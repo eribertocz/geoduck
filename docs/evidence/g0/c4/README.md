@@ -14,3 +14,10 @@ declarado, observado en Windows (`../windows/win11-qgis-3.34.15/` §4). Para `EP
 `hasAxisInverted()` es `True`, pero QGIS trata igualmente x como longitud.
 
 Reproducir: `QT_QPA_PLATFORM=offscreen python qgis_axis.py` dentro de un Python con QGIS y DuckDB.
+
+## CRS ausente y desconocido
+
+`qgis_crs_unknown.py` exporta desde DuckDB el mismo punto sin CRS, con `OGC:CRS84` y con un CRS inventado
+(`FOO:123`), y lo carga en QGIS. Resultado en QGIS 3.44.14 + DuckDB 2.0.0: `result_crs_q344.json`.
+Sin CRS y con `FOO:123`, QGIS deja la capa con CRS no válido (no inventa uno) y las coordenadas no cambian.
+Reproducir: `QT_QPA_PLATFORM=offscreen python qgis_crs_unknown.py`.
