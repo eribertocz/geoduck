@@ -28,6 +28,12 @@ decisiones arquitectónicas del 2026-11-01 y por ADR-0006/0009. Ninguna se resue
 | C8 | `technology.md`: mínimo funcional 1.5.0 | 1.5.0 cae con uso concurrente (F-02) y tiene defectos de geometría (F-04, F-05) | ADR-0006 evita el uso concurrente; decisión D5 sobre «mínimo 1.5.0 / recomendado 1.5.4+» |
 | C10 | `technology.md`: PyArrow sin restricción de NumPy | PyArrow 26 no importa con NumPy 1.x (F-03) | ADR-0009: selección por matriz; regla aplicada en el diagnóstico de G0 |
 
+## Observación adicional detectada al implementar
+
+| # | Documentos | Qué dicen | Propuesta | Decide | Estado |
+|---|---|---|---|---|---|
+| C13 | `architecture.md` §3 frente a `session-spec.md` §5 | Dos conjuntos de estados de sesión: `STOPPED/STARTING/READY/BUSY/CLOSING/FAILED` y `DISCONNECTED/CONNECTING/READY/BUSY/DETACHING/CLOSING/ERROR_RECOVERABLE` | Se implementó el de `session-spec` §5 (más específico, incluye `DETACHING`); unificar el texto de `architecture.md` | Arquitecto | Abierta |
+
 ## Integridad del paquete (no contractual)
 
 - `docs/manifest.json` está desactualizado: 14 de 23 hashes no coinciden con los archivos (anterior a la

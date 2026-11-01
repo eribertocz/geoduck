@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Certificación en Windows real (docs/certification/windows.md). Solo bajo demanda y solo en un runner
+# self-hosted del propietario con QGIS instalado; GitHub no ofrece QGIS en sus runners.
+# Si no hay runner, este workflow no corre y la celda se reporta como «no ejecutada», nunca como verde.
+name: windows-certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      qgis_root:
+        description: Carpeta de la instalación de QGIS (p. ej. C:\Program Files\QGIS 3.44.15)
+        required: true
+      method:
+        description: Método de instalación de dependencias (M1, M2, M3)
+        required: true
+        default: M2
+      constraints:
+        description: Archivo de restricciones relativo a la raíz del repositorio
+        required: true
+        default: constraints/win-qgis-3.44-py312.txt
+      install_spatial:
+        description: Descargar e instalar la extensión oficial spatial
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: [self-hosted, windows, x64, qgis-cert]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Certificar celda
+        shell: pwsh
+        # Las entradas pasan por variables de entorno, nunca interpoladas en el script (inyección).
+        env:
+          GD_QGIS_ROOT: ${{ inputs.qgis_root }}
+          GD_METHOD: ${{ inputs.method }}
+          GD_CONSTRAINTS: ${{ inputs.constraints }}
+          GD_INSTALL_SPATIAL: ${{ inputs.install_spatial }}
+        run: |
+          $params = @{
+            QgisRoot      = $env:GD_QGIS_ROOT
+            Method        = $env:GD_METHOD
+            Constraints   = $env:GD_CONSTRAINTS
+            OutDir        = (Join-Path $env:RUNNER_TEMP 'geoduck-cert')
+            RunTestSuites = $true
+          }
+          if ($env:GD_INSTALL_SPATIAL -eq 'true') { $params.InstallSpatial = $true }
+          & .\tools\windows\Invoke-GeoDuckCertification.ps1 @params
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-certification-${{ inputs.method }}-${{ github.run_id }}
+          path: ${{ runner.temp }}\geoduck-cert
