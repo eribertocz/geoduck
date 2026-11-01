@@ -1,0 +1,123 @@
+{
+  "project": "GeoDuck",
+  "edition": "Alpha architecture/spec baseline 0.1",
+  "date": "2026-11-01",
+  "role": "Documentación y especificación, no implementación",
+  "documents": [
+    {
+      "path": "README.md",
+      "bytes": 4287,
+      "sha256": "74ab41c6486c62a35fac680339213c5794bbc024438dce903f94ba37cb88c047"
+    },
+    {
+      "path": "docs/adr/0001-session-root-memory.md",
+      "bytes": 1007,
+      "sha256": "937e925c82e1448bdc74b19c5c78bd00955a5c290a47fcd5a2648a5de9028cf7"
+    },
+    {
+      "path": "docs/adr/0002-ownership-boundary.md",
+      "bytes": 990,
+      "sha256": "441a395b6fb27d711b993f202d8112c22f31fe4f5a5fca66fadbd2e68b82261d"
+    },
+    {
+      "path": "docs/adr/0003-arrow-qgis-bridge.md",
+      "bytes": 994,
+      "sha256": "8d66c7ef6d0acc957d9a83511e7ded1a580ca810640a801d92397dc9d2c615be"
+    },
+    {
+      "path": "docs/adr/0004-sql-execution.md",
+      "bytes": 1055,
+      "sha256": "c0d70ec566184db008dad2b434c45f1e041a5d3239f3c6cd541ded0858c44110"
+    },
+    {
+      "path": "docs/adr/0005-compatibility-alpha.md",
+      "bytes": 984,
+      "sha256": "cf939bfd549b713c149f113f3bd43155f0c31bae7e0ac66cdf53ebe4cff58b45"
+    },
+    {
+      "path": "docs/adr/README.md",
+      "bytes": 850,
+      "sha256": "6412e214c11e1b3faab12475dbd72cce857b872c2a193947d81faf0dcb883a8f"
+    },
+    {
+      "path": "docs/architecture.md",
+      "bytes": 5836,
+      "sha256": "b17e10bfd4b05737fce69baea94ca313ec8d29fa4e35df8d39e8040271c7d08b"
+    },
+    {
+      "path": "docs/compatibility-distribution.md",
+      "bytes": 3277,
+      "sha256": "4dff6fada2639f7b3fae1aead57f414c297d7929a1e3fd52cc01ca2cc619c43e"
+    },
+    {
+      "path": "docs/implementation-handoff.md",
+      "bytes": 3539,
+      "sha256": "9d3424e22a98045b1f80ea538a23676306b1cd3765134c87a1b348db418bca19"
+    },
+    {
+      "path": "docs/product-spec.md",
+      "bytes": 6985,
+      "sha256": "29cc0dd26aee299ea0d3055bd9c6482e2a303d53c56c10cdb60446b095d55d6e"
+    },
+    {
+      "path": "docs/references.md",
+      "bytes": 2776,
+      "sha256": "638f68092631079fdad6bb68b245374f9809edaf5a4420a9f8dcf8fd358fbd13"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "bytes": 4138,
+      "sha256": "5577a8782acf4fd7b5cb4e554fabc28b68e32d330306a152865d7cf9c0b3bc7d"
+    },
+    {
+      "path": "docs/security.md",
+      "bytes": 3712,
+      "sha256": "7c535137b19f1d1dda3c19c6d9dc0b9c320eea32a40eed67960944da19fc0ed1"
+    },
+    {
+      "path": "docs/technology.md",
+      "bytes": 3809,
+      "sha256": "b37ce64275e14a58531f694d71d53cbbcabaeeb4ac73af789cc29e7e2c1a2410"
+    },
+    {
+      "path": "docs/vision.md",
+      "bytes": 2904,
+      "sha256": "1c748422f7cfcfbb04d1a735984e64e48fdc8545fa432b7aa60f219a2c83fe20"
+    },
+    {
+      "path": "qa/benchmarks.md",
+      "bytes": 3420,
+      "sha256": "5b205e5c544e748d4e89b9913dfd69583c537372e2fe628af42a782fa6204347"
+    },
+    {
+      "path": "qa/test-strategy.md",
+      "bytes": 5918,
+      "sha256": "c7e427e3f0a22f34c5a2cccd058e4acd1fd628fd26470dcfcefd779946a8904e"
+    },
+    {
+      "path": "specs/qgis-bridge-spec.md",
+      "bytes": 6606,
+      "sha256": "286ebab6c28997bb5e7603a75be84b984ade81c14826489c80edf9c890c39bf1"
+    },
+    {
+      "path": "specs/session-spec.md",
+      "bytes": 4941,
+      "sha256": "a689989cbfd7397ae0131f076adf84ba7347ccf1e234f0a9c7b193a49b710fc3"
+    },
+    {
+      "path": "specs/spatial-spec.md",
+      "bytes": 5060,
+      "sha256": "403e76a26e9c43ea43109eb909de448e361e29750138c5e92c291da81e0375cd"
+    },
+    {
+      "path": "specs/sql-editor-spec.md",
+      "bytes": 5982,
+      "sha256": "275f7631cef79888d78fc1cb4201a8684afd2edbcb6dc06703a824d02fa0434c"
+    },
+    {
+      "path": "specs/ui-ux-spec.md",
+      "bytes": 4831,
+      "sha256": "93e63d2a9920b5cb13aa78e6d39121dd6f4590ba006db7996972473c51e73d1b"
+    }
+  ]
+}
