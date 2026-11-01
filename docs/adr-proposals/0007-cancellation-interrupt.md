@@ -71,3 +71,13 @@ como `OSError` con el texto `INTERRUPT Error`.
   - tabla de capacidades: 1.5.7 y 2.0.1 sin interrupción verificada.
 - La UI muestra «cancelación inmediata disponible» o «cancelación entre lotes» según la versión
   (verificado en Windows con DuckDB 2.0.0).
+
+## Preguntas abiertas para la validación literal
+
+1. **Redacción de la revisión 3.** ¿Se acepta el texto del punto 3, que trata como invalidación de sesión
+   (C13 §4 bis, `SESSION_INVALIDATED`) el cierre de una conexión que no responde tras `interrupt()`?
+2. **Verificación por versión exacta.** ¿Se confirma que cada versión nueva de DuckDB, incluidas las de
+   parche como 1.5.7 o 2.0.1, empieza solo con cancelación cooperativa hasta pasar la suite de cancelación,
+   aunque eso retrase la cancelación inmediata en esas versiones?
+3. **`TRANSACTION_ABORTED`.** ¿Se mantiene como punto pendiente dentro de este ADR (punto 5), o se traslada a
+   un ADR propio de transacciones en G1/G2?

@@ -60,3 +60,12 @@ versión por celda.
 - CI (`.github/workflows/ci.yml`): motor con PyArrow 25.0.1 y con PyArrow 18.1.0 + NumPy 1.26.4.
 - `compat/matrix.toml`, `constraints/win-qgis-3.34-py312.txt` (solo `duckdb`).
 - Evidencia: `docs/evidence/g0/windows/win11-qgis-3.34.15/`.
+
+## Preguntas abiertas para la validación literal
+
+1. **Piso de PyArrow.** ¿Se acepta `pyarrow >= 18` como piso declarado, siendo 18.1.0 la versión mínima
+   verificada (la que incluye QGIS 3.34.15 en Windows)?
+2. **Prioridad de la PyArrow de QGIS.** ¿Se confirma que, si QGIS incluye PyArrow, se usa esa aunque sea más
+   antigua que la de la celda de la matriz, siempre que cumpla el piso?
+3. **Método de instalación.** ¿Se confirma que el procedimiento de instalación en Windows queda fuera de este
+   ADR y se decide en el spike G0-A (issue #10)?

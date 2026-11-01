@@ -52,3 +52,12 @@ solo se mantienen si algo las comprueba automáticamente en cada PR.
   `test_rules_detect_a_violation` y `test_every_package_is_covered`.
 - `tests/architecture/test_no_foreign_mutation.py` (ADR-0011).
 - Se ejecuta en el job «lint · tipos · arquitectura · unitarias» de CI.
+
+## Preguntas abiertas para la validación literal
+
+1. **`qgis_bridge`.** ¿Se aprueba ya la fila de `qgis_bridge` (marcada «G3, propuesto»), o se aprueba al
+   crear el paquete en G3?
+2. **`plugin.py`.** ¿Se acepta que la raíz de composición importe `engine` solo de forma diferida, para que
+   el complemento cargue y muestre el diagnóstico aunque `duckdb` falte o falle?
+3. **Excepción de `infra`.** ¿Se acepta que `infra` importe `duckdb`, `pyarrow` y `qgis` solo de forma
+   dinámica y únicamente para diagnosticarlos?
