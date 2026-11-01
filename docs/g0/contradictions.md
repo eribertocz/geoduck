@@ -42,9 +42,9 @@ decisiones arquitectónicas del 2026-11-01 y por ADR-0006/0009. Ninguna se resue
 
 ## Integridad del paquete (no contractual)
 
-- `docs/manifest.json` está desactualizado: 14 de 23 hashes no coinciden con los archivos (anterior a la
-  revisión «DuckDB ≥ 1.5.0»). Propuesta: que el arquitecto regenere el manifiesto. Se conserva tal cual
-  en `spec/`.
-- `GEODUCK_SPEC_MAESTRA.md` difiere de `docs/implementation-handoff.md` en una línea; según la maestra,
-  los archivos individuales son normativos.
+- `docs/manifest.json` estaba desactualizado (hashes anteriores a la revisión «DuckDB ≥ 1.5.0»). **En
+  resolución** en el PR de sincronización normativa: `tools/spec_sync.py` regenera el manifiesto y CI lo
+  verifica en cada PR.
+- `GEODUCK_SPEC_MAESTRA.md` difería de `docs/implementation-handoff.md` en una línea; como los archivos
+  individuales son normativos, la maestra pasa a regenerarse desde ellos (mismo PR).
 - `docs/references.md` repite el identificador REF-16.

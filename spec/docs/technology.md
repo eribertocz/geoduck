@@ -28,6 +28,7 @@
 
 ## Contrato de compatibilidad DuckDB (GD-COMP-DB-001)
 - **Mínimo funcional: DuckDB Python 1.5.0** (inclusive). **Soporte objetivo: 1.5.x y versiones 2.x y superiores verificadas**; «superior» no equivale a certificación automática para versiones futuras.
+- **Recomendada en la rama 1.5: DuckDB 1.5.6** (decisión D5, 2026-11-01). Por debajo de 1.5.4 el diagnóstico advierte de defectos conocidos de geometría.
 - Exigir pruebas funcionales idénticas en 1.5.x y 2.x para SQL multisentencia, `ATTACH/DETACH`, `spatial`, relaciones lazy, `to_arrow_reader()`, tipos Arrow y entrega de capas PyQGIS.
 - Las diferencias reales de APIs, semántica de conexión, lectores Arrow, transacciones, CRS y almacenamiento deben documentarse en una **matriz de capacidades por versión**. No introducir una rama de código especial sin una prueba reproducible.
 - El runtime Python de QGIS, PyArrow y las ruedas nativas DuckDB determinan qué combinaciones se pueden certificar. La aplicación mostrará mensajes claros si la combinación no es soportada.
@@ -44,6 +45,8 @@
 - Nunca usar `con.execute(...).to_arrow_reader()` como vía «streaming» en DuckDB 2.0: ese camino copia filas y advierte.
 
 ## Decisión PyArrow
+**Mínimo de PyArrow: 18.1.0.** La versión se elige según la matriz real de QGIS, Python, NumPy y DuckDB; si QGIS incluye PyArrow, se prioriza esa y solo se instala `duckdb` (ADR-0009). El método de instalación definitivo se decide en el spike G0-A.
+
 PyArrow **no es el backend de almacenamiento QGIS**; es el medio de transporte entre DuckDB y el convertidor PyQGIS. La copia final al proveedor `memory` está prevista. La prioridad es reducir picos de memoria, no anunciar zero-copy.
 
 ## Empaquetado

@@ -265,12 +265,13 @@ flowchart TD
 **QGIS Committer:** crea o alimenta una capa temporal no registrada, exclusivamente en hilo principal. Publica todas las capas del pedido tras validar integridad, o descarta todas en fracaso.
 
 ## 3. Máquina de estados de sesión
-`STOPPED → STARTING → READY → BUSY → READY → CLOSING → STOPPED`; `FAILED` documenta errores recuperables.
+Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNECTING → READY ⇄ BUSY`, `READY → DETACHING → READY`, `* → CLOSING → DISCONNECTED`; `ERROR_RECOVERABLE` registra fallos de los que se puede salir reintentando, volviendo a `READY` (solo si la conexión y la transacción siguen utilizables) o cerrando. La tabla de transiciones de `session-spec` §5 es normativa. Los estados de operación y de entrega (`cancelando`, `transfiriendo`, `entrega exitosa`…) pertenecen a la máquina de operación, no a la de sesión.
 
 - `READY`: admite operaciones nuevas.
 - `BUSY`: operaciones seriales ocupan la conexión, incluidas lecturas Arrow. `DETACH` entra en cola, espera o pide cancelar la operación anterior.
 - `CLOSING`: cerrar lectores, terminar/cancelar trabajos, `DETACH` de las bases que proceda, cerrar la instancia y limpiar referencias.
 - Evitar cerrar prematuramente un reader: el contrato de algunas versiones de DuckDB pueden impedir consultas concurrentes mientras está abierto.
+- `ERROR_RECOVERABLE`: fallo recuperable. Si la causa es la invalidación de la conexión (`SESSION_INVALIDATED`, `session-spec` §5), solo se sale hacia una sesión nueva o el cierre.
 
 ## 4. Secuencia cargar capa
 1. UI escoge resultado tabular y su geometría/CRS.
@@ -285,7 +286,8 @@ flowchart TD
 ## 5. Política de concurrencia y cancelación
 - Un worker serializado para una sesión: conserva `TEMP`, `USE`, transacciones y contexto del script sin sorpresas.
 - Cada operación tiene `id`, token de cancelación cooperativo y estado observable.
-- Para consultas largas sin lotes, investigar en gate técnico el mecanismo de interrupción soportado por DuckDB 1.5+/2.x sin usar indebidamente la conexión desde otro hilo. **No asumir** cancelación inmediata ni segura sin prueba.
+- Para consultas largas sin lotes, `interrupt()` se usa solo como excepción controlada y en las versiones exactas de DuckDB verificadas (ADR-0007). En las demás, la cancelación es solo cooperativa. **No asumir** cancelación inmediata ni segura sin prueba.
+- Propiedad exclusiva de la conexión, cola serial y lectores Arrow con ciclo de vida explícito: ADR-0006.
 - El cierre de GeoDuck o `DETACH` solicita cancelación y espera liberación ordenada; jamás se desprende una base en mitad de la transferencia activa.
 - Las funciones de PyQGIS/QObject del proyecto se llaman en main thread; prohibido `QgsVectorLayer`, `QgsProject`, widgets o data providers dentro del worker.
 - Backpressure obligatorio: n lotes máximo en tránsito; decidir tamaño con benchmarks.
@@ -363,6 +365,7 @@ Es una estructura orientativa: Claude Code puede simplificar carpetas **sin camb
 
 ## Contrato de compatibilidad DuckDB (GD-COMP-DB-001)
 - **Mínimo funcional: DuckDB Python 1.5.0** (inclusive). **Soporte objetivo: 1.5.x y versiones 2.x y superiores verificadas**; «superior» no equivale a certificación automática para versiones futuras.
+- **Recomendada en la rama 1.5: DuckDB 1.5.6** (decisión D5, 2026-11-01). Por debajo de 1.5.4 el diagnóstico advierte de defectos conocidos de geometría.
 - Exigir pruebas funcionales idénticas en 1.5.x y 2.x para SQL multisentencia, `ATTACH/DETACH`, `spatial`, relaciones lazy, `to_arrow_reader()`, tipos Arrow y entrega de capas PyQGIS.
 - Las diferencias reales de APIs, semántica de conexión, lectores Arrow, transacciones, CRS y almacenamiento deben documentarse en una **matriz de capacidades por versión**. No introducir una rama de código especial sin una prueba reproducible.
 - El runtime Python de QGIS, PyArrow y las ruedas nativas DuckDB determinan qué combinaciones se pueden certificar. La aplicación mostrará mensajes claros si la combinación no es soportada.
@@ -379,6 +382,8 @@ Es una estructura orientativa: Claude Code puede simplificar carpetas **sin camb
 - Nunca usar `con.execute(...).to_arrow_reader()` como vía «streaming» en DuckDB 2.0: ese camino copia filas y advierte.
 
 ## Decisión PyArrow
+**Mínimo de PyArrow: 18.1.0.** La versión se elige según la matriz real de QGIS, Python, NumPy y DuckDB; si QGIS incluye PyArrow, se prioriza esa y solo se instala `duckdb` (ADR-0009). El método de instalación definitivo se decide en el spike G0-A.
+
 PyArrow **no es el backend de almacenamiento QGIS**; es el medio de transporte entre DuckDB y el convertidor PyQGIS. La copia final al proveedor `memory` está prevista. La prioridad es reducir picos de memoria, no anunciar zero-copy.
 
 ## Empaquetado
@@ -446,11 +451,28 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - En DuckDB: en las versiones certificadas, una sentencia fallida dentro de transacción puede dejarla abortada hasta `ROLLBACK`; presentar recuperación clara, no hacer `COMMIT` silencioso.
 - Un script ejecutado sin `BEGIN` explícito no se revierte globalmente si falla una sentencia posterior.
 - La operación de carga QGIS que repite consulta debe saber si se apoya en objetos temporales o transacciones abiertas; no cambiar cursores/contextos arbitrariamente.
+- Tras una cancelación o un error, la conexión solo se reutiliza si responde y su estado transaccional es conocido y utilizable; si no puede determinarse, o la transacción quedó abortada sin resolver, la sesión no vuelve a `READY` (ADR-0007). `TRANSACTION_ABORTED` se implementa en G1/G2.
 
 ## 5. Estados y errores
 `DISCONNECTED`, `CONNECTING`, `READY`, `BUSY`, `DETACHING`, `CLOSING`, `ERROR_RECOVERABLE`.
 
-Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLICT`, `DB_READ_ONLY`, `ACTIVE_RESULT`, `DEFAULT_CATALOG`, `TRANSACTION_ABORTED`, `DETACH_FAILED`.
+Transiciones normativas:
+
+| Desde | Puede pasar a |
+|---|---|
+| `DISCONNECTED` | `CONNECTING` |
+| `CONNECTING` | `READY`, `ERROR_RECOVERABLE`, `CLOSING` |
+| `READY` | `BUSY`, `DETACHING`, `CLOSING`, `ERROR_RECOVERABLE` (solo por invalidación) |
+| `BUSY` | `READY`, `CLOSING`, `ERROR_RECOVERABLE` |
+| `DETACHING` | `READY`, `ERROR_RECOVERABLE`, `CLOSING` |
+| `CLOSING` | `DISCONNECTED` |
+| `ERROR_RECOVERABLE` | `CONNECTING`, `READY` (solo si la conexión responde y su estado transaccional es utilizable; nunca tras una invalidación), `CLOSING`, `DISCONNECTED` |
+
+Los estados de operación y de entrega no forman parte de esta máquina.
+
+Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLICT`, `DB_READ_ONLY`, `ACTIVE_RESULT`, `DEFAULT_CATALOG`, `TRANSACTION_ABORTED`, `DETACH_FAILED`, `SESSION_INVALIDATED`.
+
+`SESSION_INVALIDATED`: la conexión dejó de ser utilizable (no responde tras una interrupción, el hilo propietario terminó o el motor informó un error fatal). El motor lo notifica una sola vez, después de rechazar todo trabajo nuevo y de fallar el pendiente. La sesión pasa a `ERROR_RECOVERABLE` y solo puede salir hacia una sesión nueva (`CONNECTING`), `CLOSING` o `DISCONNECTED`; nunca vuelve a `READY` con la misma conexión. Ninguna operación posterior llega a DuckDB. Requisito obligatorio de G1.
 
 ## 6. Casos de prueba mínimos
 - Memoria: crear/consultar tabla temporal y cerrar la sesión.
@@ -461,6 +483,7 @@ Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLI
 - `USE <alias>` seguido de `DETACH <alias>`: transición correcta al catálogo raíz.
 - Reader Arrow abierto: `DETACH` no se adelanta a la liberación del reader.
 - Base externa bloqueada: error claro, catálogo coherente, sin estado fantasma.
+- Invalidación de sesión (G1): INV-1 una sola notificación `SESSION_INVALIDATED`; INV-2 lo pendiente y la lectura Arrow en curso terminan con error, nunca con resultado ni como lectura completa; INV-3 toda operación posterior se rechaza sin llamar a DuckDB; INV-4 `ERROR_RECOVERABLE` sin retorno a `READY` y «Nueva sesión» con hilo y conexión nuevos; INV-5 el cierre pedido por el usuario no emite la notificación.
 
 
 
@@ -691,7 +714,11 @@ Orden de preferencia:
 3. Selección explícita del usuario.
 4. Mantener CRS desconocido con advertencia clara si el usuario decide continuar.
 
-`ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y decisión explícita. Verificar orden de ejes, particularmente `geometry_always_xy` de DuckDB 2.0, y contrastarlo con QGIS. Nunca realizar una transformación oculta.
+`ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y una decisión explícita del usuario. Nunca realizar una transformación oculta.
+
+**Orden de ejes.** GeoDuck entrega a QGIS las coordenadas del WKB tal como las produce DuckDB, sin reordenarlas; QGIS interpreta x como este/longitud también en CRS geográficos como EPSG:4326. GeoDuck no fija el ajuste `geometry_always_xy` de la extensión `spatial` (en DuckDB 2.0 no tiene valor por defecto y `ST_Transform` exige declararlo; en 2.1 pasará a `true`). Cuando `spatial` está cargada, GeoDuck muestra su valor efectivo en el diagnóstico y en los resultados espaciales cuando corresponda. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia llamada. Geometrías producidas en el orden de la autoridad (por ejemplo, latitud-longitud) se entregan tal cual y son responsabilidad del SQL del usuario. GeoDuck no intenta adivinar ejes invertidos a partir de los rangos de coordenadas.
+
+**CRS ausente o desconocido.** Si DuckDB no declara CRS, o declara uno que QGIS no reconoce, GeoDuck no lo sustituye por otro (ni EPSG:4326 ni el CRS del proyecto), no publica la capa sin una decisión del usuario (puntos 3 y 4 anteriores), conserva el texto declarado en el mensaje y el registro, y nunca modifica las coordenadas. Elegir un CRS lo etiqueta; no transforma.
 
 ## 5. Transporte WKB
 Seleccionada una columna, generar una **relación de proyección explícita** que exponga la geometría como `ST_AsWKB(...)` de tipo binario, conservar otros atributos y un identificador estable de fila para la transferencia si resulta necesario. Convertir a `QgsGeometry.fromWkb` en main thread. Evitar serializar geometrías completas en WKT como camino principal por coste y precisión.
@@ -716,6 +743,18 @@ El panel detecta `centro` y `poligono` y ofrece «Puntos», «Polígonos», «Am
 - Filas con tipos mixtos en una columna: no se descartan silenciosamente.
 - WKB con datos corruptos, `GEOMETRYCOLLECTION` y BLOB no geométrico.
 - Consultas que generan geometría (`ST_Centroid`, `ST_Buffer`) sin columna espacial original.
+- Orden de ejes y CRS. Punto de referencia `POINT(-68.15 -16.5)`; tolerancia 1e-9 en grados y 0,01 m en metros; cada prueba verifica coordenadas **y** CRS:
+
+| ID | Caso | CRS esperado en QGIS | Coordenadas esperadas | Además |
+|---|---|---|---|---|
+| AX-1a | `GEOMETRY('OGC:CRS84')` | válido, `OGC:CRS84` | x = −68,15, y = −16,5 | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
+| AX-1b | `EPSG:4326` con `spatial` | válido, `EPSG:4326` | x = −68,15, y = −16,5 aunque `hasAxisInverted()` sea verdadero | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
+| AX-1c | `ST_Transform(…, 'EPSG:4326', 'EPSG:32719', true)` | válido, `EPSG:32719` | `590716.04, 8175564.99` | igual a AX-1a/b transformado por QGIS |
+| AX-2 | `geometry_always_xy` en `true`, `false` y sin fijar | — | — | valor mostrado en el diagnóstico y en un resultado con geometría = `duckdb_settings()`; GeoDuck no lo modifica |
+| AX-3 | `ST_Transform` sin orden declarado, DuckDB 2.0, ajuste sin fijar | sin capa | — | error SQL del usuario; sin reintentos ni ajustes automáticos |
+| AX-4a | sin CRS declarado | no válido; no se asigna ninguno | x = −68,15, y = −16,5 | no se publica sin decisión del usuario; advertencia visible |
+| AX-4b | CRS desconocido para QGIS (`FOO:123`) | no válido; no se sustituye | x = −68,15, y = −16,5 | el mensaje muestra `FOO:123` |
+| AX-4c | CRS desconocido y el usuario elige `EPSG:4326` | válido, `EPSG:4326` | x = −68,15, y = −16,5 | elegir etiqueta; no transforma |
 
 
 
@@ -1060,7 +1099,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | Fase / release | Resultado verificable | Requisitos P0 | Gate de salida |
 |---|---|---|---|
 | G0 · `v0.1.0a1` Foundation | plugin abre dock, diagnóstico y sesión memoria | GD-BOOT-*, GD-SES-001 | QGIS 3/4 ancla cargan; duckdb/arrow/spatial validado |
-| G1 · `v0.2.0a1` Connections | archivo RO/RW, catálogo, ATTACH/DETACH UI y SQL | GD-SES-002..005, GD-CAT-001 | lock release real y temporales coherentes |
+| G1 · `v0.2.0a1` Connections | archivo RO/RW, catálogo, ATTACH/DETACH UI y SQL | GD-SES-002..005, GD-CAT-001 | lock release real y temporales coherentes; invalidación de sesión notificada una sola vez (INV-1..INV-5) |
 | G2 · `v0.3.0a1` SQL Execution | scripts mixtos, resultados y previews | GD-SQL-001..006 | 2 SELECT y CREATE correctos; no reejecución DML |
 | G3 · `v0.4.0a1` QGIS Bridge MVP | tabla plana y una geometría → capas memory | GD-BRD-001..005 | primera Alpha útil E2E; capas intactas tras DETACH |
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
@@ -1130,7 +1169,7 @@ Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.0+**,
 - No materializar todas las filas a pandas o `fetchall()`.
 - No asumir CRS predeterminado.
 - No publicar capas parciales o confundir preview con resultado completo.
-- No bajar DuckDB por debajo de 1.5.0; probar API en DuckDB 1.5.x y 2.x.
+- No bajar DuckDB por debajo de 1.5.0; toda API utilizada debe tener ruta probada para DuckDB 1.5.x y 2.x.
 - No declarar «QGIS 3/4 compatible» sin prueba en ambos.
 
 ## 5. Contrato de PR

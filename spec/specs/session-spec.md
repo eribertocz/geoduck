@@ -49,11 +49,28 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - En DuckDB: en las versiones certificadas, una sentencia fallida dentro de transacción puede dejarla abortada hasta `ROLLBACK`; presentar recuperación clara, no hacer `COMMIT` silencioso.
 - Un script ejecutado sin `BEGIN` explícito no se revierte globalmente si falla una sentencia posterior.
 - La operación de carga QGIS que repite consulta debe saber si se apoya en objetos temporales o transacciones abiertas; no cambiar cursores/contextos arbitrariamente.
+- Tras una cancelación o un error, la conexión solo se reutiliza si responde y su estado transaccional es conocido y utilizable; si no puede determinarse, o la transacción quedó abortada sin resolver, la sesión no vuelve a `READY` (ADR-0007). `TRANSACTION_ABORTED` se implementa en G1/G2.
 
 ## 5. Estados y errores
 `DISCONNECTED`, `CONNECTING`, `READY`, `BUSY`, `DETACHING`, `CLOSING`, `ERROR_RECOVERABLE`.
 
-Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLICT`, `DB_READ_ONLY`, `ACTIVE_RESULT`, `DEFAULT_CATALOG`, `TRANSACTION_ABORTED`, `DETACH_FAILED`.
+Transiciones normativas:
+
+| Desde | Puede pasar a |
+|---|---|
+| `DISCONNECTED` | `CONNECTING` |
+| `CONNECTING` | `READY`, `ERROR_RECOVERABLE`, `CLOSING` |
+| `READY` | `BUSY`, `DETACHING`, `CLOSING`, `ERROR_RECOVERABLE` (solo por invalidación) |
+| `BUSY` | `READY`, `CLOSING`, `ERROR_RECOVERABLE` |
+| `DETACHING` | `READY`, `ERROR_RECOVERABLE`, `CLOSING` |
+| `CLOSING` | `DISCONNECTED` |
+| `ERROR_RECOVERABLE` | `CONNECTING`, `READY` (solo si la conexión responde y su estado transaccional es utilizable; nunca tras una invalidación), `CLOSING`, `DISCONNECTED` |
+
+Los estados de operación y de entrega no forman parte de esta máquina.
+
+Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLICT`, `DB_READ_ONLY`, `ACTIVE_RESULT`, `DEFAULT_CATALOG`, `TRANSACTION_ABORTED`, `DETACH_FAILED`, `SESSION_INVALIDATED`.
+
+`SESSION_INVALIDATED`: la conexión dejó de ser utilizable (no responde tras una interrupción, el hilo propietario terminó o el motor informó un error fatal). El motor lo notifica una sola vez, después de rechazar todo trabajo nuevo y de fallar el pendiente. La sesión pasa a `ERROR_RECOVERABLE` y solo puede salir hacia una sesión nueva (`CONNECTING`), `CLOSING` o `DISCONNECTED`; nunca vuelve a `READY` con la misma conexión. Ninguna operación posterior llega a DuckDB. Requisito obligatorio de G1.
 
 ## 6. Casos de prueba mínimos
 - Memoria: crear/consultar tabla temporal y cerrar la sesión.
@@ -64,3 +81,4 @@ Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLI
 - `USE <alias>` seguido de `DETACH <alias>`: transición correcta al catálogo raíz.
 - Reader Arrow abierto: `DETACH` no se adelanta a la liberación del reader.
 - Base externa bloqueada: error claro, catálogo coherente, sin estado fantasma.
+- Invalidación de sesión (G1): INV-1 una sola notificación `SESSION_INVALIDATED`; INV-2 lo pendiente y la lectura Arrow en curso terminan con error, nunca con resultado ni como lectura completa; INV-3 toda operación posterior se rechaza sin llamar a DuckDB; INV-4 `ERROR_RECOVERABLE` sin retorno a `READY` y «Nueva sesión» con hilo y conexión nuevos; INV-5 el cierre pedido por el usuario no emite la notificación.
