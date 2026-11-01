@@ -4,6 +4,8 @@
 #   "certificado" | "conocido con limitaciones" | "no probado" | "incompatible"
 # Una celda solo pasa a "certificado" con evidencia de docs/certification/windows.md en Windows real.
 # "api_verificada_linux" registra la evidencia G0 en Linux; NO equivale a certificación.
+# Los jobs de CI en Ubuntu que reproducen versiones de dependencias de una celda (p. ej. PyArrow 18.1.0 +
+# NumPy 1.26.4) tampoco equivalen a certificación Windows.
 
 schema = 1
 updated = "2026-11-01"

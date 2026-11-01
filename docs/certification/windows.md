@@ -14,7 +14,7 @@ El procedimiento también resuelve el spike **G0-A** (método de instalación de
 | Sistema | Windows 11 x64, actualizado, en una VM o equipo que pueda restaurarse (instantánea antes de empezar) |
 | Cuenta | Usuario administrador local (solo el método M1 lo exige) |
 | Recursos | 8 GB de RAM y 15 GB libres |
-| QGIS | Instaladores MSI oficiales de [qgis.org/download](https://qgis.org/download/): **3.44.x LTR** y **4.2.3** (y **4.4.x** si está publicada, decisión D3). Instalados lado a lado en sus carpetas por defecto |
+| QGIS | Instaladores MSI oficiales de [qgis.org/download](https://qgis.org/download/): **3.34.x LTR** (mínimo soportado, D8), **3.44.x LTR** y **4.2.3** (y **4.4.x** si está publicada, decisión D3). Instalados lado a lado en sus carpetas por defecto |
 | Red | Salida HTTPS a `pypi.org`, `files.pythonhosted.org`, `github.com` y, para spatial, `extensions.duckdb.org` |
 | Herramientas | PowerShell 5.1 o 7.x; Git para Windows (o descargar el repositorio como ZIP) |
 | Repositorio | `eribertocz/geoduck` en el commit que se certifica (anotarlo) |
@@ -48,18 +48,23 @@ compatibilidad de scipy (F-15). Comando mínimo probado, desde la consola de Pyt
 
 ## 3. Celdas a ejecutar
 
-Para cada QGIS instalado × cada método (M1, M2, M3) = 6 ejecuciones (9 con 4.4.x). Cada ejecución
-cubre las tres versiones de DuckDB cambiando el archivo de restricciones:
+Una ejecución = una versión de QGIS × un método (M1, M2 o M3) × una versión de DuckDB.
 
-| Archivo de restricciones | Contenido |
-|---|---|
-| `constraints/win-qgis-3.44-py312.txt` | `duckdb==2.0.0` (PyArrow de QGIS si existe) |
-| `constraints/win-qgis-3.34-py312.txt` | `duckdb==2.0.0` (PyArrow 18.1.0 de QGIS, verificado) |
-| copia local con `duckdb==1.5.0` | mínimo soportado |
-| copia local con `duckdb==1.5.6` | última 1.5.x |
+**Un archivo de restricciones por versión de QGIS.** Cada uno fija solo `duckdb==2.0.0`:
 
-Para QGIS 4.x, cree la copia correspondiente de `constraints/win-qgis-4.2.txt` tras ver en `facts.json`
-qué Python y NumPy trae (si NumPy ≥ 2, añada también una pasada con `pyarrow==26.0.0`).
+| Celda | QGIS | Archivo de restricciones | Estado |
+|---|---|---|---|
+| `win-qgis-3.34-py312` | 3.34.x LTR (mínimo soportado, D8) | `constraints/win-qgis-3.34-py312.txt` | Prueba de humo aprobada (2026-11-01); certificación pendiente |
+| `win-qgis-3.44-py312` | 3.44.x LTR | `constraints/win-qgis-3.44-py312.txt` | No probado |
+| `win-qgis-4.2` | 4.2.3 | `constraints/win-qgis-4.2.txt` (se completa tras leer su `facts.json`) | No probado |
+
+**Las tres versiones de DuckDB.** Repita cada ejecución con una copia local del archivo de su celda en la
+que solo cambie la línea de `duckdb`: `2.0.0` (archivo original), `1.5.6` (última 1.5.x) y `1.5.0`
+(mínimo soportado).
+
+**PyArrow y NumPy.** Nunca se añaden si QGIS ya los incluye (F-13, F-15). Solo si `facts.json` muestra que
+esa instalación de QGIS no trae PyArrow, se añade al archivo la versión que indique
+`compat/matrix.toml` para su NumPy.
 
 ## 4. Pasos
 
@@ -109,7 +114,8 @@ qué Python y NumPy trae (si NumPy ≥ 2, añada también una pasada con `pyarro
 | Spatial carga y transforma EPSG | `spatial.md` | No para G0; sí para G4 |
 | Tema oscuro y 150 % legibles | capturas | Sí (GD-UX-001 parcial) |
 
-Una celda es **certificada** solo si todas las obligatorias pasan con las tres versiones de DuckDB.
+Los jobs del CI en Ubuntu que reproducen las versiones de dependencias de una celda **no** equivalen a
+certificación Windows: solo comprueban la compatibilidad de APIs. Una celda es **certificada** solo si todas las obligatorias pasan con las tres versiones de DuckDB.
 Si alguna falla, la celda queda `conocido con limitaciones` (con el defecto documentado y aceptado por el
 propietario) o `incompatible`.
 
