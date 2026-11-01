@@ -1,8 +1,7 @@
 # Propuesta C13 — unificación de los estados de sesión
 
-**Estado:** Revisión 2 (2026-11-01). Principios aprobados por el arquitecto: separación sesión/operación y
-`session-spec.md` como fuente normativa. La revisión 2 añade la invalidación de sesión (§4 bis), requerida en
-el dictamen. **No modifica** `spec/`: el texto propuesto se
+**Estado:** **Aprobado arquitectónicamente** (2026-11-01). La notificación única de invalidación de sesión
+(§4 bis) es **requisito obligatorio de G1**. Revisión 2. **No modifica** `spec/`: el texto propuesto se
 incorpora solo si se aprueba.
 **Afecta a:** `spec/docs/architecture.md` §3 (y aclara la relación con `spec/specs/ui-ux-spec.md` §6).
 **Depende de:** ADR-0006 y ADR-0007 (motor y cancelación).
@@ -205,8 +204,9 @@ DuckDB es utilizable y coherente. Causas:
 
 1. ~~¿Se aprueba separar la máquina de sesión de la de operación?~~ **Aprobado** en el dictamen del
    2026-11-01.
-2. ¿`ERROR_RECOVERABLE → READY` debe seguir permitido para un fallo de operación con la conexión intacta
+2. **Abierta.** ¿`ERROR_RECOVERABLE → READY` debe seguir permitido para un fallo de operación con la conexión intacta
    (la invalidación ya lo prohíbe, §4 bis), o todo fallo de operación debe dejar la sesión en `READY` sin
    pasar por `ERROR_RECOVERABLE`?
-3. ¿Se aprueba añadir `READY → ERROR_RECOVERABLE` (solo para invalidación) y el código
-   `SESSION_INVALIDATED` en `session-spec` §5?
+3. ~~¿Se aprueba añadir `READY → ERROR_RECOVERABLE` (solo para invalidación) y el código
+   `SESSION_INVALIDATED` en `session-spec` §5?~~ **Resuelta** (2026-11-01): aprobada con la notificación
+   única de invalidación.
