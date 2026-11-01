@@ -14,8 +14,8 @@ from geoduck.domain.versions import Version
 
 #: Mínimo funcional aprobado (spec/docs/technology.md).
 MINIMUM = (1, 5, 0)
-#: Recomendado: corrige `to_arrow_table()` de GEOMETRY (F-04). Pendiente de decisión D5.
-RECOMMENDED = (1, 5, 4)
+#: Recomendada en la rama 1.5 (decisión D5): última 1.5.x verificada; incluye la corrección de F-04 (1.5.4).
+RECOMMENDED = (1, 5, 6)
 
 #: Versiones en las que `interrupt()` desde otro hilo se verificó con la suite de regresión
 #: (F-09, `tests/engine/test_cancellation.py`). Ampliar este conjunto exige pasar esos tests
@@ -39,7 +39,7 @@ class EngineCapabilities:
     version: Version
     #: >= 1.5.0
     supported: bool
-    #: >= 1.5.4
+    #: >= 1.5.6 (D5)
     recommended: bool
     #: `interrupt()` desde otro hilo verificado para esta versión exacta (ADR-0007).
     interrupt_verified: bool

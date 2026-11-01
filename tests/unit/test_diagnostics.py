@@ -79,13 +79,21 @@ def test_missing_duckdb_skips_spatial_and_fails():
     [
         ("1.4.4", CheckStatus.FAIL),
         ("1.5.0", CheckStatus.WARN),
-        ("1.5.4", CheckStatus.OK),
+        ("1.5.4", CheckStatus.WARN),
+        ("1.5.6", CheckStatus.OK),
         ("2.0.0", CheckStatus.OK),
     ],
 )
 def test_duckdb_version_policy(version, status):
     report = run({**HEALTHY, "duckdb": module("duckdb", version)})
     assert report.by_id("duckdb").status is status
+
+
+def test_duckdb_warning_mentions_geometry_defects_only_before_1_5_4():
+    old = run({**HEALTHY, "duckdb": module("duckdb", "1.5.3")}).by_id("duckdb")
+    mid = run({**HEALTHY, "duckdb": module("duckdb", "1.5.5")}).by_id("duckdb")
+    assert "F-04" in old.detail and "F-04" not in mid.detail
+    assert "1.5.6" in mid.action
 
 
 def test_pyarrow_26_with_numpy_1_fails_with_matrix_action():

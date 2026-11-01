@@ -25,7 +25,7 @@ decisiones arquitectónicas del 2026-11-01 y por ADR-0006/0009. Ninguna se resue
 | # | Suposición del contrato | Defecto verificado | Resolución |
 |---|---|---|---|
 | C7 | `qgis-bridge-spec.md` §3: «cualquier reader anterior está cerrado» (precondición) | DuckDB 1.5.x trunca el lector sin error (F-01) | ADR-0006: guardia de resultado abierto en GeoDuck; implementado en G0 |
-| C8 | `technology.md`: mínimo funcional 1.5.0 | 1.5.0 cae con uso concurrente (F-02) y tiene defectos de geometría (F-04, F-05) | ADR-0006 evita el uso concurrente; decisión D5 sobre «mínimo 1.5.0 / recomendado 1.5.4+» |
+| C8 | `technology.md`: mínimo funcional 1.5.0 | 1.5.0 cae con uso concurrente (F-02) y tiene defectos de geometría (F-04, F-05) | ADR-0006 evita el uso concurrente. Decisión D5: mínimo 1.5.0, recomendada 1.5.6 en la rama 1.5, 2.x verificada |
 | C10 | `technology.md`: PyArrow sin restricción de NumPy | PyArrow 26 no importa con NumPy 1.x (F-03) | ADR-0009: selección por matriz; regla aplicada en el diagnóstico de G0 |
 
 ## Observación adicional detectada al implementar

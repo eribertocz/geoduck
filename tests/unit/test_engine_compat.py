@@ -12,7 +12,8 @@ from geoduck.engine.compat import EngineCapabilities, is_interrupt_error
         ("1.4.4", False, False, False, False),
         ("1.5.0", True, False, True, False),
         ("1.5.3", True, False, True, False),
-        ("1.5.4", True, True, True, False),
+        ("1.5.4", True, False, True, False),
+        ("1.5.5", True, False, True, False),
         ("1.5.6", True, True, True, False),
         ("1.5.7", True, True, False, False),  # no verificada todavía: solo cancelación cooperativa
         ("2.0.0", True, True, True, True),
