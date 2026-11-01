@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Modelo del catálogo de la sesión: bases adjuntas (GD-CAT-001, base de G1).
+
+Fuente de verdad: DuckDB (`duckdb_databases()` y `current_database()`), nunca un registro propio
+(session-spec §2: «el registro de bases se reconcilia con `duckdb_databases()`»). Una instantánea es
+inmutable y coherente: o se obtiene completa y válida, o no existe.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+
+#: DuckDB compara los nombres de catálogo plegando **solo** las letras ASCII: «Año» y «año» chocan,
+#: «Año» y «AÑO» no (verificado con DuckDB 1.5.0 y 2.0.0). Se reproduce exactamente esa regla.
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+
+def catalog_key(name: str) -> str:
+    """Clave de comparación de nombres de catálogo, con la misma regla que DuckDB."""
+    return name.translate(_ASCII_LOWER)
+
+
+class AccessMode(str, Enum):
+    READ_ONLY = "READ_ONLY"
+    READ_WRITE = "READ_WRITE"
+
+
+@dataclass(frozen=True)
+class AttachedDatabase:
+    """Una base visible en la sesión (las internas `system` y `temp` no se incluyen)."""
+
+    name: str
+    #: Ruta del archivo; `None` para una base en memoria (incluida la raíz `:memory:`).
+    path: str | None
+    access: AccessMode
+    #: Tipo de almacenamiento que informa DuckDB (p. ej. `duckdb`).
+    storage: str
+
+    @property
+    def in_memory(self) -> bool:
+        return self.path is None
+
+    @property
+    def key(self) -> str:
+        return catalog_key(self.name)
+
+
+@dataclass(frozen=True)
+class CatalogSnapshot:
+    """Estado del catálogo en un instante. Valida sus invariantes al construirse.
+
+    - los nombres son únicos según la regla de DuckDB (`catalog_key`);
+    - el catálogo raíz y el predeterminado están entre las bases listadas;
+    - `root` y `default` se guardan con la grafía listada por DuckDB (tras `USE ab`, DuckDB informa
+      `ab` aunque la base se llame `Ab`).
+    """
+
+    databases: tuple[AttachedDatabase, ...]
+    root: str
+    default: str
+
+    def __post_init__(self) -> None:
+        index: dict[str, AttachedDatabase] = {}
+        for db in self.databases:
+            if db.key in index:
+                raise ValueError(f"Nombre de catálogo repetido: {db.name!r} y {index[db.key].name!r}")
+            index[db.key] = db
+        for role in ("root", "default"):
+            listed = index.get(catalog_key(getattr(self, role)))
+            if listed is None:
+                raise ValueError(f"El catálogo {role} {getattr(self, role)!r} no figura entre las bases")
+            object.__setattr__(self, role, listed.name)
+
+    def get(self, name: str) -> AttachedDatabase | None:
+        key = catalog_key(name)
+        return next((db for db in self.databases if db.key == key), None)
+
+    def is_root(self, name: str) -> bool:
+        return catalog_key(name) == catalog_key(self.root)
+
+    @property
+    def root_database(self) -> AttachedDatabase:
+        db = self.get(self.root)
+        assert db is not None  # garantizado por __post_init__
+        return db
+
+    @property
+    def default_database(self) -> AttachedDatabase:
+        db = self.get(self.default)
+        assert db is not None  # garantizado por __post_init__
+        return db
+
+    @property
+    def attached(self) -> tuple[AttachedDatabase, ...]:
+        """Bases adjuntas por el usuario: todas menos la raíz."""
+        return tuple(db for db in self.databases if not self.is_root(db.name))

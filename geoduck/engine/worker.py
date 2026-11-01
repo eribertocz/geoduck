@@ -29,6 +29,7 @@ from typing import Any, Generic, TypeVar
 
 import duckdb
 
+from geoduck.domain.catalog import CatalogSnapshot
 from geoduck.domain.errors import (
     ActiveResultError,
     EngineError,
@@ -41,6 +42,7 @@ from geoduck.domain.errors import (
     WrongThreadError,
 )
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
+from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 
 _log = logging.getLogger("geoduck.engine")
@@ -213,6 +215,7 @@ class SessionWorker:
         self._current: _Job[Any] | None = None
         self._con: Any = None  # solo se usa en el hilo del worker; interrupt() es la excepción
         self._caps: EngineCapabilities | None = None
+        self._root = ""
         self._accepting = False
         self._close_requested = False
         self._invalidated: SessionInvalidatedError | None = None
@@ -270,6 +273,16 @@ class SessionWorker:
 
     # -- operaciones ------------------------------------------------------------------------------
 
+    def read_catalog(self) -> Future[CatalogSnapshot]:
+        """Instantánea del catálogo, leída de DuckDB en una sola operación serial."""
+        root = self._root
+        try:
+            return self.submit(lambda h, _t: read_catalog(h, root)).future
+        except SessionClosedError as exc:
+            failed: Future[CatalogSnapshot] = Future()
+            failed.set_exception(exc)
+            return failed
+
     def submit(self, fn: Operation[T]) -> OperationHandle[T]:
         with self._lock:
             if not self._accepting:
@@ -313,15 +326,25 @@ class SessionWorker:
 
     # -- hilo del worker --------------------------------------------------------------------------
 
+    def _open(self) -> tuple[Any, EngineCapabilities, str]:
+        """Abre la conexión en este hilo y lee el nombre real del catálogo raíz."""
+        caps = EngineCapabilities.for_version(duckdb.__version__)
+        if not caps.supported:
+            minimum = ".".join(map(str, MINIMUM))
+            raise UnsupportedEngineError(
+                f"DuckDB {duckdb.__version__} no es compatible; se requiere {minimum} o superior"
+            )
+        con = duckdb.connect(database=self._database)
+        try:
+            root = str(con.execute("SELECT current_database()").fetchall()[0][0])
+        except BaseException:
+            con.close()
+            raise
+        return con, caps, root
+
     def _run(self) -> None:
         try:
-            caps = EngineCapabilities.for_version(duckdb.__version__)
-            if not caps.supported:
-                minimum = ".".join(map(str, MINIMUM))
-                raise UnsupportedEngineError(
-                    f"DuckDB {duckdb.__version__} no es compatible; se requiere {minimum} o superior"
-                )
-            con = duckdb.connect(database=self._database)
+            con, caps, root = self._open()
         except BaseException as exc:
             self._started.set_exception(_wrap_start_error(exc))
             _resolve(self._invalidation, None)
@@ -332,12 +355,14 @@ class SessionWorker:
         with self._lock:
             self._con = con
             self._caps = caps
+            self._root = root
             self._accepting = True
         self._started.set_result(
             EngineInfo(
                 duckdb_version=duckdb.__version__,
                 database=self._database,
                 interrupt_enabled=caps.interrupt_verified,
+                root_catalog=root,
             )
         )
         cause: SessionInvalidatedError | None = None
