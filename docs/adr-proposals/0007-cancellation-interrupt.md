@@ -1,6 +1,6 @@
 # ADR-0007: cancelación mediante `interrupt()` como excepción controlada
 
-**Estado:** Propuesto — revisión 2 (2026-11-01) · **Requiere:** aprobación del arquitecto
+**Estado:** Principios aprobados (dictamen del 2026-11-01) — **pendiente la validación literal de este texto** · revisión 3
 **Recoge:** decisión arquitectónica del 2026-11-01 («la cancelación desde otro hilo será una excepción
 controlada, únicamente después de comprobar su seguridad»)
 **Relacionado:** ADR-0006; `spec/docs/architecture.md` §5; `spec/specs/qgis-bridge-spec.md` §5;
@@ -9,6 +9,9 @@ controlada, únicamente después de comprobar su seguridad»)
 **Cambios respecto de la revisión 1:** se corrige la latencia observada (1,5–180 ms, no 1–3 ms); se fija el
 conjunto exacto de versiones verificadas; y se separa lo implementado en G0 de lo que queda para G1/G2:
 el marcado `TRANSACTION_ABORTED` no existe todavía, porque G0 no ejecuta SQL del usuario.
+
+**Cambios respecto de la revisión 2:** el punto 3 remite a la invalidación de sesión de C13 §4 bis
+(requisito 3 del dictamen): cerrar una sesión cuya conexión no responde es una invalidación y se notifica.
 
 ## Contexto
 
@@ -36,8 +39,11 @@ como `OSError` con el texto `INTERRUPT Error`.
    del hilo propietario.
 3. **Clasificación y verificación posterior.** El worker clasifica `InterruptException` y `OSError` con
    `INTERRUPT` como `OperationCancelledError` (código `CANCELLED`). Después comprueba en su propio hilo
-   que la conexión responde (`SELECT 1`); si no responde, cierra la sesión en lugar de seguir con una
-   conexión dudosa.
+   que la conexión responde (`SELECT 1`); si no responde, **invalida la sesión** en lugar de seguir con
+   una conexión dudosa: deja de aceptar trabajo, falla lo pendiente, cierra la conexión y lo notifica una
+   sola vez con el código `SESSION_INVALIDATED`, según C13 §4 bis (`docs/proposals/C13-session-states.md`).
+   Ninguna operación posterior llega a DuckDB. En G0 ya se rechaza el trabajo nuevo y se falla lo
+   pendiente; la notificación al coordinador se implementa en G1.
 4. **Nunca éxito tras cancelar.** Una lectura cancelada devuelve `completed = False` aunque ya se hubieran
    leído todos los lotes.
 5. **Pendiente para G1/G2 (no implementado en G0).** Si la operación cancelada estaba dentro de una
@@ -50,7 +56,7 @@ como `OSError` con el texto `INTERRUPT Error`.
 - Pro: se pueden cancelar consultas largas sin lotes, algo imposible solo con la vía cooperativa.
 - Contra: cada versión nueva de DuckDB empieza sin `interrupt()` hasta que la suite de cancelación pase
   en ella y se añada a `INTERRUPT_VERIFIED`.
-- Dependencias: ADR-0006 (hilo propietario y cola); D5 (las versiones de la matriz de CI definen qué se
+- Dependencias: ADR-0006 (hilo propietario y cola); C13 §4 bis (invalidación de sesión); D5 (las versiones de la matriz de CI definen qué se
   puede verificar).
 
 ## Implementación y verificación vigentes

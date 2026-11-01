@@ -1,6 +1,6 @@
 # ADR-0010: estructura de paquetes y fronteras de importación verificadas
 
-**Estado:** Propuesto — revisión 2 (2026-11-01) · **Requiere:** aprobación del arquitecto
+**Estado:** Principios aprobados (dictamen del 2026-11-01) — **pendiente la validación literal de este texto** · revisión 2
 **Relacionado:** `spec/docs/architecture.md` §2, §6 (la estructura orientativa admite simplificarse «sin
 cambiar fronteras»); ADR-0006; ADR-0011
 

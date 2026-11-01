@@ -1,6 +1,6 @@
 # ADR-0009: PyArrow según la matriz real de QGIS, Python, NumPy y DuckDB
 
-**Estado:** Propuesto — revisión 2 (2026-11-01) · **Requiere:** aprobación del arquitecto
+**Estado:** Principios aprobados (dictamen del 2026-11-01) — **pendiente la validación literal de este texto** · revisión 2
 **Recoge:** decisión arquitectónica del 2026-11-01 («la versión de PyArrow debe elegirse a partir de la
 matriz real de QGIS, Python, NumPy y DuckDB»)
 **Relacionado:** ADR-0005, ADR-0011; `spec/docs/technology.md` (Decisión PyArrow, Empaquetado);
