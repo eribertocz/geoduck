@@ -1,0 +1,16 @@
+type/feature	1d76db	Funcionalidad o entregable
+type/bug	d73a4a	Defecto reproducible
+type/docs	0075ca	Documentación y evidencia
+type/ci	5319e7	Integración continua y herramientas
+type/spike	fbca04	Investigación con evidencia reproducible
+area/domain	c5def5	Núcleo puro
+area/engine	c5def5	Adaptador DuckDB y Session Worker
+area/bridge	c5def5	Puente Arrow → QGIS
+area/ui	c5def5	Interfaz Qt
+area/infra	c5def5	Diagnóstico, configuración, logging
+area/ci	c5def5	CI y empaquetado
+P0	b60205	Bloqueante para el gate
+P1	e99695	Importante, no bloqueante
+needs-adr	d93f0b	Requiere ADR aprobado
+needs-owner	d93f0b	Requiere decisión del propietario
+blocked	000000	Bloqueado por dependencia externa
