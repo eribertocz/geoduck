@@ -1,8 +1,7 @@
-# G0 · Documento de aceptación (propuesta de cierre)
+# G0 · Documento de aceptación
 
-**Estado:** Propuesta para aprobación del propietario y del arquitecto (2026-11-01). G0 **no** está cerrado
-hasta esa aprobación (roadmap §1: «cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba
-su documento de aceptación»). No se ha creado ningún tag ni release.
+**Estado:** **Aprobado para cierre** por el arquitecto y el propietario (2026-11-01). G0 queda cerrado al
+fusionar este documento (roadmap §1). No se ha creado ningún tag ni release.
 
 **Commit verificado:** `e6a75a0` en `main` (merge del PR #33).
 
@@ -56,8 +55,8 @@ el desarrollo**.
 **Consecuencia honesta:** mientras #10 no termine, no se afirma compatibilidad certificada en Windows para
 QGIS 3.44 ni 4.2. Las notas de cualquier release deben decirlo así.
 
-## 5. Para aprobar
+## 5. Aprobación
 
-1. Cierre de G0 con lo pendiente de §4 como trabajo de calidad no bloqueante.
-2. Tag y release `v0.1.0a1` (#12): requiere aprobación expresa aparte. Si se aprueba, el tag iría sobre
-   `e6a75a0`, con notas que digan la compatibilidad exacta verificada.
+1. **Aprobado** (2026-11-01): cierre de G0, con lo pendiente de §4 como trabajo de calidad no bloqueante.
+2. **Pendiente:** tag y release `v0.1.0a1` (#12). Requieren aprobación expresa aparte; si se aprueban, el tag
+   iría sobre `e6a75a0`, con notas que digan la compatibilidad exacta verificada.

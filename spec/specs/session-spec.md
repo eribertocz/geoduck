@@ -11,7 +11,7 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 ### `StartSession(mode, path?, access?)`
 - `mode=memory`: usa `duckdb.connect(":memory:")`; no requiere path adicional.
 - `mode=file`: crea la raíz `:memory:`, comprueba archivo/path, solicita modo `READ_ONLY` o `READ_WRITE`, luego `ATTACH '...duckdb' AS <alias> (<modo>)`.
-- No se inventan archivos por defecto sin que el usuario haya pedido crearlos; en RW, el contrato debe especificar «abrir existente» vs «crear nuevo».
+- No se inventan archivos por defecto sin que el usuario haya pedido crearlos. Hay dos acciones explícitas: **«Abrir existente»** (el archivo debe existir; si no, `DB_NOT_FOUND`) y **«Crear nueva»** (el archivo no debe existir; nunca se sobrescribe). Ningún archivo se crea de forma implícita (decisión del 2026-11-01).
 - Si falla el attach inicial, la sesión puede quedarse en memoria y el usuario recibe información explícita de qué ocurrió.
 
 ### `AttachDatabase(path, alias?, access)`
@@ -36,7 +36,8 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - No convertir `DETACH` en borrado de archivo ni en cierre ficticio.
 
 ### `CloseSession()`
-- Solicitar cancelación cooperativa; cerrar los lectores; finalizar/rollback transacciones abiertas según política explicitada al usuario; cerrar la conexión y no retener referencias.
+- Solicitar cancelación cooperativa; cerrar los lectores; cerrar la conexión y no retener referencias.
+- **Transacción abierta al cerrar** (decisión del 2026-11-01): se pregunta al usuario con tres opciones, `COMMIT`, `ROLLBACK` o **Cancelar cierre**. Cancelar no modifica la transacción y la sesión sigue abierta. Si `COMMIT` no es válido (por ejemplo, transacción abortada, `TRANSACTION_ABORTED`), la opción `COMMIT` se deshabilita.
 - No borrar archivos de usuario ni capas QGIS.
 
 ## 3. Read-only y escritura
