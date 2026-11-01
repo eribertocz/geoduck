@@ -45,3 +45,6 @@ class EngineInfo:
     duckdb_version: str
     database: str
     interrupt_enabled: bool
+    #: Nombre del catálogo raíz tal como lo informa DuckDB al conectar (`current_database()`).
+    #: No se asume que se llame `memory` (session-spec §2, DetachDatabase).
+    root_catalog: str

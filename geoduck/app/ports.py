@@ -7,6 +7,7 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from typing import Protocol
 
+from geoduck.domain.catalog import CatalogSnapshot
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.operations import EngineInfo
 
@@ -19,6 +20,10 @@ class SessionEngine(Protocol):
     def close(self) -> Future[None]: ...
 
     def cancel_current(self) -> bool: ...
+
+    def read_catalog(self) -> Future[CatalogSnapshot]:
+        """Instantánea del catálogo leída de DuckDB (nunca parcial). Falla si la sesión no acepta trabajo."""
+        ...
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:
         """Se resuelve una sola vez, al terminar el motor: la causa si se invalidó, `None` si no."""

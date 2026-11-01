@@ -6,9 +6,19 @@ from concurrent.futures import Future
 import pytest
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import SessionFailed, SessionInvalidated, SessionStarted, SessionStateChanged
+from geoduck.app.events import (
+    CatalogChanged,
+    CatalogUnavailable,
+    SessionFailed,
+    SessionInvalidated,
+    SessionStarted,
+    SessionStateChanged,
+)
+from geoduck.domain.catalog import AccessMode, AttachedDatabase, CatalogSnapshot
 from geoduck.domain.errors import (
+    EngineError,
     ErrorCode,
+    SessionClosedError,
     SessionInvalidatedError,
     SessionStateError,
     UnsupportedEngineError,
@@ -37,6 +47,7 @@ class FakeEngine:
         self.started: Future = Future()
         self.stopped: Future = Future()
         self.invalidated: Future = Future()
+        self.catalog_reads: list[Future] = []
         self.cancelled = False
 
     def start(self):
@@ -52,8 +63,12 @@ class FakeEngine:
     def invalidation(self):
         return self.invalidated
 
+    def read_catalog(self):
+        self.catalog_reads.append(Future())
+        return self.catalog_reads[-1]
 
-INFO = EngineInfo("2.0.0", ":memory:", True)
+
+INFO = EngineInfo("2.0.0", ":memory:", True, "memory")
 
 
 @pytest.fixture
@@ -253,3 +268,91 @@ def test_start_failure_records_its_cause(env):
     dispatcher.drain()
     assert coordinator.error_cause is ErrorCause.START_FAILED
     assert not coordinator._sm.can(S.READY)
+
+
+# -- catálogo (G1 paso 2) ----------------------------------------------------------------------
+
+ROOT = AttachedDatabase("memory", None, AccessMode.READ_WRITE, "duckdb")
+SALES = AttachedDatabase("ventas", "/datos/ventas.duckdb", AccessMode.READ_ONLY, "duckdb")
+ONLY_ROOT = CatalogSnapshot((ROOT,), root="memory", default="memory")
+WITH_SALES = CatalogSnapshot((ROOT, SALES), root="memory", default="memory")
+
+
+def catalogs(events):
+    return [e.catalog for e in events if isinstance(e, CatalogChanged)]
+
+
+def test_catalog_is_read_once_after_start_without_leaving_ready(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    assert len(engines[0].catalog_reads) == 1
+    assert coordinator.catalog is None  # todavía no ha llegado
+    engines[0].catalog_reads[0].set_result(ONLY_ROOT)
+    assert catalogs(events) == []  # solo tras pasar por el hilo principal
+    dispatcher.drain()
+    assert coordinator.catalog is ONLY_ROOT and catalogs(events) == [ONLY_ROOT]
+    assert states(events) == [S.CONNECTING, S.READY]
+
+
+def test_catalog_failure_discards_previous_snapshot(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].catalog_reads[0].set_result(ONLY_ROOT)
+    dispatcher.drain()
+    coordinator.refresh_catalog()
+    engines[0].catalog_reads[1].set_exception(EngineError("Catálogo incoherente"))
+    dispatcher.drain()
+    assert coordinator.catalog is None
+    unavailable = [e for e in events if isinstance(e, CatalogUnavailable)]
+    assert len(unavailable) == 1 and unavailable[0].code is ErrorCode.ENGINE_ERROR
+    assert coordinator.state is S.READY
+
+
+def test_only_the_latest_catalog_read_is_applied(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.refresh_catalog()
+    first, second = engines[0].catalog_reads
+    second.set_result(WITH_SALES)
+    first.set_result(ONLY_ROOT)  # llega tarde: superada
+    dispatcher.drain()
+    assert coordinator.catalog is WITH_SALES and catalogs(events) == [WITH_SALES]
+
+
+def test_close_drops_catalog_and_ignores_late_read(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].catalog_reads[0].set_result(ONLY_ROOT)
+    dispatcher.drain()
+    coordinator.refresh_catalog()
+    coordinator.close_session()
+    assert coordinator.catalog is None and catalogs(events)[-1] is None
+    engines[0].catalog_reads[1].set_result(WITH_SALES)
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    assert coordinator.catalog is None
+    assert catalogs(events) == [ONLY_ROOT, None]
+
+
+def test_invalidation_drops_catalog(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].catalog_reads[0].set_result(ONLY_ROOT)
+    dispatcher.drain()
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.catalog is None and catalogs(events) == [ONLY_ROOT, None]
+    with pytest.raises(SessionStateError):
+        coordinator.refresh_catalog()
+
+
+def test_catalog_read_rejected_by_closed_engine_is_reported(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].catalog_reads[0].set_exception(SessionClosedError("La sesión no acepta operaciones"))
+    dispatcher.drain()
+    assert coordinator.catalog is None
+    assert any(isinstance(e, CatalogUnavailable) and e.code is ErrorCode.SESSION_CLOSED for e in events)
+
+
+@pytest.mark.parametrize("state", ["DISCONNECTED", "CONNECTING"])
+def test_refresh_catalog_requires_ready(env, state):
+    coordinator, _dispatcher, _engines, _events = env
+    if state == "CONNECTING":
+        coordinator.start_memory_session()
+    with pytest.raises(SessionStateError):
+        coordinator.refresh_catalog()

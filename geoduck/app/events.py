@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from geoduck.domain.catalog import CatalogSnapshot
 from geoduck.domain.errors import ErrorCode
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
@@ -36,4 +37,26 @@ class SessionInvalidated:
     detail: str
 
 
-AppEvent = SessionStateChanged | SessionStarted | SessionFailed | SessionInvalidated
+@dataclass(frozen=True)
+class CatalogChanged:
+    """Nueva instantánea del catálogo, o `None` cuando ya no hay sesión de la que leerlo."""
+
+    catalog: CatalogSnapshot | None
+
+
+@dataclass(frozen=True)
+class CatalogUnavailable:
+    """No se pudo leer el catálogo. La instantánea anterior se descarta: nunca se muestra una dudosa."""
+
+    code: ErrorCode
+    message: str
+
+
+AppEvent = (
+    SessionStateChanged
+    | SessionStarted
+    | SessionFailed
+    | SessionInvalidated
+    | CatalogChanged
+    | CatalogUnavailable
+)

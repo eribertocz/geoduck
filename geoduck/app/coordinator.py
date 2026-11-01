@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Coordinador de sesión: StartSession, CloseSession, CancelOperation e invalidación de sesión.
+"""Coordinador de sesión: StartSession, CloseSession, CancelOperation, invalidación y catálogo.
 
 Vive en el hilo principal. Toda finalización del motor se reenvía al hilo principal mediante el
 `Dispatcher` antes de cambiar el estado, de modo que la máquina de estados nunca se toca desde dos hilos.
@@ -14,12 +14,15 @@ from concurrent.futures import TimeoutError as FutureTimeout
 
 from geoduck.app.events import (
     AppEvent,
+    CatalogChanged,
+    CatalogUnavailable,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, SessionEngine
+from geoduck.domain.catalog import CatalogSnapshot
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
@@ -37,6 +40,9 @@ class SessionCoordinator:
         self._sm.subscribe(lambda a, b: self._emit(SessionStateChanged(a, b)))
         self._engine: SessionEngine | None = None
         self._info: EngineInfo | None = None
+        self._catalog: CatalogSnapshot | None = None
+        #: Cada lectura del catálogo recibe un número; solo se aplica la más reciente.
+        self._catalog_generation = 0
         self._listeners: list[Listener] = []
 
     # -- consulta ----------------------------------------------------------------------------------
@@ -52,6 +58,11 @@ class SessionCoordinator:
     @property
     def engine_info(self) -> EngineInfo | None:
         return self._info
+
+    @property
+    def catalog(self) -> CatalogSnapshot | None:
+        """Última instantánea válida del catálogo; `None` si no hay sesión o no se pudo leer."""
+        return self._catalog
 
     def subscribe(self, listener: Listener) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -88,6 +99,7 @@ class SessionCoordinator:
             return done
         engine, self._engine = self._engine, None
         self._info = None
+        self._drop_catalog()
         if engine is None:  # ERROR_RECOVERABLE sin motor vivo
             self._sm.transition(SessionState.DISCONNECTED)
             done = Future()
@@ -97,6 +109,23 @@ class SessionCoordinator:
         closed = engine.close()
         closed.add_done_callback(lambda _f: self._dispatcher.post(self._on_closed))
         return closed
+
+    def refresh_catalog(self) -> None:
+        """Relee el catálogo de DuckDB. La sesión debe estar `READY`.
+
+        Es una introspección interna y breve, encolada en el worker serial: no cambia el estado de la
+        sesión. El resultado se aplica en el hilo principal y solo si sigue siendo la lectura más reciente
+        de la misma sesión.
+        """
+        if self._sm.state is not SessionState.READY or self._engine is None:
+            raise SessionStateError(f"No se puede leer el catálogo en estado {self._sm.state.value}")
+        engine = self._engine
+        self._catalog_generation += 1
+        generation = self._catalog_generation
+        reading = engine.read_catalog()
+        reading.add_done_callback(
+            lambda fut: self._dispatcher.post(lambda: self._on_catalog(engine, generation, fut))
+        )
 
     def cancel_current_operation(self) -> bool:
         return self._engine.cancel_current() if self._engine is not None else False
@@ -127,6 +156,30 @@ class SessionCoordinator:
         engine.invalidation().add_done_callback(
             lambda inv: self._dispatcher.post(lambda: self._on_invalidated(engine, inv))
         )
+        self.refresh_catalog()
+
+    def _on_catalog(self, engine: SessionEngine, generation: int, fut: Future[CatalogSnapshot]) -> None:
+        if engine is not self._engine or generation != self._catalog_generation:
+            return  # sesión cerrada o lectura superada por otra más reciente
+        exc = fut.exception()
+        if exc is None:
+            self._catalog = fut.result()
+            self._emit(CatalogChanged(self._catalog))
+            return
+        self._catalog = None
+        if isinstance(exc, GeoDuckError):
+            code, message = exc.code, exc.message
+        else:
+            code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
+        _log.warning("No se pudo leer el catálogo [%s]", code.value)
+        self._emit(CatalogUnavailable(code, message))
+
+    def _drop_catalog(self) -> None:
+        """Sin sesión no hay catálogo: se descarta y se anulan las lecturas en curso."""
+        self._catalog_generation += 1
+        if self._catalog is not None:
+            self._catalog = None
+            self._emit(CatalogChanged(None))
 
     def _on_invalidated(self, engine: SessionEngine, fut: Future[SessionInvalidatedError | None]) -> None:
         """C13 §4 bis: el motor ya rechazó el trabajo nuevo, falló lo pendiente y cerró la conexión."""
@@ -137,6 +190,7 @@ class SessionCoordinator:
             return
         self._engine = None
         self._info = None
+        self._drop_catalog()
         _log.error("Sesión invalidada [%s]: %s", cause.code.value, cause.detail)
         self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)
         self._emit(SessionInvalidated(cause.code, cause.message, cause.detail))
