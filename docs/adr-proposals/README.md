@@ -10,3 +10,4 @@ Estos ADR **no** modifican el contrato aprobado en `spec/`. Al aprobarse, el arq
 | [0008](0008-geoarrow-geometry-transport.md) | Geometría y CRS vía GeoArrow nativo | Decisión arquitectónica 2026-11-01; F-10 | G3/G4 | Propuesto (requiere enmienda de spatial-spec §5) |
 | [0009](0009-pyarrow-selection-by-matrix.md) | PyArrow por celda de matriz | Decisión arquitectónica 2026-11-01; F-03 | G0 | Propuesto |
 | [0010](0010-package-boundaries.md) | Paquetes y fronteras de importación verificadas | architecture.md §6 | G0 | Propuesto |
+| [0011](0011-coexistence-with-other-duckdb-plugins.md) | Convivencia con otros complementos que usan su propio DuckDB (R11) | Decisión arquitectónica 2026-11-01; evidencia Windows QGIS 3.34.15 | G0 (diagnóstico) / G7 | Propuesto |
