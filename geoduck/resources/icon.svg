@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Icono original de GeoDuck: cilindro de base de datos con retícula de mapa -->
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="#2f5d62"/>
+  <ellipse cx="32" cy="20" rx="16" ry="6" fill="#f2c94c"/>
+  <path d="M16 20v22c0 3.3 7.2 6 16 6s16-2.7 16-6V20c0 3.3-7.2 6-16 6s-16-2.7-16-6z" fill="#f2c94c"/>
+  <path d="M16 31c0 3.3 7.2 6 16 6s16-2.7 16-6" fill="none" stroke="#2f5d62" stroke-width="2"/>
+  <path d="M24 26v21M32 27v21M40 26v21" stroke="#2f5d62" stroke-width="1.5" opacity="0.55"/>
+</svg>
