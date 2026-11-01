@@ -29,7 +29,7 @@ El texto pide verificar, pero no fija qué hace GeoDuck con el orden de ejes. Ad
 | F-14b | Con el ajuste sin fijar, `ST_Transform` **falla** y pide declarar el orden de ejes. DuckDB anuncia que en 2.1 el valor por defecto será `true` | Windows, DuckDB 2.0.0 | idem |
 | F-14c | `ST_Transform(ST_Point(-68.15,-16.5),'EPSG:4326','EPSG:32719', true)` y `ST_Transform(ST_Point(-16.5,-68.15), …, false)` dan el mismo punto, `590716.04 8175564.99` (La Paz en UTM 19S) | Windows, DuckDB 2.0.0 | idem |
 | F-16 | Sin CRS declarado, DuckDB exporta `geoarrow.wkb` con metadatos `{}`. Con un CRS que no es PROJJSON (p. ej. `ST_SetCRS(…, 'FOO:123')`) lo exporta como `{"crs_type":"authority_code","crs":"FOO:123"}`, sin validarlo | Linux, DuckDB 1.5.6 y 2.0.0 | `docs/evidence/g0/c4/qgis_crs_unknown.py` |
-| F-17 | QGIS no reconoce `FOO:123` (`isValid() = False`) ni inventa un CRS; en ambos casos la capa queda con CRS no válido y conserva x = −68,15, y = −16,5 | Linux, QGIS 3.44.14, DuckDB 2.0.0 | `docs/evidence/g0/c4/result_crs_q344.json` |
+| F-17 | QGIS no reconoce `FOO:123` (`isValid() = False`) ni inventa un CRS; en ambos casos la capa queda con CRS no válido y conserva x = −68,15, y = −16,5 | Linux, QGIS 3.44.14 y 4.2.3, DuckDB 2.0.0 | `docs/evidence/g0/c4/result_crs_q344.json`, `result_crs_q42.json` |
 | F-14d | En el WKB que entrega GeoDuck, QGIS toma la coordenada **x como longitud (este)**, aunque el CRS sea `EPSG:4326` (`hasAxisInverted() = True`). Un punto con x = −68,15 e y = −16,5 transformado por QGIS a EPSG:32719 da `590716.04 8175564.99`, igual que DuckDB. Lo mismo ocurre con `OGC:CRS84` | Linux, QGIS 3.44.14 y 4.2.3, DuckDB 2.0.0 | `docs/evidence/g0/c4/` |
 
 Conclusión de los hechos: el WKB que produce DuckDB y el que consume QGIS usan el mismo convenio

@@ -18,6 +18,6 @@ Reproducir: `QT_QPA_PLATFORM=offscreen python qgis_axis.py` dentro de un Python 
 ## CRS ausente y desconocido
 
 `qgis_crs_unknown.py` exporta desde DuckDB el mismo punto sin CRS, con `OGC:CRS84` y con un CRS inventado
-(`FOO:123`), y lo carga en QGIS. Resultado en QGIS 3.44.14 + DuckDB 2.0.0: `result_crs_q344.json`.
+(`FOO:123`), y lo carga en QGIS. Resultados con DuckDB 2.0.0: QGIS 3.44.14 → `result_crs_q344.json`; QGIS 4.2.3 → `result_crs_q42.json`.
 Sin CRS y con `FOO:123`, QGIS deja la capa con CRS no válido (no inventa uno) y las coordenadas no cambian.
 Reproducir: `QT_QPA_PLATFORM=offscreen python qgis_crs_unknown.py`.

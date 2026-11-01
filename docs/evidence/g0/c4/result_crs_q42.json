@@ -1,0 +1,28 @@
+{
+ "qgis": "4.2.3-Bel\u00e9m do Par\u00e1",
+ "duckdb": "2.0.0",
+ "sin_crs": {
+  "geoarrow_crs_type": null,
+  "qgis_crs_valid": false,
+  "qgis_authid": "",
+  "layer_crs_valid": false,
+  "x": -68.15,
+  "y": -16.5
+ },
+ "OGC:CRS84": {
+  "geoarrow_crs_type": "projjson",
+  "qgis_crs_valid": true,
+  "qgis_authid": "OGC:CRS84",
+  "layer_crs_valid": true,
+  "x": -68.15,
+  "y": -16.5
+ },
+ "FOO:123": {
+  "geoarrow_crs_type": "authority_code",
+  "qgis_crs_valid": false,
+  "qgis_authid": "",
+  "layer_crs_valid": false,
+  "x": -68.15,
+  "y": -16.5
+ }
+}
