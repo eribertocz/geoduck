@@ -1,8 +1,6 @@
 # Propuesta C4 — contrato de CRS y orden de ejes
 
-**Estado:** Revisión 2 (2026-11-01). Principios aprobados por el arquitecto, con la condición de preservar
-coordenadas y CRS sin interpretaciones arbitrarias ni cambios silenciosos de configuración. La revisión 2
-concreta AX-1..AX-4 con valores esperados y el caso de CRS desconocido (requisito 2 del dictamen). **No modifica** `spec/`: el texto propuesto se
+**Estado:** **Aprobado arquitectónicamente** (2026-11-01), incluidas las pruebas AX. Revisión 2. **No modifica** `spec/`: el texto propuesto se
 incorpora solo si se aprueba.
 **Afecta a:** `spec/specs/spatial-spec.md` §4 (y §5 y §8 en lo indicado).
 **Depende de:** ADR-0008 (transporte GeoArrow, propuesto) para §5.
@@ -112,7 +110,8 @@ riesgo aparece solo si el SQL del usuario produce geometrías en el orden de la 
 
 ## 7. Preguntas para el arquitecto
 
-1. ¿Se aprueba que GeoDuck **no** fije `geometry_always_xy`, ni siquiera a `true` para anticipar DuckDB 2.1?
-2. ¿El valor efectivo debe mostrarse solo en el diagnóstico (G0/G4) o también en cada resultado espacial?
-3. AX-4: ¿se aprueba que, con CRS desconocido, la capa no se publique sin una decisión explícita del usuario
-   (en vez de publicarla directamente con advertencia)?
+1. ~~¿Se aprueba que GeoDuck **no** fije `geometry_always_xy`, ni siquiera a `true` para anticipar DuckDB
+   2.1?~~ **Resuelta** (2026-11-01): aprobado, sin cambios silenciosos de configuración.
+2. **Abierta.** ¿El valor efectivo debe mostrarse solo en el diagnóstico (G0/G4) o también en cada resultado espacial?
+3. ~~AX-4: ¿se aprueba que, con CRS desconocido, la capa no se publique sin una decisión explícita del
+   usuario?~~ **Resuelta** (2026-11-01): aprobada con las pruebas AX.
