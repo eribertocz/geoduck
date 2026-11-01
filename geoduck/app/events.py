@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from geoduck.domain.catalog import CatalogSnapshot
+from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot
 from geoduck.domain.errors import ErrorCode
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
@@ -52,6 +52,19 @@ class CatalogUnavailable:
     message: str
 
 
+@dataclass(frozen=True)
+class DatabaseAttached:
+    database: AttachedDatabase
+
+
+@dataclass(frozen=True)
+class AttachFailed:
+    """No se adjuntó la base. La sesión sigue utilizable con el catálogo que tenía."""
+
+    code: ErrorCode
+    message: str
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -59,4 +72,6 @@ AppEvent = (
     | SessionInvalidated
     | CatalogChanged
     | CatalogUnavailable
+    | DatabaseAttached
+    | AttachFailed
 )
