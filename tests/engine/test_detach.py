@@ -22,10 +22,13 @@ from geoduck.domain.errors import (
     ActiveResultError,
     DetachError,
     ErrorCode,
+    OperationCancelledError,
     SessionClosedError,
     SessionInvalidatedError,
 )
+from geoduck.domain.transaction import TransactionState
 from geoduck.engine import detach as engine_detach
+from geoduck.engine.compat import EngineCapabilities
 from geoduck.engine.detach import detach_database
 from geoduck.engine.worker import SessionWorker
 
@@ -195,27 +198,57 @@ def test_detach_waits_for_a_read_in_progress(worker, db_file):
 # -- transacciones y errores fatales ---------------------------------------------------------------
 
 
-def test_detach_with_outstanding_transaction_work_is_refused_or_reported(worker, db_file):
-    """F-28: 1.5.0 desadjunta aunque la transacción tenga cambios; 1.5.6 y 2.0 lo rechazan y dejan la
-    transacción abortada (F-29).
+@pytest.mark.parametrize("work", [False, True])
+def test_detach_is_blocked_by_an_open_transaction_in_every_version(worker, db_file, work):
+    """Regla obligatoria (dictamen del 2026-11-01). Sin ella, 1.5.0 desadjuntaría con cambios pendientes
+    (F-28), y 1.5.6/2.0 rechazarían el DETACH dejando la transacción abortada (F-29)."""
+    attach(worker, db_file, RW)
+    run(worker, "BEGIN")
+    if work:
+        run(worker, "INSERT INTO b.t VALUES (-1)")
+    with pytest.raises(DetachError) as info:
+        worker.detach("b").result(TIMEOUT)
+    assert info.value.code is ErrorCode.DETACH_FAILED and info.value.detail == "open_transaction: ACTIVE"
+    assert info.value.transaction is TransactionState.ACTIVE  # el DETACH nunca llegó a DuckDB: no se abortó
+    run(worker, "COMMIT" if work else "ROLLBACK")
+    expected = 1001 if work else 1000
+    assert run(worker, "SELECT count(*) FROM b.t").rows == ((expected,),)
+    worker.detach("b").result(TIMEOUT)  # sin transacción, se desadjunta
 
-    En G1 no hay SQL del usuario, así que GeoDuck no abre transacciones; la validación transaccional
-    completa es del paso 6 (TRANSACTION_ABORTED, ADR-0007 punto 6). Aquí se comprueba que el rechazo se
-    informa como DETACH_FAILED y que, tras el ROLLBACK, la base sigue adjunta.
-    """
+
+@pytest.mark.skipif(
+    not EngineCapabilities.for_version(duckdb.__version__).interrupt_verified,
+    reason="la transacción se aborta con interrupt(), no verificado en esta versión (ADR-0007)",
+)
+def test_detach_is_blocked_by_an_aborted_transaction(worker, db_file):
     attach(worker, db_file, RW)
     run(worker, "BEGIN")
     run(worker, "INSERT INTO b.t VALUES (-1)")
-    try:
+    long_query = worker.submit(
+        lambda h, t: h.execute("SELECT count(*) FROM range(5000000000) t(a) WHERE a % 7 = 3")
+    )
+    _wait_running(long_query)
+    worker.cancel(long_query.op_id)  # una interrupción dentro de la transacción la aborta (F-32)
+    with pytest.raises(OperationCancelledError):
+        long_query.future.result(TIMEOUT)
+    with pytest.raises(DetachError) as info:
         worker.detach("b").result(TIMEOUT)
-    except DetachError as exc:
-        assert exc.code is ErrorCode.DETACH_FAILED and "transacción" in exc.message
-        run(worker, "ROLLBACK")
-        assert catalog(worker).get("b") is not None
-        assert run(worker, "SELECT count(*) FROM b.t").rows == ((1000,),)
-    else:
-        assert duckdb.__version__.startswith("1.5.0"), "solo 1.5.0 acepta este DETACH"
-        run(worker, "ROLLBACK")
+    assert info.value.detail == "open_transaction: ABORTED"
+    assert info.value.transaction is TransactionState.ABORTED
+    run(worker, "ROLLBACK")
+    assert run(worker, "SELECT count(*) FROM b.t").rows == ((1000,),)  # el INSERT no se confirmó
+
+
+def _wait_running(handle, timeout=5.0):
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if handle.future.running():
+            time.sleep(0.3)
+            return
+        time.sleep(0.01)
+    raise AssertionError("la operación no empezó")
 
 
 def test_fatal_error_during_detach_invalidates_the_session(db_file, monkeypatch):

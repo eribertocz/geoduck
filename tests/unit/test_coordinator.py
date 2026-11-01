@@ -17,6 +17,8 @@ from geoduck.app.events import (
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    TransactionFailed,
+    TransactionStateChanged,
 )
 from geoduck.domain.catalog import (
     AccessMode,
@@ -38,6 +40,7 @@ from geoduck.domain.errors import (
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause
 from geoduck.domain.session import SessionState as S
+from geoduck.domain.transaction import TransactionState as T
 
 
 class QueueDispatcher:
@@ -62,6 +65,8 @@ class FakeEngine:
         self.catalog_reads: list[Future] = []
         self.attaches: list[tuple[AttachRequest, Future]] = []
         self.detaches: list[tuple[str, Future]] = []
+        self.commits: list[Future] = []
+        self.rollbacks: list[Future] = []
         self.cancelled = False
 
     def start(self):
@@ -84,6 +89,14 @@ class FakeEngine:
     def detach(self, alias):
         self.detaches.append((alias, Future()))
         return self.detaches[-1][1]
+
+    def commit(self):
+        self.commits.append(Future())
+        return self.commits[-1]
+
+    def rollback(self):
+        self.rollbacks.append(Future())
+        return self.rollbacks[-1]
 
     def read_catalog(self):
         self.catalog_reads.append(Future())
@@ -578,3 +591,150 @@ def test_close_during_detach_ignores_the_late_result(env):
     dispatcher.drain()
     assert coordinator.state is S.DISCONNECTED and coordinator.catalog is None
     assert not any(isinstance(e, DatabaseDetached) for e in events)
+
+
+# -- transacciones (G1 paso 6) ---------------------------------------------------------------------
+
+
+def failed_with(error_cls, code, transaction, message="falló"):
+    exc = error_cls(message, code=code)
+    exc.transaction = transaction
+    return exc
+
+
+def tx_states(events):
+    return [e.state for e in events if isinstance(e, TransactionStateChanged)]
+
+
+def test_new_session_starts_in_autocommit_and_close_forgets_it(env):
+    coordinator, _dispatcher, _engines, events = _ready(env)
+    assert coordinator.transaction_state is T.NONE
+    coordinator.close_session()
+    assert coordinator.transaction_state is None
+    assert tx_states(events) == [T.NONE, None]
+
+
+def test_commit_goes_busy_and_records_autocommit(env):
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator._set_transaction(T.ACTIVE)
+    coordinator.commit_transaction()
+    assert coordinator.state is S.BUSY
+    engines[0].commits[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.transaction_state is T.NONE
+
+
+def test_commit_of_an_aborted_transaction_is_refused_and_requires_rollback(env):
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.commit_transaction()
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
+    assert not coordinator._sm.can(S.READY)  # no vuelve a READY sin ROLLBACK
+    assert [e.code for e in events if isinstance(e, TransactionFailed)] == [ErrorCode.TRANSACTION_ABORTED]
+    for blocked in (coordinator.commit_transaction, lambda: coordinator.detach_database("x")):
+        with pytest.raises(SessionStateError):
+            blocked()
+
+
+def test_rollback_recovers_an_aborted_transaction_back_to_ready(env):
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.commit_transaction()
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    coordinator.rollback_transaction()
+    assert coordinator.state is S.ERROR_RECOVERABLE  # la recuperación no pasa por BUSY
+    with pytest.raises(SessionStateError):
+        coordinator.rollback_transaction()  # una sola recuperación a la vez
+    engines[0].rollbacks[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.error_cause is None
+    assert coordinator.transaction_state is T.NONE
+    assert tx_states(events)[-2:] == [T.ABORTED, T.NONE]
+
+
+def test_failed_recovery_rollback_stays_in_error_recoverable(env):
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator.commit_transaction()
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    coordinator.rollback_transaction()
+    engines[0].rollbacks[0].set_exception(failed_with(TransactionError, ErrorCode.ENGINE_ERROR, T.ABORTED))
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
+    coordinator.rollback_transaction()  # se puede reintentar
+    assert len(engines[0].rollbacks) == 2
+
+
+def test_rollback_from_ready_goes_busy(env):
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator._set_transaction(T.ACTIVE)
+    coordinator.rollback_transaction()
+    assert coordinator.state is S.BUSY
+    engines[0].rollbacks[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.transaction_state is T.NONE
+
+
+def test_operation_failure_with_aborted_transaction_does_not_return_to_ready(env):
+    """ADR-0007 punto 6: si la transacción quedó abortada, la sesión no vuelve a READY ni relee nada."""
+    from geoduck.domain.errors import DetachError
+
+    coordinator, dispatcher, engines, events = _ready_with_sales(env)
+    coordinator.detach_database("ventas")
+    engines[0].detaches[0][1].set_exception(failed_with(DetachError, ErrorCode.DETACH_FAILED, T.ABORTED))
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
+    assert len(engines[0].catalog_reads) == 1  # no se relee el catálogo con la transacción abortada
+    assert any(isinstance(e, DetachFailed) for e in events)
+
+
+def test_operation_failure_with_active_transaction_returns_to_ready_and_tracks_it(env):
+    from geoduck.domain.errors import DetachError
+
+    coordinator, dispatcher, engines, _events = _ready_with_sales(env)
+    coordinator.detach_database("ventas")
+    engines[0].detaches[0][1].set_exception(failed_with(DetachError, ErrorCode.DETACH_FAILED, T.ACTIVE))
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.transaction_state is T.ACTIVE
+
+
+def test_invalidation_during_recovery_ends_invalidated(env):
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator.commit_transaction()
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    coordinator.rollback_transaction()
+    engines[0].rollbacks[0].set_exception(CAUSE.fresh())
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.error_cause is ErrorCause.SESSION_INVALIDATED
+    assert coordinator.transaction_state is None
+    with pytest.raises(SessionStateError):
+        coordinator.rollback_transaction()
+
+
+@pytest.mark.parametrize("use_case", ["commit_transaction", "rollback_transaction"])
+def test_transaction_use_cases_require_a_session(env, use_case):
+    coordinator, _dispatcher, _engines, _events = env
+    with pytest.raises(SessionStateError):
+        getattr(coordinator, use_case)()

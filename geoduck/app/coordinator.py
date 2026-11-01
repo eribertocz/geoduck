@@ -26,12 +26,15 @@ from geoduck.app.events import (
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    TransactionFailed,
+    TransactionStateChanged,
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, SessionEngine
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
+from geoduck.domain.transaction import TransactionState
 
 _log = logging.getLogger("geoduck.app")
 
@@ -51,6 +54,10 @@ class SessionCoordinator:
         self._catalog_generation = 0
         #: Archivo que se adjunta en cuanto la sesión esté lista (StartSession(mode=file)).
         self._pending_attach: AttachRequest | None = None
+        #: Último estado transaccional comprobado en DuckDB; `None` sin sesión.
+        self._transaction: TransactionState | None = None
+        #: Un ROLLBACK de recuperación en curso desde ERROR_RECOVERABLE (no pasa por BUSY).
+        self._recovering = False
         self._listeners: list[Listener] = []
 
     # -- consulta ----------------------------------------------------------------------------------
@@ -66,6 +73,11 @@ class SessionCoordinator:
     @property
     def engine_info(self) -> EngineInfo | None:
         return self._info
+
+    @property
+    def transaction_state(self) -> TransactionState | None:
+        """Último estado transaccional comprobado en DuckDB (ADR-0007 punto 6); `None` sin sesión."""
+        return self._transaction
 
     @property
     def catalog(self) -> CatalogSnapshot | None:
@@ -129,6 +141,43 @@ class SessionCoordinator:
         detaching = engine.detach(alias)
         detaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_detached(engine, fut)))
 
+    def commit_transaction(self) -> None:
+        """COMMIT. El motor comprueba antes el estado real y nunca confirma una transacción abortada."""
+        engine = self._require_ready("confirmar la transacción")
+        self._sm.transition(SessionState.BUSY)
+        engine.commit().add_done_callback(
+            lambda fut: self._dispatcher.post(lambda: self._on_transaction_end(engine, fut, recovering=False))
+        )
+
+    def rollback_transaction(self) -> None:
+        """ROLLBACK. Desde `READY` pasa por `BUSY`. Es también la recuperación segura de una transacción
+        abortada: desde `ERROR_RECOVERABLE` con causa `TRANSACTION_ABORTED`, un ROLLBACK confirmado devuelve
+        la sesión a `READY` (ADR-0007 punto 6)."""
+        recovering = (
+            self._sm.state is SessionState.ERROR_RECOVERABLE
+            and self._sm.error_cause is ErrorCause.TRANSACTION_ABORTED
+            and self._engine is not None
+        )
+        if recovering:
+            if self._recovering:
+                raise SessionStateError("Ya hay una recuperación en curso")
+            engine = self._engine
+            assert engine is not None
+            self._recovering = True
+        else:
+            engine = self._require_ready("revertir la transacción")
+            self._sm.transition(SessionState.BUSY)
+        engine.rollback().add_done_callback(
+            lambda fut: self._dispatcher.post(
+                lambda: self._on_transaction_end(engine, fut, recovering=recovering)
+            )
+        )
+
+    def _require_ready(self, action: str) -> SessionEngine:
+        if self._sm.state is not SessionState.READY or self._engine is None:
+            raise SessionStateError(f"No se puede {action} en estado {self._sm.state.value}")
+        return self._engine
+
     def close_session(self) -> Future[None]:
         """CloseSession(): cancela lo que esté en curso y cierra el motor sin bloquear la UI."""
         state = self._sm.state
@@ -139,6 +188,8 @@ class SessionCoordinator:
         engine, self._engine = self._engine, None
         self._info = None
         self._pending_attach = None
+        self._recovering = False
+        self._set_transaction(None)
         self._drop_catalog()
         if engine is None:  # ERROR_RECOVERABLE sin motor vivo
             self._sm.transition(SessionState.DISCONNECTED)
@@ -193,6 +244,7 @@ class SessionCoordinator:
         self._info = fut.result()
         self._sm.transition(SessionState.READY)
         self._emit(SessionStarted(self._info))
+        self._set_transaction(TransactionState.NONE)  # una conexión nueva empieza en autocommit
         engine.invalidation().add_done_callback(
             lambda inv: self._dispatcher.post(lambda: self._on_invalidated(engine, inv))
         )
@@ -208,21 +260,20 @@ class SessionCoordinator:
         exc = fut.exception()
         if isinstance(exc, SessionInvalidatedError):
             return  # la invalidación llega por su propio camino y lleva a ERROR_RECOVERABLE
-        self._sm.transition(SessionState.READY)
         if exc is None:
+            self._sm.transition(SessionState.READY)
             result = fut.result()
             self._catalog_generation += 1  # cualquier lectura anterior queda superada
             self._catalog = result.catalog
             self._emit(CatalogChanged(result.catalog))
             self._emit(DatabaseAttached(result.database))
             return
-        if isinstance(exc, GeoDuckError):
-            code, message = exc.code, exc.message
-        else:
-            code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
+        code, message = _describe(exc)
         _log.warning("No se adjuntó la base [%s]", code.value)
+        usable = self._end_failed_operation(exc)
         self._emit(AttachFailed(code, message))
-        self.refresh_catalog()  # el catálogo se relee de DuckDB; nunca se supone
+        if usable:
+            self.refresh_catalog()  # el catálogo se relee de DuckDB; nunca se supone
 
     def _on_catalog(self, engine: SessionEngine, generation: int, fut: Future[CatalogSnapshot]) -> None:
         if engine is not self._engine or generation != self._catalog_generation:
@@ -246,21 +297,66 @@ class SessionCoordinator:
         exc = fut.exception()
         if isinstance(exc, SessionInvalidatedError):
             return  # la invalidación llega por su propio camino y lleva a ERROR_RECOVERABLE
-        self._sm.transition(SessionState.READY)
         if exc is None:
+            self._sm.transition(SessionState.READY)
             result = fut.result()
             self._catalog_generation += 1
             self._catalog = result.catalog
             self._emit(CatalogChanged(result.catalog))
             self._emit(DatabaseDetached(result.database))
             return
-        if isinstance(exc, GeoDuckError):
-            code, message = exc.code, exc.message
-        else:
-            code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
+        code, message = _describe(exc)
         _log.warning("No se desadjuntó la base [%s]", code.value)
+        usable = self._end_failed_operation(exc)
         self._emit(DetachFailed(code, message))
-        self.refresh_catalog()  # la base sigue adjunta: se confirma con DuckDB, no se supone
+        if usable:
+            self.refresh_catalog()  # la base sigue adjunta: se confirma con DuckDB, no se supone
+
+    def _on_transaction_end(
+        self, engine: SessionEngine, fut: Future[TransactionState], *, recovering: bool
+    ) -> None:
+        expected = SessionState.ERROR_RECOVERABLE if recovering else SessionState.BUSY
+        if engine is not self._engine or self._sm.state is not expected:
+            return  # la sesión se cerró o se invalidó mientras tanto
+        if recovering:
+            self._recovering = False
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return  # la invalidación llega por su propio camino
+        if exc is None:
+            self._set_transaction(fut.result())
+            if recovering:
+                self._sm.resolve_transaction()
+            self._sm.transition(SessionState.READY)
+            return
+        code, message = _describe(exc)
+        _log.warning("COMMIT/ROLLBACK rechazado [%s]", code.value)
+        if recovering:
+            self._record_transaction(exc)  # sigue en ERROR_RECOVERABLE: la transacción no se resolvió
+        else:
+            self._end_failed_operation(exc)
+        self._emit(TransactionFailed(code, message))
+
+    def _end_failed_operation(self, exc: BaseException) -> bool:
+        """Cierra una operación fallida (BUSY o DETACHING). Vuelve a `READY` solo si la conexión y la
+        transacción siguen utilizables (dictamen C13); con la transacción abortada pasa a
+        `ERROR_RECOVERABLE` hasta un ROLLBACK. Devuelve True si la sesión quedó `READY`."""
+        self._record_transaction(exc)
+        if self._transaction is TransactionState.ABORTED:
+            self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.TRANSACTION_ABORTED)
+            return False
+        self._sm.transition(SessionState.READY)
+        return True
+
+    def _record_transaction(self, exc: BaseException) -> None:
+        state = exc.transaction if isinstance(exc, GeoDuckError) else None
+        if state is not None:
+            self._set_transaction(state)
+
+    def _set_transaction(self, state: TransactionState | None) -> None:
+        if state is not self._transaction:
+            self._transaction = state
+            self._emit(TransactionStateChanged(state))
 
     def _drop_catalog(self) -> None:
         """Sin sesión no hay catálogo: se descarta y se anulan las lecturas en curso."""
@@ -278,9 +374,14 @@ class SessionCoordinator:
             return
         self._engine = None
         self._info = None
+        self._recovering = False
+        self._set_transaction(None)
         self._drop_catalog()
         _log.error("Sesión invalidada [%s]: %s", cause.code.value, cause.detail)
-        self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)
+        if self._sm.state is SessionState.ERROR_RECOVERABLE:
+            self._sm.mark_invalidated()  # p. ej. durante la recuperación de una transacción abortada
+        else:
+            self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)
         self._emit(SessionInvalidated(cause.code, cause.message, cause.detail))
 
     def _on_closed(self) -> None:
@@ -300,3 +401,9 @@ class SessionCoordinator:
     def _emit(self, event: AppEvent) -> None:
         for listener in list(self._listeners):
             listener(event)
+
+
+def _describe(exc: BaseException) -> tuple[ErrorCode, str]:
+    if isinstance(exc, GeoDuckError):
+        return exc.code, exc.message
+    return ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"

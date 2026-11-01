@@ -30,3 +30,15 @@ Verificado con DuckDB 1.5.0, 1.5.6 y 2.0.0 en Linux. Script: `detach_behaviour.p
 | F-27 | `DETACH` hace checkpoint: el `.wal` desaparece, otro proceso abre el archivo en RW y ve los datos confirmados | Liberación real del bloqueo comprobada desde un proceso independiente |
 | F-28 | Con una transacción abierta que tiene cambios en la base: 1.5.0 la desadjunta igualmente; 1.5.6 y 2.0 lo rechazan («outstanding work») | Se informa `DETACH_FAILED`. En G1 GeoDuck no abre transacciones (no hay SQL del usuario); la validación transaccional es del paso 6 |
 | F-29 | En 1.5.6 y 2.0, ese `DETACH` rechazado deja la transacción **abortada** («Current transaction is aborted») | Entrada para el paso 6 (`TRANSACTION_ABORTED`, ADR-0007 punto 6) |
+
+## Transacciones (paso 6)
+
+Verificado con DuckDB 1.5.0, 1.5.6 y 2.0.0 en Linux. Script: `transaction_behaviour.py`.
+
+| ID | Hecho | Consecuencia en GeoDuck |
+|---|---|---|
+| F-30 | No existe una función que informe si hay una transacción abierta, y un `BEGIN` dentro de otra transacción **aborta la del usuario** | No se usa `BEGIN` para comprobar |
+| F-31 | `txid_current()` devuelve el mismo valor en dos sentencias seguidas solo dentro de una transacción explícita; en autocommit cambia en cada sentencia. Con la transacción abortada, cualquier sentencia falla con «Current transaction is aborted» | Comprobación sin efectos: dos lecturas seguidas en la misma operación serial distinguen `NONE`, `ACTIVE` y `ABORTED` |
+| F-32 | Una interrupción dentro de una transacción la deja abortada en todas las versiones | Tras cancelar, el worker comprueba el estado y lo adjunta al error |
+| F-33 | Un error de catálogo dentro de una transacción la aborta en 2.0, pero no en 1.5.x | El estado siempre se comprueba en DuckDB; nunca se deduce del tipo de error |
+| F-07 (recordatorio) | `COMMIT` de una transacción abortada responde OK y revierte sin avisar | GeoDuck nunca lo envía: comprueba antes y rechaza con `TRANSACTION_ABORTED` |

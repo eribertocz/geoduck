@@ -10,6 +10,7 @@ from typing import Protocol
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.operations import EngineInfo
+from geoduck.domain.transaction import TransactionState
 
 
 class SessionEngine(Protocol):
@@ -31,6 +32,14 @@ class SessionEngine(Protocol):
 
     def detach(self, alias: str) -> Future[DetachResult]:
         """DetachDatabase real. Devuelve la base desadjuntada y el catálogo resultante."""
+        ...
+
+    def commit(self) -> Future[TransactionState]:
+        """COMMIT de una transacción abierta y utilizable; rechaza una abortada (nunca la envía)."""
+        ...
+
+    def rollback(self) -> Future[TransactionState]:
+        """ROLLBACK de una transacción abierta o abortada."""
         ...
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:

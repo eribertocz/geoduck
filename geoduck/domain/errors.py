@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from geoduck.domain.transaction import TransactionState
+
 
 class ErrorCode(str, Enum):
     """Códigos estables y distinguibles que la UI traduce a mensajes accionables."""
@@ -46,6 +48,9 @@ class GeoDuckError(Exception):
             self.code = code
         self.message = message
         self.detail = detail
+        #: Estado transaccional comprobado por el worker tras el fallo (ADR-0007 punto 6); `None` si no
+        #: llegó a comprobarse.
+        self.transaction: TransactionState | None = None
 
     def __str__(self) -> str:
         return f"[{self.code.value}] {self.message}"
@@ -83,6 +88,12 @@ class InvalidArgumentError(GeoDuckError):
 
 class AttachError(GeoDuckError):
     """No se pudo adjuntar una base. El código indica la causa (`DB_NOT_FOUND`, `DB_LOCKED`, …)."""
+
+
+class TransactionError(GeoDuckError):
+    """COMMIT o ROLLBACK rechazado. `TRANSACTION_ABORTED` si la transacción está abortada."""
+
+    code = ErrorCode.TRANSACTION_ABORTED
 
 
 class DetachError(GeoDuckError):
