@@ -16,7 +16,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 # Dependencias de ejecución dentro del Python de QGIS. Rango amplio; el pin exacto por celda vive en
 # constraints/ y compat/matrix.toml.
-dependencies = ["duckdb>=1.5.0", "pyarrow>=18"]  # 18.1.0 verificada (la de QGIS 3.34 en Windows)
+dependencies = ["duckdb>=1.5.0", "pyarrow>=18.1.0"]  # mínimo aprobado (ADR-0009); la de QGIS 3.34 en Windows
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
