@@ -4,9 +4,9 @@
 |---|---|---|---|
 | D1 | Repositorio GitHub | **Parcialmente resuelta** | Resuelto: `eribertocz/geoduck`, público. Pendiente: crear el repositorio (con `main` inicializada, p. ej. con README) y autorizar el acceso de la app de GitHub de Claude. Mientras tanto, el trabajo vive en un repositorio local con ramas listas para empujar |
 | D2 | Licencia | **Resuelta** | `GPL-2.0-or-later`. Implicaciones verificadas en `docs/licensing.md` (obligatorio «or later» por PyQt GPLv3 y PyArrow Apache-2.0; sin binarios en el ZIP) |
-| D3 | Anclas QGIS de certificación (C1) | **Abierta** | Recomendación: 3.44.x LTR + 4.2.3; añadir 4.4.x como P0 cuando esté en la descarga |
+| D3 | Anclas QGIS de certificación (C1) | **Resuelta** (2026-11-01) | QGIS **3.34** sigue siendo el mínimo declarado (D8). Se prioriza la **certificación completa de QGIS 3.44 LTR y 4.2.x**. En 3.34 se conservan las pruebas de regresión. QGIS 4.4.x se incorporará por una decisión posterior |
 | D4 | Equipo Windows 11 | **Resuelta (equipo)**; procedimiento entregado | Hay equipo. Primera prueba de humo aprobada en QGIS 3.34.15 (`docs/evidence/g0/windows/`); la certificación completa sigue pendiente |
-| D5 | DuckDB mínimo 1.5.0 vs recomendado 1.5.4+ (C8) | **Abierta** | Recomendación: mínimo 1.5.0, recomendado 1.5.4+. El código de G0 no depende de esta decisión |
+| D5 | Versiones de DuckDB (C8) | **Resuelta** (2026-11-01) | **1.5.0** es el mínimo contractual, **1.5.6** la versión recomendada de la rama 1.5 y **2.x** tiene soporte verificado. Las referencias a «recomendado 1.5.4» (código, pruebas, matriz y documentación) se actualizan en un PR posterior, una vez aprobado este registro |
 | D6 | Merges | **Resuelta** | Exclusivos del propietario. El implementador crea ramas, commits y PR cuando tenga acceso autorizado; nunca fusiona a `main` |
 | D7 | Red para `extensions.duckdb.org` en la sesión del implementador | **Atendida por la vía alternativa** | Spatial verificada en el equipo Windows del propietario con DuckDB 2.0.0 (F-14) |
 
