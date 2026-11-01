@@ -1,43 +1,93 @@
 # ADR-0007: cancelación mediante `interrupt()` como excepción controlada
 
-**Estado:** Propuesto · **Requiere:** aprobación del arquitecto
-**Relacionado:** ADR-0006; `spec/docs/architecture.md` §5; `spec/specs/qgis-bridge-spec.md` §5
+**Estado:** **Aprobado** (dictamen final del arquitecto, 2026-11-01) · revisión 4
+**Recoge:** decisión arquitectónica del 2026-11-01 («la cancelación desde otro hilo será una excepción
+controlada, únicamente después de comprobar su seguridad»)
+**Relacionado:** ADR-0006; `spec/docs/architecture.md` §5; `spec/specs/qgis-bridge-spec.md` §5;
+`spec/specs/session-spec.md` §4 (transacciones)
+
+**Cambios respecto de la revisión 1:** se corrige la latencia observada (1,5–180 ms, no 1–3 ms); se fija el
+conjunto exacto de versiones verificadas; y se separa lo implementado en G0 de lo que queda para G1/G2:
+el marcado `TRANSACTION_ABORTED` no existe todavía, porque G0 no ejecuta SQL del usuario.
+
+**Cambios respecto de la revisión 2:** el punto 3 remite a la invalidación de sesión de C13 §4 bis
+(requisito 3 del dictamen): cerrar una sesión cuya conexión no responde es una invalidación y se notifica.
+
+**Cambios respecto de la revisión 3 (dictamen final):** el punto 5 exige validar el estado transaccional
+antes de reutilizar la conexión tras una cancelación o un error; se añade el registro de resoluciones.
 
 ## Contexto
 
-El contrato pide no llamar «APIs de interrupción DuckDB no verificadas desde otro hilo». La decisión
-arquitectónica del 2026-11-01 admite la cancelación desde otro hilo «como excepción controlada,
-únicamente después de comprobar su seguridad».
+El contrato prohíbe llamar «APIs de interrupción DuckDB no verificadas desde otro hilo». La decisión del
+2026-11-01 las admite solo como excepción controlada y tras comprobar su seguridad.
 
-Evidencia G0 (F-09): `DuckDBPyConnection.interrupt()` invocado desde otro hilo detuvo `execute()` y
-lectores Arrow en todas las versiones 1.5.0–1.5.6 y 2.0.0 (latencia observada entre 1,5 y 180 ms), y la
-conexión siguió usable (`SELECT 1`).
-Dentro de un lector, el error llega como `OSError` con texto `INTERRUPT Error`, no como
-`InterruptException`.
+Evidencia (F-09, `docs/evidence/g0/results/F-09_interrupt_all_versions.txt`): `interrupt()` invocado desde
+otro hilo detuvo un `execute()` largo y un lector Arrow en **todas** las versiones 1.5.0, 1.5.1, 1.5.2,
+1.5.3, 1.5.4, 1.5.5, 1.5.6 y 2.0.0, con latencias observadas entre 1,5 y 180 ms. En todas, la conexión
+respondió `SELECT 1` después. En `execute()` el error llega como `InterruptException`; dentro de un lector,
+como `OSError` con el texto `INTERRUPT Error`.
 
 ## Decisión
 
 1. **Dos niveles de cancelación.**
-   - *Cooperativa* (siempre disponible): un `CancelToken` que el worker consulta entre lotes y entre
-     sentencias.
-   - *Interrupción del motor* (excepción controlada): `interrupt()` solo cuando la versión de DuckDB
-     está en el conjunto **verificado por la suite de regresión** (`engine/compat.py`,
-     `interrupt_verified`). Para versiones no verificadas, solo cancelación cooperativa.
-2. **Único punto de llamada.** Solo `SessionWorker.cancel(op_id)` puede llamar a `interrupt()`, y solo
-   si `op_id` es la operación en curso. Es la **única** llamada a la conexión permitida fuera del hilo
-   propietario y está documentada como tal en el código.
-3. **Verificación posterior.** Tras una interrupción, el worker clasifica el error
-   (`InterruptException` u `OSError` con `INTERRUPT`) como `CANCELLED`, comprueba en su propio hilo
-   que la conexión responde y, si había una transacción explícita, marca el estado
-   `TRANSACTION_ABORTED` para que la UI ofrezca `ROLLBACK`.
-4. **Nunca éxito tras cancelar.** Una operación cancelada devuelve siempre `completed=False`.
+   - *Cooperativa*, siempre disponible: un `CancelToken` que el worker consulta entre lotes y antes de
+     cada operación. Una operación aún en cola se cancela sin llegar a ejecutarse.
+   - *Interrupción del motor*, la excepción controlada: `interrupt()` solo si la versión exacta de DuckDB
+     está en `INTERRUPT_VERIFIED` (`engine/compat.py`). Hoy contiene 1.5.0–1.5.6 y 2.0.0. Con cualquier
+     otra versión, incluidas 1.5.7, 2.0.1 y las pre-releases, solo hay cancelación cooperativa.
+2. **Único punto de llamada.** Solo `SessionWorker._interrupt_current_locked()`, invocado desde
+   `cancel(op_id)` o `close()`, llama a `interrupt()`. Lo hace con el *lock* del worker adquirido y solo
+   si hay una operación en curso: el worker no puede cambiar de operación mientras tanto, así que la
+   interrupción solo alcanza a la operación actual. Es la **única** llamada a la conexión permitida fuera
+   del hilo propietario.
+3. **Clasificación y verificación posterior.** El worker clasifica `InterruptException` y `OSError` con
+   `INTERRUPT` como `OperationCancelledError` (código `CANCELLED`). Después comprueba en su propio hilo
+   que la conexión responde (`SELECT 1`); si no responde, **invalida la sesión** en lugar de seguir con
+   una conexión dudosa: deja de aceptar trabajo, falla lo pendiente, cierra la conexión y lo notifica una
+   sola vez con el código `SESSION_INVALIDATED`, según C13 §4 bis (`docs/proposals/C13-session-states.md`).
+   Ninguna operación posterior llega a DuckDB. En G0 ya se rechaza el trabajo nuevo y se falla lo
+   pendiente; la notificación al coordinador se implementa en G1.
+4. **Nunca éxito tras cancelar.** Una lectura cancelada devuelve `completed = False` aunque ya se hubieran
+   leído todos los lotes.
+5. **Pendiente para G1/G2 (no implementado en G0).** Si la operación cancelada estaba dentro de una
+   transacción explícita, la sesión debe quedar marcada `TRANSACTION_ABORTED` para que la UI ofrezca
+   `ROLLBACK` (relacionado con C12: tras un error, `COMMIT` revierte sin avisar). Se implementará cuando
+   GeoDuck ejecute SQL del usuario.
+6. **Validación transaccional antes de reutilizar la conexión.** Tras una cancelación o un error, la
+   conexión solo vuelve a usarse para trabajo nuevo si (a) responde (punto 3) y (b) su estado
+   transaccional es conocido y utilizable: sin transacción abierta, o con una transacción abierta que
+   GeoDuck ha identificado y comunicado al usuario. Si el estado transaccional no puede determinarse, o la
+   transacción quedó abortada y el usuario no la ha resuelto (`ROLLBACK`), la sesión no vuelve a `READY`
+   (C13 §4 bis). Si la conexión no es recuperable, se invalida. Se implementa junto con el punto 5.
 
 ## Consecuencias
 
-- Pro: cancelación inmediata de consultas largas sin lotes, imposible solo con la vía cooperativa.
-- Contra: añadir una versión de DuckDB al conjunto verificado exige pasar los tests de cancelación.
+- Pro: se pueden cancelar consultas largas sin lotes, algo imposible solo con la vía cooperativa.
+- Contra: cada versión nueva de DuckDB, incluidas las de parche, empieza sin `interrupt()` hasta que la
+  suite de cancelación pase en ella y se añada a `INTERRUPT_VERIFIED`.
+- Contra: la reutilización de la conexión tras un fallo depende de poder leer el estado transaccional;
+  mientras G1/G2 no lo implementen, una sesión con SQL del usuario no podrá volver a `READY` sin esa
+  comprobación.
+- Dependencias: ADR-0006 (hilo propietario y cola); C13 §4 bis (invalidación de sesión); D5 (las versiones de la matriz de CI definen qué se
+  puede verificar).
 
-## Verificación
+## Implementación y verificación vigentes
 
-`tests/engine/test_cancellation.py`: interrupción de `execute` largo y de lector en curso, conexión
-usable después, operación marcada `completed=False`; versión no verificada → solo cooperativa.
+- Código: `geoduck/engine/worker.py` (`cancel`, `cancel_current`, `_interrupt_current_locked`,
+  `_connection_responds`), `geoduck/engine/compat.py` (`INTERRUPT_VERIFIED`, `is_interrupt_error`).
+- Pruebas (`tests/engine/test_cancellation.py` y `tests/unit/test_engine_compat.py`):
+  - `test_interrupt_stops_long_execute_and_session_recovers` (menos de 5 s y conexión usable después);
+  - `test_interrupt_during_arrow_read_is_never_complete`;
+  - `test_cooperative_cancel_between_batches`, `test_cancel_queued_operation_never_runs`;
+  - `test_unverified_version_does_not_call_interrupt`;
+  - tabla de capacidades: 1.5.7 y 2.0.1 sin interrupción verificada.
+- La UI muestra «cancelación inmediata disponible» o «cancelación entre lotes» según la versión
+  (verificado en Windows con DuckDB 2.0.0).
+
+## Resoluciones del dictamen final (2026-11-01)
+
+1. Se acepta la redacción del punto 3: una conexión no recuperable se invalida (C13 §4 bis).
+2. `interrupt()` solo en versiones exactas verificadas; las versiones nuevas, incluidas las de parche,
+   empiezan solo con cancelación cooperativa.
+3. `TRANSACTION_ABORTED` se mantiene pendiente en este ADR para G1/G2, con la validación transaccional
+   del punto 6 como requisito antes de reutilizar la conexión.
