@@ -45,6 +45,11 @@ _log = logging.getLogger("geoduck.engine")
 
 #: Reglas para clasificar los errores de `ATTACH` de DuckDB, en orden. Texto en minúsculas.
 _RULES: tuple[tuple[str, ErrorCode, str], ...] = (
+    (
+        "current transaction is aborted",
+        ErrorCode.TRANSACTION_ABORTED,
+        "La transacción está abortada; reviértala.",
+    ),
     ("conflicting lock is held", ErrorCode.DB_LOCKED, "Otro proceso tiene el archivo bloqueado."),
     ("could not set lock", ErrorCode.DB_LOCKED, "Otro proceso tiene el archivo bloqueado."),
     (

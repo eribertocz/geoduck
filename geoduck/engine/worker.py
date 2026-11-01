@@ -42,10 +42,12 @@ from geoduck.domain.errors import (
     WrongThreadError,
 )
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
+from geoduck.domain.transaction import TransactionState
 from geoduck.engine.attach import attach_database
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
+from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
 _log = logging.getLogger("geoduck.engine")
 
@@ -290,6 +292,17 @@ class SessionWorker:
         root = self._root
         return self._submit_future(lambda h, _t: detach_database(h, alias, root))
 
+    def transaction_state(self) -> Future[TransactionState]:
+        """Estado transaccional real, comprobado sin modificarlo."""
+        return self._submit_future(lambda h, _t: probe_transaction(h))
+
+    def commit(self) -> Future[TransactionState]:
+        """COMMIT solo si hay una transacción abierta y utilizable; nunca de una abortada (F-07)."""
+        return self._submit_future(lambda h, _t: commit(h))
+
+    def rollback(self) -> Future[TransactionState]:
+        return self._submit_future(lambda h, _t: rollback(h))
+
     def _submit_future(self, fn: Operation[T]) -> Future[T]:
         """Como `submit`, pero una sesión que no acepta trabajo se entrega como `Future` fallido."""
         try:
@@ -424,49 +437,84 @@ class SessionWorker:
                 continue
             with self._lock:
                 self._current = job
-            interrupted = False
-            fatal: SessionInvalidatedError | None = None
-            try:
-                job.token.raise_if_cancelled()
-                result = job.fn(handle, job.token)
-            except BaseException as exc:
-                interrupted = is_interrupt_error(exc)
-                fatal_cause = _fatal_in_chain(exc)
-                if fatal_cause is not None:
-                    fatal = SessionInvalidatedError(
-                        "DuckDB informó un error fatal; la sesión se invalidó",
-                        detail=_first_line(fatal_cause),
-                    )
-                    job.future.set_exception(fatal.fresh())
-                else:
-                    job.future.set_exception(_classify(exc, job.token))
-            else:
-                job.future.set_result(result)
-            finally:
-                with self._lock:
-                    self._current = None
-                    self._pending.pop(job.op_id, None)
+            result, failure, fatal, interrupted = self._execute(job, handle)
+            with self._lock:
+                self._current = None  # ya nada puede interrumpir esta operación (ni la comprobación)
+            unusable = None
+            if fatal is None and (failure is not None or interrupted or job.engine_interrupted):
+                unusable = self._verify_after(handle, failure, interrupted or job.engine_interrupted)
+            self._deliver(job, result, failure)
             if fatal is not None:
                 _log.error("Error fatal de DuckDB; se invalida la sesión")
                 return fatal
-            if (interrupted or job.engine_interrupted) and not self._connection_responds(handle):
-                _log.error("La conexión no responde tras una interrupción; se invalida la sesión")
+            if unusable is not None:
+                _log.error("La conexión no es utilizable [%s]; se invalida la sesión", unusable.detail)
+                return unusable
+
+    @staticmethod
+    def _execute(
+        job: _Job[Any], handle: ConnectionHandle
+    ) -> tuple[Any, BaseException | None, SessionInvalidatedError | None, bool]:
+        """Ejecuta un trabajo. Devuelve (resultado, fallo clasificado, invalidación fatal, interrumpido)."""
+        try:
+            job.token.raise_if_cancelled()
+            return job.fn(handle, job.token), None, None, False
+        except BaseException as exc:
+            interrupted = is_interrupt_error(exc)
+            fatal_cause = _fatal_in_chain(exc)
+            if fatal_cause is None:
+                return None, _classify(exc, job.token), None, interrupted
+            fatal = SessionInvalidatedError(
+                "DuckDB informó un error fatal; la sesión se invalidó", detail=_first_line(fatal_cause)
+            )
+            return None, fatal.fresh(), fatal, interrupted
+
+    def _verify_after(
+        self, handle: ConnectionHandle, failure: BaseException | None, interrupted: bool
+    ) -> SessionInvalidatedError | None:
+        """ADR-0007 §3 y punto 6: tras un fallo o una interrupción, la conexión debe responder y su estado
+        transaccional debe ser conocido antes de reutilizarla. Se comprueba antes de entregar el resultado,
+        y el estado se adjunta al error. Devuelve la causa de invalidación si no es utilizable."""
+        state = self._check_connection(handle)
+        if state is None:
+            if interrupted:
                 return SessionInvalidatedError(
                     "La conexión DuckDB no responde tras una interrupción; la sesión se invalidó",
                     detail="unresponsive_after_interrupt",
                 )
+            return SessionInvalidatedError(
+                "No se pudo comprobar el estado de la conexión; la sesión se invalidó",
+                detail="transaction_state_unknown",
+            )
+        if isinstance(failure, GeoDuckError):
+            failure.transaction = state
+        return None
+
+    def _deliver(self, job: _Job[Any], result: Any, failure: BaseException | None) -> None:
+        try:
+            if failure is not None:
+                job.future.set_exception(failure)
+            else:
+                job.future.set_result(result)
+        finally:
+            with self._lock:
+                self._pending.pop(job.op_id, None)
 
     def _forget(self, job: _Job[Any]) -> None:
         with self._lock:
             self._pending.pop(job.op_id, None)
 
     @staticmethod
-    def _connection_responds(handle: ConnectionHandle) -> bool:
-        """Verificación posterior de ADR-0007 §3, en el hilo propietario."""
+    def _check_connection(handle: ConnectionHandle) -> TransactionState | None:
+        """Verificación posterior de ADR-0007 §3 y punto 6, en el hilo propietario.
+
+        Devuelve el estado transaccional si la conexión responde (una transacción abortada responde: solo
+        admite `ROLLBACK`), o `None` si no responde o el estado no puede determinarse.
+        """
         try:
-            return handle.execute("SELECT 1").rows == ((1,),)
+            return probe_transaction(handle)
         except Exception:
-            return False
+            return None
 
 
 def _fatal_in_chain(exc: BaseException) -> BaseException | None:
@@ -497,6 +545,12 @@ def _classify(exc: BaseException, token: CancelToken) -> BaseException:
         return exc
     if is_interrupt_error(exc) or (token.cancelled and isinstance(exc, (duckdb.Error, OSError))):
         return OperationCancelledError("Operación cancelada", detail=type(exc).__name__)
+    if isinstance(exc, duckdb.Error) and is_aborted_error(exc):
+        return GeoDuckError(
+            "La transacción está abortada; solo se puede revertir (ROLLBACK).",
+            code=ErrorCode.TRANSACTION_ABORTED,
+            detail=type(exc).__name__,
+        )
     if isinstance(exc, duckdb.Error):
         return EngineError(_first_line(exc), detail=type(exc).__name__)
     return exc

@@ -36,6 +36,9 @@ class ErrorCause(str, Enum):
     START_FAILED = "START_FAILED"
     #: La conexión dejó de ser utilizable (`SESSION_INVALIDATED`); no se reutiliza.
     SESSION_INVALIDATED = "SESSION_INVALIDATED"
+    #: La conexión responde, pero la transacción quedó abortada (`TRANSACTION_ABORTED`). Solo se vuelve a
+    #: `READY` después de un `ROLLBACK` (ADR-0007 punto 6).
+    TRANSACTION_ABORTED = "TRANSACTION_ABORTED"
 
 
 _S = SessionState
@@ -86,6 +89,24 @@ class SessionStateMachine:
         self._cause = cause if target is SessionState.ERROR_RECOVERABLE else None
         for listener in list(self._listeners):
             listener(previous, target)
+
+    def resolve_transaction(self) -> None:
+        """Tras un `ROLLBACK` confirmado, la transacción deja de bloquear: la causa restante es el fallo de
+        una operación con la conexión y la transacción utilizables, y se permite volver a `READY`."""
+        if (
+            self._state is not SessionState.ERROR_RECOVERABLE
+            or self._cause is not ErrorCause.TRANSACTION_ABORTED
+        ):
+            raise SessionStateError("No hay una transacción abortada que resolver")
+        self._cause = ErrorCause.OPERATION_FAILED
+
+    def mark_invalidated(self) -> None:
+        """La conexión se invalidó estando ya en `ERROR_RECOVERABLE` (p. ej. durante la recuperación de una
+        transacción abortada). La tabla de session-spec §5 no tiene `ERROR_RECOVERABLE → ERROR_RECOVERABLE`:
+        el estado no cambia, solo la causa, y `READY` queda prohibido."""
+        if self._state is not SessionState.ERROR_RECOVERABLE:
+            raise SessionStateError("Solo se marca la invalidación estando en ERROR_RECOVERABLE")
+        self._cause = ErrorCause.SESSION_INVALIDATED
 
     def _reject_reason(self, target: SessionState, cause: ErrorCause | None) -> str | None:
         if target not in TRANSITIONS[self._state]:

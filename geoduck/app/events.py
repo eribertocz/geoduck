@@ -9,6 +9,7 @@ from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot
 from geoduck.domain.errors import ErrorCode
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
+from geoduck.domain.transaction import TransactionState
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,21 @@ class DetachFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class TransactionStateChanged:
+    """Estado transaccional comprobado en DuckDB; `None` cuando ya no hay sesión."""
+
+    state: TransactionState | None
+
+
+@dataclass(frozen=True)
+class TransactionFailed:
+    """COMMIT o ROLLBACK rechazado o fallido."""
+
+    code: ErrorCode
+    message: str
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -89,4 +105,6 @@ AppEvent = (
     | AttachFailed
     | DatabaseDetached
     | DetachFailed
+    | TransactionStateChanged
+    | TransactionFailed
 )

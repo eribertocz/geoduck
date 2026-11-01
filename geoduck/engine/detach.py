@@ -14,6 +14,10 @@ Hechos verificados con DuckDB 1.5.0, 1.5.6 y 2.0.0 (evidencia: `docs/evidence/g1
   sin error (F-26). Lo impide el guardia de lector abierto de `ConnectionHandle` (`ACTIVE_RESULT`).
 - `DETACH` hace checkpoint: tras él, el `.wal` desaparece y otro proceso puede abrir el archivo y ve los
   datos confirmados (F-27).
+- Con una transacción abierta con cambios, 1.5.0 desadjunta igualmente y 1.5.6/2.0 lo rechazan y dejan la
+  transacción abortada (F-28, F-29). Regla obligatoria (dictamen del 2026-11-01): **con cualquier
+  transacción abierta, activa o abortada, el `DETACH` se bloquea en todas las versiones**, antes de
+  enviarlo a DuckDB.
 """
 
 from __future__ import annotations
@@ -26,7 +30,9 @@ import duckdb
 from geoduck.domain.catalog import DetachResult
 from geoduck.domain.errors import DetachError, ErrorCode
 from geoduck.domain.sql_text import quote_identifier
+from geoduck.domain.transaction import TransactionState
 from geoduck.engine.catalog import read_catalog
+from geoduck.engine.transactions import is_aborted_error, probe_transaction
 
 if TYPE_CHECKING:
     from geoduck.engine.worker import ConnectionHandle
@@ -35,6 +41,14 @@ _log = logging.getLogger("geoduck.engine")
 
 
 def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachResult:
+    transaction = probe_transaction(handle)
+    if transaction.is_open:
+        raise DetachError(
+            "Hay una transacción abierta: confirme (COMMIT) o revierta (ROLLBACK) antes de desadjuntar."
+            if transaction is TransactionState.ACTIVE
+            else "La transacción está abortada: reviértala (ROLLBACK) antes de desadjuntar.",
+            detail=f"open_transaction: {transaction.value}",
+        )
     catalog = read_catalog(handle, root)
     target = catalog.get(alias)
     if target is None:
@@ -65,6 +79,12 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
 
 def _classify(exc: duckdb.Error) -> DetachError:
     text = str(exc).lower()
+    if is_aborted_error(exc):
+        return DetachError(
+            "La transacción está abortada; solo se puede revertir (ROLLBACK).",
+            code=ErrorCode.TRANSACTION_ABORTED,
+            detail=type(exc).__name__,
+        )
     if "outstanding work" in text:
         return DetachError(
             "Hay una transacción abierta con cambios en esa base; confirme o revierta antes de desadjuntar.",

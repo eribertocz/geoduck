@@ -73,6 +73,38 @@ class TestSessionStateMachine:
         for exit_ in (SessionState.CONNECTING, SessionState.CLOSING, SessionState.DISCONNECTED):
             assert sm.can(exit_)
 
+    def test_aborted_transaction_blocks_ready_until_resolved(self):
+        sm = _machine_at(SessionState.BUSY)
+        sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.TRANSACTION_ABORTED)
+        assert not sm.can(SessionState.READY)
+        sm.resolve_transaction()
+        assert sm.state is SessionState.ERROR_RECOVERABLE and sm.can(SessionState.READY)
+
+    @pytest.mark.parametrize(
+        "cause", [ErrorCause.SESSION_INVALIDATED, ErrorCause.START_FAILED, ErrorCause.OPERATION_FAILED]
+    )
+    def test_only_an_aborted_transaction_can_be_resolved(self, cause):
+        sm = _machine_at(SessionState.BUSY)
+        sm.transition(SessionState.ERROR_RECOVERABLE, cause)
+        with pytest.raises(SessionStateError):
+            sm.resolve_transaction()
+        assert sm.error_cause is cause
+
+    def test_invalidation_while_recovering_changes_only_the_cause(self):
+        sm = _machine_at(SessionState.BUSY)
+        sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.TRANSACTION_ABORTED)
+        seen = []
+        sm.subscribe(lambda a, b: seen.append(b))
+        sm.mark_invalidated()
+        assert sm.state is SessionState.ERROR_RECOVERABLE and sm.error_cause is ErrorCause.SESSION_INVALIDATED
+        assert not sm.can(SessionState.READY) and seen == []
+        with pytest.raises(SessionStateError):
+            sm.resolve_transaction()
+
+    def test_mark_invalidated_requires_error_recoverable(self):
+        with pytest.raises(SessionStateError):
+            _machine_at(SessionState.READY).mark_invalidated()
+
     def test_cause_is_cleared_when_leaving_error_recoverable(self):
         sm = _machine_at(SessionState.BUSY)
         sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)

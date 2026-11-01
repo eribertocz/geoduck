@@ -34,7 +34,7 @@ needs_verified_interrupt = pytest.mark.skipif(
 @pytest.fixture
 def unresponsive(monkeypatch):
     """Simula una conexión que no responde a `SELECT 1` tras la interrupción (ADR-0007 §3)."""
-    monkeypatch.setattr(SessionWorker, "_connection_responds", staticmethod(lambda handle: False))
+    monkeypatch.setattr(SessionWorker, "_check_connection", staticmethod(lambda handle: None))
 
 
 def wait_running(handle, timeout=5.0):
