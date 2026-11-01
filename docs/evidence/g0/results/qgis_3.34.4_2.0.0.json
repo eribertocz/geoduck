@@ -1,0 +1,82 @@
+{
+ "qgis": "3.34.4-Prizren",
+ "qt": "5.15.13",
+ "pyqt": "5.15.10",
+ "python": "3.12.3",
+ "duckdb": "2.0.0",
+ "pyarrow": "25.0.1",
+ "numpy": "1.26.4",
+ "field_api": {
+  "QgsField(QMetaType.Type)": "ERR QgsField(): arguments did not match any overloaded call:\n  overload 1: argument 2 has unexpected",
+  "QgsField(QVariant.LongLong)": ""
+ },
+ "transfer_100k_points": {
+  "rows_read": 100000,
+  "rows_added": 100000,
+  "featureCount": 100000,
+  "crs_authid": "OGC:CRS84",
+  "crs_valid": true,
+  "crs_desc": "WGS 84 (CRS84)",
+  "convert_add_s": 2.61,
+  "wkbType": "Point",
+  "sample_attrs": {
+   "id": "0",
+   "d": "0.0",
+   "b": "True",
+   "dt": "PyQt5.QtCore.QDate(2026, 1, 1)",
+   "ts": "PyQt5.QtCore.QDateTime(2026, 1, 1, 0, 0)",
+   "big": "9223372036854775807",
+   "ubig": "'18446744073709551615'",
+   "decv": "'12345.67890123456789012300'",
+   "nullable": "NULL",
+   "lst": "'[0, 1]'"
+  },
+  "null_attr_is_NULL": "NULL",
+  "geom_wkt": "Point (-180 -90)"
+ },
+ "atomic_fail_row_30001": {
+  "error": "fila corrupta simulada",
+  "layers_before": 1,
+  "layers_after": 1
+ },
+ "layer_after_duckdb_close": {
+  "after_con_close_featureCount": 100000,
+  "valid": true,
+  "provider": "memory"
+ },
+ "no_geometry_table": {
+  "rows_read": 10,
+  "rows_added": 10,
+  "featureCount": 10,
+  "crs_authid": "",
+  "crs_valid": false,
+  "crs_desc": "",
+  "convert_add_s": 0.0,
+  "wkbType": "NoGeometry",
+  "isSpatial": false
+ },
+ "crs_axis": {
+  "OGC:CRS84": [
+   true,
+   "OGC:CRS84",
+   false
+  ],
+  "EPSG:4326": [
+   true,
+   "EPSG:4326",
+   true
+  ],
+  "EPSG:32719": [
+   true,
+   "EPSG:32719",
+   false
+  ]
+ },
+ "editor_and_task": {
+  "QgsCodeEditorSQL": "OK QgsCodeEditor",
+  "has_setFieldNames": true,
+  "has_setExtraKeywords": true,
+  "Qsci": "importable",
+  "QgsTask": true
+ }
+}
