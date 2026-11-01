@@ -1,6 +1,6 @@
 # ADR-0007: cancelación mediante `interrupt()` como excepción controlada
 
-**Estado:** Aceptado en principios (2026-11-01) — **pendiente de validación literal** · revisión 3
+**Estado:** Aceptado (dictamen final del arquitecto, 2026-11-01) — revisión 4
 **Recoge:** decisión arquitectónica del 2026-11-01 («la cancelación desde otro hilo será una excepción
 controlada, únicamente después de comprobar su seguridad»)
 **Relacionado:** ADR-0006; `spec/docs/architecture.md` §5; `spec/specs/qgis-bridge-spec.md` §5;
@@ -12,6 +12,9 @@ el marcado `TRANSACTION_ABORTED` no existe todavía, porque G0 no ejecuta SQL de
 
 **Cambios respecto de la revisión 2:** el punto 3 remite a la invalidación de sesión de C13 §4 bis
 (requisito 3 del dictamen): cerrar una sesión cuya conexión no responde es una invalidación y se notifica.
+
+**Cambios respecto de la revisión 3 (dictamen final):** el punto 5 exige validar el estado transaccional
+antes de reutilizar la conexión tras una cancelación o un error; se añade el registro de resoluciones.
 
 ## Contexto
 
@@ -50,12 +53,21 @@ como `OSError` con el texto `INTERRUPT Error`.
    transacción explícita, la sesión debe quedar marcada `TRANSACTION_ABORTED` para que la UI ofrezca
    `ROLLBACK` (relacionado con C12: tras un error, `COMMIT` revierte sin avisar). Se implementará cuando
    GeoDuck ejecute SQL del usuario.
+6. **Validación transaccional antes de reutilizar la conexión.** Tras una cancelación o un error, la
+   conexión solo vuelve a usarse para trabajo nuevo si (a) responde (punto 3) y (b) su estado
+   transaccional es conocido y utilizable: sin transacción abierta, o con una transacción abierta que
+   GeoDuck ha identificado y comunicado al usuario. Si el estado transaccional no puede determinarse, o la
+   transacción quedó abortada y el usuario no la ha resuelto (`ROLLBACK`), la sesión no vuelve a `READY`
+   (C13 §4 bis). Si la conexión no es recuperable, se invalida. Se implementa junto con el punto 5.
 
 ## Consecuencias
 
 - Pro: se pueden cancelar consultas largas sin lotes, algo imposible solo con la vía cooperativa.
-- Contra: cada versión nueva de DuckDB empieza sin `interrupt()` hasta que la suite de cancelación pase
-  en ella y se añada a `INTERRUPT_VERIFIED`.
+- Contra: cada versión nueva de DuckDB, incluidas las de parche, empieza sin `interrupt()` hasta que la
+  suite de cancelación pase en ella y se añada a `INTERRUPT_VERIFIED`.
+- Contra: la reutilización de la conexión tras un fallo depende de poder leer el estado transaccional;
+  mientras G1/G2 no lo implementen, una sesión con SQL del usuario no podrá volver a `READY` sin esa
+  comprobación.
 - Dependencias: ADR-0006 (hilo propietario y cola); C13 §4 bis (invalidación de sesión); D5 (las versiones de la matriz de CI definen qué se
   puede verificar).
 
@@ -71,3 +83,11 @@ como `OSError` con el texto `INTERRUPT Error`.
   - tabla de capacidades: 1.5.7 y 2.0.1 sin interrupción verificada.
 - La UI muestra «cancelación inmediata disponible» o «cancelación entre lotes» según la versión
   (verificado en Windows con DuckDB 2.0.0).
+
+## Resoluciones del dictamen final (2026-11-01)
+
+1. Se acepta la redacción del punto 3: una conexión no recuperable se invalida (C13 §4 bis).
+2. `interrupt()` solo en versiones exactas verificadas; las versiones nuevas, incluidas las de parche,
+   empiezan solo con cancelación cooperativa.
+3. `TRANSACTION_ABORTED` se mantiene pendiente en este ADR para G1/G2, con la validación transaccional
+   del punto 6 como requisito antes de reutilizar la conexión.

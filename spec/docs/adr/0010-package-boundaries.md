@@ -1,8 +1,10 @@
 # ADR-0010: estructura de paquetes y fronteras de importación verificadas
 
-**Estado:** Aceptado en principios (2026-11-01) — **pendiente de validación literal** · revisión 2
+**Estado:** Aceptado (dictamen final del arquitecto, 2026-11-01) — revisión 3
 **Relacionado:** `spec/docs/architecture.md` §2, §6 (la estructura orientativa admite simplificarse «sin
 cambiar fronteras»); ADR-0006; ADR-0011
+
+**Cambios respecto de la revisión 2 (dictamen final):** la fila de `qgis_bridge` queda aprobada.
 
 **Cambios respecto de la revisión 1:** la tabla refleja exactamente lo que hace cumplir el test. Se
 explicitan el acceso al módulo raíz `geoduck` (solo `__version__`), las reglas previstas para
@@ -29,7 +31,7 @@ solo se mantienen si algo las comprueba automáticamente en cada PR.
 | `engine` | biblioteca estándar, `domain`, `engine`, `duckdb`, `pyarrow` | `qgis`, `PyQt*`, `app`, `infra`, `ui`, `qgis_bridge` |
 | `infra` | biblioteca estándar, raíz, `domain`, `infra`; importación **dinámica** de dependencias para diagnosticarlas | importación estática de `duckdb`/`pyarrow`/`qgis`; `app`, `engine`, `ui` |
 | `ui` | biblioteca estándar, raíz, `domain`, `app`, `infra`, `ui`, `qgis` (incluido `qgis.PyQt`) | `duckdb`, `pyarrow`, `engine`, `qgis_bridge` |
-| `qgis_bridge` (G3, propuesto) | biblioteca estándar, `domain`, `qgis_bridge`, `pyarrow`, `qgis` | `duckdb`, `engine`, `ui` |
+| `qgis_bridge` (se crea en G3) | biblioteca estándar, `domain`, `qgis_bridge`, `pyarrow`, `qgis` | `duckdb`, `engine`, `ui` |
 | `plugin.py` | todo (raíz de composición); `engine` solo con importación diferida | — |
 
 3. **Verificación automática.** Un test sin dependencias externas (`tests/architecture`, análisis AST de
@@ -43,7 +45,7 @@ solo se mantienen si algo las comprueba automáticamente en cada PR.
 - Pro: una frontera cruzada, como la UI usando DuckDB o el motor tocando QGIS, falla en CI.
 - Pro: `domain`, `app` y `engine` se prueban sin QGIS.
 - Contra: cambiar una regla exige modificar este ADR y el test a la vez.
-- Al crear `qgis_bridge` en G3, su fila de la tabla se añade al test.
+- Al crear `qgis_bridge` en G3, su fila (ya aprobada) se añade al test.
 
 ## Implementación y verificación vigentes
 
@@ -52,3 +54,9 @@ solo se mantienen si algo las comprueba automáticamente en cada PR.
   `test_rules_detect_a_violation` y `test_every_package_is_covered`.
 - `tests/architecture/test_no_foreign_mutation.py` (ADR-0011).
 - Se ejecuta en el job «lint · tipos · arquitectura · unitarias» de CI.
+
+## Resoluciones del dictamen final (2026-11-01)
+
+1. Se aprueba la fila de `qgis_bridge`.
+2. Se acepta que `plugin.py` importe `engine` solo de forma diferida.
+3. Se acepta que `infra` importe `duckdb`, `pyarrow` y `qgis` solo de forma dinámica, para diagnosticarlos.

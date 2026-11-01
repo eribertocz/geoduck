@@ -45,7 +45,7 @@
 - Nunca usar `con.execute(...).to_arrow_reader()` como vía «streaming» en DuckDB 2.0: ese camino copia filas y advierte.
 
 ## Decisión PyArrow
-La versión de PyArrow se elige según la matriz real de QGIS, Python, NumPy y DuckDB; si QGIS incluye PyArrow, se usa esa y solo se instala `duckdb` (ADR-0009).
+**Mínimo de PyArrow: 18.1.0.** La versión se elige según la matriz real de QGIS, Python, NumPy y DuckDB; si QGIS incluye PyArrow, se prioriza esa y solo se instala `duckdb` (ADR-0009). El método de instalación definitivo se decide en el spike G0-A.
 
 PyArrow **no es el backend de almacenamiento QGIS**; es el medio de transporte entre DuckDB y el convertidor PyQGIS. La copia final al proveedor `memory` está prevista. La prioridad es reducir picos de memoria, no anunciar zero-copy.
 

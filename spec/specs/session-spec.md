@@ -49,6 +49,7 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - En DuckDB: en las versiones certificadas, una sentencia fallida dentro de transacción puede dejarla abortada hasta `ROLLBACK`; presentar recuperación clara, no hacer `COMMIT` silencioso.
 - Un script ejecutado sin `BEGIN` explícito no se revierte globalmente si falla una sentencia posterior.
 - La operación de carga QGIS que repite consulta debe saber si se apoya en objetos temporales o transacciones abiertas; no cambiar cursores/contextos arbitrariamente.
+- Tras una cancelación o un error, la conexión solo se reutiliza si responde y su estado transaccional es conocido y utilizable; si no puede determinarse, o la transacción quedó abortada sin resolver, la sesión no vuelve a `READY` (ADR-0007). `TRANSACTION_ABORTED` se implementa en G1/G2.
 
 ## 5. Estados y errores
 `DISCONNECTED`, `CONNECTING`, `READY`, `BUSY`, `DETACHING`, `CLOSING`, `ERROR_RECOVERABLE`.
@@ -63,7 +64,7 @@ Transiciones normativas:
 | `BUSY` | `READY`, `CLOSING`, `ERROR_RECOVERABLE` |
 | `DETACHING` | `READY`, `ERROR_RECOVERABLE`, `CLOSING` |
 | `CLOSING` | `DISCONNECTED` |
-| `ERROR_RECOVERABLE` | `CONNECTING`, `READY` (prohibido tras una invalidación), `CLOSING`, `DISCONNECTED` |
+| `ERROR_RECOVERABLE` | `CONNECTING`, `READY` (solo si la conexión responde y su estado transaccional es utilizable; nunca tras una invalidación), `CLOSING`, `DISCONNECTED` |
 
 Los estados de operación y de entrega no forman parte de esta máquina.
 

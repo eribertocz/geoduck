@@ -1,10 +1,13 @@
 # ADR-0009: PyArrow según la matriz real de QGIS, Python, NumPy y DuckDB
 
-**Estado:** Aceptado en principios (2026-11-01) — **pendiente de validación literal** · revisión 2
+**Estado:** Aceptado (dictamen final del arquitecto, 2026-11-01) — revisión 3
 **Recoge:** decisión arquitectónica del 2026-11-01 («la versión de PyArrow debe elegirse a partir de la
 matriz real de QGIS, Python, NumPy y DuckDB»)
 **Relacionado:** ADR-0005, ADR-0011; `spec/docs/technology.md` (Decisión PyArrow, Empaquetado);
 `spec/docs/compatibility-distribution.md`
+
+**Cambios respecto de la revisión 2 (dictamen final):** mínimo 18.1.0 (antes «>= 18»), prioridad
+explícita de la PyArrow de QGIS e instalación remitida al issue #10.
 
 **Cambios respecto de la revisión 1:** incorpora la evidencia de Windows (F-13, F-15). La regla
 principal pasa a ser usar la PyArrow que incluye QGIS cuando existe. Antes, la revisión 1 fijaba una
@@ -27,7 +30,8 @@ versión por celda.
 
 ## Decisión
 
-1. **Si QGIS incluye PyArrow, se usa esa.** GeoDuck y sus instrucciones de instalación solo instalan
+1. **Si QGIS incluye PyArrow, se usa esa** (prioridad sobre la versión de la celda de la matriz, siempre
+   que cumpla el mínimo del punto 5). GeoDuck y sus instrucciones de instalación solo instalan
    `duckdb`. Nunca instalan otra PyArrow en una instalación de QGIS que ya la trae (F-13).
 2. **Si QGIS no incluye PyArrow**, la versión se elige por celda de `compat/matrix.toml` según Python y
    NumPy de esa instalación, y se fija en `constraints/<celda>.txt`.
@@ -37,10 +41,12 @@ versión por celda.
    - un `DLL load failed` al importar PyArrow indica un choque con la PyArrow de QGIS y se explica así (F-13);
    - NumPy o PyArrow cargadas desde el *site* de usuario se advierten (QGIS #63733, F-13, F-15).
    Solo se añaden reglas nuevas con evidencia reproducible.
-5. **Piso declarado:** `pyarrow >= 18` (18.1.0 es la mínima verificada). Ningún rango se amplía sin pasar
-   la matriz.
+5. **Mínimo de PyArrow: 18.1.0** (`pyarrow >= 18.1.0`), la versión mínima verificada y la que incluye
+   QGIS 3.34.15 en Windows. Ningún rango se amplía sin pasar la matriz.
 6. **Distinción obligatoria.** Los jobs de CI en Ubuntu que reproducen las versiones de una celda
    demuestran compatibilidad de APIs, **no** certificación Windows.
+7. **Método de instalación.** El procedimiento definitivo de instalación se decide en el issue #10
+   (spike G0-A), no en este ADR.
 
 ## Consecuencias
 
@@ -60,3 +66,9 @@ versión por celda.
 - CI (`.github/workflows/ci.yml`): motor con PyArrow 25.0.1 y con PyArrow 18.1.0 + NumPy 1.26.4.
 - `compat/matrix.toml`, `constraints/win-qgis-3.34-py312.txt` (solo `duckdb`).
 - Evidencia: `docs/evidence/g0/windows/win11-qgis-3.34.15/`.
+
+## Resoluciones del dictamen final (2026-11-01)
+
+1. Mínimo de PyArrow: 18.1.0.
+2. Se prioriza la PyArrow incluida por QGIS.
+3. La instalación definitiva se decide en el issue #10.

@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 88510,
-      "sha256": "9f92af02d1f62a46651dd0e5ae30d184696d3c295341f698133e7a2cb5242634"
+      "bytes": 89144,
+      "sha256": "51257d541a3d546f58150e03442e99ec91480975bff1da58886e09d2930b51c0"
     },
     {
       "path": "README.md",
@@ -46,18 +46,18 @@
     },
     {
       "path": "docs/adr/0007-cancellation-interrupt.md",
-      "bytes": 5172,
-      "sha256": "01196fcd14fdcbdb6ea0aa1cba6d0a9c9ffa34e81f590de6d41587589ff875ae"
+      "bytes": 6697,
+      "sha256": "ea2399898a75a2f052313aabd22c53174aae4fc78622e5b55b8c4dae0b945a6c"
     },
     {
       "path": "docs/adr/0009-pyarrow-selection-by-matrix.md",
-      "bytes": 4001,
-      "sha256": "700193f68c5da3a2f32dcb0d75ab13f88794f6a8b9574092e2ab14346cecf796"
+      "bytes": 4626,
+      "sha256": "6ba386e972400c86756673fea5e1932bde9e67f217208742b68f6569d689e624"
     },
     {
       "path": "docs/adr/0010-package-boundaries.md",
-      "bytes": 3508,
-      "sha256": "a05d8da47cda75ae5ba7a6b0a4f00e45caac072ffa2f55ea5be6922b627bae3f"
+      "bytes": 3855,
+      "sha256": "c8b866961c00438db85c08a62fd209ddee99f682a7d94d28caf004e27b83f1fc"
     },
     {
       "path": "docs/adr/0011-coexistence-with-other-duckdb-plugins.md",
@@ -66,13 +66,13 @@
     },
     {
       "path": "docs/adr/README.md",
-      "bytes": 1672,
-      "sha256": "3b6ea461557e9a6561e7a7d4743eaa7c3e75ce4d03e80d73749a542946eb3773"
+      "bytes": 1641,
+      "sha256": "43a9c9dac5751778106fdb5eeb65aaa185856c377a6dc502c3e6c6fcc108a415"
     },
     {
       "path": "docs/architecture.md",
-      "bytes": 6566,
-      "sha256": "8611d60a853742ead3214202fff88f503f660976da84d6f6bb6f0615d6bded7d"
+      "bytes": 6626,
+      "sha256": "0e16b9dc5ba4426946323009608e7a78f6b16936e4c3df8543958d148e2cfe27"
     },
     {
       "path": "docs/compatibility-distribution.md",
@@ -106,8 +106,8 @@
     },
     {
       "path": "docs/technology.md",
-      "bytes": 5514,
-      "sha256": "d1d3ee1b20d0692a2bb7525e040836aec4e7ed039683b7bd429beb04c149ae79"
+      "bytes": 5606,
+      "sha256": "c4fc85bde38de5d10c736c59ce73476381e7314a0744af4e6dbd15aae5579660"
     },
     {
       "path": "docs/vision.md",
@@ -131,13 +131,13 @@
     },
     {
       "path": "specs/session-spec.md",
-      "bytes": 6499,
-      "sha256": "f02272b3fec6097ba5ff387065e50679000a0a7da38b610060d6d31778979f57"
+      "bytes": 6860,
+      "sha256": "a134a8935ce1fe7cae74385041a18a23d9e2657c34b2090093ee582d9c220555"
     },
     {
       "path": "specs/spatial-spec.md",
-      "bytes": 7570,
-      "sha256": "1b4b648a6b0177dd05702644a17830e0f6e7039759c149991377be35ea026717"
+      "bytes": 7691,
+      "sha256": "18464d16f61c8c5ba0a191b155106bf60ee2955a185db0b9ab85010ea9f80630"
     },
     {
       "path": "specs/sql-editor-spec.md",
