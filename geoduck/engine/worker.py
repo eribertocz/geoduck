@@ -224,7 +224,8 @@ class SessionWorker:
     def close(self) -> Future[None]:
         """Cierra sin bloquear: rechaza trabajo nuevo, cancela el pendiente y el actual.
 
-        El `Future` devuelto se completa cuando el hilo terminó y la conexión está cerrada.
+        El `Future` devuelto se completa cuando la conexión ya está cerrada; es lo último que hace el
+        hilo, que termina inmediatamente después (use `thread.join()` si necesita esperar al hilo).
         """
         with self._lock:
             if self._thread is None:

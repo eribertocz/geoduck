@@ -42,7 +42,8 @@ def test_start_reports_engine_and_close_stops_thread():
     assert info.duckdb_version == duckdb.__version__
     assert info.database == ":memory:"
     assert w.thread is not None and w.thread.is_alive()
-    w.close().result(TIMEOUT)
+    w.close().result(TIMEOUT)  # la conexión ya está cerrada; el hilo termina justo después
+    w.thread.join(TIMEOUT)
     assert not w.thread.is_alive()
 
 
