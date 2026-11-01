@@ -10,6 +10,9 @@ Invariantes que este módulo garantiza en DuckDB 1.5.x y 2.x por igual:
 4. Una lectura solo es completa si el lector se agotó (`ReadSummary.completed`).
 5. La única llamada a la conexión desde otro hilo es `interrupt()`, dentro de `cancel()`, y solo en
    versiones verificadas (`EngineCapabilities.interrupt_verified`).
+6. Invalidación (C13 §4 bis): si la conexión deja de ser utilizable, primero se rechaza todo trabajo
+   nuevo, se falla lo pendiente y se cierra la conexión; después `invalidation()` se resuelve una sola
+   vez con la causa. Un cierre pedido nunca se notifica como invalidación.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from geoduck.domain.errors import (
     GeoDuckError,
     OperationCancelledError,
     SessionClosedError,
+    SessionInvalidatedError,
     UnsupportedEngineError,
     WrongThreadError,
 )
@@ -184,6 +188,9 @@ class _Job(Generic[T]):
     fn: Operation[T]
     future: Future[T] = field(default_factory=Future)
     token: CancelToken = field(default_factory=CancelToken)
+    #: `interrupt()` se llamó durante este trabajo; obliga a verificar la conexión después (ADR-0007 §3),
+    #: aunque el trabajo haya absorbido el error (p. ej. una lectura Arrow que devuelve CANCELLED).
+    engine_interrupted: bool = False
 
 
 @dataclass(frozen=True)
@@ -207,9 +214,12 @@ class SessionWorker:
         self._con: Any = None  # solo se usa en el hilo del worker; interrupt() es la excepción
         self._caps: EngineCapabilities | None = None
         self._accepting = False
+        self._close_requested = False
+        self._invalidated: SessionInvalidatedError | None = None
         self._thread: threading.Thread | None = None
         self._started: Future[EngineInfo] = Future()
         self._stopped: Future[None] = Future()
+        self._invalidation: Future[SessionInvalidatedError | None] = Future()
 
     # -- ciclo de vida ---------------------------------------------------------------------------
 
@@ -228,9 +238,10 @@ class SessionWorker:
         hilo, que termina inmediatamente después (use `thread.join()` si necesita esperar al hilo).
         """
         with self._lock:
+            self._close_requested = True
             if self._thread is None:
-                if not self._stopped.done():
-                    self._stopped.set_result(None)
+                _resolve(self._invalidation, None)
+                _resolve(self._stopped, None)
                 return self._stopped
             was_accepting = self._accepting
             self._accepting = False
@@ -240,6 +251,14 @@ class SessionWorker:
         if was_accepting or not self._started.done():
             self._queue.put(None)
         return self._stopped
+
+    def invalidation(self) -> Future[SessionInvalidatedError | None]:
+        """Se resuelve una sola vez cuando el hilo termina, después de cerrar la conexión.
+
+        Resultado: la causa (`SessionInvalidatedError`) si la sesión se invalidó; `None` si terminó por un
+        cierre pedido o porque no llegó a arrancar. Nunca se resuelve con una excepción.
+        """
+        return self._invalidation
 
     @property
     def capabilities(self) -> EngineCapabilities | None:
@@ -254,6 +273,8 @@ class SessionWorker:
     def submit(self, fn: Operation[T]) -> OperationHandle[T]:
         with self._lock:
             if not self._accepting:
+                if self._invalidated is not None:
+                    raise self._invalidated.fresh()
                 raise SessionClosedError("La sesión no acepta operaciones")
             job: _Job[T] = _Job(next(self._ids), fn)
             self._pending[job.op_id] = job
@@ -287,6 +308,7 @@ class SessionWorker:
             return
         job.token.cancel()
         if self._caps.interrupt_verified:
+            job.engine_interrupted = True
             self._con.interrupt()
 
     # -- hilo del worker --------------------------------------------------------------------------
@@ -302,6 +324,7 @@ class SessionWorker:
             con = duckdb.connect(database=self._database)
         except BaseException as exc:
             self._started.set_exception(_wrap_start_error(exc))
+            _resolve(self._invalidation, None)
             self._stopped.set_result(None)
             return
 
@@ -317,49 +340,79 @@ class SessionWorker:
                 interrupt_enabled=caps.interrupt_verified,
             )
         )
+        cause: SessionInvalidatedError | None = None
         try:
-            self._loop(handle)
+            cause = self._loop(handle)
+        except BaseException as exc:  # un fallo del propio bucle: el hilo no puede seguir
+            _log.exception("El hilo de la sesión terminó inesperadamente")
+            cause = SessionInvalidatedError(
+                "El hilo de la sesión terminó inesperadamente; la sesión se invalidó",
+                detail=type(exc).__name__,
+            )
         finally:
             with self._lock:
+                if self._close_requested:
+                    cause = None  # un cierre pedido nunca se notifica como invalidación (INV-5)
+                self._invalidated = cause
                 self._accepting = False
                 self._con = None
                 leftovers = list(self._pending.values())
                 self._pending.clear()
             for job in leftovers:
                 if not job.future.done():
-                    job.future.set_exception(SessionClosedError("La sesión se cerró"))
+                    job.future.set_exception(
+                        cause.fresh() if cause is not None else SessionClosedError("La sesión se cerró")
+                    )
             handle._close()
             try:
                 con.close()
+            except Exception:
+                _log.warning("No se pudo cerrar la conexión DuckDB", exc_info=True)
             finally:
+                _resolve(self._invalidation, cause)
                 self._stopped.set_result(None)
 
-    def _loop(self, handle: ConnectionHandle) -> None:
+    def _loop(self, handle: ConnectionHandle) -> SessionInvalidatedError | None:
+        """Ejecuta trabajos hasta un cierre pedido (`None`) o una invalidación (la causa)."""
         while True:
             job = self._queue.get()
             if job is None:
-                return
+                return None
             if not job.future.set_running_or_notify_cancel():
                 self._forget(job)
                 continue
             with self._lock:
                 self._current = job
             interrupted = False
+            fatal: SessionInvalidatedError | None = None
             try:
                 job.token.raise_if_cancelled()
                 result = job.fn(handle, job.token)
             except BaseException as exc:
                 interrupted = is_interrupt_error(exc)
-                job.future.set_exception(_classify(exc, job.token))
+                if isinstance(exc, duckdb.FatalException):
+                    fatal = SessionInvalidatedError(
+                        "DuckDB informó un error fatal; la sesión se invalidó",
+                        detail=_first_line(exc),
+                    )
+                    job.future.set_exception(fatal.fresh())
+                else:
+                    job.future.set_exception(_classify(exc, job.token))
             else:
                 job.future.set_result(result)
             finally:
                 with self._lock:
                     self._current = None
                     self._pending.pop(job.op_id, None)
-            if interrupted and not self._connection_responds(handle):
-                _log.error("La conexión no responde tras una interrupción; se cierra la sesión")
-                return
+            if fatal is not None:
+                _log.error("Error fatal de DuckDB; se invalida la sesión")
+                return fatal
+            if (interrupted or job.engine_interrupted) and not self._connection_responds(handle):
+                _log.error("La conexión no responde tras una interrupción; se invalida la sesión")
+                return SessionInvalidatedError(
+                    "La conexión DuckDB no responde tras una interrupción; la sesión se invalidó",
+                    detail="unresponsive_after_interrupt",
+                )
 
     def _forget(self, job: _Job[Any]) -> None:
         with self._lock:
@@ -372,6 +425,11 @@ class SessionWorker:
             return handle.execute("SELECT 1").rows == ((1,),)
         except Exception:
             return False
+
+
+def _resolve(future: Future[Any], value: Any) -> None:
+    if not future.done():
+        future.set_result(value)
 
 
 def _first_line(exc: BaseException) -> str:

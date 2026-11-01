@@ -24,7 +24,13 @@ from qgis.PyQt.QtWidgets import (
 
 from geoduck import __version__
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import AppEvent, SessionFailed, SessionStarted, SessionStateChanged
+from geoduck.app.events import (
+    AppEvent,
+    SessionFailed,
+    SessionInvalidated,
+    SessionStarted,
+    SessionStateChanged,
+)
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.session import SessionState
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
@@ -221,6 +227,13 @@ class GeoDuckDock(QDockWidget):
                 else tr("cancelación entre lotes")
             )
             self.engine_label.setText(f"DuckDB {info.duckdb_version} · {cancel}")
+        elif isinstance(event, SessionInvalidated):
+            self.message_label.setText(
+                tr("Sesión invalidada:")
+                + f" {event.message} [{event.code.value}] "
+                + tr("Inicie una sesión nueva o cierre.")
+            )
+            self.message_label.show()
         elif isinstance(event, SessionFailed):
             self.message_label.setText(
                 tr("No se pudo completar la operación.") + f" [{event.code.value}] {event.message}"

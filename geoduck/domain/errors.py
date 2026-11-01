@@ -27,6 +27,8 @@ class ErrorCode(str, Enum):
     INVALID_TRANSITION = "INVALID_TRANSITION"
     SESSION_NOT_READY = "SESSION_NOT_READY"
     SESSION_CLOSED = "SESSION_CLOSED"
+    #: session-spec §5 / C13 §4 bis: la conexión dejó de ser utilizable.
+    SESSION_INVALIDATED = "SESSION_INVALIDATED"
     CANCELLED = "CANCELLED"
     UNSUPPORTED_ENGINE = "UNSUPPORTED_ENGINE"
     ENGINE_ERROR = "ENGINE_ERROR"
@@ -71,6 +73,20 @@ class SessionClosedError(GeoDuckError):
     """La sesión está cerrada o cerrándose y no admite operaciones nuevas."""
 
     code = ErrorCode.SESSION_CLOSED
+
+
+class SessionInvalidatedError(SessionClosedError):
+    """La conexión dejó de ser utilizable y la sesión se invalidó (C13 §4 bis, ADR-0007 §3).
+
+    Es un `SessionClosedError`: ninguna operación posterior llega a DuckDB. La conexión no se reutiliza;
+    salir del fallo exige una sesión nueva.
+    """
+
+    code = ErrorCode.SESSION_INVALIDATED
+
+    def fresh(self) -> SessionInvalidatedError:
+        """Copia sin traza, para entregar la misma causa a varias operaciones."""
+        return SessionInvalidatedError(self.message, detail=self.detail)
 
 
 class OperationCancelledError(GeoDuckError):
