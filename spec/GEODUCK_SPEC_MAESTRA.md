@@ -1,0 +1,1198 @@
+# GEODUCK — ESPECIFICACIÓN MAESTRA CONSOLIDADA
+
+**Revisión 2026-11-01: mínimo DuckDB >= 1.5.0.** Los archivos individuales del ZIP son normativos.
+
+## Índice de capítulos
+- [01. README.md](#capitulo-1)
+- [02. docs/vision.md](#capitulo-2)
+- [03. docs/product-spec.md](#capitulo-3)
+- [04. docs/architecture.md](#capitulo-4)
+- [05. docs/technology.md](#capitulo-5)
+- [06. specs/session-spec.md](#capitulo-6)
+- [07. specs/sql-editor-spec.md](#capitulo-7)
+- [08. specs/qgis-bridge-spec.md](#capitulo-8)
+- [09. specs/spatial-spec.md](#capitulo-9)
+- [10. specs/ui-ux-spec.md](#capitulo-10)
+- [11. docs/security.md](#capitulo-11)
+- [12. docs/compatibility-distribution.md](#capitulo-12)
+- [13. qa/test-strategy.md](#capitulo-13)
+- [14. qa/benchmarks.md](#capitulo-14)
+- [15. docs/roadmap.md](#capitulo-15)
+- [16. docs/implementation-handoff.md](#capitulo-16)
+- [17. docs/references.md](#capitulo-17)
+
+
+---
+
+<a id="capitulo-1"></a>
+
+## CAPÍTULO 01 — `README.md`
+
+# GeoDuck — Documentation & Specification Pack
+
+> **Estado:** Draft de arquitectura v0.1 · **Fecha base:** 2026-11-01 · **Clasificación:** especificación, no software ejecutable.
+> **Roles:** propietario del producto = usuario; arquitecto y especificador = ChatGPT; implementador = Claude Code. Claude Code no modifica unilateralmente decisiones de producto ni declara estable una versión.
+
+## Propósito
+GeoDuck es una **extensión de escritorio para QGIS, en Python**, que ofrece una sesión DuckDB de primera clase, un editor SQL profesional y un camino fiable para entregar tablas, vistas y resultados SQL como **capas nativas de memoria de QGIS**. Cuando la entrega concluye, QGIS administra esas capas sin vínculo vivo con GeoDuck o DuckDB.
+
+**Flujo canónico:** abrir extensión → iniciar `:memory:` o seleccionar un archivo `.duckdb` (RO/RW) → opcionalmente `ATTACH` otras bases → elegir tabla/vista o ejecutar SQL → seleccionar resultado y, si corresponde, geometría/CRS → **Cargar en QGIS** → entregar capa(s) independientes → QGIS administra.
+
+## Principios no negociables
+1. No inventar otro SQL: DuckDB interpreta y ejecuta sus sentencias.
+2. Priorizar `DuckDBPyRelation` para consultas y el lector Arrow por lotes; usar `DuckDBPyConnection.execute()` para administración/DDL/DML/transacciones.
+3. **No** mezclar «Ejecutar SQL» con «Cargar en QGIS»; el usuario decide qué resultado entregar.
+4. Una sola sesión lógica, propiedad de un ejecutor serializado; `ATTACH`/`DETACH` reales, desde SQL o UI.
+5. Una transferencia incompleta **nunca** se registra como capa definitiva en el proyecto QGIS.
+6. No prometer carga *zero-copy*: Arrow es transporte, PyQGIS realiza la conversión final.
+7. UX moderna y minimalista, compatible con las ramas QGIS 3/4 certificadas.
+8. Alpha prolongada. No existe fecha prevista para v1.0.0.
+
+## Navegación
+
+| Documento | Función |
+|---|---|
+| [Visión](docs/vision.md) | Problema, experiencia y límites |
+| [Contrato de producto](docs/product-spec.md) | Requisitos verificables, ID y criterios |
+| [Arquitectura](docs/architecture.md) | Componentes, hilos, estado y trazabilidad |
+| [Tecnologías](docs/technology.md) | Stack, versiones y criterios de adopción |
+| [Sesiones](specs/session-spec.md) | Raíz en memoria, ATTACH/DETACH, permisos y fallos |
+| [SQL](specs/sql-editor-spec.md) | Scripts, resultados, editor, reejecución controlada |
+| [Puente QGIS](specs/qgis-bridge-spec.md) | Arrow, tipos, atomicidad, entrega |
+| [Espacial](specs/spatial-spec.md) | Multi-geometría, CRS, WKB, errores |
+| [UI/UX](specs/ui-ux-spec.md) | Experiencia, componentes, estados y accesibilidad |
+| [Seguridad](docs/security.md) | Riesgos y límites de confianza |
+| [Compatibilidad](docs/compatibility-distribution.md) | Matriz QGIS/Python/Qt y entrega Windows |
+| [Calidad](qa/test-strategy.md) | Pirámide CI, criterios y pruebas de aceptación |
+| [Benchmarks](qa/benchmarks.md) | Metodología, escenarios y métricas |
+| [Roadmap](docs/roadmap.md) | Fases Alpha, gates y dependencias |
+| [Guía a Claude Code](docs/implementation-handoff.md) | Orden de trabajo, DoD y contrato de cambios |
+| [ADRs](docs/adr/README.md) | Registro de decisiones arquitectónicas |
+| [Fuentes](docs/references.md) | Referencias oficiales verificables |
+
+## Alcance v0.x
+- Incluye: conexión y exploración DuckDB, SQL completo local, scripts multi-sentencia, resultados, carga de tablas sin geometría y capas geográficas en memoria, resolución de CRS, gestión explícita de conexiones, pruebas y UX.
+- Excluye por ahora: proveedor dinámico DuckDB↔QGIS, sincronización de capas, servidores, URLs, dashboards, importación bidireccional QGIS→DuckDB, colaboración y servicios web. Su inclusión requiere ADR y decisión del propietario.
+
+## Instrucciones de uso de este paquete
+- Leer primero `docs/vision.md`, `docs/product-spec.md`, `docs/architecture.md`, luego las cuatro SPEC.
+- Cada implementación debe referenciar los IDs `GD-*` y sus pruebas `AT-*`.
+- Los archivos de este paquete **no son código implementado** ni demuestran compatibilidad en un entorno QGIS instalado.
+- No fijar automáticamente versiones nuevas de dependencias sin ensayar la matriz; los ejemplos SQL son orientativos, no pruebas de runtime.
+
+
+
+---
+
+<a id="capitulo-2"></a>
+
+## CAPÍTULO 02 — `docs/vision.md`
+
+# GeoDuck — Visión y límites del producto
+
+**Estado:** aprobado en principio · **Owner:** propietario del producto · **Fecha base:** 2026-11-01
+
+## 1. Problema y oportunidad
+El usuario de QGIS que ya usa DuckDB debería poder abrir una sesión, adjuntar archivos `.duckdb`, escribir SQL y entregar resultados como capas nativas sin exportar manualmente CSV, GeoPackage ni depender de un servidor. El valor de GeoDuck no es reinventar QGIS: es hacer que DuckDB se sienta **integrado, completo y transparente** dentro de QGIS.
+
+## 2. Propuesta de valor
+> **DuckDB procesa; GeoDuck interpreta el resultado y lo entrega; QGIS lo administra.**
+
+GeoDuck privilegia la fidelidad semántica y la facilidad de uso por encima de interfaces cargadas de botones y promesas de rendimiento no demostradas.
+
+## 3. Usuarios principales
+- Especialista GIS que escribe SQL para análisis espacial.
+- Analista de datos que dispone de tablas DuckDB, espaciales y no espaciales.
+- Profesional que necesita combinar bases persistentes adjuntas y explorar sus datos dentro de QGIS.
+
+No se necesita saber programar Python; sí son útiles conocimientos de SQL para la experiencia avanzada. Acciones de UI cubrirán los casos de selección de tabla/vista y ATTACH/DETACH.
+
+## 4. Principios UX
+1. Un panel acoplable en QGIS con explorador, editor y resultados, y diseño visual sobrio.
+2. El siguiente paso evidente: abrir → consultar → entregar a QGIS.
+3. Predeterminados inteligentes solo cuando no existe ambigüedad; preguntar cuando hay varias geometrías o CRS incierto.
+4. Explicar los efectos de acciones sensibles, sin restringir artificialmente el SQL completo.
+5. No alterar capas entregadas a QGIS, incluso tras `DETACH` o cierre de GeoDuck.
+6. Mostrar límites reales: la vista previa no es el resultado completo; QGIS memory consume RAM.
+7. Progreso y cancelación claros; no declarar éxito anticipado.
+
+## 5. Frontera de propiedad
+**GeoDuck es responsable** de instalación, sesión DuckDB, editor SQL, exploración, preview, selección de geometría, conversión de tipos, transferencia y validación antes de la entrega.
+
+**QGIS es responsable**, después de una entrega exitosa, de renderizar, simbolizar, editar, guardar, exportar, eliminar y conservar las capas de memoria según sus propias reglas. Las capas no llevan conexión viva a DuckDB.
+
+## 6. No objetivos de la Alpha inicial
+No dashboards, no URLs/web, no API server, no capas DuckDB en modo vivo, no sincronización automática, no cambios en los datos fuente por editar la capa QGIS, no sustitución del administrador de capas, no soporte de QGIS 2.
+
+## 7. Métrica de éxito
+Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DETACH` sin residuos de GeoDuck ni pérdida de capas ya entregadas; manejo correcto de geometrías/CRS; interfaz QGIS responsiva; instalación y pruebas de compatibilidad verificadas.
+
+
+
+---
+
+<a id="capitulo-3"></a>
+
+## CAPÍTULO 03 — `docs/product-spec.md`
+
+# GeoDuck — Especificación funcional maestra (Product SPEC)
+
+**Estado:** Draft aprobado para implementar mediante gates · **Versión del documento:** 0.1 · **Referencia:** `docs/roadmap.md`
+
+## 1. Contrato y términos
+- **Sesión:** contexto de ejecución DuckDB de GeoDuck, cuya raíz es `:memory:` y que puede tener catálogos adjuntos.
+- **Base principal visible:** archivo seleccionado al iniciar; internamente se adjunta a la raíz. No confundir con la conexión física principal.
+- **Resultado:** salida rastreable de una sentencia (estado o conjunto tabular).
+- **Vista previa:** conjunto limitado de filas; nunca equivale por definición a la totalidad.
+- **Entrega:** transferencia completa a una o más capas `memory` y registro en proyecto QGIS *después* de validar éxito.
+- **Geometría primaria:** columna espacial usada para generar una capa QGIS determinada.
+- **Estado Alpha:** producto en desarrollo, aunque determinadas versiones ya sean útiles.
+
+## 2. Requisitos funcionales y aceptación
+
+| ID | Prioridad | Requisito | Aceptación esencial |
+|---|---|---|---|
+| GD-BOOT-001 | P0 | Plugin Python aparece en QGIS y abre panel | AT-BOOT-001 |
+| GD-BOOT-002 | P0 | Diagnóstico de dependencias con mensajes accionables | AT-BOOT-002 |
+| GD-SES-001 | P0 | Iniciar sesión raíz `:memory:` | AT-SES-001 |
+| GD-SES-002 | P0 | Adjuntar archivo de inicio RO/RW | AT-SES-002 |
+| GD-SES-003 | P0 | `ATTACH`/`DETACH` por UI y SQL, sincronizados | AT-SES-003 |
+| GD-SES-004 | P0 | `DETACH` real libera uso propio y no afecta capas QGIS ya entregadas | AT-SES-004 |
+| GD-SES-005 | P0 | `USE`, temporales, parámetros de sesión y transacciones coherentes | AT-SES-005 |
+| GD-CAT-001 | P0 | Explorar catálogos, esquemas, vistas y tablas | AT-CAT-001 |
+| GD-SQL-001 | P0 | SQL nativo DuckDB completo, sujeto a privilegios reales | AT-SQL-001 |
+| GD-SQL-002 | P0 | Script multi-sentencia, en orden, con estado por instrucción | AT-SQL-002 |
+| GD-SQL-003 | P0 | Resultados tabulares independientes y vinculados a sentencia | AT-SQL-003 |
+| GD-SQL-004 | P0 | Ejecutar actual, selección o todo | AT-SQL-004 |
+| GD-SQL-005 | P0 | Preview limitado sin `fetchall()` de datasets grandes | AT-SQL-005 |
+| GD-SQL-006 | P0 | No reejecutar DDL/DML al cargar capas; política de SELECT explícita | AT-SQL-006 |
+| GD-SQL-007 | P1 | Autocompletado, historial, pestañas, formato y EXPLAIN | AT-SQL-007 |
+| GD-BRD-001 | P0 | Cargar resultado tabular como capa de memoria QGIS | AT-BRD-001 |
+| GD-BRD-002 | P0 | Transporte Arrow por lotes con conversión explícita | AT-BRD-002 |
+| GD-BRD-003 | P0 | Progreso y cancelación sin manipular QGIS desde worker | AT-BRD-003 |
+| GD-BRD-004 | P0 | Sin capas publicadas parcialmente ante error/cancelación | AT-BRD-004 |
+| GD-BRD-005 | P0 | No gestionar ni vincular capas después de entrega | AT-BRD-005 |
+| GD-SPA-001 | P0 | Detectar ausencia, una o varias columnas espaciales | AT-SPA-001 |
+| GD-SPA-002 | P0 | Preguntar columnas cuando existan varias; opción capas separadas | AT-SPA-002 |
+| GD-SPA-003 | P0 | Preservar/solicitar CRS; prohibido asignar CRS inventado | AT-SPA-003 |
+| GD-SPA-004 | P0 | Gestionar nulos, incompatibilidad geométrica y errores WKB | AT-SPA-004 |
+| GD-UX-001 | P0 | UI minimalista QGIS 3/4 con accesibilidad | AT-UX-001 |
+| GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
+| GD-CFG-001 | P1 | Persistir preferencias, SQL guardado y conexiones recientes; no capas/datos | AT-CFG-001 |
+| GD-COMP-001 | P0 | Probar pares QGIS/Python/Qt/DUCKDB/PyArrow | AT-COMP-001 |
+| GD-QA-001 | P0 | CI, integración QGIS y benchmarks sin métricas fabricadas | AT-QA-001 |
+
+## 3. Reglas de proceso
+### 3.1 Inicio
+1. Al abrir GeoDuck se ve un formulario compacto de sesión.
+2. Modo en memoria: se inicia sesión editable en `:memory:`.
+3. Modo archivo: la sesión física sigue siendo en memoria y el archivo se `ATTACH` como catálogo principal visible, con RO/RW explícito.
+4. Una vez iniciada la sesión, habilitar explorador y editor.
+5. Si falla abrir el archivo o cargar dependencias, explicar error y permitir corregirlo sin perder el estado útil previo.
+
+### 3.2 Consultas, scripts y resultados
+- Una o varias sentencias; el parser de DuckDB define los límites; no `split(';')` ingenuo.
+- Ejecución ordenada, con un registro por sentencia: ID, SQL saneado, tipo, inicio/fin, estado, error y, si corresponde, preview.
+- Cuando una sentencia falla: parar el script, explicar efectos ya aplicados; no rollback implícito.
+- `CREATE`, `ATTACH`, `DETACH`, DML no producen capas automáticamente.
+- Una instrucción con filas (`SELECT`, `RETURNING`, etc.) puede mostrar preview; un `RETURNING` no se reejecuta al cargar.
+- «Cargar resultado activo» y «Cargar seleccionados» son acciones explícitas; cada resultado, si corresponde, puede crear 0/1/N capas por geometría.
+- El soporte de cargar SELECT por reejecución es consciente del estado mutable; consultar `specs/sql-editor-spec.md`.
+
+### 3.3 Capas QGIS
+- Si no hay geometría, crear una tabla sin geometría.
+- Si hay una geometría, elegirla automáticamente cuando el tipo y CRS son inequívocos.
+- Si hay varias, preguntar y permitir una o varias capas; no inferir que el primer campo es el correcto.
+- Transformación/corrección CRS solo con consentimiento, no automática oculta.
+- Solo añadir al proyecto las capas ya completas; capas temporales privadas se descartan en error.
+
+## 4. Reglas no funcionales
+- **NF-01 Integridad:** 0 filas silenciosamente perdidas, duplicadas o truncadas por la transferencia.
+- **NF-02 Memoria:** procesar resultados Arrow por lotes, sin `fetchall` no acotado; QGIS memory consume RAM real.
+- **NF-03 Responsividad:** no ejecutar SQL pesado ni acceder al almacenamiento durante largo tiempo desde hilo principal.
+- **NF-04 Compatibilidad:** soportar matrices certificadas; no atribuir compatibilidad solo por metadatos del plugin.
+- **NF-05 Seguridad:** las extensiones ejecutan código nativo y las operaciones de archivos tienen efectos reales.
+- **NF-06 Observabilidad:** log técnico opt-in, sin datos sensibles ni SQL completo por defecto.
+- **NF-07 Simplicidad:** sin servicio externo ni dependencia obligatoria de servidor.
+- **NF-08 Recuperabilidad:** fallos de conversión/cancelación no publican capas inválidas.
+
+## 5. Estructura de trazabilidad
+Los criterios `AT-*` aparecen en `qa/test-strategy.md`. Los detalles de diseño son normativos en `specs/*` y ADR. En caso de contradicción, una decisión explícita posterior del propietario resuelve el conflicto; Claude Code solicita la aclaración mediante issue/ADR y no improvisa el contrato.
+
+## 6. No objetivos v0.x y entrada al backlog
+Dashboards, mapa por URL, servidor GeoDuck, capas dinámicas, live refresh, reverse sync QGIS→DuckDB, múltiples motores de consulta, editor visual drag-and-drop y conectores no DuckDB propios. Registrar ideas, no implementarlas por iniciativa del implementador.
+
+
+
+---
+
+<a id="capitulo-4"></a>
+
+## CAPÍTULO 04 — `docs/architecture.md`
+
+# GeoDuck — Arquitectura de referencia
+
+**Estado:** ADR-001..ADR-004 propuestos como baseline. **Ámbito:** plugin local QGIS con un proceso y un ejecutor de sesión.
+
+## 1. Vista de componentes
+
+```mermaid
+flowchart TD
+  UI[QGIS Dock UI / Explorer / SQL Editor] --> CMD[Application / Commands]
+  CMD --> COORD[Session & Operation Coordinator]
+  COORD --> W[DuckDB Session Worker - un único hilo propietario]
+  W --> DB[(DuckDB in-memory root)]
+  DB --> A[(ATTACH archivos .duckdb RO/RW)]
+  W --> AR[Arrow RecordBatch stream]
+  AR --> BQ[Bounded batch handoff / backpressure]
+  BQ --> MAIN[Main-thread PyQGIS Converter / private memory layer]
+  MAIN -->|commit tras éxito| PROJECT[QgsProject / capas QGIS]
+  COORD --> R[Result Registry: previews + metadatos]
+  UI --> R
+```
+
+## 2. Subsistemas
+**UI shell (PyQGIS/Qt):** `QDockWidget`, explorador, editor, inspector de resultados, selectors de geometría y CRS, notificaciones accesibles. Nunca contiene SQL de negocio ni accesos a DuckDB directos.
+
+**Application layer:** comandos `StartSession`, `AttachDatabase`, `DetachDatabase`, `ExecuteScript`, `PreviewResult`, `LoadResultToQGIS`, `CancelOperation`, `CloseSession`; errores tipados y estado del flujo.
+
+**Session Worker:** único propietario de `duckdb.DuckDBPyConnection`, creada expresamente en su hilo. Cola serial de operaciones que cambian estado o consumen lectores. No usar `duckdb.sql()` global ni `:default:`. No usar el mismo objeto `con` simultáneamente desde hilos.
+
+**Result Registry:** guarda metadatos de sentencia, preview limitado, SQL reejecutable cuando procede, contexto y estado de disponibilidad; no contiene un resultado completo en memoria ni un lector Arrow indefinido.
+
+**Arrow Bridge:** transfiere `RecordBatch` con control de presión y cierre garantizado del reader. La conversión final Arrow → `QgsFeature`/`QgsGeometry` implica copia y asignación controlada.
+
+**QGIS Committer:** crea o alimenta una capa temporal no registrada, exclusivamente en hilo principal. Publica todas las capas del pedido tras validar integridad, o descarta todas en fracaso.
+
+## 3. Máquina de estados de sesión
+`STOPPED → STARTING → READY → BUSY → READY → CLOSING → STOPPED`; `FAILED` documenta errores recuperables.
+
+- `READY`: admite operaciones nuevas.
+- `BUSY`: operaciones seriales ocupan la conexión, incluidas lecturas Arrow. `DETACH` entra en cola, espera o pide cancelar la operación anterior.
+- `CLOSING`: cerrar lectores, terminar/cancelar trabajos, `DETACH` de las bases que proceda, cerrar la instancia y limpiar referencias.
+- Evitar cerrar prematuramente un reader: el contrato de algunas versiones de DuckDB pueden impedir consultas concurrentes mientras está abierto.
+
+## 4. Secuencia cargar capa
+1. UI escoge resultado tabular y su geometría/CRS.
+2. Application valida que la consulta puede volver a ejecutarse con seguridad para ese caso; si no, ofrece explicación.
+3. Worker prepara relación `con.sql(read_query)`; abre `rel.to_arrow_reader(batch_size=config)` en `with`.
+4. Worker entrega lotes sin acceso a objetos Qt/QGIS del hilo principal; cola acotada y ACK mantienen memoria predecible.
+5. Main thread valida campos, convierte cada lote y agrega a una capa **privada** de memoria.
+6. Si se cancela o falla, limpiar reader y descartar capa privada; ninguna publicación.
+7. Al final, cotejar recuentos, esquema y errores; registrar capa(s) en `QgsProject` y emitir éxito.
+8. Desde ese momento la propiedad es exclusivamente de QGIS y la capa no retiene referencia a DuckDB.
+
+## 5. Política de concurrencia y cancelación
+- Un worker serializado para una sesión: conserva `TEMP`, `USE`, transacciones y contexto del script sin sorpresas.
+- Cada operación tiene `id`, token de cancelación cooperativo y estado observable.
+- Para consultas largas sin lotes, investigar en gate técnico el mecanismo de interrupción soportado por DuckDB 1.5+/2.x sin usar indebidamente la conexión desde otro hilo. **No asumir** cancelación inmediata ni segura sin prueba.
+- El cierre de GeoDuck o `DETACH` solicita cancelación y espera liberación ordenada; jamás se desprende una base en mitad de la transferencia activa.
+- Las funciones de PyQGIS/QObject del proyecto se llaman en main thread; prohibido `QgsVectorLayer`, `QgsProject`, widgets o data providers dentro del worker.
+- Backpressure obligatorio: n lotes máximo en tránsito; decidir tamaño con benchmarks.
+
+## 6. Estructura sugerida del código a implementar
+
+```text
+geoduck/
+  __init__.py
+  metadata.txt
+  plugin.py
+  ui/
+    dock.py, sql_editor.py, explorer.py, results.py, dialogs.py
+  app/
+    commands.py, coordinator.py, state.py, events.py
+  duckdb/
+    session.py, catalog.py, script_runner.py, relations.py
+  bridge/
+    transfer.py, arrow_adapter.py, qgis_types.py, geometry.py
+  infra/
+    compatibility.py, configuration.py, logging.py
+  resources/
+  tests/
+    unit/, integration/, qgis/, perf/
+```
+
+Es una estructura orientativa: Claude Code puede simplificar carpetas **sin cambiar fronteras ni requisitos**, registrando el cambio. No crear capas abstractas sin uso real ni usar infraestructura distribuida.
+
+## 7. Riesgos a probar antes de congelar la implementación
+1. QGIS 3/4 y librería editor SQL nativa: qué bindings PyQGIS hay por Windows.
+2. PyArrow/duckdb DLL y dependencias dentro de Python embebido de QGIS.
+3. Devolver RecordBatch de worker a main thread sin degradar latencia/estabilidad.
+4. `USE`/`DETACH` en script y revalidación de resultados previos.
+5. Materialización de varios millones en `QgsVectorLayer(memory)`: consumo real de RAM.
+6. QGIS 4 tipado de campos y manejo de geometrías con CRS.
+
+## 8. Fuente de verdad
+`docs/product-spec.md` y `specs/*.md` son los contratos. Esta arquitectura puede refinarse tras un spike, pero ninguna optimización puede violar el límite de responsabilidad con QGIS.
+
+
+
+---
+
+<a id="capitulo-5"></a>
+
+## CAPÍTULO 05 — `docs/technology.md`
+
+# GeoDuck — Selección tecnológica y restricciones
+
+**Fecha base:** 2026-11-01 · **Política:** elegir tecnologías de primera línea sin incluir dependencias por moda.
+
+| Pieza | Elección | Motivo | Riesgo/prueba |
+|---|---|---|---|
+| Host GIS | QGIS 3/4 Desktop | Plugin nativo y capas administradas por QGIS | Qt5/Qt6 y bindings |
+| Lenguaje plugin | Python de QGIS | API PyQGIS y mantenibilidad | QGIS controla el runtime |
+| UI | PyQGIS + `qgis.PyQt`, widgets Qt | Integración y diseño nativo minimalista | diferencias Qt5/Qt6 |
+| SQL editor | Preferir `QgsCodeEditorSQL` si el binding existe; fallback QScintilla/Qt | evitar editor web innecesario | spike Windows QGIS3/4 |
+| Motor | DuckDB Python `>=1.5.0` certificado | SQL + relaciones + Spatial | versiones de almacenamiento y DLL |
+| Spatial | extensión oficial DuckDB `spatial` | geometría y funciones `ST_*` | instalación/carga y permisos |
+| Transporte | PyArrow RecordBatch | lotes, tipos columnares, transferencias acotadas | conversión a QVariant y RAM |
+| Geometría | WKB → `QgsGeometry` | intercambio binario estándar | CRS separado y geometría mixta |
+| Testing | pytest + pruebas reales QGIS | detección temprana | runners Windows QGIS instalados |
+| Calidad | ruff, mypy orientativo, CI | consistencia | imports de PyQGIS en static checks |
+| Benchmarks | harness reproducible | evidencia y regresiones | hardware fijo, métricas exactas |
+
+## Política de versiones
+- Windows x64 primero.
+- Certificación inicial de referencia: QGIS 4.2.x actual y QGIS 3.44.x LTR, ambas instaladas, con PyQGIS real y dependencias reales.
+- QGIS 4.0.x, otras 4.x y QGIS 3 anteriores: matriz gradual; ninguna garantía genérica de «todos QGIS 3».
+- QGIS 2: fuera de soporte.
+- DuckDB 1.5.0 es la versión mínima soportada. DuckDB 1.5.x y 2.x se certifican por matriz de CI; las versiones nuevas se incorporan tras validación. Usar APIs comunes verificadas, sin asumir que todas las APIs de 2.x existen en 1.5.
+- La compatibilidad Python depende del wheel concreto de DuckDB 1.5.x/2.x y del runtime QGIS. Verificarla con instalación real por combinación; no imponer el requisito de Python de DuckDB 2.x a la rama 1.5.
+- Elegir PyArrow que publique wheel compatible con el Python/ABI/arquitectura del QGIS de destino. No asumir que `pyarrow` funciona por tener instalado un Python separado.
+- Usar rango compatible más lock/constraints por combinación certificada; evitar depender de «último» sin pruebas.
+
+## Contrato de compatibilidad DuckDB (GD-COMP-DB-001)
+- **Mínimo funcional: DuckDB Python 1.5.0** (inclusive). **Soporte objetivo: 1.5.x y versiones 2.x y superiores verificadas**; «superior» no equivale a certificación automática para versiones futuras.
+- Exigir pruebas funcionales idénticas en 1.5.x y 2.x para SQL multisentencia, `ATTACH/DETACH`, `spatial`, relaciones lazy, `to_arrow_reader()`, tipos Arrow y entrega de capas PyQGIS.
+- Las diferencias reales de APIs, semántica de conexión, lectores Arrow, transacciones, CRS y almacenamiento deben documentarse en una **matriz de capacidades por versión**. No introducir una rama de código especial sin una prueba reproducible.
+- El runtime Python de QGIS, PyArrow y las ruedas nativas DuckDB determinan qué combinaciones se pueden certificar. La aplicación mostrará mensajes claros si la combinación no es soportada.
+- La lectura/escritura de archivos DuckDB creados con otras versiones se probará separadamente: **compatibilidad de API Python no garantiza compatibilidad del formato de almacenamiento**.
+- La transferencia a QGIS usa la misma interfaz lógica independientemente de la versión de DuckDB, con un adaptador mínimo solamente si hace falta.
+
+## APIs DuckDB preferidas
+- `duckdb.connect(database=":memory:")` explícito y sin conexiones globales.
+- `con.execute(sql)` para DDL, DML, transacciones, ATTACH/DETACH y configuración.
+- `con.sql(sql)`/`con.table(name)` para consultas y relaciones.
+- `relation.to_arrow_reader(batch_size=...)` + `with` como transporte de lectura.
+- `con.extract_statements()` para parseo de script, con una capa que conserve SQL original/posición si la API lo soporta.
+- `duckdb_databases()`, `information_schema` para introspección.
+- Nunca usar `con.execute(...).to_arrow_reader()` como vía «streaming» en DuckDB 2.0: ese camino copia filas y advierte.
+
+## Decisión PyArrow
+PyArrow **no es el backend de almacenamiento QGIS**; es el medio de transporte entre DuckDB y el convertidor PyQGIS. La copia final al proveedor `memory` está prevista. La prioridad es reducir picos de memoria, no anunciar zero-copy.
+
+## Empaquetado
+El complemento debe registrar un verificador de entorno que inspeccione Python, QGIS, Qt, architecture, `duckdb`, `pyarrow` y capacidad `spatial`. No ejecutar `pip install` silencioso dentro de QGIS; decidir el flujo de instalación Windows mediante un spike con instrucciones y paquete reproducible.
+
+## Criterios para añadir librerías
+Toda dependencia nueva requiere: necesidad no resuelta por QGIS/DuckDB, soporte a QGIS 3/4 en Windows, wheel/instalación viable, licencia compatible, mantenimiento razonable, plan de pruebas y evaluación de riesgo.
+
+
+
+---
+
+<a id="capitulo-6"></a>
+
+## CAPÍTULO 06 — `specs/session-spec.md`
+
+# SPEC GD-SES — Sesiones y bases DuckDB
+
+**Estado:** baseline para Alpha · **IDs:** GD-SES-001..005
+
+## 1. Semántica general
+GeoDuck mantiene una **única sesión lógica** con conexión física raíz en `:memory:`. Seleccionar archivo persistente en la pantalla de inicio equivale a adjuntarlo con alias asignado a su base principal visible. El archivo se puede `DETACH` sin cerrar todo GeoDuck. La raíz en memoria no se puede `DETACH` desde la UI.
+
+La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` compartido simultáneamente con la UI. Los objetos temporales persisten durante la sesión; al salir de ella desaparecen.
+
+## 2. Contratos de operación
+### `StartSession(mode, path?, access?)`
+- `mode=memory`: usa `duckdb.connect(":memory:")`; no requiere path adicional.
+- `mode=file`: crea la raíz `:memory:`, comprueba archivo/path, solicita modo `READ_ONLY` o `READ_WRITE`, luego `ATTACH '...duckdb' AS <alias> (<modo>)`.
+- No se inventan archivos por defecto sin que el usuario haya pedido crearlos; en RW, el contrato debe especificar «abrir existente» vs «crear nuevo».
+- Si falla el attach inicial, la sesión puede quedarse en memoria y el usuario recibe información explícita de qué ocurrió.
+
+### `AttachDatabase(path, alias?, access)`
+- Valida un alias único, una ruta válida y un modo explícito.
+- Usa sentencias parametrizadas cuando sea posible o quoting correcto de identificadores/rutas; jamás interpolación ingenua de texto del usuario.
+- Actualiza explorador después del éxito, no antes.
+- Permite `ATTACH` desde SQL sin interferir: el registro de bases se reconcilia con `duckdb_databases()` después de la sentencia.
+- El motor decide cuándo un mismo archivo puede o no adjuntarse simultáneamente o en modo RW por bloqueos.
+
+### `DetachDatabase(alias)`
+- Comprueba que no sea la raíz y que la base esté adjunta.
+- Rechaza o encola la operación cuando hay transferencias/consultas activas; ofrece cancelar primero.
+- Si el catálogo elegido es predeterminado, cambia primero al catálogo raíz identificado en introspección, no asume que se llama `memory`.
+- Ejecuta `DETACH` real; verifica desaparición del catálogo; libera readers/resultados propios relacionados.
+- **No modifica ni elimina capas QGIS previamente entregadas.**
+- Si fracasa, informa el error y no marca la base como desconectada.
+- Aun con `DETACH` exitoso no garantiza que otro proceso no mantenga bloqueos externos. Probar apertura RW desde proceso independiente.
+
+### `ExecuteSQL("ATTACH ..." / "DETACH ...")`
+- Se ejecuta a través del mismo worker serializado.
+- Tras operaciones con cambios de catálogo, reconsulta estado real antes de actualizar UI.
+- No convertir `DETACH` en borrado de archivo ni en cierre ficticio.
+
+### `CloseSession()`
+- Solicitar cancelación cooperativa; cerrar los lectores; finalizar/rollback transacciones abiertas según política explicitada al usuario; cerrar la conexión y no retener referencias.
+- No borrar archivos de usuario ni capas QGIS.
+
+## 3. Read-only y escritura
+- `READ_ONLY` protege esa base según reglas DuckDB. **No** es sandbox del proceso ni impide escribir en memoria u otros archivos permitidos.
+- El SQL completo se conserva. Acciones potencialmente destructivas pueden requerir confirmación UX, pero la seguridad no dependerá exclusivamente de heurísticas de parsing.
+- No pretender elevar permisos con un segundo canal de escritura a una base RO.
+
+## 4. Transacciones
+- `BEGIN`, `COMMIT`, `ROLLBACK` admitidos como SQL real.
+- En DuckDB: en las versiones certificadas, una sentencia fallida dentro de transacción puede dejarla abortada hasta `ROLLBACK`; presentar recuperación clara, no hacer `COMMIT` silencioso.
+- Un script ejecutado sin `BEGIN` explícito no se revierte globalmente si falla una sentencia posterior.
+- La operación de carga QGIS que repite consulta debe saber si se apoya en objetos temporales o transacciones abiertas; no cambiar cursores/contextos arbitrariamente.
+
+## 5. Estados y errores
+`DISCONNECTED`, `CONNECTING`, `READY`, `BUSY`, `DETACHING`, `CLOSING`, `ERROR_RECOVERABLE`.
+
+Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLICT`, `DB_READ_ONLY`, `ACTIVE_RESULT`, `DEFAULT_CATALOG`, `TRANSACTION_ABORTED`, `DETACH_FAILED`.
+
+## 6. Casos de prueba mínimos
+- Memoria: crear/consultar tabla temporal y cerrar la sesión.
+- Archivo existente en RO: lectura OK; escritura al mismo catálogo rechazada.
+- Archivo RW: escritura y persistencia; bloqueos recuperados al `DETACH`.
+- `ATTACH` en SQL se refleja en UI; `DETACH` en UI invalida futuras lecturas de ese alias.
+- Capa ya entregada permanece funcional después de `DETACH` y del cierre del plugin.
+- `USE <alias>` seguido de `DETACH <alias>`: transición correcta al catálogo raíz.
+- Reader Arrow abierto: `DETACH` no se adelanta a la liberación del reader.
+- Base externa bloqueada: error claro, catálogo coherente, sin estado fantasma.
+
+
+
+---
+
+<a id="capitulo-7"></a>
+
+## CAPÍTULO 07 — `specs/sql-editor-spec.md`
+
+# SPEC GD-SQL — Editor SQL profesional y resultados
+
+**Estado:** baseline Alpha · **IDs:** GD-SQL-001..007
+
+## 1. Modelo UX
+Un editor integrado en dock con pestañas de texto SQL, acciones **Ejecutar sentencia**, **Ejecutar selección**, **Ejecutar todo**, **Cancelar**, **Explicar**, resultados y historial. Nunca ejecuta SQL por presionar «Cargar en QGIS» sin que el usuario sepa cuál consulta se ejecutará.
+
+El editor acepta el SQL disponible en DuckDB >=1.5 (DDL, DML, vistas, macros, transacciones, configuración, extensión Spatial, `ATTACH`, `DETACH`, consultas, `EXPLAIN`, `COPY`, `INSTALL`, `LOAD`) sujeto a permisos y funciones reales. No forzar el DSL «solo SELECT».
+
+## 2. Parser y scripts
+- Usar el parser oficial de DuckDB (`con.extract_statements`) para identificar sentencias. **No** separar con `str.split(';')`, porque hay literales, comentarios y bloques.
+- Preservar texto, orden y posiciones del editor; si el parser no expone offsets, implementar mapeo verificado mediante pruebas, no heurística ingenua.
+- Por defecto, ejecutar secuencialmente. Si falla una sentencia: detener el resto, presentar estado y la recuperación apropiada de transacción.
+- Registrar por instrucción: `statement_id`, `run_id`, `type`, `status`, `duration_ms`, `message`, `preview_handle?`, `error_range?`, `catalog_epoch`.
+- «Ejecutar selección» de múltiples sentencias respeta el orden y errores.
+
+## 3. Tipos de salida
+1. **Status:** DDL/administración o sentencia sin filas útiles; mostrar OK/error, duración y detalle seguro.
+2. **Tabular read result:** `SELECT`, `WITH ... SELECT`, `VALUES`, lecturas que retornan filas; cada sentencia tiene pestaña independiente.
+3. **Mutation with returned rows:** `INSERT/UPDATE/DELETE ... RETURNING` u otras salidas de escritura; ejecutar **una sola vez** y permitir inspeccionar preview; no repetir al pulsar cargar.
+4. **Plan/diagnóstico:** `EXPLAIN`, avisos, tablas técnicas de resultado; visualizables, no capas automáticas.
+
+Una sentencia no se clasifica solo por su primera palabra: `WITH` puede anteceder DML; el parser y el comportamiento del motor son la fuente de verdad.
+
+## 4. Previsualización y paginación
+- Vista previa por defecto: 200 filas; opción 50/200/500/1000; siempre visualmente etiquetada «Vista previa».
+- Nunca materializar `fetchall()` en resultados sin límite conocido.
+- Para lecturas reejecutables, usar una consulta acotada, respetando semántica SQL y su ordenación; si no hay `ORDER BY` no garantizar que la paginación sea estable.
+- No calcular `COUNT(*)` completo automáticamente para todo SELECT.
+- Cambiar de pestaña de resultados no debe mantener un reader DuckDB abierto.
+- El registro conserva solo el fragmento mostrado y metadatos necesarios; no caché universal del resultado completo.
+- No efectuar reejecuciones ocultas en consultas potencialmente volátiles/sensibles; indicar cuándo cambia el estado de datos.
+
+## 5. Política de «Cargar resultado en QGIS»
+- Solo se activa para resultados tabulares convertibles, seleccionados por el usuario.
+- Para `SELECT` reejecutable, volver a ejecutar **únicamente esa consulta de lectura** para obtener el conjunto completo mediante Arrow; comunicar que se basa en el estado actual y puede diferir de la preview.
+- Si la query depende de tablas temporales eliminadas, base desadjuntada o una transacción ya cerrada, informar fallo en lugar de cargar otro resultado.
+- Para consultas no deterministas o con funciones de efecto lateral, mostrar advertencia/solicitar confirmación explícita; la clasificación «SELECT» no es prueba absoluta de ausencia de efectos secundarios.
+- **Nunca reejecutar** DDL/DML, el resto del script, un `RETURNING` ni los `ATTACH/DETACH` previos para obtener una capa.
+- Los resultados de escritura con `RETURNING` no tienen carga del conjunto completo vía replay en V1; el usuario puede crear luego una consulta de lectura apropiada. Evitar falsa promesa de repetibilidad.
+- Cada query genera 0/1/N capas según selección espacial. «Cargar todos» procesa explícitamente varios resultados y muestra estado por resultado, sin implicar transacción QGIS global entre resultados salvo que se implemente y pruebe.
+
+## 6. Estado del SQL respecto de la sesión
+- El catálogo activo (`USE`), tablas temporales, configuración, extensiones y transacciones pertenecen al worker de la sesión.
+- Tras `ATTACH`/`DETACH`, `CREATE/DROP`, refrescar explorador y marcar las previews afectadas como posiblemente obsoletas; no borrarlas silenciosamente.
+- Cuando cambia el SQL de origen de una pestaña, los resultados previos deben conservar `run_id` y mostrar claramente que ya no corresponden al texto actual.
+
+## 7. Editor profesional por etapas
+**P0:** resaltado, números de línea, ejecutar actual/selección/todo, stop, errores con ubicación cuando DuckDB la proporcione, pestañas resultados y registro de ejecuciones.
+
+**P1:** autocompletado de catálogos/tablas/columnas/funciones `ST_*`, historial, múltiples pestañas de editor, búsqueda y reemplazo, snippets básicos, guardado explícito de SQL, `EXPLAIN ANALYZE`, accesos de teclado, formato SQL.
+
+**P2 (evaluar):** diagnósticos en vivo, sugerencias sofisticadas y trazas de profiling; no son excusa para introducir editor web no justificado.
+
+## 8. Ejemplos de comportamiento esperado
+
+```sql
+CREATE TABLE productos AS SELECT 1 AS id, 'Medidor' AS nombre;
+SELECT * FROM productos;
+SELECT COUNT(*) AS n FROM productos;
+```
+
+Salida: tres registros de ejecución, dos pestañas de datos; se pueden cargar como tablas independientes de QGIS. No se reejecuta `CREATE` al cargar.
+
+```sql
+ATTACH 'comercial.duckdb' AS comercial (READ_ONLY);
+SELECT * FROM comercial.main.ventas;
+DETACH comercial;
+```
+
+Tras el `DETACH`, la vista previa existente sigue visible como preview limitada, pero la carga completa del `SELECT` anterior **ya no es válida** hasta volver a adjuntar la base explícitamente; no reconectar automáticamente.
+
+
+
+---
+
+<a id="capitulo-8"></a>
+
+## CAPÍTULO 08 — `specs/qgis-bridge-spec.md`
+
+# SPEC GD-BRD — Transporte Arrow y entrega de capas QGIS
+
+**Estado:** baseline Alpha · **Requisitos:** GD-BRD-001..005 · **Contrato principal:** GeoDuck produce; QGIS administra.
+
+## 1. Objetivo
+Transferir el resultado **completo** de una consulta DuckDB de lectura a una o varias capas nativas `QgsVectorLayer(provider="memory")`, con control de errores, progreso y cancelación. No se crea una conexión viva DuckDB↔capa y no se crea un proveedor personalizado en esta fase.
+
+## 2. Pipeline normativo
+
+```mermaid
+sequenceDiagram
+  participant U as Usuario
+  participant W as Worker DuckDB
+  participant A as Arrow stream
+  participant M as Hilo principal QGIS
+  participant Q as QgsProject
+  U->>W: Cargar SELECT seleccionado + geometría/CRS
+  W->>A: relation.to_arrow_reader(batch_size=N)
+  loop Lotes acotados
+    A-->>M: RecordBatch (sin objetos PyQGIS)
+    M->>M: Convertir columnas a QgsFields/QgsFeatures
+    M->>M: Añadir a QgsVectorLayer privada
+    M-->>W: ACK para backpressure
+  end
+  W-->>M: EOF / conteos / cierre reader
+  M->>M: Validar integridad y metadatos
+  M->>Q: Registrar capa(s) completas
+  Q-->>U: Éxito y control de la capa
+```
+
+## 3. Precondiciones
+- Sesión activa y resultado SQL tabular apto para consulta de lectura; no repetir DML/DDL.
+- Columnas conocidas; destino/estrategia geométrica seleccionados; CRS identificado o decisión explícita de usuario.
+- Recursos de memoria estimados y advertencia útil cuando el resultado es potencialmente grande. No fingir disponibilidad infinita de RAM.
+- Cualquier reader anterior de la conexión está cerrado antes de comenzar.
+
+## 4. API elegida
+```python
+relation = con.sql(read_query)  # solo para consulta de lectura
+with relation.to_arrow_reader(batch_size=batch_size) as reader:
+    for batch in reader:
+        # entregar mediante cola con backpressure
+        ...
+```
+
+DuckDB 1.5/2.x: no asumir streaming eficiente desde `con.execute().to_arrow_reader()`; usar relación. La consulta se ejecuta al consumir la relación. `batch_size` es configurable y se perfila; 8 192 / 16 384 filas son valores iniciales de experimento, no optimizaciones probadas.
+
+## 5. Hilos y estabilidad
+- Worker DuckDB: lector Arrow, conversión a tipos Arrow estándar, acumuladores de conteos; no usar `QgsVectorLayer`/`QgsProject`/widgets/QObject del hilo principal.
+- Main QGIS: `QgsVectorLayer`, `QgsFields`, `QgsFeature`, `QgsGeometry.fromWkb`, `dataProvider().addFeatures`, registro en `QgsProject`.
+- Queues y señales: backpressure explícito (máximo 1–3 lotes en vuelo inicialmente); verificar seguridad y latencia con pruebas reales.
+- La incorporación en QGIS de grandes lotes debe repartir trabajo en eventos del hilo principal; no ejecutar un bucle enorme que bloquee la interfaz durante segundos.
+- Cancelación cooperativa y cleanup `finally`; no llamar APIs de interrupción DuckDB no verificadas desde otro hilo.
+
+## 6. Atomicidad de entrega
+Una transferencia **no se registra como completa** si alguna fila falla al convertir o insertar. Mientras se transfiere, usar capa privada no registrada en `QgsProject`. Al éxito, registro del grupo de capas. Si una selección espacial crea dos capas, o se registran ambas completas o ninguna para esa operación, salvo elección explícita posterior del propietario.
+
+En cancelación/error/OOM: cerrar reader, descartar capas privadas, liberar estructuras temporales del bridge, registrar error sin datos sensibles. Los `ATTACH` previos permanecen a menos que el usuario ordene `DETACH`.
+
+La atomicidad es sobre **publicación en el proyecto**, no una transacción en la memoria interna de QGIS.
+
+## 7. Tabla de conversión DuckDB / Arrow → QGIS
+
+| Entrada | Política V1 | Advertencia |
+|---|---|---|
+| `BOOLEAN` | booleano/QVariant compatible | validar por QGIS3/4 |
+| `TINYINT`/`SMALLINT`/`INTEGER` | entero | límites por binding |
+| `BIGINT` | entero de 64 bits si es representable; si no, string | sin pérdida silenciosa |
+| `UBIGINT`/`HUGEINT` | texto canónico por defecto si rango excede QGIS | preservar exactitud |
+| `FLOAT`/`DOUBLE` | `double` | `NaN/Inf` según estrategia explícita |
+| `DECIMAL(p,s)` | doble si exactitud controlada; texto cuando pueda perder precisión | **nunca** convertir silenciosamente |
+| `VARCHAR`/`ENUM`/`UUID` | texto | codificación UTF-8 |
+| `DATE` | QDate o texto ISO validado | nulos |
+| `TIMESTAMP`/`TIMESTAMPTZ` | QDateTime o ISO con zona documentada | conservar semántica de zona |
+| `TIME`/`INTERVAL` | QTime o texto normalizado | no inventar fecha |
+| `BLOB` | hexadecimal o texto base64 explícito | no tratar BLOB como geometría sin metadatos |
+| `LIST`/`STRUCT`/`MAP`/`UNION` | JSON canonizado si representable o texto tipado | avisar pérdida de estructura nativa QGIS |
+| geometría primaria | WKB → `QgsGeometry` | CRS separado; validar tipo y contenido |
+| geometría no primaria | omitir de atributos por defecto, ofrecer WKT/WKB textual opcional | no afecta fuente DuckDB |
+| `NULL` | `NULL` real de QGIS | no convertirlo a cadena `"None"` |
+
+La tabla debe refinarse mediante contrato testado por tipo y bindings QGIS concretos, no tomar como garantía universal de QVariant. Rechazar datos imposibles de convertir con motivo explícito en lugar de producir datos inconsistentes.
+
+## 8. IDs, orden y atributos
+- Si hay una columna de ID único y compatible, ofrecerla como campo de atributo, **no** confiar automáticamente en ella como FID QGIS.
+- Crear FID nativo `QgsFeature` para cada fila y validar conteos; las tablas sin geometría usan capa `None`.
+- SQL sin `ORDER BY` no garantiza orden de salida. No usar el orden para producir identidad persistente entre ejecuciones.
+- El naming del usuario manda; nombres generados son `Tabla — <geom>`/`Resultado N — <geom>` y se normalizan para QGIS.
+
+## 9. Integridad y comprobación
+- `rows_read == rows_converted == rows_added` para cada capa.
+- Metadatos de campos, CRS, geometría y valores se verifican antes de registrar capa.
+- Para 2 geometrías, comprobar que las 2 capas obtienen el mismo número de filas lógico cuando el contrato así lo establece (salvo nulos con regla documentada).
+- No completar silenciosamente con una capa parcial en casos de error o falta de memoria.
+
+## 10. Límite de responsabilidad
+Después del `QgsProject.addMapLayer(...)` exitoso y la notificación de entrega: GeoDuck no mantiene referencias al archivo DuckDB, no refresca la capa, no la borra al `DETACH`, ni decide cómo se guarda o se renderiza. QGIS asume el control. La capa memory se puede perder si el usuario no la guarda según las reglas de QGIS.
+
+
+
+---
+
+<a id="capitulo-9"></a>
+
+## CAPÍTULO 09 — `specs/spatial-spec.md`
+
+# SPEC GD-SPA — Geometría, CRS y selección multi-geometría
+
+**Estado:** baseline Alpha · **IDs:** GD-SPA-001..004
+
+## 1. Meta
+Una tabla, vista o consulta puede contener cero, una o múltiples columnas geoespaciales. GeoDuck debe decidir con el usuario la(s) geometría(s) de cada capa, preservar los valores, asignar CRS solo cuando esté fundamentado y entregar capas nativas QGIS completas.
+
+## 2. Detección
+1. Inspeccionar esquema tipado de relación/consulta y catálogos, buscando `GEOMETRY` y tipos espaciales DuckDB 1.5+/2.x compatibles, incluidos tipos especializados cuando se soporten.
+2. Verificar funciones espaciales instaladas; para columnas BLOB/WKB o textos WKT exigir confirmación de origen/tipo, **no** inferir por nombre `geom` o por primeros bytes únicamente.
+3. En `GEOMETRY` genérico, explorar tipos de valores con funciones espaciales cuando sea necesario para elegir la geometría del proveedor `memory`.
+4. Distinguir `NULL`, `EMPTY`, `POINT`/`MULTIPOINT`, `LINESTRING`/`MULTILINESTRING`, `POLYGON`/`MULTIPOLYGON`, `GEOMETRYCOLLECTION`, subtipos con Z/M cuando PyQGIS lo permita.
+
+## 3. Selección
+| Situación | Acción |
+|---|---|
+| 0 geometrías | entregar tabla QGIS sin geometría |
+| 1 geometría con tipo + CRS inequívocos | seleccionarla automáticamente |
+| 2+ geometrías | selector: elegir una o «crear una capa por columna» |
+| CRS ausente/ambiguo | pedir elección explícita o marcar como desconocido, sin inventar EPSG |
+| mezcla de familias no compatible con layer tipo único | proponer dividir por familias o cancelar; nunca truncar geometría silenciosamente |
+| geometría corrupta | reportar fallo de conversión; cancelar transferencia por defecto |
+| geometría `NULL` | feature con geometría vacía, conforme al contrato de campos |
+
+La columna espacial alternativa no se pierde en DuckDB. Para la capa concreta, por defecto se **excluye de los atributos** el resto de columnas espaciales, con opción explícita de incluirlas convertidas a texto WKT/WKB; el usuario puede crear una segunda capa para otra columna.
+
+## 4. CRS en DuckDB 1.5+
+DuckDB 1.5+ permite tipos de geometría parametrizados con identificadores CRS, p.ej. `GEOMETRY('OGC:CRS84')`, y funciones `ST_CRS`, `ST_SetCRS`; el módulo `spatial` aporta transformaciones y catálogos CRS. Por ello GeoDuck **sí debe inspeccionar metadatos CRS cuando estén disponibles**. Una columna `GEOMETRY` sin CRS declarado no autoriza deducir EPSG:4326.
+
+Orden de preferencia:
+1. CRS explícitamente asociado al tipo de geometría/resultset (documentado y compatible).
+2. Metadatos de origen confiables y trazables, si existen, y no contradicen el resultado SQL.
+3. Selección explícita del usuario.
+4. Mantener CRS desconocido con advertencia clara si el usuario decide continuar.
+
+`ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y decisión explícita. Verificar orden de ejes, particularmente `geometry_always_xy` de DuckDB 2.0, y contrastarlo con QGIS. Nunca realizar una transformación oculta.
+
+## 5. Transporte WKB
+Seleccionada una columna, generar una **relación de proyección explícita** que exponga la geometría como `ST_AsWKB(...)` de tipo binario, conservar otros atributos y un identificador estable de fila para la transferencia si resulta necesario. Convertir a `QgsGeometry.fromWkb` en main thread. Evitar serializar geometrías completas en WKT como camino principal por coste y precisión.
+
+La generación de la proyección SQL debe citar campos correctamente y preservar semántica de la consulta original; no modificar SQL de usuario en el editor. Se necesita test de tipos especializados y funciones concretas en DuckDB 2.0.
+
+## 6. Geometrías mixtas
+Política V1: detectar incompatibilidades de familias geométricas antes de registrar capas. Si una columna contiene Point y Polygon mezclados, mostrar opciones **separar familias en capas** (solo cuando se implemente con garantías) o **cancelar con explicación**. No asignar tipo Polygon ignorando Points. El soporte opcional de `GeometryCollection` debe probarse en las ramas QGIS objetivo.
+
+## 7. Múltiples geometrías
+Consulta ejemplo:
+```sql
+SELECT id, ST_Centroid(geom) AS centro, geom AS poligono
+FROM zonas;
+```
+El panel detecta `centro` y `poligono` y ofrece «Puntos», «Polígonos», «Ambos». Si el usuario elige ambos, GeoDuck crea dos capas independientes, verificadas, y las publica juntas al terminar. Las dos capas no mantienen conexión a DuckDB.
+
+## 8. Pruebas geoespaciales obligatorias
+- Point, Line, Polygon, Multi*, nulos/vacías, Z, geometría inválida.
+- Dos columnas geométricas con familias diferentes y selección de ambas.
+- CRS tipado DuckDB 1.5+/2.x y CRS desconocido; CRS de distinto eje y reproyección explícita.
+- Filas con tipos mixtos en una columna: no se descartan silenciosamente.
+- WKB con datos corruptos, `GEOMETRYCOLLECTION` y BLOB no geométrico.
+- Consultas que generan geometría (`ST_Centroid`, `ST_Buffer`) sin columna espacial original.
+
+
+
+---
+
+<a id="capitulo-10"></a>
+
+## CAPÍTULO 10 — `specs/ui-ux-spec.md`
+
+# SPEC GD-UX — Interfaz moderna, minimalista y profesional
+
+**Estado:** baseline Alpha · **ID:** GD-UX-001
+
+## 1. Filosofía
+Una sola superficie coherente dentro de QGIS: **explorar, escribir, consultar y entregar**. UI nativa Qt, respetando tema claro/oscuro de QGIS, tipografía de sistema, espaciado generoso, controles discretos, íconos consistentes y estados visibles. No introducir landing pages, dashboards ni animaciones innecesarias.
+
+## 2. Disposición del dock
+```text
+┌─ GeoDuck ────────────── [Sesión: memoria | Archivo RO/RW] [Estado] ──┐
+│ Explorador de catálogos │ Editor SQL [tab 1] [tab 2]                 │
+│   ▶ memory             │ [Ejecutar] [Actual] [Selección] [Todo]    │
+│   ▼ comercial (RO)     │ SELECT ...                                 │
+│     esquemas           │                                            │
+│       tablas/vistas    ├────────────────────────────────────────────┤
+│   + Adjuntar / Detach  │ Resultados [#1] [#2] [Ejecuciones]         │
+│                       │ Preview paginado / error / plan            │
+│                       │ [Cargar activo en QGIS] [Cargar elegidos]   │
+└───────────────────────┴────────────────────────────────────────────┘
+```
+
+El explorador puede colapsarse; el área del editor y resultados tiene divisores ajustables. El dock es redimensionable, con estados vacíos informativos.
+
+## 3. Interacciones definidas
+- **Inicio:** tarjeta discreta «En memoria» / «Archivo DuckDB», selector de archivo, toggle «Solo lectura / Lectura y escritura», botón «Iniciar sesión». La UI se desbloquea al confirmar la sesión.
+- **ATTACH:** icono `+` al lado de catálogos; diálogo path, alias, RO/RW; feedback al finalizar.
+- **DETACH:** menú contextual «Desadjuntar» con confirmación si hay operaciones propias activas. No mostrar advertencia falsa de que se perderán capas QGIS ya entregadas.
+- **Tabla/Vista:** doble clic abre preview opcional o añade una consulta en editor; clic derecho «Cargar completa en QGIS» con selector espacial si aplica.
+- **SQL:** botón principal «Ejecutar» opera sobre sentencia actual si no hay selección, o selección según preferencia explícita; comandos «Todo» y «Selección» inequívocos.
+- **Resultados:** pestañas por sentencia con nombre legible y ID; cambiar pestaña selecciona solo ese resultado. `Cargar en QGIS` siempre etiqueta el resultado objetivo.
+- **Múltiples geometrías:** selector pequeño con radiobutton/checkbox por columna, nombre/tipo/CRS; permitir uno o varios. No modal por cada consulta cuando no hay ambigüedad.
+- **Progreso:** nombre operación, estado, filas procesadas, tiempo, cancelar; sin porcentaje inventado cuando no existe total.
+- **Errores:** título comprensible, detalle expandible, acción de recuperación; conservar SQL para corregirlo.
+
+## 4. Diseño visual
+- Diseño monocromático por defecto con un acento derivado del tema QGIS; estados semanticamente accesibles (éxito/advertencia/error).
+- Controles con alturas y espacios coherentes; evitar iconos sin texto o tooltip.
+- Autocompletado contextual no intrusivo; errores de SQL resaltados sin cubrir código.
+- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar actual, Ctrl+Shift+Enter ejecutar todo, Esc cancelar donde sea seguro), configurables.
+- UI responsive dentro del dock; no usar tamaños fijos que hagan inutilizable un panel estrecho.
+
+## 5. Accesibilidad e internacionalización
+- Teclado completo, foco visible, etiquetado accesible, contraste, tooltips y lectores de pantalla cuando Qt lo permita.
+- Español inicial; internacionalización por catálogos de traducción con idioma inglés listo para incorporar.
+- Formatos numéricos locales en UI sin alterar sintaxis SQL ni precisión interna.
+
+## 6. Estados obligatorios
+`sin sesión`, `conectando`, `listo`, `ejecutando`, `preview disponible`, `resolución espacial`, `transfiriendo`, `cancelando`, `entrega exitosa`, `fallo recuperable`.
+
+Para «entrega exitosa», no mostrar «capa lista» hasta que el proyecto QGIS haya registrado capas íntegras. Cuando se desadjunta una base, el explorador se actualiza; las capas entregadas no aparecen como «desconectadas» porque son independientes.
+
+## 7. UX QA
+Prueba de tareas guiadas con persona no programadora: adjuntar base, abrir tabla, cargar punto, desadjuntar y constatar que capa sigue visible. Prueba SQL avanzada: crear temporal, múltiples SELECT, alternar resultados, cargar sólo uno. Probar UI en Qt5 y Qt6 con distintos tamaños DPI.
+
+
+
+---
+
+<a id="capitulo-11"></a>
+
+## CAPÍTULO 11 — `docs/security.md`
+
+# GeoDuck — Modelo de seguridad y efectos de SQL
+
+**Estado:** baseline Alpha. GeoDuck ejecuta código SQL **local elegido por el usuario**, no un servicio de SQL remoto.
+
+## 1. Modelo de confianza
+- El usuario puede introducir SQL con efectos de lectura/escritura, red o filesystem dependiendo de permisos de DuckDB y del proceso QGIS.
+- GeoDuck no se presenta como *sandbox* de SQL no confiable. **No** ejecutar automáticamente scripts externos, repositorios o SQL generado por agentes sin revisión.
+- El control RO de un catálogo `ATTACH` es específico de esa base y no impide `COPY` a un archivo distinto o cambios en otras bases.
+
+## 2. Extensiones DuckDB
+- Extensión `spatial` oficial: soportada, con carga explícita y estado visible; cualquier instalación de componentes que necesite red se comunica al usuario.
+- No permitir extensiones sin firma por defecto.
+- Preferir permitir extensiones oficiales y restringir comunitarias por configuración, sin bloquear arbitrariamente el editor como si fuera un SQL distinto.
+- Instalación/carga de extensiones externas no controladas: mostrar advertencia/permiso explícito y registrar la decisión local.
+- Nunca hacer `INSTALL`/`LOAD` desde un archivo remoto de manera silenciosa.
+
+## 3. Operaciones destructivas
+- Advertencia contextual para `DROP`, `TRUNCATE`, `DELETE` sin filtro, sobrescrituras, attach RW u operaciones que se identifiquen claramente como riesgo.
+- Advertencias son **UX** y no garantía de bloqueo: UDF, macros y subconsultas complejas pueden tener efectos inesperados.
+- Mantener acciones de confirmación legibles y no usar reglas por regex como supuesta política de seguridad.
+
+## 4. Protección de datos
+- Por defecto, no persistir previews ni contenido de capas ni historiales completos que puedan contener datos sensibles.
+- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles.
+- Configuración local con catálogo/alias, paths recientes y preferencias, con opción «borrar recientes». No almacenar passwords ni tokens en texto claro.
+- Los datos pueden estar en RAM de QGIS después de entrega; esto es parte del contrato de capas de memoria y depende de QGIS.
+- Cuando se considera un buffer temporal en disco, requiere ADR y controles de borrado/cifrado; no incluirlo en Alpha inicial.
+
+## 5. Concurrencia y bloqueo
+- Una sola sesión, worker serial: evita `DETACH` concurrente a una lectura activa de GeoDuck.
+- Conflicto de RW con otro proceso: error claro; nunca forzar liberación de bloqueos de terceros.
+- No usar un segundo canal oculto que siga manteniendo abierta la base después de un `DETACH`.
+
+## 6. Modelo de amenazas resumido
+| Amenaza | Mitigación | Riesgo residual |
+|---|---|---|
+| SQL destructivo accidental | confirmación y feedback | una consulta puede ocultar efectos |
+| Extensión maliciosa | solo firma/categorías permitidas y confirmación | firmas no sustituyen auditoría |
+| Datos en log | redacción y opt-in | previews voluntarias en UI |
+| SQL o ruta inyectados desde diálogo | citas/parametrización estrictas | SQL escrito por usuario se ejecuta como tal |
+| Bloqueos de archivo | `DETACH` real, cleanup y test externo | terceros pueden bloquear |
+| Agotamiento de RAM | lotes, backpressure, advertencias | QgsVectorLayer(memory) mantiene copia completa |
+| QGIS crash por threads | PyQGIS main-thread only | bindings/plugins externos |
+
+## 7. QA y criterios de salida
+No publicar Alpha externa si carga extensiones no firmadas por defecto, si ignora read-only, si conserva referencias DuckDB tras `DETACH`, si registra SQL sensible por defecto, o si manipula QGIS desde worker causando crashes.
+
+
+
+---
+
+<a id="capitulo-12"></a>
+
+## CAPÍTULO 12 — `docs/compatibility-distribution.md`
+
+# GeoDuck — Compatibilidad y distribución Windows
+
+**Estado:** plan de certificación. Compatibilidad declarada ≠ compatibilidad comprobada.
+
+## 1. Horizonte y política
+- Host: QGIS Desktop **3.x y 4.x**, sin QGIS 2.
+- **Anclas de prueba iniciales al 2026-11-01**: QGIS 3.44.15 LTR (Qt5) y QGIS 4.2.3 (Qt6).
+- QGIS 4.0.x: segunda prioridad de certificación. QGIS 3.x anteriores: best-effort hasta que existan pruebas efectivas.
+- Windows 11 x64 primero. Otros SO en fases posteriores mediante decisiones registradas.
+- DuckDB >= 1.5.0: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
+- PyArrow requiere coincidencia de ABI, arquitectura y wheels reales; verificar en `sys.executable` de QGIS.
+
+## 2. Matriz de soporte
+| Combinación | Política en Alpha | Estado al escribir docs |
+|---|---|---|
+| Windows x64 + QGIS 4.2.3 + DuckDB 1.5.x / 2.x | P0 certificación | **Pendiente prueba en QGIS real** |
+| Windows x64 + QGIS 3.44.15 + DuckDB 1.5.x / 2.x | P0 certificación | **Pendiente prueba** |
+| Windows x64 + QGIS 4.0.x | P1 | Pendiente |
+| Windows x64 + QGIS 3.40 / 3.34 / 3.28 | P2 por viabilidad del Python del QGIS | Pendiente / podría no ser compatible |
+| QGIS 2.x | excluido | no aplica |
+| Linux / macOS con QGIS 3/4 | posterior | pendiente |
+
+`qgisMaximumVersion=4.99` o metadatos equivalentes solo habilitan visibilidad del plugin en el repositorio; **no prueban** su funcionamiento. Empaquetar con imports vía `qgis.PyQt` y test Qt5/Qt6.
+
+## 3. Diagnóstico de instalación
+Al habilitar plugin: detectar QGIS y Qt exactos, Python/ABI/architecture, import de `duckdb`, versión `duckdb`, import de `pyarrow`, versión, carga `spatial` y derechos de instalación/lectura de extensiones.
+
+Si algún requisito falla: presentar informe claro, no dejar excepción críptica ni intentar `pip install` silencioso. Proponer instrucciones específicas al entorno verificado de QGIS; nunca ejecutar un instalador externo sin consentimiento.
+
+## 4. Estrategia de distribución
+Fase 0: spike de instalación en Windows, comparando plugin ZIP con resolución guiada de dependencias, empaquetado de wheels compatibles y alternativa OSGeo4W. Elegir un solo método principal con evidencia.
+
+Restricciones:
+1. No incluir archivos de wheels sin revisar licencias y compatibilidad.
+2. No mezclar DLL/Qt de Python independiente con QGIS, ni modificar un Python global.
+3. No descargar paquetes automáticamente en cada apertura del plugin.
+4. Prueba de instalación limpia y desinstalación limpia en cada versión ancla.
+5. Mantener artefactos versionados reproducibles y notas de release con compatibilidad concreta.
+
+## 5. Política hacia atrás
+La compatibilidad con QGIS 3 es un objetivo **realista por matriz**, no promesa de soportar cualquier 3.x desde su primer release. No asumir compatibilidad con cualquier Python integrado en QGIS: determinar los wheels reales de DuckDB y PyArrow en cada matriz y notificar incompatibilidad cuando falten.
+
+## 6. Condición para marcar «soportado»
+Solo cuando pasen: instalación limpia, carga del panel, inicio/attach/detach, SQL multi-statement, streaming Arrow, geometría CRS y entrega de capa QGIS en el equipo de prueba correspondiente. El QGIS Plugin Checker complementa pero no sustituye pruebas.
+
+## DuckDB mínimo 1.5.0
+GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de primera clase junto a 2.x. Se requiere matriz independiente por QGIS, Python embebido, DuckDB, Spatial y PyArrow. La instalación no debe actualizar forzosamente una instalación compatible de DuckDB 1.5.x.
+
+
+
+---
+
+<a id="capitulo-13"></a>
+
+## CAPÍTULO 13 — `qa/test-strategy.md`
+
+# GeoDuck — Estrategia de pruebas y CI
+
+**Estado:** baseline QA · **Política:** un feature sin test de aceptación no se considera completo.
+
+## 1. Pirámide de pruebas
+- **Unitarias** (rápidas, cada PR): parseo y planificación SQL, estados de sesión, quoting de rutas/alias, clasificación de resultados, mapeo de campos, CRS y políticas de retry/safe replay. Dobles para interfaces QGIS; no suplantan integración.
+- **DuckDB real** (cada PR): `:memory:`, `ATTACH/DETACH`, scripts, `CREATE`, temporales, `SELECT`, DML y reader Arrow en v1.5.x y v2.x; no mocks del motor para aceptación.
+- **PyQGIS real** (PR/release en runners Windows provisionados): creación de memory layer, campos, WKB, mezcla geométrica, entrega múltiple y descarte en cancelación.
+- **E2E QGIS GUI** (gates/release): abrir dock, escribir SQL, cargar capa y comprobar que persiste tras `DETACH`; UI QGIS3 y QGIS4.
+- **Seguridad, resiliencia y compatibilidad**: extensiones, bloqueos, interrupción, OOM simulado, errores tipo/CRS, instalación limpia.
+- **Performance**: harness determinista con inventario hardware y datos generados repetibles.
+
+## 2. CI por niveles
+**PR requerido:** formato/lint, tests unitarios, tests DuckDB, build del plugin, validación metadata/documentación, verificación de dependencias y licencia, detección de APIs obsoletas.
+
+**Integración de QGIS:** matrix Windows x64 QGIS 3.44 LTR y 4.2 latest, cada combinación en un entorno certificado. Si los runners GitHub estándar no tienen QGIS real, usar runners dedicados/VM provisionadas, y **reportar no ejecutado**, no declarar éxito verde ficticio.
+
+**Release Alpha:** toda la matriz P0 real + E2E + benchmarks respecto baseline y auditoría de seguridad.
+
+## 3. Casos de aceptación prioritarios
+| ID | Escenario | Resultado esperado |
+|---|---|---|
+| AT-BOOT-001 | Abrir dock en QGIS 3/4 | sin errores de import/UI |
+| AT-BOOT-002 | falta `pyarrow` | diagnóstico accionable, sin crash |
+| AT-SES-001 | sesión :memory: | tablas temporales y SQL funcional |
+| AT-SES-002 | archivo RO/RW | modos respetados, archivo no corrupto |
+| AT-SES-003 | ATTACH por SQL y DETACH UI (y viceversa) | catálogo/UI iguales |
+| AT-SES-004 | cargar capa → DETACH → inspeccionar capa | capa intacta; archivo liberado por GeoDuck |
+| AT-SES-005 | BEGIN → INSERT → fallo → rollback | semántica DuckDB 1.5.x/2.x respetada |
+| AT-CAT-001 | múltiples catálogos/esquemas y vistas | explorador completo y refrescado |
+| AT-SQL-001 | CREATE/INSERT/COPY/EXPLAIN/SELECT | ejecución según DuckDB |
+| AT-SQL-002 | script 2 SELECT + CREATE | estados ordenados, 2 resultados |
+| AT-SQL-003 | pestañas de distintos resultados | cada preview corresponde al SQL correcto |
+| AT-SQL-004 | ejecutar selección/actual/todo | solo lo elegido se ejecuta |
+| AT-SQL-005 | SELECT un millón | preview acotada, no fetchall |
+| AT-SQL-006 | DML RETURNING → cargar | no repetir DML; carga completa no disponible por replay |
+| AT-SQL-007 | autocompletado en catálogos adjuntos | contexto correcto |
+| AT-BRD-001 | SELECT sin geometría → QGIS | tabla memory íntegra |
+| AT-BRD-002 | lector Arrow multi-lote | conteos/valores coinciden |
+| AT-BRD-003 | cancelar carga prolongada | GUI responde, lector cerrado |
+| AT-BRD-004 | fallo fila 30 001 | ninguna capa parcial publicada |
+| AT-BRD-005 | capa entregada → cerrar GeoDuck | QGIS controla capa y atributos |
+| AT-SPA-001 | 0/1/2 campos GEOMETRY | decisión adecuada, no geometría arbitraria |
+| AT-SPA-002 | centroide + polígono → ambas capas | dos capas completas con geometría correcta |
+| AT-SPA-003 | GEOMETRY con CRS y sin CRS | conservar/preguntar, nunca CRS inventado |
+| AT-SPA-004 | geometría corrupta o mixta | error o separación explícita, no pérdidas |
+| AT-UX-001 | pruebas teclado/tema/dock/Qt | acciones visibles y accesibles |
+| AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
+| AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
+| AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
+| AT-QA-001 | CI y perf baseline | informes vinculados a commit |
+
+## 4. Tests adversariales obligatorios
+- Alias con espacios/comillas y ruta Windows con acentos/Unicode.
+- SQL con `;` dentro de strings, comentarios y macros.
+- Reader Arrow abierto + tentativa de `DETACH`: no provocar `ResourceInUseException` sin manejo.
+- SQL que referencia vista creada en `:memory:`; consultas posteriores usan mismo estado de sesión.
+- SELECT antiguo tras `DROP` o `DETACH`: falla claramente, **sin** reconectar silenciosamente.
+- `SELECT` volátil: no prometer coincidencia preview y carga completa.
+- Queries sin `ORDER BY`: paginación no garantiza orden estable.
+- `INSERT RETURNING`: no duplicar escrituras al hacer preview/cargar.
+- CRS tipado vs CRS desconocido; EPSG confundible y ejes XY.
+- `DECIMAL` de alta precisión y enteros grandes: sin corrupción silenciosa.
+- Cancelación a mitad de 2 capas simultáneas: ninguna publicada.
+- Reabrir archivo RW desde un proceso independiente tras `DETACH` exitoso.
+- Ejecutar sin QGIS UI (headless) donde aplica; GUI real donde el caso lo exige.
+
+## 5. Pruebas de compatibilidad
+A cada plataforma/versión declarar: `certificado`, `conocido con limitaciones`, `no probado` o `incompatible`. Ninguna combinación sin prueba figura como certificada. Test de ejecución con `sys.executable` de QGIS, no un venv independiente.
+
+## 6. Política de merges/releases
+- Bloqueantes: 100% tests P0 de integridad/sesión, sin crash reproducible, sin corrupción de datos/capas, sin bypass de RO, sin incompatibilidad silenciosa.
+- Lint/tests básicos verdes son necesarios pero **insuficientes** para gates de integración.
+- Cada PR debe adjuntar test ID, evidencia y release target. Regresiones verificadas bloquean release. Los benchmarks no justifican reducir corrección.
+
+## Matriz obligatoria de regresión DuckDB
+- Ejecutar pruebas con **1.5.x y 2.x** (comenzando con 1.5.0 y 2.0.0 si sus wheels son compatibles con el runtime).
+- Verificar por cada versión DuckDB + Spatial + PyArrow: SELECT lazy, lector por lotes, SQL mixto, ATTACH/DETACH, geometría y CRS, cancelación, archivo persistente y casos de error.
+- Mantener artefactos de resultado y versión exacta; no declarar soporte para una combinación no probada.
+
+
+
+---
+
+<a id="capitulo-14"></a>
+
+## CAPÍTULO 14 — `qa/benchmarks.md`
+
+# GeoDuck — Protocolo de benchmarks y perfiles
+
+**Estado:** plan experimental; **no contiene resultados medidos**.
+
+## 1. Propósito
+Medir DuckDB SQL, Arrow, conversión a entidades QGIS, memoria, responsividad, cancelar y `DETACH`. No publicar afirmaciones de desempeño antes de ejecutarlas en condiciones reproducibles.
+
+## 2. Equipo y entorno registrados
+OS exacto; CPU núcleos/frecuencia; RAM; SSD; QGIS versión y Qt; Python `sys.version`/ABI; DuckDB; PyArrow; GeoDuck commit; tamaños de batch; `threads`, `memory_limit`, temperatura/carga; estado caché caliente/fría.
+
+## 3. Generadores reproducibles
+- T1: 100k filas tabulares simples (INT/DOUBLE/VARCHAR/NULL).
+- T2: 1M filas con 10 columnas (fechas, DECIMAL, strings, NULL).
+- T3: 100k / 1M puntos WKB, CRS declarado.
+- T4: 100k polígonos (varios vértices); registrar tamaño total en bytes.
+- T5: 2 geometrías por fila (POINT + POLYGON), 100k.
+- T6: 1M+ filas agregadas por SQL a ~1k resultados (medir pushdown y puente).
+- T7: datos inválidos en posición parametrizable para atomicidad.
+
+Scripts deterministas con semilla fija, verificaciones de checksums/filas y dataset checksum en cada corrida. Datos de prueba artificiales: no usar datos sensibles.
+
+## 4. Métricas
+1. **Latencia de preparación** de relación y esquema.
+2. **Tiempo de primera preview** (200 filas).
+3. **Tiempo total de carga QGIS**, subdividido DuckDB query, Arrow, convertir y `addFeatures`/commit.
+4. Throughput filas/s y MB/s en las fases medibles.
+5. RAM pico QGIS, memoria worker y backlog Arrow.
+6. Responsividad: latencia de eventos UI mientras transfiere (p95/p99 mediante harness).
+7. Tiempo hasta cancelación cooperativa y cleanup.
+8. Tiempo `DETACH` y prueba de apertura externa RW después de liberar referencias.
+9. Integridad de filas/campos/CRS y errores (siempre 0 pérdidas silenciosas).
+10. Tiempo instalación limpia y tiempo apertura del panel.
+
+## 5. Método
+- Warm-up 1 corrida por variante; >= 5 corridas medidas; mediana y p95; repetir en condiciones fijas.
+- Comparar batch sizes 4k, 8k, 16k, 32k, 64k, 128k; escoger por rendimiento **y** capacidad de respuesta, no únicamente throughput.
+- Baseline directo DuckDB `relation.to_arrow_reader` separado del overhead GeoDuck→QGIS.
+- No usar `fetchall()` de todas las filas en tests de producción.
+- Inspeccionar memory peak y tasa de eventos; invalidar corridas con swapping masivo o proceso externo saturando disco.
+
+## 6. Gates de desempeño
+No fijar metas universales de millones de filas/s sin datos. Inicialmente:
+- 0 crash, 0 fila silenciosamente omitida, 0 capa publicada incompleta.
+- Aceptación de cancelación en el siguiente punto seguro definido; latencia observada se publica.
+- En equipo/control fijos, una regresión de mediana mayor al 20% en tiempo de transferencia exige investigación/justificación o rollback del cambio. No mezclar mediciones entre hardware o versiones QGIS distintas.
+- Presupuesto RAM por tamaño de dataset debe documentarse; si se supera RAM disponible, abortar informando, no prometer carga ilimitada.
+- Los valores de referencia se incorporarán al repositorio con evidencia del primer gate E2E.
+
+## 7. Resultados y artefactos
+Guardar `json`/`csv` de métricas, commit, archivos de fixture, entorno, gráficos de evolución y comparación por QGIS 3/4. Un benchmark sin número de repeticiones, versión y hardware no respalda una decisión técnica.
+
+
+
+---
+
+<a id="capitulo-15"></a>
+
+## CAPÍTULO 15 — `docs/roadmap.md`
+
+# GeoDuck — Roadmap Alpha por fases y versiones tentativas
+
+**Fecha base:** 2026-11-01 · **Estado:** propuesta aprobable por gates, **sin fechas comprometidas**.
+
+## 1. Política de versiones
+Usar SemVer con sufijo pre-release PEP 440 compatible en Python para la documentación de releases (`0.1.0a1`, `0.1.0a2`, ...); para Git/GitHub se puede etiquetar `v0.1.0a1`. Esta convención representa **Alpha**, incluso cuando funciones ya sean útiles.
+
+No saltar a beta/RC/1.0.0 por completar una lista: estable requiere evidencia prolongada de compatibilidad, instalación, seguridad, rendimiento, casos límite y experiencia real. Se permite `0.10.0a1`, `0.11.0a1`, etc., si es necesario.
+
+Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su documento de aceptación. Un release puede tener varios parches alpha antes de avanzar.
+
+## 2. Hitos
+| Fase / release | Resultado verificable | Requisitos P0 | Gate de salida |
+|---|---|---|---|
+| G0 · `v0.1.0a1` Foundation | plugin abre dock, diagnóstico y sesión memoria | GD-BOOT-*, GD-SES-001 | QGIS 3/4 ancla cargan; duckdb/arrow/spatial validado |
+| G1 · `v0.2.0a1` Connections | archivo RO/RW, catálogo, ATTACH/DETACH UI y SQL | GD-SES-002..005, GD-CAT-001 | lock release real y temporales coherentes |
+| G2 · `v0.3.0a1` SQL Execution | scripts mixtos, resultados y previews | GD-SQL-001..006 | 2 SELECT y CREATE correctos; no reejecución DML |
+| G3 · `v0.4.0a1` QGIS Bridge MVP | tabla plana y una geometría → capas memory | GD-BRD-001..005 | primera Alpha útil E2E; capas intactas tras DETACH |
+| G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
+| G5 · `v0.6.0a1` SQL Professional | editor avanzado, historial, autocompletado | GD-SQL-007, GD-UX-001 | UX teclado/Qt5/Qt6 y errores profesionales |
+| G6 · `v0.7.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
+| G7 · `v0.8.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
+| G8 · `v0.9.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
+| G9+ · `v0.10.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
+
+## 3. Dependencias/gates críticos
+- **Spike G0-A**: validar QGIS 3.44/4.2 + DuckDB 1.5.x y 2.x + PyArrow + Spatial en Windows, sin ello no afirmar viabilidad del MVP.
+- **Spike G0-B**: comprobar editor SQL en bindings PyQGIS3/4, elegir una sola implementación principal con fallback si procede.
+- **Spike G2-A**: multi-statement en DuckDB 1.5.x/2.x y política para `RETURNING`/SELECT reejecutable.
+- **Spike G3-A**: límites reales de memoria y cambio worker→main con RecordBatch.
+- **Spike G4-A**: tipos `GEOMETRY('CRS')` y WKB en QGIS3/4.
+- **Spike G6-A**: mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
+
+## 4. Capacidad mínima de Alpha útil
+A partir de **v0.4.0a1**: abrir plugin → sesión DuckDB → ATTACH archivo → SELECT → seleccionar resultado → cargar tabla o geometría en QGIS → DETACH → capa permanece. Una demo de carga sin tests de integridad no aprueba el gate.
+
+## 5. Condición de cada entrega
+- Contrato y especificaciones actualizados.
+- Tests vinculados por ID pasan (o limitación claramente documentada y aceptada por el propietario).
+- Notas de versión con compatibilidad exacta, riesgos y cambios.
+- No prometer sobre rendimiento sin benchmark ni compatibilidad sin ejecución real.
+- Ninguna funcionalidad fuera de fase sin issue, análisis de dependencia y decisión del propietario.
+
+## 6. Estable posterior
+No se propone v1.0.0 en este roadmap. Antes de iniciar una eventual beta, evaluar: madurez de API, ausencia de corrupción de datos, compatibilidad QGIS3/4 ampliamente testada, instalador fiable, cancelación y errores resilientes, experiencias de usuarios externos, soporte/mantenimiento y seguridad revisada.
+
+## Regla transversal de versiones
+Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.0+**, con pruebas representativas tanto de 1.5.x como de 2.x. Ninguna etapa podrá declararse terminada si solo funciona en 2.x y falla una combinación 1.5.x certificada.
+
+
+
+---
+
+<a id="capitulo-16"></a>
+
+## CAPÍTULO 16 — `docs/implementation-handoff.md`
+
+# GeoDuck — Contrato de trabajo para Claude Code (implementador)
+
+**Arquitectura/especificación:** ChatGPT. **Implementación:** Claude Code. **Aprobación de producto/releases:** propietario.
+
+## 1. Instrucción de arranque
+> Implementar GeoDuck exclusivamente según `README.md`, `docs/product-spec.md`, `docs/architecture.md`, `specs/*.md`, `qa/*.md` y `docs/roadmap.md`. Antes de escribir features, ejecutar spikes G0-A/G0-B y producir un informe de compatibilidad verificable en Windows/QGIS3/QGIS4. No reescribir el producto como web app o servidor. No añadir un dialecto SQL. Mantener la frontera GeoDuck→QGIS.
+
+## 2. Regla de oro
+**DuckDB procesa; GeoDuck transfiere; QGIS administra.** Las capas entregadas son nativas QGIS memory, sin dependencia viva ni administración posterior por GeoDuck.
+
+## 3. Orden de implementación
+1. Preparar estructura mínima QGIS, metadatos, tests, UI dock y diagnóstico de entorno.
+2. Integrar sesión raíz `:memory:` y worker propietario sin global connection.
+3. Conexión principal mediante `ATTACH` RO/RW, explorador sincronizado, `DETACH` real y test de locks.
+4. Parser nativo de scripts, ejecución ordenada, previews acotadas, resultado por sentencia.
+5. Bridge Arrow por lotes y conversión PyQGIS en main thread con atomicidad.
+6. Spatial multi-geometría + CRS + errores.
+7. SQL editor profesional y UX refinada.
+8. Cancelación/benchmark/packaging/hardening.
+
+## 4. Implementar sin inventar
+- No inventar `con.execute().to_arrow_reader()` streaming (se priorizan relaciones).
+- No usar Qt widgets ni `QgsProject`/`QgsVectorLayer` dentro de worker.
+- No reejecutar DML/DDL ni un script completo al cargar resultado.
+- No auto-reconnect después de `DETACH`.
+- No materializar todas las filas a pandas o `fetchall()`.
+- No asumir CRS predeterminado.
+- No publicar capas parciales o confundir preview con resultado completo.
+- No bajar DuckDB por debajo de 1.5.0; probar API en DuckDB 1.5.x y 2.x.
+- No declarar «QGIS 3/4 compatible» sin prueba en ambos.
+
+## 5. Contrato de PR
+Cada PR informa: `versión/phase`, resumen, IDs GD-*, evidencias AT-*, riesgos, capturas UI cuando aplique, cambios de dependencias y alternativas evaluadas. Test fallido o limitación real se documenta, no se esconde.
+
+Los ADR son obligatorios si se cambia: root session, API Arrow, responsable de capas, memoria→provider live, seguridad de extensiones, threading, dependencia tecnológica o estrategia multi-statement.
+
+## 6. Definition of Done
+- Criterios de aceptación satisfechos.
+- Unit/integration/E2E pertinentes pasaron con evidencia.
+- Sin pérdida silenciosa de datos, capas parciales, recursos activos post-DETACH o manipulación Qt en hilo secundario.
+- Docs/README/roadmap actualizados.
+- Sin dependencias no justificadas; instalación reproducible.
+- Merge por el propietario según sus reglas de proyecto; no asumir privilegios.
+
+## 7. Preguntas que sí debe elevar al propietario
+Cambios de producto, aceptación de degradaciones incompatibles, renuncias a QGIS3/4 o DuckDB2, nuevos motores, persistent caches/SQL history sensible, arquitectura con servidor, nuevos alcances (dashboards/URL/live layers), fecha de beta/stable.
+
+## 8. Primer entregable solicitado
+Informe G0-A/G0-B con tabla de entornos reales, comandos/evidencia de import, funcionamiento de Arrow/Spatial, PyQGIS memory, editor SQL y recomendación de empaquetado Windows, más `metadata.txt` mínimo y test smoke; **sin** construir antes una arquitectura gigante sin pruebas.
+
+## Actualización obligatoria de alcance
+Claude Code debe implementar soporte mínimo de **DuckDB 1.5.0** y mantener compatibilidad probada con DuckDB 2.x. Queda prohibido codificar una dependencia incondicional de una API exclusiva de 2.x sin adaptación y prueba equivalente para 1.5.x.
+
+
+
+---
+
+<a id="capitulo-17"></a>
+
+## CAPÍTULO 17 — `docs/references.md`
+
+# GeoDuck — Fuentes técnicas oficiales consultadas
+
+**Fecha de consulta y corte de especificación:** 2026-11-01. Se priorizan documentación oficial de QGIS, DuckDB y Apache Arrow. Las referencias son fuentes para implementar; los requisitos `GD-*` son decisiones de producto.
+
+| Ref | Tema y aplicación | URL |
+|---|---|---|
+| REF-01 | QGIS releases 4.2.3 / 3.44.15 | https://github.com/qgis/QGIS/releases |
+| REF-02 | QGIS guía de instalación y versiones | https://qgis.github.io/QGIS-Website/resources/installation-guide/ |
+| REF-03 | Migración de plugins a QGIS 4 y qgis.PyQt | https://plugins.qgis.org/docs/migrate-qgis4 |
+| REF-04 | PyQGIS cookbook, memory layer | https://github.com/qgis/QGIS-Documentation/blob/master/docs/pyqgis_developer_cookbook/vector.rst |
+| REF-05 | PyQGIS cookbook, tareas/hilos | https://documentation.qgis.org/testing/en/docs/pyqgis_developer_cookbook/tasks.html |
+| REF-06 | DuckDB 2.0 API Python/migración | https://duckdb.org/docs/2.0/clients/python/migration |
+| REF-07 | DuckDB 2.0 Relational API | https://duckdb.org/docs/2.0/clients/python/relational_api |
+| REF-08 | DuckDB 2.0 exportación Arrow | https://www.duckdb.org/docs/2.0/guides/python/export_arrow |
+| REF-09 | DuckDB ATTACH/DETACH | https://duckdb.org/docs/current/sql/statements/attach |
+| REF-10 | DuckDB 2.0 Python DB-API y cursores | https://duckdb.org/docs/2.0/clients/python/dbapi |
+| REF-11 | DuckDB tipos GEOMETRY, CRS | https://duckdb.org/docs/current/sql/data_types/geometry |
+| REF-12 | DuckDB funciones espaciales ST_AsWKB | https://duckdb.org/docs/current/core_extensions/spatial/functions |
+| REF-13 | DuckDB seguridad extensiones | https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions |
+| REF-14 | Apache Arrow/PyArrow instalación | https://arrow.apache.org/docs/python/install.html |
+| REF-15 | PyPI paquetes oficiales DuckDB | https://pypi.org/project/duckdb/2.0.0/ |
+| REF-16 | PyPI paquetes oficiales PyArrow | https://pypi.org/project/pyarrow/ |
+
+## Notas de rigor
+1. DuckDB 1.5.x y 2.x pueden diferir en el comportamiento de readers Arrow y sesiones. Probar bloqueo, cancelación y concurrencia para cada versión y aislar divergencias en un adaptador mínimo.
+2. DuckDB 1.5+ dispone de geometrías con CRS tipado; no repetir documentación antigua como si todo GEOMETRY careciera de CRS.
+3. Las páginas oficiales evolucionan: registrar commit, versión o fecha cuando una API cambie; el código debe testarse contra dependencias realmente fijadas.
+4. Apache Arrow puede proporcionar wheels para una versión Python cuyo texto de compatibilidad oficial todavía no está actualizado. La prueba de import + ABI del Python de QGIS decide compatibilidad real.
+5. La lista de releases de QGIS solo prueba que existe el binario; no prueba GeoDuck funcionando allí.
+
+| REF-16 | DuckDB 1.5 Relational API | https://duckdb.org/docs/1.5/clients/python/relational_api |
+| REF-17 | DuckDB Geometry y compatibilidad almacenamiento v1.5 | https://duckdb.org/docs/stable/sql/data_types/geometry |
+
