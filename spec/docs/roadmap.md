@@ -13,8 +13,8 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | Fase / release | Resultado verificable | Requisitos P0 | Gate de salida |
 |---|---|---|---|
 | G0 · `v0.1.0a1` Foundation | plugin abre dock, diagnóstico y sesión memoria | GD-BOOT-*, GD-SES-001 | QGIS 3/4 ancla cargan; duckdb/arrow/spatial validado |
-| G1 · `v0.2.0a1` Connections | archivo RO/RW, catálogo, ATTACH/DETACH UI y SQL | GD-SES-002..005, GD-CAT-001 | lock release real y temporales coherentes; invalidación de sesión notificada una sola vez (INV-1..INV-5) |
-| G2 · `v0.3.0a1` SQL Execution | scripts mixtos, resultados y previews | GD-SQL-001..006 | 2 SELECT y CREATE correctos; no reejecución DML |
+| G1 · `v0.2.0a1` Connections | archivo RO/RW, catálogo, ATTACH/DETACH por UI | GD-SES-002..005 (de GD-SES-003, solo la UI), GD-CAT-001 | lock release real y temporales coherentes; invalidación de sesión notificada una sola vez (INV-1..INV-5) |
+| G2 · `v0.3.0a1` SQL Execution | scripts mixtos, resultados y previews; ATTACH/DETACH desde SQL conciliados con la UI | GD-SQL-001..006, GD-SES-003 (parte SQL) | 2 SELECT y CREATE correctos; no reejecución DML |
 | G3 · `v0.4.0a1` QGIS Bridge MVP | tabla plana y una geometría → capas memory | GD-BRD-001..005 | primera Alpha útil E2E; capas intactas tras DETACH |
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
 | G5 · `v0.6.0a1` SQL Professional | editor avanzado, historial, autocompletado | GD-SQL-007, GD-UX-001 | UX teclado/Qt5/Qt6 y errores profesionales |
@@ -24,6 +24,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G9+ · `v0.10.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
 
 ## 3. Dependencias/gates críticos
+- **Decisión 2026-11-01:** ATTACH/DETACH escritos en SQL pasan de G1 a G2; G1 no incluye un editor SQL provisional.
 - **Spike G0-A**: validar QGIS 3.44/4.2 + DuckDB 1.5.x y 2.x + PyArrow + Spatial en Windows, sin ello no afirmar viabilidad del MVP.
 - **Spike G0-B**: comprobar editor SQL en bindings PyQGIS3/4, elegir una sola implementación principal con fallback si procede.
 - **Spike G2-A**: multi-statement en DuckDB 1.5.x/2.x y política para `RETURNING`/SELECT reejecutable.
