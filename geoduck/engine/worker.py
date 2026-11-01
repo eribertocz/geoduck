@@ -425,10 +425,11 @@ class SessionWorker:
                 result = job.fn(handle, job.token)
             except BaseException as exc:
                 interrupted = is_interrupt_error(exc)
-                if isinstance(exc, duckdb.FatalException):
+                fatal_cause = _fatal_in_chain(exc)
+                if fatal_cause is not None:
                     fatal = SessionInvalidatedError(
                         "DuckDB informó un error fatal; la sesión se invalidó",
-                        detail=_first_line(exc),
+                        detail=_first_line(fatal_cause),
                     )
                     job.future.set_exception(fatal.fresh())
                 else:
@@ -460,6 +461,19 @@ class SessionWorker:
             return handle.execute("SELECT 1").rows == ((1,),)
         except Exception:
             return False
+
+
+def _fatal_in_chain(exc: BaseException) -> BaseException | None:
+    """Busca un `duckdb.FatalException` en la cadena de causas: una operación que envuelve el error
+    (p. ej. para clasificarlo) no puede ocultar que la base quedó invalidada."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        if isinstance(current, duckdb.FatalException):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def _resolve(future: Future[Any], value: Any) -> None:

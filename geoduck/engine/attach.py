@@ -86,6 +86,8 @@ def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str)
         sql += " (READ_ONLY)"
     try:
         _execute_attach(handle, sql)
+    except duckdb.FatalException:
+        raise  # no es un fallo del ATTACH: el worker invalida la sesión (C13 §4 bis)
     except duckdb.Error as exc:
         raise classify_attach_error(exc) from exc
     if identity is not None and _identity(path) != identity:
@@ -151,5 +153,7 @@ def _execute_attach(handle: ConnectionHandle, sql: str) -> None:
 def _detach_quietly(handle: ConnectionHandle, alias: str) -> None:
     try:
         handle.execute(f"DETACH {quote_identifier(alias)}")
+    except duckdb.FatalException:
+        raise  # nunca se silencia un error fatal: invalida la sesión
     except duckdb.Error:
         _log.warning("No se pudo desadjuntar una base rechazada", exc_info=True)

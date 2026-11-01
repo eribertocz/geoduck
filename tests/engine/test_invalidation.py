@@ -174,3 +174,20 @@ def test_invalidation_resolves_after_thread_cleanup():
     w.invalidation().add_done_callback(lambda f: released.set())
     w.close().result(TIMEOUT)
     assert released.wait(TIMEOUT)
+
+
+def test_fatal_error_wrapped_by_an_operation_still_invalidates():
+    """Regresión: una operación que envuelve el FatalException no puede ocultarlo."""
+    w = started_worker()
+
+    def wrapped(h, t):
+        try:
+            raise duckdb.FatalException("FATAL Error: simulado")
+        except duckdb.Error as exc:
+            raise GeoDuckError("error clasificado") from exc
+
+    failing = w.submit(wrapped)
+    with pytest.raises(SessionInvalidatedError):
+        failing.future.result(TIMEOUT)
+    cause = w.invalidation().result(TIMEOUT)
+    assert cause is not None and "simulado" in cause.detail

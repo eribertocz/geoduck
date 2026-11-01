@@ -262,3 +262,39 @@ def test_concurrent_creates_with_the_same_alias_only_one_wins(worker, tmp_path):
     assert all(e.code is ErrorCode.DB_ALIAS_CONFLICT for e in errors)
     created = sorted(p.name for p in tmp_path.iterdir() if p.suffix == ".duckdb")
     assert created == [os.path.basename(results[0].database.path)]  # ningún archivo de más
+
+
+# -- regresión: un error fatal durante el ATTACH invalida la sesión --------------------------------
+
+
+def _fatal(*_args):
+    raise duckdb.FatalException("FATAL Error: simulado")
+
+
+@pytest.mark.parametrize("step", ["attach", "detach_after_rejection"])
+def test_fatal_error_during_attach_invalidates_the_session(existing, monkeypatch, step):
+    """Regresión: antes se clasificaba como AttachError(ENGINE_ERROR) y la sesión volvía a READY."""
+    from geoduck.domain.errors import SessionInvalidatedError
+    from geoduck.engine.worker import ConnectionHandle
+
+    if step == "attach":
+        monkeypatch.setattr(engine_attach, "_execute_attach", _fatal)
+    else:  # el ATTACH funciona, la verificación de identidad falla y el DETACH da un error fatal
+        identities = iter([(1, 1, 1, 1), (2, 2, 2, 2)])
+        monkeypatch.setattr(engine_attach, "_identity", lambda path: next(identities))
+        original = ConnectionHandle.execute
+
+        def execute(self, sql, parameters=None, *, max_rows=200):
+            if sql.startswith("DETACH"):
+                _fatal()
+            return original(self, sql, parameters, max_rows=max_rows)
+
+        monkeypatch.setattr(ConnectionHandle, "execute", execute)
+    w = SessionWorker()
+    w.start().result(TIMEOUT)
+    with pytest.raises(SessionInvalidatedError):
+        attach(w, existing, RW, OPEN)
+    cause = w.invalidation().result(TIMEOUT)
+    assert cause is not None and "simulado" in cause.detail
+    with pytest.raises(SessionInvalidatedError):
+        w.submit(lambda h, t: None)
