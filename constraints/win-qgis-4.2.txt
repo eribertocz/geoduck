@@ -1,4 +1,4 @@
-# Celda win-qgis-4.2 — PENDIENTE: se fija tras verificar Python y NumPy del instalador MSI 4.2.3.
-# Candidatos con wheel win_amd64 para cp312 y cp314 (pip download, 2026-11-01):
-# duckdb==2.0.0
-# pyarrow==25.0.1
+# Celda win-qgis-4.2 — PENDIENTE, estado "no probado".
+# Se completa tras leer el facts.json de la certificación (Python y NumPy del instalador MSI 4.2.3).
+# Regla (F-13, F-15): solo duckdb; PyArrow y NumPy los de QGIS si los incluye.
+duckdb==2.0.0

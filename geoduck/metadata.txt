@@ -1,6 +1,6 @@
 [general]
 name=GeoDuck
-qgisMinimumVersion=3.44
+qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 supportsQt6=True
 description=Sesión DuckDB dentro de QGIS y entrega de resultados como capas nativas de memoria.

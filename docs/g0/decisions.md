@@ -5,10 +5,12 @@
 | D1 | Repositorio GitHub | **Parcialmente resuelta** | Resuelto: `eribertocz/geoduck`, público. Pendiente: crear el repositorio (con `main` inicializada, p. ej. con README) y autorizar el acceso de la app de GitHub de Claude. Mientras tanto, el trabajo vive en un repositorio local con ramas listas para empujar |
 | D2 | Licencia | **Resuelta** | `GPL-2.0-or-later`. Implicaciones verificadas en `docs/licensing.md` (obligatorio «or later» por PyQt GPLv3 y PyArrow Apache-2.0; sin binarios en el ZIP) |
 | D3 | Anclas QGIS de certificación (C1) | **Abierta** | Recomendación: 3.44.x LTR + 4.2.3; añadir 4.4.x como P0 cuando esté en la descarga |
-| D4 | Equipo Windows 11 | **Resuelta (equipo)**; procedimiento entregado | Hay equipo. El procedimiento reproducible y los requisitos están en `docs/certification/windows.md`; pendiente su ejecución |
+| D4 | Equipo Windows 11 | **Resuelta (equipo)**; procedimiento entregado | Hay equipo. Primera prueba de humo aprobada en QGIS 3.34.15 (`docs/evidence/g0/windows/`); la certificación completa sigue pendiente |
 | D5 | DuckDB mínimo 1.5.0 vs recomendado 1.5.4+ (C8) | **Abierta** | Recomendación: mínimo 1.5.0, recomendado 1.5.4+. El código de G0 no depende de esta decisión |
 | D6 | Merges | **Resuelta** | Exclusivos del propietario. El implementador crea ramas, commits y PR cuando tenga acceso autorizado; nunca fusiona a `main` |
-| D7 | Red para `extensions.duckdb.org` en la sesión del implementador | **Abierta** | Alternativa: verificar `spatial` en el equipo Windows con `docs/certification/spatial.md` |
+| D7 | Red para `extensions.duckdb.org` en la sesión del implementador | **Atendida por la vía alternativa** | Spatial verificada en el equipo Windows del propietario con DuckDB 2.0.0 (F-14) |
+
+| D8 | QGIS mínimo soportado | **Resuelta** (2026-11-01) | **QGIS 3.34**, manteniendo DuckDB ≥ 1.5.0. El propietario pidió «QGIS 3.0 en adelante»; no es posible con DuckDB ≥ 1.5 porque no hay wheels para Python ≤ 3.9 y QGIS en Windows usó Python 3.9 hasta la serie 3.34. `metadata.txt` pasa a `qgisMinimumVersion=3.34` |
 
 Además: **tags y releases requieren aprobación expresa del propietario** (decisión del 2026-11-01).
 
