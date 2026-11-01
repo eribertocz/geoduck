@@ -1,0 +1,4 @@
+# Celda win-qgis-3.34-py312 — smoke en Windows aprobado (2026-11-01), certificación pendiente.
+# Solo se instala duckdb, siempre con --no-deps. La PyArrow (18.1.0) y la NumPy (1.26.4) son las de QGIS:
+# instalar otra PyArrow falla con «DLL load failed» (F-13) y otra NumPy rompe GDAL/scipy (F-15).
+duckdb==2.0.0

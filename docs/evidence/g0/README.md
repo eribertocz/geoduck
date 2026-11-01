@@ -39,6 +39,9 @@ Disponibilidad de wheels Windows comprobada con
 | F-10 | La relación exporta `GEOMETRY` como `geoarrow.wkb` con CRS PROJJSON en los metadatos del campo; `ST_AsWKB` produce `binary` **sin** metadatos | 1.5.0+ (vía lector) | `scripts/geo_arrow.py`, `scripts/geo_min.py` |
 | F-11 | `QgsField(nombre, QMetaType.Type)` no existe en QGIS 3.34; NULL llega como `QVariant` NULL en QGIS 3 y como `None` en QGIS 4.2 | QGIS 3.34 / 4.2 | `results/qgis_*.json` |
 | F-12 | DuckDB 1.5.0 no abre archivos escritos por 2.0.0 en formato por defecto; sí con `STORAGE_VERSION 'v1.5.0'` | 2.0.0 → 1.5.0 | ver informe G0, §2 |
+| F-13 | En QGIS 3.34.15 para Windows, una PyArrow distinta de la incluida por QGIS (18.1.0) falla con «DLL load failed … No se encontró el proceso especificado» | Windows, QGIS 3.34.15 | `windows/win11-qgis-3.34.15/` §2 |
+| F-14 | DuckDB 2.0 + spatial: `ST_Transform` exige el orden de ejes explícito (`geometry_always_xy` sin fijar); se lee con `duckdb_settings()` | Windows, DuckDB 2.0.0 | `windows/win11-qgis-3.34.15/` §4 |
+| F-15 | `pip install … --upgrade` sin `--no-deps` instala NumPy 2.x en el *user site* por encima de la NumPy de QGIS | Windows, QGIS 3.34.15 | `windows/win11-qgis-3.34.15/` §2 |
 
 ## Resultados positivos (resumen)
 

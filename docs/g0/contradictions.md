@@ -13,7 +13,7 @@ decisiones arquitectónicas del 2026-11-01 y por ADR-0006/0009. Ninguna se resue
 | C1 | `technology.md`, `compatibility-distribution.md` | Anclas «QGIS 4.2.x actual» y «3.44.15 LTR» | El calendario oficial programó 4.4.0 / 3.44.16 para el 30-oct-2026; 4.2 ya no será LTR (próxima: 4.4.4, 5-mar-2027). La descarga aún ofrece 4.2.3 / 3.44.15 | Certificar 3.44.x + 4.2.3 ahora; sumar 4.4.x como P0 cuando esté en la descarga | Propietario (D3) | Abierta |
 | C2 | `architecture.md` §5, `qgis-bridge-spec.md` §5 | No llamar a la interrupción de DuckDB desde otro hilo «no verificada» | `interrupt()` verificado en 1.5.0/1.5.6/2.0.0 (F-09) | ADR-0007: excepción controlada, solo versiones verificadas | Arquitecto | Decidida en principio; ADR-0007 propuesto |
 | C3 | `spatial-spec.md` §5 | Transportar geometría con `ST_AsWKB(...)` | `ST_AsWKB` descarta el CRS; la exportación nativa es GeoArrow con PROJJSON (F-10) | ADR-0008 + enmienda de §5 | Arquitecto | Decidida en principio; ADR-0008 propuesto |
-| C4 | `spatial-spec.md` §4 | `geometry_always_xy` «de DuckDB 2.0» | Es un ajuste de la extensión `spatial` en 1.5 y 2.0; sin spatial no existe | Corregir el texto; verificar con spatial en la certificación | Arquitecto | Abierta |
+| C4 | `spatial-spec.md` §4 | `geometry_always_xy` «de DuckDB 2.0» | Es un ajuste de la extensión `spatial` en 1.5 y 2.0; sin spatial no existe | Corregir el texto. Verificado en Windows (F-14): en DuckDB 2.0 + spatial el ajuste existe sin fijar (`None`), `ST_Transform` exige el orden de ejes explícito y en 2.1 pasará a `true` por defecto | Arquitecto | Hechos verificados; falta enmendar el texto |
 | C5 | `technology.md`, `sql-editor-spec.md` §2 | `extract_statements()` conservando posiciones «si la API lo soporta» | `Statement` no expone offsets; `query` incluye comentarios y espacios previos | Mapeo incremental del texto con tests adversariales (G2) | Implementador, registrado | Propuesta |
 | C6 | `session-spec.md` §2 | `ATTACH` con «sentencias parametrizadas cuando sea posible» | `ATTACH ?` falla en 1.5.x, funciona en 2.0 (F-06) | Un único camino: literal con comillas escapadas + identificador citado (GD-3, `geoduck/domain/sql_text.py`) | Implementador, registrado | Función en G0 (GD-3); uso en G1 |
 | C9 | `qgis-bridge-spec.md` §7 | «NULL real de QGIS» como si fuera uniforme | QGIS 3 → `QVariant` NULL; QGIS 4.2 → `None`; `QgsField(QMetaType)` no existe en 3.34 (F-11) | Adaptador `qgis_bridge/compat.py` con tests Qt5/Qt6 (G3) | Implementador, registrado | Propuesta |
@@ -33,6 +33,12 @@ decisiones arquitectónicas del 2026-11-01 y por ADR-0006/0009. Ninguna se resue
 | # | Documentos | Qué dicen | Propuesta | Decide | Estado |
 |---|---|---|---|---|---|
 | C13 | `architecture.md` §3 frente a `session-spec.md` §5 | Dos conjuntos de estados de sesión: `STOPPED/STARTING/READY/BUSY/CLOSING/FAILED` y `DISCONNECTED/CONNECTING/READY/BUSY/DETACHING/CLOSING/ERROR_RECOVERABLE` | Se implementó el de `session-spec` §5 (más específico, incluye `DETACHING`); unificar el texto de `architecture.md` | Arquitecto | Abierta |
+
+## Riesgo nuevo detectado en Windows
+
+| # | Riesgo | Evidencia | Propuesta | Decide |
+|---|---|---|---|---|
+| R11 | Otro complemento que incrusta su propia versión de DuckDB (QDuckDB trae 1.4.4) comparte el proceso de QGIS con GeoDuck. Solo puede haber un módulo `duckdb` cargado, y prevalece el que se carga primero: GeoDuck podría recibir una versión por debajo de su mínimo, o el otro complemento una versión que no espera | `docs/evidence/g0/windows/win11-qgis-3.34.15/` §5 | El diagnóstico informa de dónde viene `duckdb` y avisa si proviene de otro complemento. Política de convivencia a decidir (G7, distribución) | Arquitecto |
 
 ## Integridad del paquete (no contractual)
 

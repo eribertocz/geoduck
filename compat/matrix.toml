@@ -7,6 +7,8 @@
 
 schema = 1
 updated = "2026-11-01"
+# D8 (2026-11-01): QGIS mínimo = 3.34 (primera serie con Python >= 3.10 en Windows), DuckDB >= 1.5.0.
+# F-13: en QGIS para Windows se usa la PyArrow incluida por QGIS; GeoDuck solo instala duckdb.
 
 [duckdb]
 minimum = "1.5.0"
@@ -21,7 +23,7 @@ qt = "5.15"
 python = "3.12"            # documentado (QGIS issue #63733); por confirmar en la certificación
 numpy = "1.26.4?"          # por confirmar en la certificación
 duckdb = ["1.5.0", "1.5.6", "2.0.0"]
-pyarrow = "25.0.1"         # si NumPy < 2; con NumPy >= 2 se evalúa 26.x
+pyarrow = "la incluida por QGIS, si existe (F-13); por verificar en 3.44"
 constraints = "constraints/win-qgis-3.44-py312.txt"
 status = "no probado"
 api_verificada_linux = "QGIS 3.44.14 conda-forge, Py 3.12.16, DuckDB 1.5.0/2.0.0, PyArrow 25.0.1"
@@ -52,16 +54,29 @@ qgis = "4.0.x"
 status = "no probado"
 
 [[cell]]
-id = "win-qgis-3.34-3.40"
-priority = "P2"
-qgis = "3.34 / 3.40"
-status = "no probado"
+id = "win-qgis-3.34-py312"
+priority = "P1 (D8: versión mínima soportada)"
+qgis = "3.34.x LTR (desde la primera 3.34 con Python 3.12 en Windows)"
+qt = "5.15"
+python = "3.12.8 (verificado en Windows, 3.34.15)"
+numpy = "1.26.4 (verificado en Windows)"
+duckdb = ["2.0.0"]           # 1.5.x por verificar en Windows
+pyarrow = "18.1.0, la incluida por QGIS (verificado en Windows; F-13)"
+constraints = "constraints/win-qgis-3.34-py312.txt"
+status = "no probado"        # la certificación exige suites pytest y DuckDB 1.5.x en Windows
+smoke_windows = "aprobado 2026-11-01: docs/evidence/g0/windows/win11-qgis-3.34.15/"
 api_verificada_linux = "QGIS 3.34.4 (Ubuntu apt), Py 3.12.3, NumPy 1.26.4, DuckDB 1.5.0/2.0.0, PyArrow 25.0.1"
-notes = "Requiere el adaptador QVariant para tipos de campo (F-11)."
+notes = "Requiere el adaptador QVariant para tipos de campo (F-11). QDuckDB incrusta DuckDB 1.4.4 (R11)."
 
 [[cell]]
-id = "win-qgis-3.28-o-anterior"
+id = "win-qgis-3.36-3.42"
 priority = "P2"
-qgis = "<= 3.28"
+qgis = "3.36 / 3.38 / 3.40 / 3.42"
+status = "no probado"
+
+[[cell]]
+id = "win-qgis-anterior-a-3.34"
+priority = "fuera de soporte (D8)"
+qgis = "3.0 – 3.32 y las primeras 3.34 con Python 3.9"
 status = "incompatible"
-notes = "Si su Python es 3.9: no existen wheels de DuckDB >= 1.5 ni PyArrow recientes (verificado con pip download)."
+notes = "Python <= 3.9 en Windows (p. ej. 3.28.15 trae 3.9.18): no existen wheels de DuckDB >= 1.5 para Python <= 3.9 (verificado con pip download para 3.6-3.9)."

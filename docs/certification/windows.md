@@ -37,6 +37,15 @@ de QGIS.
 
 La elección del método principal es una decisión del propietario con base en esta evidencia.
 
+**Regla verificada en Windows (2026-11-01, QGIS 3.34.15):** solo se instala `duckdb`. Si QGIS ya incluye
+PyArrow, se usa esa: instalar otra versión falla con «DLL load failed» (F-13). Nunca se instala ni se
+actualiza NumPy: `pip install … --upgrade` sin `--no-deps` dejó NumPy 2.5.4 en el *user site* y rompió la
+compatibilidad de scipy (F-15). Comando mínimo probado, desde la consola de Python de QGIS:
+
+```
+!pip install --user --no-deps duckdb==2.0.0
+```
+
 ## 3. Celdas a ejecutar
 
 Para cada QGIS instalado × cada método (M1, M2, M3) = 6 ejecuciones (9 con 4.4.x). Cada ejecución
@@ -44,7 +53,8 @@ cubre las tres versiones de DuckDB cambiando el archivo de restricciones:
 
 | Archivo de restricciones | Contenido |
 |---|---|
-| `constraints/win-qgis-3.44-py312.txt` | `duckdb==2.0.0`, `pyarrow==25.0.1` |
+| `constraints/win-qgis-3.44-py312.txt` | `duckdb==2.0.0` (PyArrow de QGIS si existe) |
+| `constraints/win-qgis-3.34-py312.txt` | `duckdb==2.0.0` (PyArrow 18.1.0 de QGIS, verificado) |
 | copia local con `duckdb==1.5.0` | mínimo soportado |
 | copia local con `duckdb==1.5.6` | última 1.5.x |
 

@@ -1,5 +1,5 @@
 # Celda win-qgis-3.44-py312 — PROPUESTA, estado "no probado".
 # Wheels win_amd64 cp312 verificados con `pip download` el 2026-11-01.
-# pyarrow<26 porque esta celda puede traer NumPy 1.26.4 (F-03, ADR-0009).
+# Solo duckdb: si QGIS 3.44 incluye PyArrow (como 3.34.15), se usa la suya (F-13). Si no la incluye,
+# añadir pyarrow<26 cuando QGIS traiga NumPy 1.x (F-03, ADR-0009). Se confirma en la certificación.
 duckdb==2.0.0
-pyarrow==25.0.1
