@@ -1,0 +1,8 @@
+1.5.0 execute ('InterruptException', 3.3, True, False) reader ('OSError', 3.5, True, False)
+1.5.1 execute ('InterruptException', 180.1, True, False) reader ('OSError', 2.5, True, False)
+1.5.2 execute ('InterruptException', 149.2, True, False) reader ('OSError', 2.6, True, False)
+1.5.3 execute ('InterruptException', 12.1, True, False) reader ('OSError', 3.9, True, False)
+1.5.4 execute ('InterruptException', 66.0, True, False) reader ('OSError', 1.5, True, False)
+1.5.5 execute ('InterruptException', 118.2, True, False) reader ('OSError', 1.9, True, False)
+1.5.6 execute ('InterruptException', 148.0, True, False) reader ('OSError', 2.1, True, False)
+2.0.0 execute ('InterruptException', 5.6, True, False) reader ('OSError', 2.6, True, False)

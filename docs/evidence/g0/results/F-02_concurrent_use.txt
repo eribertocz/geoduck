@@ -1,0 +1,10 @@
+duckdb=1.5.0 exit_code=124
+duckdb=1.5.6 errores=ninguno
+duckdb=1.5.6 exit_code=0
+duckdb=2.0.0 errores=['ResourceInUseException']
+duckdb=2.0.0 exit_code=0
+duckdb=1.5.0 corrida=1 exit_code=0
+duckdb=1.5.0 corrida=2 exit_code=0
+duckdb=1.5.0 corrida=3 exit_code=134
+duckdb=1.5.0 corrida=4 exit_code=134
+duckdb=1.5.0 corrida=5 exit_code=134
