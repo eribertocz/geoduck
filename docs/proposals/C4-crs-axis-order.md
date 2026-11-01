@@ -44,7 +44,8 @@ riesgo aparece solo si el SQL del usuario produce geometrías en el orden de la 
    DuckDB 2.0.
 3. **Transparencia.** Cuando `spatial` está cargada, GeoDuck informa el valor efectivo de
    `geometry_always_xy` (`true`, `false` o «sin fijar»), leído con `duckdb_settings()`. Se muestra en el
-   diagnóstico y, en G4, junto al selector de geometría y CRS.
+   diagnóstico y en los resultados espaciales cuando corresponda: en todo resultado con columnas de
+   geometría y, en G4, junto al selector de geometría y CRS.
 4. **CRS desde GeoArrow.** El CRS de la capa se obtiene de los metadatos GeoArrow (PROJJSON o código de
    autoridad → `QgsCoordinateReferenceSystem.createFromUserInput`), según ADR-0008. Sin CRS declarado, rige
    el orden de preferencia actual de §4. Nunca se asume EPSG:4326.
@@ -71,7 +72,7 @@ riesgo aparece solo si el SQL del usuario produce geometrías en el orden de la 
 > reordenarlas; QGIS interpreta x como este/longitud también en CRS geográficos como EPSG:4326. GeoDuck no
 > fija el ajuste `geometry_always_xy` de la extensión `spatial` (en DuckDB 2.0 no tiene valor por defecto y
 > `ST_Transform` exige declararlo; en 2.1 pasará a `true`). Cuando `spatial` está cargada, GeoDuck muestra
-> su valor efectivo. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia
+> su valor efectivo en el diagnóstico y en los resultados espaciales cuando corresponda. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia
 > llamada. Geometrías producidas en el orden de la autoridad (por ejemplo, latitud-longitud) se entregan
 > tal cual y es responsabilidad del SQL del usuario.
 
@@ -88,7 +89,7 @@ riesgo aparece solo si el SQL del usuario produce geometrías en el orden de la 
 | **AX-1a** | `GEOMETRY('OGC:CRS84')` | válido, `authid = OGC:CRS84` | x = −68,15, y = −16,5 (sin reordenar) | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
 | **AX-1b** | `EPSG:4326` con `spatial` | válido, `authid = EPSG:4326` | x = −68,15, y = −16,5, aunque `hasAxisInverted() = True` | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
 | **AX-1c** | `ST_Transform(…, 'EPSG:4326', 'EPSG:32719', true)` en DuckDB | válido, `authid = EPSG:32719` | `590716.04, 8175564.99` | igual que AX-1a/b transformado por QGIS |
-| **AX-2** | `geometry_always_xy` en `true`, `false` y sin fijar | — | — | valor mostrado = valor de `duckdb_settings()`; antes y después de cada operación de GeoDuck el valor es el mismo (GeoDuck no lo modifica) |
+| **AX-2** | `geometry_always_xy` en `true`, `false` y sin fijar | — | — | valor mostrado en el diagnóstico y en un resultado con geometría = valor de `duckdb_settings()`; antes y después de cada operación de GeoDuck el valor es el mismo (GeoDuck no lo modifica) |
 | **AX-3** | `ST_Transform` sin orden declarado, DuckDB 2.0 con el ajuste sin fijar | — (no se crea capa) | — | error de DuckDB presentado como error SQL del usuario; sin reintentos; `geometry_always_xy` sigue sin fijar |
 | **AX-4a** | Sin CRS declarado (metadatos GeoArrow `{}`) | no válido; GeoDuck **no** asigna ninguno | x = −68,15, y = −16,5 | la capa no se publica sin decisión del usuario; si continúa, la advertencia es visible |
 | **AX-4b** | CRS declarado desconocido para QGIS (`FOO:123`) | no válido; GeoDuck **no** lo sustituye | x = −68,15, y = −16,5 | el mensaje muestra `FOO:123`; misma decisión del usuario que AX-4a |
@@ -112,6 +113,8 @@ riesgo aparece solo si el SQL del usuario produce geometrías en el orden de la 
 
 1. ~~¿Se aprueba que GeoDuck **no** fije `geometry_always_xy`, ni siquiera a `true` para anticipar DuckDB
    2.1?~~ **Resuelta** (2026-11-01): aprobado, sin cambios silenciosos de configuración.
-2. **Abierta.** ¿El valor efectivo debe mostrarse solo en el diagnóstico (G0/G4) o también en cada resultado espacial?
+2. ~~¿El valor efectivo debe mostrarse solo en el diagnóstico o también en cada resultado espacial?~~
+   **Resuelta** (dictamen final, 2026-11-01): en el diagnóstico **y** en los resultados espaciales cuando
+   corresponda (punto 3 de la decisión).
 3. ~~AX-4: ¿se aprueba que, con CRS desconocido, la capa no se publique sin una decisión explícita del
    usuario?~~ **Resuelta** (2026-11-01): aprobada con las pruebas AX.
