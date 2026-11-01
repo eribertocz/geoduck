@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# CI por niveles (docs/g0 y spec/qa/test-strategy.md §2).
+# Linux: lint, unitarias, arquitectura, motor DuckDB real (matriz) y PyQGIS headless (conda-forge).
+# Windows real: workflow separado windows-certification.yml en runner propio, solo bajo demanda.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint · tipos · arquitectura · unitarias
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "ruff>=0.6" "mypy>=1.10" "pytest>=8" "duckdb==2.0.0" "pyarrow==25.0.1"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: python -m pytest tests/unit tests/architecture -q
+
+  engine:
+    name: motor · DuckDB ${{ matrix.duckdb }} · Py ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        duckdb: ["1.5.0", "1.5.6", "2.0.0"]   # mínimo, última 1.5.x, última 2.x (compat/matrix.toml)
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==25.0.1"
+      - run: python -m pytest tests/engine -q --junitxml=engine-${{ matrix.duckdb }}-py${{ matrix.python }}.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engine-${{ matrix.duckdb }}-py${{ matrix.python }}
+          path: engine-*.xml
+
+  qgis:
+    name: PyQGIS headless · QGIS ${{ matrix.qgis }} · DuckDB ${{ matrix.duckdb }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        qgis: ["3.44.14", "4.2.3"]
+        duckdb: ["1.5.0", "2.0.0"]
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: qgis
+          create-args: qgis=${{ matrix.qgis }} pip
+          cache-environment: true
+      - run: python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==25.0.1"
+      - run: python -c "from qgis.core import Qgis; print(Qgis.version())"
+      - name: tests/qgis
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/qgis -q --junitxml=qgis-${{ matrix.qgis }}-${{ matrix.duckdb }}.xml
+      - name: capturas del panel
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/screenshot_dock.py screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qgis-${{ matrix.qgis }}-duckdb-${{ matrix.duckdb }}
+          path: |
+            qgis-*.xml
+            screenshots/
+
+  build:
+    name: ZIP del complemento
+    runs-on: ubuntu-24.04
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/build_zip.py --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geoduck-plugin-zip
+          path: dist/
