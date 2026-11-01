@@ -109,6 +109,27 @@ def test_pyarrow_26_with_numpy_2_is_ok():
     assert report.by_id("pyarrow").status is CheckStatus.OK
 
 
+@pytest.mark.parametrize(
+    "version, status",
+    [
+        ("17.0.0", CheckStatus.FAIL),
+        ("18.0.0", CheckStatus.FAIL),
+        ("18.1.0rc1", CheckStatus.FAIL),
+        ("18.1.0", CheckStatus.OK),
+        ("18.1.1", CheckStatus.OK),
+        ("21.0.0", CheckStatus.OK),
+    ],
+)
+def test_pyarrow_minimum_is_18_1_0(version, status):
+    """ADR-0009: mínimo PyArrow 18.1.0; por debajo el entorno no es utilizable."""
+    report = run({**HEALTHY, "pyarrow": module("pyarrow", version)})
+    check = report.by_id("pyarrow")
+    assert check.status is status
+    if status is CheckStatus.FAIL:
+        assert not report.ok
+        assert "18.1.0" in check.action and "ADR-0009" in check.action
+
+
 def test_pyarrow_import_error_mentioning_numpy_is_explained():
     available = {k: v for k, v in HEALTHY.items() if k != "pyarrow"}
     failures = {"pyarrow": ImportError("pyarrow requires NumPy 2.0 or newer, found 1.26.4")}
