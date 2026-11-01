@@ -57,7 +57,8 @@ G0 implementó el conjunto de `session-spec` §5, el más específico (incluye `
 
 ¹ Nueva en la revisión 2, solo para la invalidación (§4 bis): el hilo puede terminar con la sesión
 inactiva. Hoy no está en `geoduck/domain/session.py`; se añade en G1.
-² Prohibida si la causa fue una invalidación (§4 bis, regla 4).
+² Permitida solo si la conexión responde y su estado transaccional es utilizable (dictamen final;
+ADR-0007 punto 6). Prohibida siempre tras una invalidación (§4 bis, regla 4).
 
 ```mermaid
 stateDiagram-v2
@@ -99,7 +100,8 @@ stateDiagram-v2
 
 > Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNECTING → READY ⇄ BUSY`,
 > `READY → DETACHING → READY`, `* → CLOSING → DISCONNECTED`; `ERROR_RECOVERABLE` registra fallos de los que
-> se puede salir reintentando, volviendo a `READY` o cerrando. La tabla de transiciones de `session-spec` §5
+> se puede salir reintentando, volviendo a `READY` (solo si la conexión y la transacción siguen
+> utilizables) o cerrando. La tabla de transiciones de `session-spec` §5
 > es normativa. Los estados de operación y de entrega (`cancelando`, `transfiriendo`, `entrega exitosa`…)
 > pertenecen a la máquina de operación, no a la de sesión.
 
@@ -204,9 +206,9 @@ DuckDB es utilizable y coherente. Causas:
 
 1. ~~¿Se aprueba separar la máquina de sesión de la de operación?~~ **Aprobado** en el dictamen del
    2026-11-01.
-2. **Abierta.** ¿`ERROR_RECOVERABLE → READY` debe seguir permitido para un fallo de operación con la conexión intacta
-   (la invalidación ya lo prohíbe, §4 bis), o todo fallo de operación debe dejar la sesión en `READY` sin
-   pasar por `ERROR_RECOVERABLE`?
+2. ~~¿`ERROR_RECOVERABLE → READY` debe seguir permitido para un fallo de operación con la conexión
+   intacta?~~ **Resuelta** (dictamen final, 2026-11-01): se permite **solo si la conexión y la transacción
+   siguen utilizables** (ADR-0007 punto 6). En otro caso, solo `CONNECTING`, `CLOSING` o `DISCONNECTED`.
 3. ~~¿Se aprueba añadir `READY → ERROR_RECOVERABLE` (solo para invalidación) y el código
    `SESSION_INVALIDATED` en `session-spec` §5?~~ **Resuelta** (2026-11-01): aprobada con la notificación
    única de invalidación.
