@@ -85,6 +85,12 @@ class AttachError(GeoDuckError):
     """No se pudo adjuntar una base. El código indica la causa (`DB_NOT_FOUND`, `DB_LOCKED`, …)."""
 
 
+class DetachError(GeoDuckError):
+    """No se desadjuntó la base: sigue adjunta (session-spec §2, `DETACH_FAILED` por defecto)."""
+
+    code = ErrorCode.DETACH_FAILED
+
+
 class SessionInvalidatedError(SessionClosedError):
     """La conexión dejó de ser utilizable y la sesión se invalidó (C13 §4 bis, ADR-0007 §3).
 

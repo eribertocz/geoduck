@@ -29,7 +29,7 @@ from typing import Any, Generic, TypeVar
 
 import duckdb
 
-from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot
+from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import (
     ActiveResultError,
     EngineError,
@@ -45,6 +45,7 @@ from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, Stat
 from geoduck.engine.attach import attach_database
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
+from geoduck.engine.detach import detach_database
 
 _log = logging.getLogger("geoduck.engine")
 
@@ -283,6 +284,11 @@ class SessionWorker:
         """«Abrir existente» o «Crear nueva» (`geoduck.engine.attach`), en una sola operación serial."""
         root = self._root
         return self._submit_future(lambda h, _t: attach_database(h, request, root))
+
+    def detach(self, alias: str) -> Future[DetachResult]:
+        """DetachDatabase (`geoduck.engine.detach`), en una sola operación serial."""
+        root = self._root
+        return self._submit_future(lambda h, _t: detach_database(h, alias, root))
 
     def _submit_future(self, fn: Operation[T]) -> Future[T]:
         """Como `submit`, pero una sesión que no acepta trabajo se entrega como `Future` fallido."""

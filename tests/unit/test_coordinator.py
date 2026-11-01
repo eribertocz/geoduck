@@ -11,6 +11,8 @@ from geoduck.app.events import (
     CatalogChanged,
     CatalogUnavailable,
     DatabaseAttached,
+    DatabaseDetached,
+    DetachFailed,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
@@ -22,6 +24,7 @@ from geoduck.domain.catalog import (
     AttachRequest,
     AttachResult,
     CatalogSnapshot,
+    DetachResult,
     OpenAction,
 )
 from geoduck.domain.errors import (
@@ -58,6 +61,7 @@ class FakeEngine:
         self.invalidated: Future = Future()
         self.catalog_reads: list[Future] = []
         self.attaches: list[tuple[AttachRequest, Future]] = []
+        self.detaches: list[tuple[str, Future]] = []
         self.cancelled = False
 
     def start(self):
@@ -76,6 +80,10 @@ class FakeEngine:
     def attach(self, request):
         self.attaches.append((request, Future()))
         return self.attaches[-1][1]
+
+    def detach(self, alias):
+        self.detaches.append((alias, Future()))
+        return self.detaches[-1][1]
 
     def read_catalog(self):
         self.catalog_reads.append(Future())
@@ -490,3 +498,83 @@ def test_file_session_requires_no_active_session(env):
     coordinator, _dispatcher, _engines, _events = _ready(env)
     with pytest.raises(SessionStateError):
         coordinator.start_file_session(REQUEST)
+
+
+# -- DetachDatabase (G1 pasos 4 y 5) -------------------------------------------------------------
+
+DETACHED = DetachResult(SALES, ONLY_ROOT)
+
+
+def _ready_with_sales(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].catalog_reads[0].set_result(WITH_SALES)
+    dispatcher.drain()
+    return coordinator, dispatcher, engines, events
+
+
+def test_detach_goes_through_detaching_and_publishes_the_new_catalog(env):
+    coordinator, dispatcher, engines, events = _ready_with_sales(env)
+    coordinator.detach_database("ventas")
+    assert coordinator.state is S.DETACHING
+    for blocked in (
+        lambda: coordinator.detach_database("ventas"),
+        lambda: coordinator.attach_database(REQUEST),
+    ):
+        with pytest.raises(SessionStateError):
+            blocked()
+    assert engines[0].detaches[0][0] == "ventas"
+    engines[0].detaches[0][1].set_result(DETACHED)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.catalog is ONLY_ROOT
+    assert [e.database for e in events if isinstance(e, DatabaseDetached)] == [SALES]
+    assert states(events)[-2:] == [S.DETACHING, S.READY]
+
+
+@pytest.mark.parametrize(
+    "code", [ErrorCode.DETACH_FAILED, ErrorCode.DEFAULT_CATALOG, ErrorCode.ACTIVE_RESULT]
+)
+def test_failed_detach_keeps_the_database_and_rereads_the_catalog(env, code):
+    from geoduck.domain.errors import DetachError
+
+    coordinator, dispatcher, engines, events = _ready_with_sales(env)
+    coordinator.detach_database("ventas")
+    engines[0].detaches[0][1].set_exception(DetachError("No se pudo", code=code))
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.error_cause is None
+    assert len(engines[0].catalog_reads) == 2  # se relee de DuckDB: nunca se supone
+    engines[0].catalog_reads[1].set_result(WITH_SALES)
+    dispatcher.drain()
+    assert coordinator.catalog.get("ventas") is not None  # sigue adjunta
+    assert [e.code for e in events if isinstance(e, DetachFailed)] == [code]
+
+
+def test_detach_requires_ready(env):
+    coordinator, _dispatcher, _engines, _events = env
+    with pytest.raises(SessionStateError):
+        coordinator.detach_database("ventas")
+
+
+def test_invalidation_during_detach_ends_in_error_recoverable(env):
+    coordinator, dispatcher, engines, events = _ready_with_sales(env)
+    coordinator.detach_database("ventas")
+    engines[0].detaches[0][1].set_exception(CAUSE.fresh())
+    dispatcher.drain()
+    assert coordinator.state is S.DETACHING
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.SESSION_INVALIDATED
+    assert not coordinator._sm.can(S.READY)
+    assert not any(isinstance(e, DetachFailed) for e in events)
+
+
+def test_close_during_detach_ignores_the_late_result(env):
+    coordinator, dispatcher, engines, events = _ready_with_sales(env)
+    coordinator.detach_database("ventas")
+    coordinator.close_session()
+    assert coordinator.state is S.CLOSING
+    engines[0].detaches[0][1].set_result(DETACHED)
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    assert coordinator.state is S.DISCONNECTED and coordinator.catalog is None
+    assert not any(isinstance(e, DatabaseDetached) for e in events)
