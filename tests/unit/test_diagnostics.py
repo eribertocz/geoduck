@@ -143,15 +143,71 @@ def test_spatial_probe_exception_is_contained():
     assert run(spatial=boom).by_id("spatial").status is CheckStatus.WARN
 
 
-def test_user_site_packages_are_reported():
-    leaking = module(
-        "numpy", "2.1.0", file="/home/u/AppData/Roaming/Python/Python312/site-packages/numpy/__init__.py"
-    )
+USER_SITE = "C:/Users/u/AppData/Roaming/Python/Python312/site-packages"
+
+
+def test_numpy_or_pyarrow_in_user_site_is_reported():
+    """F-15 / QGIS #63733: NumPy del usuario por encima de la de QGIS."""
+    leaking = module("numpy", "2.5.4", file=f"{USER_SITE}/numpy/__init__.py")
+    report = run({**HEALTHY, "numpy": leaking}, user_site=USER_SITE)
+    check = report.by_id("user_site")
+    assert check.status is CheckStatus.WARN
+    assert "numpy" in check.detail and "pip uninstall numpy" in check.action
+
+
+def test_duckdb_in_user_site_is_a_valid_install():
+    """Verificado en Windows (QGIS 3.34.15): duckdb en el site de usuario no es un problema."""
+    duck = module("duckdb", "2.0.0", file=f"{USER_SITE}/duckdb/__init__.py")
+    check = run({**HEALTHY, "duckdb": duck}, user_site=USER_SITE).by_id("user_site")
+    assert check.status is CheckStatus.OK
+    assert "duckdb" in check.detail
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        r"C:\Users\u\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\qduckdb\embedded_external_libs\duckdb\__init__.py",
+        "/home/u/.local/share/QGIS/QGIS3/profiles/default/python/plugins/qduckdb/embedded_external_libs/duckdb/__init__.py",
+    ],
+)
+def test_duckdb_embedded_by_another_plugin_is_warned(path):
+    """R11: DuckDB incrustado por QDuckDB (ruta real observada en Windows)."""
+    report = run({**HEALTHY, "duckdb": module("duckdb", "1.4.4", file=path)})
+    check = report.by_id("duckdb_origin")
+    assert check.status is CheckStatus.WARN
+    assert "qduckdb" in check.detail and "qduckdb" in check.action
+    assert report.by_id("duckdb").status is CheckStatus.FAIL  # 1.4.4 < 1.5.0
+    assert report.facts["DuckDB desde"] == path
+
+
+def test_duckdb_from_qgis_or_user_site_has_ok_origin():
+    report = run({**HEALTHY, "duckdb": module("duckdb", "2.0.0", file=f"{USER_SITE}/duckdb/__init__.py")})
+    assert report.by_id("duckdb_origin").status is CheckStatus.OK
+
+
+def test_pyarrow_dll_conflict_is_explained():
+    """F-13: mensaje real de Windows con una PyArrow distinta de la de QGIS."""
+    available = {k: v for k, v in HEALTHY.items() if k != "pyarrow"}
+    failures = {
+        "pyarrow": ImportError("DLL load failed while importing lib: No se encontró el proceso especificado.")
+    }
+    check = run(available, failures).by_id("pyarrow")
+    assert check.status is CheckStatus.FAIL
+    assert "F-13" in check.action and "pip uninstall pyarrow" in check.action
+
+
+def test_windows_qgis_334_combination_is_usable():
+    """Combinación real del equipo Windows: QGIS 3.34.15, DuckDB 2.0.0, PyArrow 18.1.0, NumPy 1.26.4."""
     report = run(
-        {**HEALTHY, "numpy": leaking}, user_site="/home/u/AppData/Roaming/Python/Python312/site-packages"
+        {
+            "duckdb": module("duckdb", "2.0.0", file=f"{USER_SITE}/duckdb/__init__.py"),
+            "pyarrow": module("pyarrow", "18.1.0"),
+            "numpy": module("numpy", "1.26.4"),
+        },
+        user_site=USER_SITE,
     )
-    assert report.by_id("user_site").status is CheckStatus.WARN
-    assert "PYTHONNOUSERSITE" in report.by_id("user_site").action
+    assert report.ok
+    assert all(c.status is not CheckStatus.WARN for c in report.checks if c.id != "spatial")
 
 
 def test_qgis_facts_when_available():
