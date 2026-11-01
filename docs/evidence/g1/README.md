@@ -18,3 +18,15 @@ caso «Permission denied» → `DB_READ_ONLY`. Aquí no se puede reproducir, por
 
 Reproducir: `python attach_behaviour.py` y `python attach_identity.py` con la versión de DuckDB que se
 quiera comprobar.
+
+## Desadjuntar (pasos 4 y 5)
+
+Verificado con DuckDB 1.5.0, 1.5.6 y 2.0.0 en Linux. Script: `detach_behaviour.py`.
+
+| ID | Hecho | Consecuencia en GeoDuck |
+|---|---|---|
+| F-25 | DuckDB no desadjunta la base predeterminada («because it is the default database»), tampoco la raíz | Si es la predeterminada, primero `USE` de la raíz real. Si el `DETACH` falla, se restaura la predeterminada anterior. La raíz se rechaza con `DEFAULT_CATALOG` |
+| F-26 | En 1.5.x, `DETACH` con un lector Arrow abierto sobre esa base se acepta y el lector entrega **0 filas sin error**; 2.0 lo rechaza («open result») | Lo impide el guardia de lector abierto (`ACTIVE_RESULT`) antes de llegar a DuckDB, y el worker serial hace que el `DETACH` espere a que termine la lectura |
+| F-27 | `DETACH` hace checkpoint: el `.wal` desaparece, otro proceso abre el archivo en RW y ve los datos confirmados | Liberación real del bloqueo comprobada desde un proceso independiente |
+| F-28 | Con una transacción abierta que tiene cambios en la base: 1.5.0 la desadjunta igualmente; 1.5.6 y 2.0 lo rechazan («outstanding work») | Se informa `DETACH_FAILED`. En G1 GeoDuck no abre transacciones (no hay SQL del usuario); la validación transaccional es del paso 6 |
+| F-29 | En 1.5.6 y 2.0, ese `DETACH` rechazado deja la transacción **abortada** («Current transaction is aborted») | Entrada para el paso 6 (`TRANSACTION_ABORTED`, ADR-0007 punto 6) |

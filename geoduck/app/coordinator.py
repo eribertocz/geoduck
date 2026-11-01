@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Coordinador de sesión: StartSession (memoria y archivo), AttachDatabase, CloseSession, CancelOperation,
+"""Coordinador de sesión: StartSession (memoria y archivo), AttachDatabase, DetachDatabase, CloseSession,
+CancelOperation,
 invalidación y catálogo.
 
 Vive en el hilo principal. Toda finalización del motor se reenvía al hilo principal mediante el
@@ -19,13 +20,15 @@ from geoduck.app.events import (
     CatalogChanged,
     CatalogUnavailable,
     DatabaseAttached,
+    DatabaseDetached,
+    DetachFailed,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, SessionEngine
-from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot
+from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
@@ -113,6 +116,18 @@ class SessionCoordinator:
         self._sm.transition(SessionState.BUSY)
         attaching = engine.attach(request)
         attaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_attached(engine, fut)))
+
+    def detach_database(self, alias: str) -> None:
+        """DetachDatabase: `DETACH` real. La sesión pasa por `DETACHING`.
+
+        Al ejecutarse en el worker serial, nunca se adelanta a una lectura en curso (session-spec §6).
+        """
+        if self._sm.state is not SessionState.READY or self._engine is None:
+            raise SessionStateError(f"No se puede desadjuntar una base en estado {self._sm.state.value}")
+        engine = self._engine
+        self._sm.transition(SessionState.DETACHING)
+        detaching = engine.detach(alias)
+        detaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_detached(engine, fut)))
 
     def close_session(self) -> Future[None]:
         """CloseSession(): cancela lo que esté en curso y cierra el motor sin bloquear la UI."""
@@ -224,6 +239,28 @@ class SessionCoordinator:
             code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
         _log.warning("No se pudo leer el catálogo [%s]", code.value)
         self._emit(CatalogUnavailable(code, message))
+
+    def _on_detached(self, engine: SessionEngine, fut: Future[DetachResult]) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.DETACHING:
+            return  # la sesión se cerró o se invalidó mientras tanto
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return  # la invalidación llega por su propio camino y lleva a ERROR_RECOVERABLE
+        self._sm.transition(SessionState.READY)
+        if exc is None:
+            result = fut.result()
+            self._catalog_generation += 1
+            self._catalog = result.catalog
+            self._emit(CatalogChanged(result.catalog))
+            self._emit(DatabaseDetached(result.database))
+            return
+        if isinstance(exc, GeoDuckError):
+            code, message = exc.code, exc.message
+        else:
+            code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
+        _log.warning("No se desadjuntó la base [%s]", code.value)
+        self._emit(DetachFailed(code, message))
+        self.refresh_catalog()  # la base sigue adjunta: se confirma con DuckDB, no se supone
 
     def _drop_catalog(self) -> None:
         """Sin sesión no hay catálogo: se descarta y se anulan las lecturas en curso."""

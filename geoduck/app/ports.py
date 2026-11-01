@@ -7,7 +7,7 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from typing import Protocol
 
-from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot
+from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.operations import EngineInfo
 
@@ -27,6 +27,10 @@ class SessionEngine(Protocol):
 
     def attach(self, request: AttachRequest) -> Future[AttachResult]:
         """«Abrir existente» o «Crear nueva». Devuelve la base y el catálogo resultante."""
+        ...
+
+    def detach(self, alias: str) -> Future[DetachResult]:
+        """DetachDatabase real. Devuelve la base desadjuntada y el catálogo resultante."""
         ...
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:

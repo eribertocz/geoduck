@@ -147,3 +147,11 @@ class AttachResult:
 
     database: AttachedDatabase
     catalog: CatalogSnapshot
+
+
+@dataclass(frozen=True)
+class DetachResult:
+    """Base desadjuntada y el catálogo leído después, en la misma operación serial."""
+
+    database: AttachedDatabase
+    catalog: CatalogSnapshot

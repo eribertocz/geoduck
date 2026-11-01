@@ -65,6 +65,19 @@ class AttachFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class DatabaseDetached:
+    database: AttachedDatabase
+
+
+@dataclass(frozen=True)
+class DetachFailed:
+    """No se desadjuntó la base: sigue adjunta y la sesión sigue utilizable."""
+
+    code: ErrorCode
+    message: str
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -74,4 +87,6 @@ AppEvent = (
     | CatalogUnavailable
     | DatabaseAttached
     | AttachFailed
+    | DatabaseDetached
+    | DetachFailed
 )
