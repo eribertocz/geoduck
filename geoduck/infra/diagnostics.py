@@ -36,6 +36,9 @@ SpatialProber = Callable[[], SpatialProbe]
 
 _DOCS = "docs/certification/windows.md"
 
+#: Mínimo aprobado de PyArrow (ADR-0009): 18.1.0, la mínima verificada (la de QGIS 3.34.15 en Windows).
+PYARROW_MINIMUM = (18, 1, 0)
+
 
 def collect(
     *,
@@ -189,11 +192,21 @@ def _duckdb_action() -> str:
 
 
 def _check_pyarrow(pyarrow_version: str, numpy_version: str) -> Check:
-    """Regla verificada F-03 / ADR-0009: PyArrow ≥ 26 requiere NumPy ≥ 2 si NumPy está presente."""
+    """Reglas de ADR-0009: mínimo 18.1.0; PyArrow ≥ 26 requiere NumPy ≥ 2 si NumPy está presente (F-03)."""
     try:
         pa = Version.parse(pyarrow_version)
     except ValueError:
         return Check("pyarrow", "PyArrow", CheckStatus.WARN, f"Versión no reconocida: {pyarrow_version}")
+    if pa.release() < PYARROW_MINIMUM or (pa.is_prerelease and pa.release() == PYARROW_MINIMUM):
+        minimum = ".".join(map(str, PYARROW_MINIMUM))
+        return Check(
+            "pyarrow",
+            "PyArrow",
+            CheckStatus.FAIL,
+            f"PyArrow {pyarrow_version} es anterior al mínimo admitido ({minimum}).",
+            f"GeoDuck requiere PyArrow ≥ {minimum} (ADR-0009). Si es la PyArrow incluida en QGIS, use una "
+            f"versión de QGIS de la matriz de compatibilidad; no la sustituya dentro de QGIS ({_DOCS}).",
+        )
     if numpy_version:
         try:
             np_major = Version.parse(numpy_version).major
