@@ -6,9 +6,15 @@ from concurrent.futures import Future
 import pytest
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import SessionFailed, SessionStarted, SessionStateChanged
-from geoduck.domain.errors import ErrorCode, SessionStateError, UnsupportedEngineError
+from geoduck.app.events import SessionFailed, SessionInvalidated, SessionStarted, SessionStateChanged
+from geoduck.domain.errors import (
+    ErrorCode,
+    SessionInvalidatedError,
+    SessionStateError,
+    UnsupportedEngineError,
+)
 from geoduck.domain.operations import EngineInfo
+from geoduck.domain.session import ErrorCause
 from geoduck.domain.session import SessionState as S
 
 
@@ -30,6 +36,7 @@ class FakeEngine:
     def __init__(self):
         self.started: Future = Future()
         self.stopped: Future = Future()
+        self.invalidated: Future = Future()
         self.cancelled = False
 
     def start(self):
@@ -41,6 +48,9 @@ class FakeEngine:
     def cancel_current(self):
         self.cancelled = True
         return True
+
+    def invalidation(self):
+        return self.invalidated
 
 
 INFO = EngineInfo("2.0.0", ":memory:", True)
@@ -153,3 +163,93 @@ def test_shutdown_times_out_without_raising(env):
     assert coordinator.shutdown(timeout=0.05) is False
     engines[0].stopped.set_result(None)
     assert coordinator.shutdown(timeout=0.05) is True
+
+
+# -- invalidación de sesión (C13 §4 bis, #31) ------------------------------------------------------
+
+CAUSE = SessionInvalidatedError("La conexión DuckDB no responde", detail="unresponsive_after_interrupt")
+
+
+def _ready(env):
+    coordinator, dispatcher, engines, events = env
+    coordinator.start_memory_session()
+    engines[-1].started.set_result(INFO)
+    dispatcher.drain()
+    assert coordinator.state is S.READY
+    return coordinator, dispatcher, engines, events
+
+
+def test_inv1_invalidation_is_notified_once_with_its_code(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].invalidated.set_result(CAUSE)
+    assert not any(isinstance(e, SessionInvalidated) for e in events)  # solo tras pasar por el hilo principal
+    dispatcher.drain()
+    notices = [e for e in events if isinstance(e, SessionInvalidated)]
+    assert len(notices) == 1
+    assert notices[0].code is ErrorCode.SESSION_INVALIDATED
+    assert notices[0].detail == "unresponsive_after_interrupt"
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.SESSION_INVALIDATED
+    assert coordinator.engine_info is None
+
+
+def test_inv4_no_return_to_ready_and_new_session_uses_a_new_engine(env):
+    coordinator, dispatcher, engines, _events = _ready(env)
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert not coordinator._sm.can(S.READY)
+    with pytest.raises(SessionStateError):
+        coordinator._sm.transition(S.READY)
+    assert coordinator.cancel_current_operation() is False  # nada llega al motor invalidado
+    coordinator.start_memory_session()
+    assert len(engines) == 2 and engines[1] is not engines[0]
+    engines[1].started.set_result(INFO)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.error_cause is None
+
+
+def test_inv4_close_after_invalidation_disconnects_without_touching_the_engine(env):
+    coordinator, dispatcher, engines, _events = _ready(env)
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.close_session().done()
+    assert coordinator.state is S.DISCONNECTED
+
+
+def test_inv5_requested_close_is_never_an_invalidation(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.close_session()
+    engines[0].invalidated.set_result(CAUSE)  # incluso si el motor informara una causa tardía
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    assert coordinator.state is S.DISCONNECTED
+    assert not any(isinstance(e, SessionInvalidated) for e in events)
+
+
+def test_normal_engine_end_does_not_notify(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].invalidated.set_result(None)
+    dispatcher.drain()
+    assert coordinator.state is S.READY
+    assert not any(isinstance(e, SessionInvalidated) for e in events)
+
+
+def test_late_invalidation_of_a_replaced_engine_is_ignored(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.close_session()
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    _ready(env)
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.state is S.READY
+    assert not any(isinstance(e, SessionInvalidated) for e in events)
+
+
+def test_start_failure_records_its_cause(env):
+    coordinator, dispatcher, engines, _events = env
+    coordinator.start_memory_session()
+    engines[0].started.set_exception(UnsupportedEngineError("DuckDB 1.4"))
+    dispatcher.drain()
+    assert coordinator.error_cause is ErrorCause.START_FAILED
+    assert not coordinator._sm.can(S.READY)

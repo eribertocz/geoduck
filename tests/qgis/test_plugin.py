@@ -59,6 +59,42 @@ def test_start_and_close_memory_session_from_the_dock(iface):
     plugin.unload()
 
 
+def test_invalidated_session_is_shown_once_and_new_session_recovers(iface):
+    """#31 / C13 §4 bis en la UI: aviso visible, solo «Iniciar» y «Cerrar», y sesión nueva funcional."""
+    import duckdb
+
+    from geoduck.app.events import SessionInvalidated
+    from geoduck.domain.session import ErrorCause
+
+    plugin = geoduck.classFactory(iface)
+    plugin.initGui()
+    dock, coordinator = plugin.dock, plugin.coordinator
+    notices = []
+    coordinator.subscribe(lambda e: notices.append(e) if isinstance(e, SessionInvalidated) else None)
+    dock.start_button.click()
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    first_engine = coordinator._engine
+
+    def fatal(handle, token):
+        raise duckdb.FatalException("FATAL Error: simulado")
+
+    first_engine.submit(fatal)
+    assert wait_for(lambda: coordinator.state is SessionState.ERROR_RECOVERABLE)
+    assert coordinator.error_cause is ErrorCause.SESSION_INVALIDATED
+    assert len(notices) == 1
+    assert "Sesión invalidada" in dock.message_label.text()
+    assert "SESSION_INVALIDATED" in dock.message_label.text()
+    assert dock.start_button.isEnabled() and dock.close_button.isEnabled()
+
+    dock.start_button.click()
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    assert coordinator._engine is not first_engine
+    dock.close_button.click()
+    assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
+    assert len(notices) == 1
+    plugin.unload()
+
+
 def test_unload_with_open_session_stops_the_worker(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()

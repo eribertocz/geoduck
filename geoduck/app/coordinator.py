@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Coordinador de sesión: casos de uso StartSession, CloseSession y CancelOperation (G0).
+"""Coordinador de sesión: StartSession, CloseSession, CancelOperation e invalidación de sesión.
 
 Vive en el hilo principal. Toda finalización del motor se reenvía al hilo principal mediante el
 `Dispatcher` antes de cambiar el estado, de modo que la máquina de estados nunca se toca desde dos hilos.
@@ -12,11 +12,17 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
 
-from geoduck.app.events import AppEvent, SessionFailed, SessionStarted, SessionStateChanged
+from geoduck.app.events import (
+    AppEvent,
+    SessionFailed,
+    SessionInvalidated,
+    SessionStarted,
+    SessionStateChanged,
+)
 from geoduck.app.ports import Dispatcher, EngineFactory, SessionEngine
-from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionStateError
+from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
-from geoduck.domain.session import SessionState, SessionStateMachine
+from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
 
 _log = logging.getLogger("geoduck.app")
 
@@ -38,6 +44,10 @@ class SessionCoordinator:
     @property
     def state(self) -> SessionState:
         return self._sm.state
+
+    @property
+    def error_cause(self) -> ErrorCause | None:
+        return self._sm.error_cause
 
     @property
     def engine_info(self) -> EngineInfo | None:
@@ -114,6 +124,22 @@ class SessionCoordinator:
         self._info = fut.result()
         self._sm.transition(SessionState.READY)
         self._emit(SessionStarted(self._info))
+        engine.invalidation().add_done_callback(
+            lambda inv: self._dispatcher.post(lambda: self._on_invalidated(engine, inv))
+        )
+
+    def _on_invalidated(self, engine: SessionEngine, fut: Future[SessionInvalidatedError | None]) -> None:
+        """C13 §4 bis: el motor ya rechazó el trabajo nuevo, falló lo pendiente y cerró la conexión."""
+        if engine is not self._engine:
+            return  # sesión ya cerrada o sustituida: un cierre pedido no es una invalidación (INV-5)
+        cause = fut.result()
+        if cause is None:
+            return
+        self._engine = None
+        self._info = None
+        _log.error("Sesión invalidada [%s]: %s", cause.code.value, cause.detail)
+        self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)
+        self._emit(SessionInvalidated(cause.code, cause.message, cause.detail))
 
     def _on_closed(self) -> None:
         if self._sm.state is SessionState.CLOSING:
@@ -125,7 +151,7 @@ class SessionCoordinator:
         else:
             code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
         _log.warning("Fallo de sesión [%s]", code.value)
-        self._sm.transition(SessionState.ERROR_RECOVERABLE)
+        self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.START_FAILED)
         self._emit(SessionFailed(code, message))
 
     def _emit(self, event: AppEvent) -> None:

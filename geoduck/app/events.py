@@ -27,4 +27,13 @@ class SessionFailed:
     message: str
 
 
-AppEvent = SessionStateChanged | SessionStarted | SessionFailed
+@dataclass(frozen=True)
+class SessionInvalidated:
+    """La conexión dejó de ser utilizable (C13 §4 bis). Se emite una sola vez por sesión."""
+
+    code: ErrorCode
+    message: str
+    detail: str
+
+
+AppEvent = SessionStateChanged | SessionStarted | SessionFailed | SessionInvalidated

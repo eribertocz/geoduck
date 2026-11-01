@@ -3,7 +3,7 @@ import pytest
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionStateError
 from geoduck.domain.operations import ReadOutcome, ReadSummary
-from geoduck.domain.session import TRANSITIONS, SessionState, SessionStateMachine
+from geoduck.domain.session import TRANSITIONS, ErrorCause, SessionState, SessionStateMachine
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.domain.versions import Version
 
@@ -35,6 +35,53 @@ class TestSessionStateMachine:
     def test_every_state_has_rules_and_closing_ends_disconnected(self):
         assert set(TRANSITIONS) == set(SessionState)
         assert TRANSITIONS[SessionState.CLOSING] == {SessionState.DISCONNECTED}
+
+    def test_error_recoverable_requires_a_cause(self):
+        sm = SessionStateMachine()
+        sm.transition(SessionState.CONNECTING)
+        with pytest.raises(SessionStateError):
+            sm.transition(SessionState.ERROR_RECOVERABLE)
+        assert sm.state is SessionState.CONNECTING
+        sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.START_FAILED)
+        assert sm.error_cause is ErrorCause.START_FAILED
+
+    def test_cause_only_accompanies_error_recoverable(self):
+        sm = SessionStateMachine()
+        with pytest.raises(SessionStateError):
+            sm.transition(SessionState.CONNECTING, ErrorCause.OPERATION_FAILED)
+
+    def test_ready_to_error_recoverable_only_by_invalidation(self):
+        sm = _machine_at(SessionState.READY)
+        assert not sm.can(SessionState.ERROR_RECOVERABLE, ErrorCause.OPERATION_FAILED)
+        assert not sm.can(SessionState.ERROR_RECOVERABLE, ErrorCause.START_FAILED)
+        sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)
+        assert sm.state is SessionState.ERROR_RECOVERABLE
+
+    @pytest.mark.parametrize(
+        ("cause", "can_ready"),
+        [
+            (ErrorCause.OPERATION_FAILED, True),
+            (ErrorCause.START_FAILED, False),
+            (ErrorCause.SESSION_INVALIDATED, False),
+        ],
+    )
+    def test_back_to_ready_only_with_usable_connection(self, cause, can_ready):
+        """Dictamen final (C13): ERROR_RECOVERABLE → READY solo si conexión y transacción son utilizables."""
+        sm = _machine_at(SessionState.BUSY)
+        sm.transition(SessionState.ERROR_RECOVERABLE, cause)
+        assert sm.can(SessionState.READY) is can_ready
+        for exit_ in (SessionState.CONNECTING, SessionState.CLOSING, SessionState.DISCONNECTED):
+            assert sm.can(exit_)
+
+    def test_cause_is_cleared_when_leaving_error_recoverable(self):
+        sm = _machine_at(SessionState.BUSY)
+        sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.SESSION_INVALIDATED)
+        sm.transition(SessionState.CONNECTING)
+        assert sm.error_cause is None
+
+    def test_cannot_start_in_error_recoverable_without_cause(self):
+        with pytest.raises(SessionStateError):
+            SessionStateMachine(SessionState.ERROR_RECOVERABLE)
 
     def test_unsubscribe(self):
         sm = SessionStateMachine()
@@ -111,3 +158,14 @@ def test_read_summary_completed_only_when_exhausted():
     assert ReadSummary(10, 1, ReadOutcome.EXHAUSTED).completed
     assert not ReadSummary(10, 1, ReadOutcome.CANCELLED).completed
     assert not ReadSummary(10, 1, ReadOutcome.FAILED).completed
+
+
+def _machine_at(state):
+    sm = SessionStateMachine()
+    path = {
+        SessionState.READY: [SessionState.CONNECTING, SessionState.READY],
+        SessionState.BUSY: [SessionState.CONNECTING, SessionState.READY, SessionState.BUSY],
+    }[state]
+    for target in path:
+        sm.transition(target)
+    return sm
