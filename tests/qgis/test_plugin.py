@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""AT-BOOT-001 y GD-SES-001 a través de la UI, con PyQGIS real (QGIS 3.x/Qt5 y 4.x/Qt6)."""
+
+import importlib
+import pkgutil
+import threading
+
+import pytest
+
+import geoduck
+from geoduck.domain.session import SessionState
+from tests.qgis.conftest import wait_for
+
+pytestmark = pytest.mark.qgis
+
+
+def test_every_module_imports(qgis_app):
+    """AT-BOOT-001: ningún error de importación en QGIS 3 ni 4."""
+    names = [m.name for m in pkgutil.walk_packages(geoduck.__path__, "geoduck.")]
+    for name in names:
+        importlib.import_module(name)
+    assert "geoduck.ui.dock" in names and "geoduck.engine.worker" in names
+
+
+def test_init_gui_registers_and_unload_removes(iface):
+    plugin = geoduck.classFactory(iface)
+    plugin.initGui()
+    assert len(iface.docks) == 1 and len(iface.menu) == 1 and len(iface.toolbar) == 1
+    dock = iface.docks[0]
+    assert dock.objectName() == "GeoDuckDock"
+    assert dock.isHidden()
+    plugin.action.setChecked(True)
+    assert not dock.isHidden()
+    plugin.unload()
+    assert iface.docks == [] and iface.menu == [] and iface.toolbar == []
+
+
+def test_start_and_close_memory_session_from_the_dock(iface):
+    plugin = geoduck.classFactory(iface)
+    plugin.initGui()
+    dock, coordinator = plugin.dock, plugin.coordinator
+    assert dock.start_button.isEnabled()
+    assert not dock.close_button.isEnabled()
+
+    dock.start_button.click()
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    assert dock.state_label.text() == "Lista"
+    assert "DuckDB" in dock.engine_label.text()
+    assert not dock.start_button.isEnabled() and dock.close_button.isEnabled()
+
+    worker_thread = plugin.coordinator._engine.thread
+    assert worker_thread is not threading.current_thread()
+
+    dock.close_button.click()
+    assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
+    assert dock.state_label.text() == "Sin sesión"
+    worker_thread.join(5)
+    assert not worker_thread.is_alive()
+    plugin.unload()
+
+
+def test_unload_with_open_session_stops_the_worker(iface):
+    plugin = geoduck.classFactory(iface)
+    plugin.initGui()
+    plugin.dock.start_button.click()
+    assert wait_for(lambda: plugin.coordinator.state is SessionState.READY)
+    worker_thread = plugin.coordinator._engine.thread
+    plugin.unload()
+    # la conexión ya está cerrada cuando unload() vuelve; el hilo termina inmediatamente después
+    worker_thread.join(5)
+    assert not worker_thread.is_alive()
+
+
+def test_dispatcher_runs_callbacks_on_main_thread(qgis_app):
+    from geoduck.ui.dispatcher import QtDispatcher
+
+    dispatcher = QtDispatcher()
+    seen = []
+    t = threading.Thread(target=lambda: dispatcher.post(lambda: seen.append(threading.get_ident())))
+    t.start()
+    t.join()
+    assert wait_for(lambda: seen)
+    assert seen == [threading.get_ident()]
+    dispatcher.close()
+    dispatcher.post(lambda: seen.append("tarde"))
+    wait_for(lambda: False, timeout=0.2)
+    assert seen == [threading.get_ident()]
+
+
+def test_diagnostics_dialog_shows_and_copies_report(qgis_app):
+    from qgis.PyQt.QtGui import QGuiApplication
+
+    from geoduck.plugin import run_diagnostics
+    from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
+
+    report = run_diagnostics()
+    assert report.by_id("qgis").status.value == "OK"
+    dialog = DiagnosticsDialog(report)
+    assert "Diagnóstico de GeoDuck" in dialog.text.toPlainText()
+    dialog.copy_button.click()
+    assert QGuiApplication.clipboard().text() == report.to_text()
+
+
+def test_broken_environment_disables_start(iface, monkeypatch):
+    """AT-BOOT-002 en la UI: sin DuckDB el panel abre, explica y no permite iniciar."""
+    from geoduck import plugin as plugin_module
+    from geoduck.infra.diagnostics import collect
+
+    def missing_duckdb(name):
+        if name in ("duckdb", "pyarrow"):
+            raise ImportError(f"No module named {name!r}")
+        return importlib.import_module(name)
+
+    monkeypatch.setattr(plugin_module, "run_diagnostics", lambda: collect(import_module=missing_duckdb))
+    plugin = geoduck.classFactory(iface)
+    plugin.initGui()
+    assert not plugin.dock.start_button.isEnabled()
+    assert not plugin.dock.env_banner.isHidden()
+    assert "DuckDB" in plugin.dock.env_label.text()
+    plugin.unload()

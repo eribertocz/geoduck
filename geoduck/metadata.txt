@@ -1,0 +1,25 @@
+[general]
+name=GeoDuck
+qgisMinimumVersion=3.44
+qgisMaximumVersion=4.99
+supportsQt6=True
+description=Sesión DuckDB dentro de QGIS y entrega de resultados como capas nativas de memoria.
+about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra: las capas entregadas son capas de memoria nativas, independientes de GeoDuck.
+
+    ESTADO: Alpha (0.1.0a1, Alpha Foundation). Esta versión solo abre el panel, diagnostica el entorno e inicia una sesión en memoria.
+
+    DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en el panel para comprobarlos. La extensión DuckDB «spatial» es opcional.
+version=0.1.0a1
+author=eribertocz
+email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
+changelog=0.1.0a1 (sin publicar)
+    - Panel acoplable para QGIS 3 y 4, diagnóstico del entorno y sesión DuckDB en memoria.
+tags=duckdb,sql,database,arrow,memory layer
+homepage=https://github.com/eribertocz/geoduck
+tracker=https://github.com/eribertocz/geoduck/issues
+repository=https://github.com/eribertocz/geoduck
+category=Database
+icon=resources/icon.svg
+experimental=True
+deprecated=False
+hasProcessingProvider=no
