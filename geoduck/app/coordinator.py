@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Coordinador de sesión: StartSession, CloseSession, CancelOperation, invalidación y catálogo.
+"""Coordinador de sesión: StartSession (memoria y archivo), AttachDatabase, CloseSession, CancelOperation,
+invalidación y catálogo.
 
 Vive en el hilo principal. Toda finalización del motor se reenvía al hilo principal mediante el
 `Dispatcher` antes de cambiar el estado, de modo que la máquina de estados nunca se toca desde dos hilos.
@@ -14,15 +15,17 @@ from concurrent.futures import TimeoutError as FutureTimeout
 
 from geoduck.app.events import (
     AppEvent,
+    AttachFailed,
     CatalogChanged,
     CatalogUnavailable,
+    DatabaseAttached,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, SessionEngine
-from geoduck.domain.catalog import CatalogSnapshot
+from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
@@ -43,6 +46,8 @@ class SessionCoordinator:
         self._catalog: CatalogSnapshot | None = None
         #: Cada lectura del catálogo recibe un número; solo se aplica la más reciente.
         self._catalog_generation = 0
+        #: Archivo que se adjunta en cuanto la sesión esté lista (StartSession(mode=file)).
+        self._pending_attach: AttachRequest | None = None
         self._listeners: list[Listener] = []
 
     # -- consulta ----------------------------------------------------------------------------------
@@ -90,6 +95,25 @@ class SessionCoordinator:
         self._engine = engine
         started.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_started(engine, fut)))
 
+    def start_file_session(self, request: AttachRequest) -> None:
+        """StartSession(mode=file): raíz `:memory:` y después el `ATTACH` del archivo (session-spec §2).
+
+        Si el `ATTACH` falla, la sesión queda en memoria, `READY`, y se informa con `AttachFailed`.
+        """
+        if self._sm.state not in (SessionState.DISCONNECTED, SessionState.ERROR_RECOVERABLE):
+            raise SessionStateError(f"No se puede iniciar una sesión en estado {self._sm.state.value}")
+        self._pending_attach = request
+        self.start_memory_session()  # si el arranque falla, _fail descarta el ATTACH pendiente
+
+    def attach_database(self, request: AttachRequest) -> None:
+        """AttachDatabase: «Abrir existente» o «Crear nueva». La sesión pasa por `BUSY`."""
+        if self._sm.state is not SessionState.READY or self._engine is None:
+            raise SessionStateError(f"No se puede adjuntar una base en estado {self._sm.state.value}")
+        engine = self._engine
+        self._sm.transition(SessionState.BUSY)
+        attaching = engine.attach(request)
+        attaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_attached(engine, fut)))
+
     def close_session(self) -> Future[None]:
         """CloseSession(): cancela lo que esté en curso y cierra el motor sin bloquear la UI."""
         state = self._sm.state
@@ -99,6 +123,7 @@ class SessionCoordinator:
             return done
         engine, self._engine = self._engine, None
         self._info = None
+        self._pending_attach = None
         self._drop_catalog()
         if engine is None:  # ERROR_RECOVERABLE sin motor vivo
             self._sm.transition(SessionState.DISCONNECTED)
@@ -156,7 +181,33 @@ class SessionCoordinator:
         engine.invalidation().add_done_callback(
             lambda inv: self._dispatcher.post(lambda: self._on_invalidated(engine, inv))
         )
-        self.refresh_catalog()
+        pending, self._pending_attach = self._pending_attach, None
+        if pending is not None:
+            self.attach_database(pending)  # el resultado trae el catálogo
+        else:
+            self.refresh_catalog()
+
+    def _on_attached(self, engine: SessionEngine, fut: Future[AttachResult]) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return  # la sesión se cerró o se invalidó mientras tanto
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return  # la invalidación llega por su propio camino y lleva a ERROR_RECOVERABLE
+        self._sm.transition(SessionState.READY)
+        if exc is None:
+            result = fut.result()
+            self._catalog_generation += 1  # cualquier lectura anterior queda superada
+            self._catalog = result.catalog
+            self._emit(CatalogChanged(result.catalog))
+            self._emit(DatabaseAttached(result.database))
+            return
+        if isinstance(exc, GeoDuckError):
+            code, message = exc.code, exc.message
+        else:
+            code, message = ErrorCode.ENGINE_ERROR, f"{type(exc).__name__}: {exc}"
+        _log.warning("No se adjuntó la base [%s]", code.value)
+        self._emit(AttachFailed(code, message))
+        self.refresh_catalog()  # el catálogo se relee de DuckDB; nunca se supone
 
     def _on_catalog(self, engine: SessionEngine, generation: int, fut: Future[CatalogSnapshot]) -> None:
         if engine is not self._engine or generation != self._catalog_generation:
@@ -200,6 +251,7 @@ class SessionCoordinator:
             self._sm.transition(SessionState.DISCONNECTED)
 
     def _fail(self, exc: BaseException) -> None:
+        self._pending_attach = None
         if isinstance(exc, GeoDuckError):
             code, message = exc.code, exc.message
         else:

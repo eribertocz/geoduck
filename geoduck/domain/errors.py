@@ -75,6 +75,16 @@ class SessionClosedError(GeoDuckError):
     code = ErrorCode.SESSION_CLOSED
 
 
+class InvalidArgumentError(GeoDuckError):
+    """La petición es inválida antes de llegar al motor."""
+
+    code = ErrorCode.INVALID_ARGUMENT
+
+
+class AttachError(GeoDuckError):
+    """No se pudo adjuntar una base. El código indica la causa (`DB_NOT_FOUND`, `DB_LOCKED`, …)."""
+
+
 class SessionInvalidatedError(SessionClosedError):
     """La conexión dejó de ser utilizable y la sesión se invalidó (C13 §4 bis, ADR-0007 §3).
 

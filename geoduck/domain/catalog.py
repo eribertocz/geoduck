@@ -8,8 +8,11 @@ inmutable y coherente: o se obtiene completa y válida, o no existe.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
+
+from geoduck.domain.errors import InvalidArgumentError
 
 #: DuckDB compara los nombres de catálogo plegando **solo** las letras ASCII: «Año» y «año» chocan,
 #: «Año» y «AÑO» no (verificado con DuckDB 1.5.0 y 2.0.0). Se reproduce exactamente esa regla.
@@ -21,9 +24,22 @@ def catalog_key(name: str) -> str:
     return name.translate(_ASCII_LOWER)
 
 
+#: Nombres que DuckDB reserva para sus catálogos internos (verificado con DuckDB 1.5.0 y 2.0.0).
+RESERVED_CATALOG_NAMES = frozenset({"system", "temp"})
+
+
 class AccessMode(str, Enum):
     READ_ONLY = "READ_ONLY"
     READ_WRITE = "READ_WRITE"
+
+
+class OpenAction(str, Enum):
+    """Las dos únicas formas de llegar a un archivo (session-spec §2). Nunca se crea uno implícitamente."""
+
+    #: El archivo debe existir; si no, `DB_NOT_FOUND` y no se crea nada.
+    OPEN_EXISTING = "OPEN_EXISTING"
+    #: El archivo no debe existir; nunca se sobrescribe ni se reutiliza uno existente. Solo en RW.
+    CREATE_NEW = "CREATE_NEW"
 
 
 @dataclass(frozen=True)
@@ -95,3 +111,39 @@ class CatalogSnapshot:
     def attached(self) -> tuple[AttachedDatabase, ...]:
         """Bases adjuntas por el usuario: todas menos la raíz."""
         return tuple(db for db in self.databases if not self.is_root(db.name))
+
+
+@dataclass(frozen=True)
+class AttachRequest:
+    """Petición de «Abrir existente» o «Crear nueva». Se valida al construirse."""
+
+    path: str
+    access: AccessMode
+    action: OpenAction
+    #: Alias del catálogo. Si falta, se usa el nombre del archivo sin extensión, como hace DuckDB.
+    alias: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.path.strip() or "\x00" in self.path:
+            raise InvalidArgumentError("Indique la ruta del archivo")
+        if self.action is OpenAction.CREATE_NEW and self.access is not AccessMode.READ_WRITE:
+            raise InvalidArgumentError("«Crear nueva» solo admite lectura y escritura")
+        alias = self.effective_alias
+        if not alias.strip() or "\x00" in alias:
+            raise InvalidArgumentError("Indique un alias para la base")
+
+    @property
+    def effective_alias(self) -> str:
+        if self.alias is not None:
+            return self.alias
+        name = re.split(r"[\\/]", self.path.rstrip("\\/"))[-1]
+        stem, dot, _ext = name.rpartition(".")
+        return stem if dot and stem else name
+
+
+@dataclass(frozen=True)
+class AttachResult:
+    """Base recién adjuntada y el catálogo leído en la misma operación serial."""
+
+    database: AttachedDatabase
+    catalog: CatalogSnapshot

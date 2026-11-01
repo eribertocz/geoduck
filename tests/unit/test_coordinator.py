@@ -7,14 +7,23 @@ import pytest
 
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.app.events import (
+    AttachFailed,
     CatalogChanged,
     CatalogUnavailable,
+    DatabaseAttached,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
 )
-from geoduck.domain.catalog import AccessMode, AttachedDatabase, CatalogSnapshot
+from geoduck.domain.catalog import (
+    AccessMode,
+    AttachedDatabase,
+    AttachRequest,
+    AttachResult,
+    CatalogSnapshot,
+    OpenAction,
+)
 from geoduck.domain.errors import (
     EngineError,
     ErrorCode,
@@ -48,6 +57,7 @@ class FakeEngine:
         self.stopped: Future = Future()
         self.invalidated: Future = Future()
         self.catalog_reads: list[Future] = []
+        self.attaches: list[tuple[AttachRequest, Future]] = []
         self.cancelled = False
 
     def start(self):
@@ -62,6 +72,10 @@ class FakeEngine:
 
     def invalidation(self):
         return self.invalidated
+
+    def attach(self, request):
+        self.attaches.append((request, Future()))
+        return self.attaches[-1][1]
 
     def read_catalog(self):
         self.catalog_reads.append(Future())
@@ -356,3 +370,123 @@ def test_refresh_catalog_requires_ready(env, state):
         coordinator.start_memory_session()
     with pytest.raises(SessionStateError):
         coordinator.refresh_catalog()
+
+
+# -- Abrir existente / Crear nueva (G1 paso 3) -----------------------------------------------------
+
+REQUEST = AttachRequest("/datos/ventas.duckdb", AccessMode.READ_ONLY, OpenAction.OPEN_EXISTING)
+ATTACHED = AttachResult(SALES, WITH_SALES)
+
+
+def test_attach_goes_busy_then_ready_with_the_new_catalog(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.attach_database(REQUEST)
+    assert coordinator.state is S.BUSY
+    with pytest.raises(SessionStateError):
+        coordinator.attach_database(REQUEST)  # una operación a la vez
+    request, fut = engines[0].attaches[0]
+    assert request is REQUEST
+    fut.set_result(ATTACHED)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.catalog is WITH_SALES
+    assert [e.database for e in events if isinstance(e, DatabaseAttached)] == [SALES]
+    assert states(events)[-2:] == [S.BUSY, S.READY]
+
+
+@pytest.mark.parametrize("code", [ErrorCode.DB_NOT_FOUND, ErrorCode.DB_LOCKED, ErrorCode.DB_ALIAS_CONFLICT])
+def test_attach_failure_keeps_the_session_ready_and_rereads_the_catalog(env, code):
+    from geoduck.domain.errors import AttachError
+
+    coordinator, dispatcher, engines, events = _ready(env)
+    engines[0].catalog_reads[0].set_result(ONLY_ROOT)
+    dispatcher.drain()
+    coordinator.attach_database(REQUEST)
+    engines[0].attaches[0][1].set_exception(AttachError("No se pudo", code=code))
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.error_cause is None
+    failed = [e for e in events if isinstance(e, AttachFailed)]
+    assert len(failed) == 1 and failed[0].code is code
+    assert len(engines[0].catalog_reads) == 2  # se relee de DuckDB, no se supone
+
+
+def test_attach_requires_ready(env):
+    coordinator, _dispatcher, _engines, _events = env
+    with pytest.raises(SessionStateError):
+        coordinator.attach_database(REQUEST)
+
+
+def test_stale_catalog_read_cannot_overwrite_the_attach_result(env):
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator.attach_database(REQUEST)
+    engines[0].attaches[0][1].set_result(ATTACHED)
+    dispatcher.drain()
+    engines[0].catalog_reads[0].set_result(ONLY_ROOT)  # lectura inicial que llega tarde
+    dispatcher.drain()
+    assert coordinator.catalog is WITH_SALES
+
+
+def test_invalidation_during_attach_ends_in_error_recoverable(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.attach_database(REQUEST)
+    engines[0].attaches[0][1].set_exception(CAUSE.fresh())
+    dispatcher.drain()
+    assert coordinator.state is S.BUSY  # espera a la notificación de invalidación
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.SESSION_INVALIDATED
+    assert not any(isinstance(e, AttachFailed) for e in events)
+
+
+def test_close_during_attach_ignores_the_late_result(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.attach_database(REQUEST)
+    coordinator.close_session()
+    engines[0].attaches[0][1].set_result(ATTACHED)
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    assert coordinator.state is S.DISCONNECTED and coordinator.catalog is None
+    assert not any(isinstance(e, DatabaseAttached) for e in events)
+
+
+def test_file_session_attaches_after_start(env):
+    coordinator, dispatcher, engines, _events = env
+    coordinator.start_file_session(REQUEST)
+    assert engines[0].attaches == []  # todavía no: primero la raíz en memoria
+    engines[0].started.set_result(INFO)
+    dispatcher.drain()
+    assert coordinator.state is S.BUSY and engines[0].attaches[0][0] is REQUEST
+    assert engines[0].catalog_reads == []  # el ATTACH ya trae el catálogo
+    engines[0].attaches[0][1].set_result(ATTACHED)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.catalog is WITH_SALES
+
+
+def test_file_session_failed_attach_stays_in_memory(env):
+    from geoduck.domain.errors import AttachError
+
+    coordinator, dispatcher, engines, events = env
+    coordinator.start_file_session(REQUEST)
+    engines[0].started.set_result(INFO)
+    dispatcher.drain()
+    engines[0].attaches[0][1].set_exception(AttachError("No existe", code=ErrorCode.DB_NOT_FOUND))
+    dispatcher.drain()
+    assert coordinator.state is S.READY  # sesión en memoria, informada
+    assert any(isinstance(e, AttachFailed) and e.code is ErrorCode.DB_NOT_FOUND for e in events)
+
+
+def test_file_session_failed_start_drops_the_pending_attach(env):
+    coordinator, dispatcher, engines, _events = env
+    coordinator.start_file_session(REQUEST)
+    engines[0].started.set_exception(UnsupportedEngineError("DuckDB 1.4"))
+    dispatcher.drain()
+    coordinator.start_memory_session()
+    engines[1].started.set_result(INFO)
+    dispatcher.drain()
+    assert engines[1].attaches == [] and len(engines[1].catalog_reads) == 1
+
+
+def test_file_session_requires_no_active_session(env):
+    coordinator, _dispatcher, _engines, _events = _ready(env)
+    with pytest.raises(SessionStateError):
+        coordinator.start_file_session(REQUEST)

@@ -29,7 +29,7 @@ from typing import Any, Generic, TypeVar
 
 import duckdb
 
-from geoduck.domain.catalog import CatalogSnapshot
+from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot
 from geoduck.domain.errors import (
     ActiveResultError,
     EngineError,
@@ -42,6 +42,7 @@ from geoduck.domain.errors import (
     WrongThreadError,
 )
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
+from geoduck.engine.attach import attach_database
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 
@@ -276,10 +277,19 @@ class SessionWorker:
     def read_catalog(self) -> Future[CatalogSnapshot]:
         """Instantánea del catálogo, leída de DuckDB en una sola operación serial."""
         root = self._root
+        return self._submit_future(lambda h, _t: read_catalog(h, root))
+
+    def attach(self, request: AttachRequest) -> Future[AttachResult]:
+        """«Abrir existente» o «Crear nueva» (`geoduck.engine.attach`), en una sola operación serial."""
+        root = self._root
+        return self._submit_future(lambda h, _t: attach_database(h, request, root))
+
+    def _submit_future(self, fn: Operation[T]) -> Future[T]:
+        """Como `submit`, pero una sesión que no acepta trabajo se entrega como `Future` fallido."""
         try:
-            return self.submit(lambda h, _t: read_catalog(h, root)).future
+            return self.submit(fn).future
         except SessionClosedError as exc:
-            failed: Future[CatalogSnapshot] = Future()
+            failed: Future[T] = Future()
             failed.set_exception(exc)
             return failed
 
@@ -415,10 +425,11 @@ class SessionWorker:
                 result = job.fn(handle, job.token)
             except BaseException as exc:
                 interrupted = is_interrupt_error(exc)
-                if isinstance(exc, duckdb.FatalException):
+                fatal_cause = _fatal_in_chain(exc)
+                if fatal_cause is not None:
                     fatal = SessionInvalidatedError(
                         "DuckDB informó un error fatal; la sesión se invalidó",
-                        detail=_first_line(exc),
+                        detail=_first_line(fatal_cause),
                     )
                     job.future.set_exception(fatal.fresh())
                 else:
@@ -450,6 +461,19 @@ class SessionWorker:
             return handle.execute("SELECT 1").rows == ((1,),)
         except Exception:
             return False
+
+
+def _fatal_in_chain(exc: BaseException) -> BaseException | None:
+    """Busca un `duckdb.FatalException` en la cadena de causas: una operación que envuelve el error
+    (p. ej. para clasificarlo) no puede ocultar que la base quedó invalidada."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        if isinstance(current, duckdb.FatalException):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def _resolve(future: Future[Any], value: Any) -> None:
