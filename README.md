@@ -24,7 +24,7 @@ GeoDuck usa el intérprete Python **de la instalación de QGIS**; no requiere ni
 
 | Paquete | Requisito | Licencia |
 |---|---|---|
-| `duckdb` | `>= 1.5.0` (recomendado `>= 1.5.4`), ramas 1.5.x y 2.x verificadas por matriz | MIT |
+| `duckdb` | `>= 1.5.0` (recomendada 1.5.6 en la rama 1.5; 2.x con soporte verificado, decisión D5) | MIT |
 | `pyarrow` | En QGIS para Windows, la que incluye QGIS (verificado con 18.1.0); en otros casos, según [`compat/matrix.toml`](compat/matrix.toml) | Apache-2.0 |
 
 Compatibilidad mínima: **QGIS 3.34** (decisión D8: primera serie con Python ≥ 3.10 en Windows, requisito de

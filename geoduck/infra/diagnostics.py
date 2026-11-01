@@ -28,7 +28,9 @@ from geoduck.domain.versions import Version
 
 #: Mismos valores que geoduck/engine/compat.py; aquí no se importa `engine` (requiere duckdb).
 DUCKDB_MINIMUM = (1, 5, 0)
-DUCKDB_RECOMMENDED = (1, 5, 4)
+DUCKDB_RECOMMENDED = (1, 5, 6)  # D5: recomendada en la rama 1.5
+#: Versión que corrige los defectos de geometría F-04 (to_arrow_table de GEOMETRY).
+DUCKDB_GEOMETRY_FIXES = (1, 5, 4)
 PYTHON_MINIMUM = (3, 10)
 
 Importer = Callable[[str], ModuleType]
@@ -178,8 +180,13 @@ def _check_duckdb_version(text: str) -> Check:
             "duckdb",
             "DuckDB",
             CheckStatus.WARN,
-            f"DuckDB {text}: soportado, con defectos conocidos en geometría (F-04/F-05).",
-            f"Se recomienda duckdb>={'.'.join(map(str, DUCKDB_RECOMMENDED))}.",
+            f"DuckDB {text}: soportado"
+            + (
+                ", con defectos conocidos en geometría (F-04/F-05)."
+                if not v.at_least(*DUCKDB_GEOMETRY_FIXES)
+                else "."
+            ),
+            f"Versión recomendada: duckdb {'.'.join(map(str, DUCKDB_RECOMMENDED))} (rama 1.5) o 2.x (D5).",
         )
     return Check("duckdb", "DuckDB", CheckStatus.OK, f"DuckDB {text}")
 
