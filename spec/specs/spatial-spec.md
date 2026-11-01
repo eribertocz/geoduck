@@ -33,7 +33,11 @@ Orden de preferencia:
 3. Selección explícita del usuario.
 4. Mantener CRS desconocido con advertencia clara si el usuario decide continuar.
 
-`ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y decisión explícita. Verificar orden de ejes, particularmente `geometry_always_xy` de DuckDB 2.0, y contrastarlo con QGIS. Nunca realizar una transformación oculta.
+`ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y una decisión explícita del usuario. Nunca realizar una transformación oculta.
+
+**Orden de ejes.** GeoDuck entrega a QGIS las coordenadas del WKB tal como las produce DuckDB, sin reordenarlas; QGIS interpreta x como este/longitud también en CRS geográficos como EPSG:4326. GeoDuck no fija el ajuste `geometry_always_xy` de la extensión `spatial` (en DuckDB 2.0 no tiene valor por defecto y `ST_Transform` exige declararlo; en 2.1 pasará a `true`). Cuando `spatial` está cargada, GeoDuck muestra su valor efectivo. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia llamada. Geometrías producidas en el orden de la autoridad (por ejemplo, latitud-longitud) se entregan tal cual y son responsabilidad del SQL del usuario. GeoDuck no intenta adivinar ejes invertidos a partir de los rangos de coordenadas.
+
+**CRS ausente o desconocido.** Si DuckDB no declara CRS, o declara uno que QGIS no reconoce, GeoDuck no lo sustituye por otro (ni EPSG:4326 ni el CRS del proyecto), no publica la capa sin una decisión del usuario (puntos 3 y 4 anteriores), conserva el texto declarado en el mensaje y el registro, y nunca modifica las coordenadas. Elegir un CRS lo etiqueta; no transforma.
 
 ## 5. Transporte WKB
 Seleccionada una columna, generar una **relación de proyección explícita** que exponga la geometría como `ST_AsWKB(...)` de tipo binario, conservar otros atributos y un identificador estable de fila para la transferencia si resulta necesario. Convertir a `QgsGeometry.fromWkb` en main thread. Evitar serializar geometrías completas en WKT como camino principal por coste y precisión.
@@ -58,3 +62,15 @@ El panel detecta `centro` y `poligono` y ofrece «Puntos», «Polígonos», «Am
 - Filas con tipos mixtos en una columna: no se descartan silenciosamente.
 - WKB con datos corruptos, `GEOMETRYCOLLECTION` y BLOB no geométrico.
 - Consultas que generan geometría (`ST_Centroid`, `ST_Buffer`) sin columna espacial original.
+- Orden de ejes y CRS. Punto de referencia `POINT(-68.15 -16.5)`; tolerancia 1e-9 en grados y 0,01 m en metros; cada prueba verifica coordenadas **y** CRS:
+
+| ID | Caso | CRS esperado en QGIS | Coordenadas esperadas | Además |
+|---|---|---|---|---|
+| AX-1a | `GEOMETRY('OGC:CRS84')` | válido, `OGC:CRS84` | x = −68,15, y = −16,5 | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
+| AX-1b | `EPSG:4326` con `spatial` | válido, `EPSG:4326` | x = −68,15, y = −16,5 aunque `hasAxisInverted()` sea verdadero | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
+| AX-1c | `ST_Transform(…, 'EPSG:4326', 'EPSG:32719', true)` | válido, `EPSG:32719` | `590716.04, 8175564.99` | igual a AX-1a/b transformado por QGIS |
+| AX-2 | `geometry_always_xy` en `true`, `false` y sin fijar | — | — | valor mostrado = `duckdb_settings()`; GeoDuck no lo modifica |
+| AX-3 | `ST_Transform` sin orden declarado, DuckDB 2.0, ajuste sin fijar | sin capa | — | error SQL del usuario; sin reintentos ni ajustes automáticos |
+| AX-4a | sin CRS declarado | no válido; no se asigna ninguno | x = −68,15, y = −16,5 | no se publica sin decisión del usuario; advertencia visible |
+| AX-4b | CRS desconocido para QGIS (`FOO:123`) | no válido; no se sustituye | x = −68,15, y = −16,5 | el mensaje muestra `FOO:123` |
+| AX-4c | CRS desconocido y el usuario elige `EPSG:4326` | válido, `EPSG:4326` | x = −68,15, y = −16,5 | elegir etiqueta; no transforma |

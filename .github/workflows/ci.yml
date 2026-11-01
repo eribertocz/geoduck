@@ -31,6 +31,8 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       - run: python -m pytest tests/unit tests/architecture -q
+      - name: Integridad de spec/ (maestra y manifiesto)
+        run: python tools/spec_sync.py --check
 
   engine:
     name: motor · DuckDB ${{ matrix.duckdb }} · Py ${{ matrix.python }} · PyArrow ${{ matrix.pyarrow }}

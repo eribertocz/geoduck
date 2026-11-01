@@ -33,12 +33,13 @@ flowchart TD
 **QGIS Committer:** crea o alimenta una capa temporal no registrada, exclusivamente en hilo principal. Publica todas las capas del pedido tras validar integridad, o descarta todas en fracaso.
 
 ## 3. Máquina de estados de sesión
-`STOPPED → STARTING → READY → BUSY → READY → CLOSING → STOPPED`; `FAILED` documenta errores recuperables.
+Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNECTING → READY ⇄ BUSY`, `READY → DETACHING → READY`, `* → CLOSING → DISCONNECTED`; `ERROR_RECOVERABLE` registra fallos de los que se puede salir reintentando, volviendo a `READY` o cerrando. La tabla de transiciones de `session-spec` §5 es normativa. Los estados de operación y de entrega (`cancelando`, `transfiriendo`, `entrega exitosa`…) pertenecen a la máquina de operación, no a la de sesión.
 
 - `READY`: admite operaciones nuevas.
 - `BUSY`: operaciones seriales ocupan la conexión, incluidas lecturas Arrow. `DETACH` entra en cola, espera o pide cancelar la operación anterior.
 - `CLOSING`: cerrar lectores, terminar/cancelar trabajos, `DETACH` de las bases que proceda, cerrar la instancia y limpiar referencias.
 - Evitar cerrar prematuramente un reader: el contrato de algunas versiones de DuckDB pueden impedir consultas concurrentes mientras está abierto.
+- `ERROR_RECOVERABLE`: fallo recuperable. Si la causa es la invalidación de la conexión (`SESSION_INVALIDATED`, `session-spec` §5), solo se sale hacia una sesión nueva o el cierre.
 
 ## 4. Secuencia cargar capa
 1. UI escoge resultado tabular y su geometría/CRS.
@@ -53,7 +54,8 @@ flowchart TD
 ## 5. Política de concurrencia y cancelación
 - Un worker serializado para una sesión: conserva `TEMP`, `USE`, transacciones y contexto del script sin sorpresas.
 - Cada operación tiene `id`, token de cancelación cooperativo y estado observable.
-- Para consultas largas sin lotes, investigar en gate técnico el mecanismo de interrupción soportado por DuckDB 1.5+/2.x sin usar indebidamente la conexión desde otro hilo. **No asumir** cancelación inmediata ni segura sin prueba.
+- Para consultas largas sin lotes, `interrupt()` se usa solo como excepción controlada y en las versiones exactas de DuckDB verificadas (ADR-0007). En las demás, la cancelación es solo cooperativa. **No asumir** cancelación inmediata ni segura sin prueba.
+- Propiedad exclusiva de la conexión, cola serial y lectores Arrow con ciclo de vida explícito: ADR-0006.
 - El cierre de GeoDuck o `DETACH` solicita cancelación y espera liberación ordenada; jamás se desprende una base en mitad de la transferencia activa.
 - Las funciones de PyQGIS/QObject del proyecto se llaman en main thread; prohibido `QgsVectorLayer`, `QgsProject`, widgets o data providers dentro del worker.
 - Backpressure obligatorio: n lotes máximo en tránsito; decidir tamaño con benchmarks.
