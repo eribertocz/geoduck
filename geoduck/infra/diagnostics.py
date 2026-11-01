@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import os
 import platform
+import re
 import site
 import struct
 import sys
@@ -66,6 +67,9 @@ def collect(
     if duckdb_mod is not None:
         duckdb_check = _check_duckdb_version(str(getattr(duckdb_mod, "__version__", "0.0.0")))
     checks.append(duckdb_check)
+    if duckdb_mod is not None:
+        facts["DuckDB desde"] = str(getattr(duckdb_mod, "__file__", "?"))
+        checks.append(_check_duckdb_origin(duckdb_mod))
 
     numpy_mod, _ = _import_check(import_module, "numpy", "NumPy", action="")
     numpy_version = str(getattr(numpy_mod, "__version__", "")) if numpy_mod else ""
@@ -80,6 +84,17 @@ def collect(
     )
     if pyarrow_mod is not None:
         pyarrow_check = _check_pyarrow(str(getattr(pyarrow_mod, "__version__", "0")), numpy_version)
+        facts["PyArrow desde"] = str(getattr(pyarrow_mod, "__file__", "?"))
+    elif "DLL load failed" in pyarrow_check.detail:
+        pyarrow_check = Check(
+            "pyarrow",
+            "PyArrow",
+            CheckStatus.FAIL,
+            pyarrow_check.detail,
+            "Hay una PyArrow distinta de la que incluye QGIS y sus DLL chocan con las ya cargadas (F-13). "
+            "Desinstale la PyArrow añadida (p. ej. «pip uninstall pyarrow» si está en el site de usuario) "
+            "y use la de QGIS.",
+        )
     elif "NumPy 2" in pyarrow_check.detail or "numpy" in pyarrow_check.detail.lower():
         pyarrow_check = Check(
             "pyarrow",
@@ -237,25 +252,61 @@ def _check_spatial(prober: SpatialProber | None) -> Check:
     )
 
 
+#: Paquetes que QGIS ya trae y cuya sustitución desde el site de usuario rompe QGIS o GeoDuck:
+#: NumPy 2 encima de la de QGIS rompe GDAL/scipy (QGIS #63733, F-15); otra PyArrow choca con sus DLL (F-13).
+#: `duckdb` en el site de usuario es un método de instalación válido y no se advierte.
+_QGIS_OWNED = ("numpy", "pyarrow")
+
+_PLUGIN_DIR = re.compile(r"/python/plugins/([^/]+)/", re.IGNORECASE)
+
+
+def _check_duckdb_origin(module: ModuleType) -> Check:
+    """R11: avisa si `duckdb` lo aporta otro complemento que lo incrusta en su carpeta."""
+    title = "Origen de DuckDB"
+    path = str(getattr(module, "__file__", "") or "").replace("\\", "/")
+    match = _PLUGIN_DIR.search(path)
+    if match and match.group(1).lower() != "geoduck":
+        plugin = match.group(1)
+        return Check(
+            "duckdb_origin",
+            title,
+            CheckStatus.WARN,
+            f"DuckDB {getattr(module, '__version__', '?')} lo aporta el complemento «{plugin}», que lo "
+            "incluye en su carpeta. En QGIS solo puede haber un DuckDB cargado: GeoDuck y ese complemento "
+            "comparten esta versión (riesgo R11).",
+            f"Si la versión no es la que GeoDuck necesita, desactive «{plugin}», reinicie QGIS y vuelva a "
+            "ejecutar este diagnóstico.",
+        )
+    return Check("duckdb_origin", title, CheckStatus.OK, path or "desconocido")
+
+
 def _check_user_site(user_site: str, modules: list[ModuleType]) -> Check:
     title = "Paquetes del usuario"
     if not user_site:
         return Check("user_site", title, CheckStatus.OK, "El site de usuario está desactivado.")
     norm = os.path.normcase(os.path.abspath(user_site))
-    leaking = [
+    in_user_site = [
         m.__name__
         for m in modules
         if getattr(m, "__file__", None)
         and os.path.normcase(os.path.abspath(str(m.__file__))).startswith(norm)
     ]
-    if leaking:
+    risky = [name for name in in_user_site if name in _QGIS_OWNED]
+    if risky:
         return Check(
             "user_site",
             title,
             CheckStatus.WARN,
-            f"{', '.join(leaking)} se cargan desde {user_site}, fuera de la instalación de QGIS "
-            "(conflicto conocido, QGIS issue #63733).",
-            "Elimine esos paquetes del site de usuario o defina PYTHONNOUSERSITE=1 para QGIS.",
+            f"{', '.join(risky)} se cargan desde {user_site} en lugar de la versión de QGIS "
+            "(conflictos conocidos: QGIS issue #63733, F-13, F-15).",
+            f"Desinstálelos del site de usuario («pip uninstall {' '.join(risky)}») para usar los de QGIS.",
+        )
+    if in_user_site:
+        return Check(
+            "user_site",
+            title,
+            CheckStatus.OK,
+            f"{', '.join(in_user_site)} instalado en el site de usuario; NumPy y PyArrow son los de QGIS.",
         )
     return Check("user_site", title, CheckStatus.OK, "Ninguna dependencia proviene del site de usuario.")
 
