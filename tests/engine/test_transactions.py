@@ -193,3 +193,71 @@ def test_a_new_session_starts_clean():
         assert state(second) is T.NONE and "t" not in tables(second)
     finally:
         second.close().result(TIMEOUT)
+
+
+# -- regresión: la comprobación coincide con una verdad independiente -----------------------------
+
+_SCENARIOS = {
+    "inicio": [],
+    "BEGIN": ["BEGIN"],
+    "BEGIN con escritura": ["BEGIN", "INSERT INTO x VALUES (1)"],
+    "BEGIN y COMMIT": ["BEGIN", "INSERT INTO x VALUES (1)", "COMMIT"],
+    "BEGIN y ROLLBACK": ["BEGIN", "INSERT INTO x VALUES (1)", "ROLLBACK"],
+    "error en autocommit": ["!SELECT * FROM no_existe"],
+    "restricción en autocommit": ["!INSERT INTO u VALUES (1)"],
+    "error de catálogo en transacción": ["BEGIN", "!SELECT * FROM no_existe"],
+    "restricción en transacción": ["BEGIN", "!INSERT INTO u VALUES (1)"],
+    "error y ROLLBACK": ["BEGIN", "!INSERT INTO u VALUES (1)", "ROLLBACK"],
+    "error y COMMIT directo": ["BEGIN", "!INSERT INTO u VALUES (1)", "COMMIT"],
+    "cancelación en autocommit": ["@cancel"],
+    "cancelación en transacción": ["BEGIN", "@cancel"],
+    "cancelación y ROLLBACK": ["BEGIN", "@cancel", "ROLLBACK"],
+    "cancelación y COMMIT directo": ["BEGIN", "@cancel", "COMMIT"],
+    "COMMIT sin transacción": ["!COMMIT"],
+    "ROLLBACK sin transacción": ["!ROLLBACK"],
+    "BEGIN anidado": ["BEGIN", "!BEGIN"],
+    "transacción tras otra": ["BEGIN", "COMMIT", "BEGIN"],
+}
+
+
+def _truth(worker):
+    """Estado real sin usar txid_current(): una sentencia falla si está abortada; ROLLBACK falla si no hay
+    transacción. Es destructiva, por eso se aplica después de comprobar."""
+    try:
+        run(worker, "SELECT 1")
+    except GeoDuckError as exc:
+        assert exc.code is ErrorCode.TRANSACTION_ABORTED
+        return T.ABORTED
+    try:
+        run(worker, "ROLLBACK")
+    except GeoDuckError as exc:
+        assert "no transaction is active" in exc.message
+        return T.NONE
+    return T.ACTIVE
+
+
+@pytest.mark.parametrize("steps", list(_SCENARIOS.values()), ids=list(_SCENARIOS))
+def test_probe_has_no_false_positives_or_negatives(steps):
+    """Revisión de #43: tras COMMIT, ROLLBACK, errores y cancelaciones, en 1.5.0, 1.5.6 y 2.0.0, la
+    comprobación coincide siempre con la verdad, es estable y no cambia el estado ni invalida la sesión."""
+    if "@cancel" in steps and not EngineCapabilities.for_version(duckdb.__version__).interrupt_verified:
+        pytest.skip("interrupt() no verificado en esta versión (ADR-0007)")
+    w = SessionWorker()
+    w.start().result(TIMEOUT)
+    try:
+        run(w, "CREATE TABLE x (a INT)")
+        run(w, "CREATE TABLE u (a INT PRIMARY KEY)")
+        run(w, "INSERT INTO u VALUES (1)")
+        for step in steps:
+            if step == "@cancel":
+                abort(w)
+            elif step.startswith("!"):
+                with pytest.raises(GeoDuckError):
+                    run(w, step[1:])
+            else:
+                run(w, step)
+        probes = [state(w) for _ in range(3)]
+        assert not w.invalidation().done()
+        assert probes == [_truth(w)] * 3
+    finally:
+        w.close().result(TIMEOUT)
