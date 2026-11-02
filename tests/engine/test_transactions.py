@@ -261,3 +261,54 @@ def test_probe_has_no_false_positives_or_negatives(steps):
         assert probes == [_truth(w)] * 3
     finally:
         w.close().result(TIMEOUT)
+
+
+# -- cierre: revertir lo pendiente, nunca confirmar (decisión del 2026-11-01) ------------------------
+
+
+def _spy_statements(monkeypatch):
+    from geoduck.engine.worker import ConnectionHandle
+
+    sent: list[str] = []
+    original = ConnectionHandle.execute
+
+    def execute(self, sql, parameters=None, *, max_rows=200):
+        sent.append(sql.strip().upper())
+        return original(self, sql, parameters, max_rows=max_rows)
+
+    monkeypatch.setattr(ConnectionHandle, "execute", execute)
+    return sent
+
+
+@pytest.mark.parametrize("aborted", [False, True])
+def test_close_rolls_back_a_pending_transaction_and_never_commits(tmp_path, monkeypatch, aborted, caplog):
+    if aborted and not EngineCapabilities.for_version(duckdb.__version__).interrupt_verified:
+        pytest.skip("interrupt() no verificado en esta versión (ADR-0007)")
+    path = str(tmp_path / "x.duckdb")
+    con = duckdb.connect(path)
+    con.execute("CREATE TABLE t AS SELECT 1 AS a")
+    con.close()
+    sent = _spy_statements(monkeypatch)
+    w = SessionWorker()
+    w.start().result(TIMEOUT)
+    run(w, f"ATTACH '{path}' AS d")
+    run(w, "BEGIN")
+    run(w, "INSERT INTO d.t VALUES (2)")
+    if aborted:
+        abort(w)
+    with caplog.at_level("WARNING", logger="geoduck.engine"):
+        w.close().result(TIMEOUT)
+    assert "ROLLBACK" in sent and "COMMIT" not in sent
+    assert "Se revirtió una transacción pendiente" in caplog.text
+    check = duckdb.connect(path, read_only=True)
+    assert check.execute("SELECT a FROM t").fetchall() == [(1,)]
+    check.close()
+
+
+def test_close_without_transaction_sends_no_rollback(monkeypatch):
+    sent = _spy_statements(monkeypatch)
+    w = SessionWorker()
+    w.start().result(TIMEOUT)
+    run(w, "CREATE TABLE t AS SELECT 1 AS a")
+    w.close().result(TIMEOUT)
+    assert "ROLLBACK" not in sent and "COMMIT" not in sent
