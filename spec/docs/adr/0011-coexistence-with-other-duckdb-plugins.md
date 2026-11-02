@@ -39,7 +39,7 @@ convivencia (R11) con cualquier complemento que incruste o fije su propio DuckDB
 4. **Riesgo pendiente.** La convivencia con QDuckDB queda documentada como riesgo abierto. Toda solución
    que vaya más allá del diagnóstico requiere un ADR nuevo: coordinación con los mantenedores de QDuckDB,
    aislamiento del motor en un proceso aparte o un rango de versiones compatible acordado. Se reevaluará
-   en G7 (Reliability & Distribution).
+   en G8 (Reliability & Distribution; antes G7, renumerado el 2026-11-02).
 
 ## Alternativas descartadas por ahora
 

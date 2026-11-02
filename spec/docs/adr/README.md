@@ -14,5 +14,6 @@
 | [ADR-0010](0010-package-boundaries.md) | Aceptado (2026-11-01) | Paquetes y fronteras de importación verificadas por test |
 | [ADR-0011](0011-coexistence-with-other-duckdb-plugins.md) | Aceptado (2026-11-01) | Convivencia con otros complementos DuckDB; sin modificaciones silenciosas |
 | [ADR-0012](0012-three-load-modes.md) | Aceptado (2026-11-02) | Tres modalidades de carga: Memoria, Instantánea (GeoPackage `/vsimem`) y Conectada (proveedor PyQGIS editable) |
+| [ADR-0013](0013-single-workspace-dual-presentation.md) | Aceptado (2026-11-02) | Un solo workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado |
 
 Los ADR registran decisiones y compensaciones. Cambios que afecten compatibilidad, propiedad de capa o seguridad necesitan uno nuevo, no edición silenciosa del historial.
