@@ -230,12 +230,10 @@ def build_provider():
 
             def op(handle, token):
                 if fetch == "table":
+                    # El worker lee el resultado entero y queda libre; el iterador lo recorre después.
                     batches: list = []
                     summary = handle.read_arrow(sql, batch_size=65536, on_batch=batches.append, token=token)
-                    for b in batches:
-                        if not put(b):
-                            break
-                    put(_DONE)
+                    q.queue_table = batches  # entrega sin cola acotada: no bloquea al worker
                     return summary
                 with handle.arrow_batches(sql, batch_size=8192) as reader:
                     for b in reader:
@@ -265,7 +263,15 @@ def build_provider():
             self.handle.future.add_done_callback(watch)
 
         def _next_batch(self) -> bool:
-            item = self.q.get()
+            if self.p.fetch == "table":
+                if not hasattr(self, "_table_batches"):
+                    self.handle.future.exception()  # espera a que el worker termine la lectura
+                    self._table_batches = list(getattr(self.q, "queue_table", []))
+                if not self._table_batches:
+                    return False
+                item = self._table_batches.pop(0)
+            else:
+                item = self.q.get()
             if item is _DONE:
                 return False
             names = item.schema.names
@@ -316,6 +322,7 @@ def build_provider():
             if self.closed:
                 return False
             self._abandon()
+            self.__dict__.pop("_table_batches", None)
             self.started = False
             self.q = queue.Queue(maxsize=2)
             self.stop = threading.Event()
