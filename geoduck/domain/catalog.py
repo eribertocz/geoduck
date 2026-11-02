@@ -26,6 +26,24 @@ def catalog_key(name: str) -> str:
 
 #: Nombres que DuckDB reserva para sus catálogos internos (verificado con DuckDB 1.5.0 y 2.0.0).
 RESERVED_CATALOG_NAMES = frozenset({"system", "temp"})
+#: Catálogo interno donde DuckDB guarda las tablas y vistas temporales de la sesión.
+TEMP_CATALOG = "temp"
+
+
+class ObjectKind(str, Enum):
+    TABLE = "TABLE"
+    VIEW = "VIEW"
+
+
+@dataclass(frozen=True)
+class CatalogObject:
+    """Tabla o vista visible en la sesión (GD-CAT-001). Las temporales están en el catálogo `temp`."""
+
+    database: str
+    schema: str
+    name: str
+    kind: ObjectKind
+    temporary: bool = False
 
 
 class AccessMode(str, Enum):
@@ -75,6 +93,10 @@ class CatalogSnapshot:
     databases: tuple[AttachedDatabase, ...]
     root: str
     default: str
+    #: Esquemas `(base, esquema)` de las bases listadas.
+    schemas: tuple[tuple[str, str], ...] = ()
+    #: Tablas y vistas de esas bases, más las temporales (`database == "temp"`).
+    objects: tuple[CatalogObject, ...] = ()
 
     def __post_init__(self) -> None:
         index: dict[str, AttachedDatabase] = {}
@@ -87,6 +109,17 @@ class CatalogSnapshot:
             if listed is None:
                 raise ValueError(f"El catálogo {role} {getattr(self, role)!r} no figura entre las bases")
             object.__setattr__(self, role, listed.name)
+        known_schemas = set()
+        for database, schema in self.schemas:
+            if catalog_key(database) not in index:
+                raise ValueError(f"El esquema {schema!r} pertenece a una base no listada: {database!r}")
+            known_schemas.add((catalog_key(database), schema))
+        for obj in self.objects:
+            if obj.temporary:
+                if catalog_key(obj.database) != TEMP_CATALOG:
+                    raise ValueError(f"Objeto temporal fuera del catálogo temp: {obj.name!r}")
+            elif (catalog_key(obj.database), obj.schema) not in known_schemas:
+                raise ValueError(f"El objeto {obj.name!r} pertenece a un esquema no listado")
 
     def get(self, name: str) -> AttachedDatabase | None:
         key = catalog_key(name)
@@ -111,6 +144,22 @@ class CatalogSnapshot:
     def attached(self) -> tuple[AttachedDatabase, ...]:
         """Bases adjuntas por el usuario: todas menos la raíz."""
         return tuple(db for db in self.databases if not self.is_root(db.name))
+
+    def schemas_of(self, database: str) -> tuple[str, ...]:
+        key = catalog_key(database)
+        return tuple(schema for db, schema in self.schemas if catalog_key(db) == key)
+
+    def objects_in(self, database: str, schema: str) -> tuple[CatalogObject, ...]:
+        key = catalog_key(database)
+        return tuple(
+            o
+            for o in self.objects
+            if not o.temporary and catalog_key(o.database) == key and o.schema == schema
+        )
+
+    @property
+    def temporaries(self) -> tuple[CatalogObject, ...]:
+        return tuple(o for o in self.objects if o.temporary)
 
 
 @dataclass(frozen=True)

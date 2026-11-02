@@ -62,3 +62,45 @@ def test_snapshot_is_immutable():
     snap = CatalogSnapshot((db("memory"),), root="memory", default="memory")
     with pytest.raises(AttributeError):
         snap.default = "otra"
+
+
+# -- esquemas, tablas y vistas (G1 paso 8, GD-CAT-001) --------------------------------------------
+
+from geoduck.domain.catalog import CatalogObject, ObjectKind  # noqa: E402
+
+T, V = ObjectKind.TABLE, ObjectKind.VIEW
+
+
+def test_objects_are_grouped_by_database_and_schema():
+    snap = CatalogSnapshot(
+        (db("memory"), db("Ventas", "/d/v.duckdb", RO)),
+        root="memory",
+        default="memory",
+        schemas=(("memory", "main"), ("Ventas", "main"), ("Ventas", "ventas")),
+        objects=(
+            CatalogObject("Ventas", "ventas", "t", T),
+            CatalogObject("Ventas", "ventas", "v", V),
+            CatalogObject("memory", "main", "r", T),
+            CatalogObject("temp", "main", "tmp", T, temporary=True),
+        ),
+    )
+    assert snap.schemas_of("VENTAS") == ("main", "ventas")
+    assert [o.name for o in snap.objects_in("ventas", "ventas")] == ["t", "v"]
+    assert snap.objects_in("Ventas", "main") == ()
+    assert [o.name for o in snap.temporaries] == ["tmp"]
+
+
+@pytest.mark.parametrize(
+    ("schemas", "objects"),
+    [
+        ((("otra", "main"),), ()),  # esquema de una base no listada
+        ((("memory", "main"),), (CatalogObject("memory", "nada", "x", T),)),  # esquema no listado
+        (
+            (("memory", "main"),),
+            (CatalogObject("memory", "main", "x", T, temporary=True),),
+        ),  # temp fuera de temp
+    ],
+)
+def test_incoherent_objects_are_rejected(schemas, objects):
+    with pytest.raises(ValueError):
+        CatalogSnapshot((db("memory"),), root="memory", default="memory", schemas=schemas, objects=objects)

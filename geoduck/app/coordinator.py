@@ -100,9 +100,21 @@ class SessionCoordinator:
 
     # -- casos de uso ------------------------------------------------------------------------------
 
+    @property
+    def can_start(self) -> bool:
+        """Se puede iniciar una sesión nueva: no hay sesión, o la anterior terminó sin motor vivo.
+
+        Con `ERROR_RECOVERABLE` por una transacción abortada el motor sigue vivo (con su conexión y sus
+        bloqueos): primero hay que revertir o cerrar.
+        """
+        return (
+            self._sm.state in (SessionState.DISCONNECTED, SessionState.ERROR_RECOVERABLE)
+            and self._engine is None
+        )
+
     def start_memory_session(self) -> None:
         """StartSession(mode=memory): raíz `:memory:` (ADR-0001)."""
-        if self._sm.state not in (SessionState.DISCONNECTED, SessionState.ERROR_RECOVERABLE):
+        if not self.can_start:
             raise SessionStateError(f"No se puede iniciar una sesión en estado {self._sm.state.value}")
         self._sm.transition(SessionState.CONNECTING)
         try:
@@ -120,7 +132,7 @@ class SessionCoordinator:
 
         Si el `ATTACH` falla, la sesión queda en memoria, `READY`, y se informa con `AttachFailed`.
         """
-        if self._sm.state not in (SessionState.DISCONNECTED, SessionState.ERROR_RECOVERABLE):
+        if not self.can_start:
             raise SessionStateError(f"No se puede iniciar una sesión en estado {self._sm.state.value}")
         self._pending_attach = request
         self.start_memory_session()  # si el arranque falla, _fail descarta el ATTACH pendiente
