@@ -47,9 +47,11 @@ def finished_message(report: LoadReport) -> str:
     if len(report.layers) > 1:  # una capa por geometría (spatial-spec §7)
         names = ", ".join(f"«{name}»" for _, name in report.layers)
         lines = [
-            tr("Capas {} cargadas · {} · {} entidades cada una").format(
-                names, _MODES[report.mode], _count(report.rows)
-            )
+            (
+                tr("Capas {} cargadas · {} · {} entidades cada una")
+                if report.rows_each
+                else tr("Capas {} cargadas · {} · {} entidades en total")
+            ).format(names, _MODES[report.mode], _count(report.rows))
         ]
     else:
         lines = [

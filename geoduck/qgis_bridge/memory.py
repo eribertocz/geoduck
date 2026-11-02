@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from qgis.core import QgsFeature, QgsProject, QgsVectorLayer, QgsWkbTypes
+from qgis.core import QgsCoordinateReferenceSystem, QgsFeature, QgsProject
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import LoadPlan, missing_crs_warning
@@ -26,11 +26,10 @@ from geoduck.qgis_bridge.convert import (
     column_converter,
     crs_from_field,
     fields_for,
-    fit_geometry,
     geometry_from_wkb,
-    layer_type_for,
     strip_unreadable,
 )
+from geoduck.qgis_bridge.families import FamilyLayers
 from geoduck.qgis_bridge.reproject import Reprojector
 
 #: Filas convertidas por tramo en el hilo principal (F-44: bloqueo ≤ 200 ms).
@@ -67,10 +66,8 @@ class MemoryLoad:
         self._plan: LoadPlan | None = None
         self._summary: Any = None
         self._handle: Any = None
-        self._layer: QgsVectorLayer | None = None
-        self._layer_type: Any = None
+        self._layers: FamilyLayers | None = None
         self._reprojector: Reprojector | None = None
-        self._pending: list[QgsFeature] = []  # entidades sin geometría antes de conocer el tipo
         self._batch: Any = None
         self._offset = 0
         self._rows = 0
@@ -146,104 +143,64 @@ class MemoryLoad:
         names = piece.schema.names
         columns = [column_converter(f.kind)(piece.column(names.index(f.name))) for f in plan.fields]
         wkbs = piece.column(names.index(plan.geometry.name)).to_pylist() if plan.geometry else None
-        geoms = [geometry_from_wkb(w) for w in wkbs] if wkbs is not None else None
-        if self._layer is None:
-            self._create_layer(piece, geoms)
-        fields = self._fields
+        if self._layers is None:
+            self._create_layers(piece)
+        assert self._layers is not None
+        fields = self._layers.fields
         features = []
         for i in range(piece.num_rows):
             f = QgsFeature(fields)
             f.setAttributes([col[i] for col in columns])
-            g = geoms[i] if geoms is not None else None
+            g = geometry_from_wkb(wkbs[i]) if wkbs is not None else None
             if g is not None and not g.isNull():
                 if self._reprojector is not None and not g.isEmpty():
                     g = self._reprojector.geometry(g, self._rows + i + 1)
-                if self._layer_type is not None:
-                    g = fit_geometry(g, self._layer_type)
                 f.setGeometry(g)
             features.append(f)
-        if self._layer is None:  # todavía no hay ninguna geometría: se espera a conocer el tipo
-            self._pending.extend(features)
-        else:
-            self._add(features)
+        self._layers.add(features)
         self._rows += piece.num_rows
         now = time.monotonic()
         if now - self._last_progress >= _PROGRESS_EVERY:
             self._last_progress = now
             self._on_progress(self._rows)
 
-    def _create_layer(self, piece: Any, geoms: list[Any] | None) -> None:
+    def _create_layers(self, piece: Any) -> None:
         plan = self._plan
         assert plan is not None
-        self._fields = fields_for(plan)
-        if plan.geometry is None:
-            uri = "None"
-        else:
-            layer_type = layer_type_for(geoms or [])
-            if layer_type is None:
-                return  # ni una geometría en este tramo: se decide con el siguiente
-            self._layer_type = layer_type
-            uri = QgsWkbTypes.displayString(layer_type)
-        layer = QgsVectorLayer(uri, self._request.layer_name, "memory")
-        if plan.geometry is not None and self._layer_type is not None:
-            # Siempre explícito: sin CRS en la URI, QGIS asignaría uno por defecto en silencio (C4).
+        crs = QgsCoordinateReferenceSystem()
+        if plan.geometry is not None:
+            # Siempre explícito: sin CRS, QGIS asignaría uno por defecto en silencio (C4).
             crs = crs_from_field(piece.schema.field(plan.geometry.name), self._request.crs_override)
             if self._request.reproject_to:  # QGIS/PROJ, nunca DuckDB (spatial-spec §4)
                 self._reprojector = Reprojector(crs, self._request.reproject_to)
                 crs = self._reprojector.target
-            layer.setCrs(crs)
-        if not layer.isValid():
-            raise GeoDuckError("QGIS no pudo crear la capa en memoria")
-        provider = layer.dataProvider()
-        if self._fields.count() and not provider.addAttributes(list(self._fields)):
-            raise GeoDuckError(f"QGIS rechazó los campos: {provider.lastError()}")
-        layer.updateFields()
-        self._fields = layer.fields()
-        self._layer = layer
-        if self._pending:
-            pending, self._pending = self._pending, []
-            self._add(pending)
-
-    def _add(self, features: list[QgsFeature]) -> None:
-        assert self._layer is not None
-        provider = self._layer.dataProvider()
-        ok, _ = provider.addFeatures(features)
-        if not ok:
-            raise GeoDuckError(f"QGIS rechazó entidades: {provider.lastError() or 'sin detalle'}")
+        self._layers = FamilyLayers(
+            self._request.layer_name, fields_for(plan), crs, split=self._request.split_families
+        )
 
     def _finish(self) -> None:
         plan = self._plan
         if plan is None:
             raise GeoDuckError("La lectura terminó sin plan")
-        if self._layer is None:  # sin ninguna geometría no nula en todo el resultado
-            self._layer_type = None
-            self._plan = plan
-            self._fields = fields_for(plan)
-            layer = QgsVectorLayer("None", self._request.layer_name, "memory")
-            if self._fields.count():
-                layer.dataProvider().addAttributes(list(self._fields))
-            layer.updateFields()
-            self._layer = layer
-            self._fields = layer.fields()
-            pending, self._pending = self._pending, []
-            if pending:
-                for f in pending:
-                    f.setFields(self._fields, False)
-                self._add(pending)
-        layer = self._layer
+        if self._layers is None:  # resultado vacío
+            self._layers = FamilyLayers(
+                self._request.layer_name, fields_for(plan), QgsCoordinateReferenceSystem(), split=True
+            )
+        layers, notes = self._layers.finish()
         read = self._summary.rows if self._summary is not None else -1
-        count = layer.featureCount()
+        count = sum(layer.featureCount() for layer in layers)
         if not (read == self._rows == count):
             raise GeoDuckError(
-                f"Conteos distintos: leídas {read}, convertidas {self._rows}, en la capa {count}"
+                f"Conteos distintos: leídas {read}, convertidas {self._rows}, en las capas {count}"
             )
         self._timer.stop()
         self._finished = True
-        self._project.addMapLayer(layer)
-        warnings = plan.warnings
+        self._project.addMapLayers(layers)  # todas o ninguna (§8)
+        layer = layers[0]
+        warnings = (*plan.warnings, *notes)
         if self._reprojector is not None:
             warnings = (*warnings, self._reprojector.note)
-        if plan.geometry is not None and self._layer_type is None:
+        if plan.geometry is not None and not self._layers.types:
             warnings = (*warnings, "Sin geometrías: se carga como tabla")
         elif plan.geometry is not None and not layer.crs().isValid():
             warnings = (*warnings, missing_crs_warning(plan.geometry, self._request.crs_override))
@@ -257,6 +214,7 @@ class MemoryLoad:
                 warnings,
                 origin=describe_origin(self._request),
                 access=COPY_ACCESS,
+                layers=tuple((lyr.id(), lyr.name()) for lyr in layers) if len(layers) > 1 else (),
             )
         )
 
@@ -268,6 +226,5 @@ class MemoryLoad:
         self._channel.abandon()
         if self._handle is not None and not self._handle.future.done():
             self._engine.cancel(self._handle.op_id)
-        self._layer = None  # privada: nunca se publicó; se libera con la referencia
-        self._pending = []
+        self._layers = None  # privadas: nunca se publicaron; se liberan con la referencia
         self._on_done(exc)

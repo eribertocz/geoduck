@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 113936,
-      "sha256": "b3cbf59aae3ea3a36a79cc14672f3b0105bb1b3f31f2756846da6ba23f93e541"
+      "bytes": 114252,
+      "sha256": "3ed736d07bfd9bb2bc5797e9e91f15b616b6da740d14271b3533a939963a45b2"
     },
     {
       "path": "README.md",
@@ -131,8 +131,8 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 8167,
-      "sha256": "6b56cec1a37a347e8ee77991f4562fb501f7db3698a3e06a816d65a6922a4d41"
+      "bytes": 8184,
+      "sha256": "c0b9b27cc53484a13df6fd220f0b9981cbf2cecaf643001ff3ccb8e76b31b12b"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
@@ -146,8 +146,8 @@
     },
     {
       "path": "specs/spatial-spec.md",
-      "bytes": 15189,
-      "sha256": "06d47779cd0c546d06e2ef877ae371806b494159973fbadd9dbb72d078cc5718"
+      "bytes": 15488,
+      "sha256": "60d4ba39ad99a413dd3ac55b4e86347c91f6a4d3dd99db3dfe8575db47b7488e"
     },
     {
       "path": "specs/sql-editor-spec.md",

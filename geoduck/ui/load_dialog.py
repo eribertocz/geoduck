@@ -104,6 +104,16 @@ class LoadDialog(QDialog):
         reproject_form = QFormLayout()
         reproject_form.addRow(self.reproject_check, self.reproject_widget)
         layout.addLayout(reproject_form)
+        # Tipos mixtos (spatial-spec §6): copias, una capa por tipo (activada); Conectada, «Separar por tipo»
+        self.split_check = QCheckBox(tr("Tipos mixtos: una capa por tipo"))
+        self.split_check.setChecked(True)
+        self.split_check.setToolTip(tr("Si se desactiva y hay varios tipos de geometría, no se carga nada."))
+        self.separate_check = QCheckBox(tr("Separar por tipo"))
+        self.separate_check.setToolTip(
+            tr("Una capa Conectada por tipo de geometría, filtrada en DuckDB. Sin marcar: una sola capa.")
+        )
+        layout.addWidget(self.split_check)
+        layout.addWidget(self.separate_check)
 
         self.mode_group = QButtonGroup(self)
         self.mode_buttons: dict[LoadMode, QRadioButton] = {}
@@ -231,6 +241,9 @@ class LoadDialog(QDialog):
             warnings.append(tr("Los datos no declaran SRC. Elija uno o continúe sin SRC."))
         if self.geometry_checks and not checked:
             warnings.append(tr("Marque al menos una geometría."))
+        copy = self.mode() in (LoadMode.MEMORY, LoadMode.SNAPSHOT)
+        self.split_check.setVisible(bool(checked) and copy)
+        self.separate_check.setVisible(bool(checked) and self.mode() is LoadMode.CONNECTED)
         can_reproject = self._can_reproject(checked)
         self.reproject_check.setEnabled(can_reproject)
         self.reproject_widget.setEnabled(can_reproject and self.reproject_check.isChecked())
@@ -276,6 +289,8 @@ class LoadDialog(QDialog):
             formats=tuple((n, f.value) for n, f in self._formats.items() if n in checked),
             crs_overrides=tuple(overrides),
             reproject_to=self._reproject_target(),
+            split_families=self.split_check.isChecked(),
+            separate_types=mode is LoadMode.CONNECTED and self.separate_check.isChecked(),
         )
 
     def _reproject_target(self) -> str | None:

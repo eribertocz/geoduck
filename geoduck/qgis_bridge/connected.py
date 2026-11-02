@@ -20,19 +20,23 @@ from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsGeometry, QgsProjec
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import (
+    FAMILY_CODES,
     GeometryFormat,
     LoadPlan,
     build_load_plan,
+    family_code_sql,
     geometry_read_sql,
     missing_crs_warning,
     strip_terminator,
     unreadable_warning,
+    wkb_family,
 )
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import crs_from_field
+from geoduck.qgis_bridge.families import family, target_type
 from geoduck.qgis_bridge.memory import LoadCancelledError
 from geoduck.qgis_bridge.provider import KEY, encode_uri
 
@@ -134,24 +138,31 @@ def _scan_extent(handle: Any, token: Any, sql: str) -> tuple[float, float, float
     return (xmin, ymin, xmax, ymax) if finite else None
 
 
-def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
-    """Tipo de capa (`Qgis.WkbType` por nombre) desde cabeceras WKB ISO en hex, y un aviso si hay mezcla."""
-    types = set()
+def header_codes(headers: list[str]) -> set[int]:
+    """Códigos de tipo WKB ISO de cabeceras en hex (`hex(ST_AsWKB(g))[1:10]`)."""
+    codes = set()
     for h in headers:
         if not h or len(h) < 10:
             continue
         raw = bytes.fromhex(h[2:10])
-        code = int.from_bytes(raw, "little" if h[:2] == "01" else "big")
-        types.add(Qgis.WkbType(code))
+        codes.add(int.from_bytes(raw, "little" if h[:2] == "01" else "big"))
+    return codes
+
+
+def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
+    """Tipo de capa (`Qgis.WkbType` por nombre) desde cabeceras WKB ISO en hex, y un aviso si hace falta.
+
+    Una familia: el tipo que admite todas sus geometrías (Multi si alguna lo es; Z/M si alguna la tiene,
+    spatial-spec §6). Varias familias: `Unknown`."""
+    types = {Qgis.WkbType(c) for c in header_codes(headers)}
     if not types:
         return "Unknown", "Sin geometrías: tipo de geometría desconocido"
-    if len(types) == 1:
-        return Qgis.WkbType(next(iter(types))).name, None
-    flat = {QgsWkbTypes.flatType(QgsWkbTypes.multiType(t)) for t in types}
-    dims = {(QgsWkbTypes.hasZ(t), QgsWkbTypes.hasM(t)) for t in types}
-    if len(flat) == 1 and len(dims) == 1:  # p. ej. Point y MultiPoint: la capa es Multi
-        return Qgis.WkbType(QgsWkbTypes.multiType(next(iter(types)))).name, None
-    return "Unknown", "Tipos de geometría mixtos: simbología por tipo no disponible"
+    if len({family(t) for t in types}) > 1:
+        return "Unknown", "Tipos de geometría mixtos: simbología por tipo no disponible"
+    note = None
+    if len({(QgsWkbTypes.hasZ(t), QgsWkbTypes.hasM(t)) for t in types}) > 1:
+        note = "Dimensiones Z/M mixtas: las geometrías sin ellas se muestran con NaN"
+    return Qgis.WkbType(target_type(types)).name, note
 
 
 def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912, PLR0915
@@ -239,6 +250,19 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         )
     ]
     token.raise_if_cancelled()
+    if request.separate_types:  # «Separar por tipo»: filas por familia, para el conteo de cada capa (§6)
+        counts: dict[str, int] = {}
+        for code, n in _rows(
+            handle,
+            f"SELECT {family_code_sql(g)}, count(*) FROM (\n{inner}\n) AS __geoduck_q "
+            f"WHERE {g} IS NOT NULL GROUP BY 1",
+            100,
+        ):
+            name = wkb_family(int(code))
+            counts[name] = counts.get(name, 0) + int(n)
+        out["family_counts"] = counts
+        out["nulls"] = count - sum(counts.values())
+        token.raise_if_cancelled()
     spatial = _rows(handle, "SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'", 1)
     if spatial and spatial[0][0]:
         box = _rows(
@@ -369,15 +393,21 @@ class ConnectedLoad:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
                 warnings.append("Extensión no disponible")
-        layer = QgsVectorLayer(encode_uri(params), self._request.layer_name, KEY)
-        if not layer.isValid():
-            raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
-        if plan.geometry is not None and not layer.crs().isValid():
-            layer.setCrs(QgsCoordinateReferenceSystem())  # sin CRS asignado en silencio (C4)
+        specs = self._specs(meta, params, warnings)
+        layers = []
+        for name, layer_params in specs:
+            layer = QgsVectorLayer(encode_uri(layer_params), name, KEY)
+            if not layer.isValid():
+                raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
+            if plan.geometry is not None and not layer.crs().isValid():
+                layer.setCrs(QgsCoordinateReferenceSystem())  # sin CRS asignado en silencio (C4)
+            layers.append(layer)
         self._finished = True  # antes de publicar: un error al dibujar no es un fallo de la carga
-        self._project.addMapLayer(layer)
+        self._project.addMapLayers(layers)  # todas o ninguna
+        layer = layers[0]
         if self._on_layer is not None:
-            self._on_layer(layer)
+            for each in layers:
+                self._on_layer(each)
         self._on_progress(meta["count"])
         return LoadReport(
             layer.id(),
@@ -387,7 +417,38 @@ class ConnectedLoad:
             tuple(warnings),
             origin=describe_origin(self._request, meta["kind"]),
             access=meta["readonly"] or "lectura y escritura",
+            layers=tuple((lyr.id(), lyr.name()) for lyr in layers) if len(layers) > 1 else (),
         )
+
+    def _specs(
+        self, meta: dict[str, Any], params: dict[str, Any], warnings: list[str]
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Una capa; o, con «Separar por tipo» y varias familias, una por familia con su filtro empujado a
+        DuckDB (spatial-spec §6). Las filas sin geometría no entran en ninguna: se avisa su número."""
+        name = self._request.layer_name
+        counts: dict[str, int] = meta.get("family_counts") or {}
+        if not self._request.separate_types or len(counts) <= 1:
+            return [(name, params)]
+        by_family: dict[str, list[str]] = {}
+        for h in meta["headers"]:
+            codes = header_codes([h])
+            if codes:
+                by_family.setdefault(wkb_family(next(iter(codes))), []).append(h)
+        warnings[:] = [w for w in warnings if not w.startswith("Tipos de geometría mixtos")]
+        specs = []
+        for fam in FAMILY_CODES:
+            if fam not in counts:
+                continue
+            type_name, note = wkb_type_name(by_family.get(fam, []))
+            if note and note not in warnings:
+                warnings.append(note)
+            specs.append(
+                (f"{name} — {fam}", {**params, "family": fam, "type": type_name, "count": counts[fam]})
+            )
+        warnings.append(f"Tipos de geometría mixtos: {len(specs)} capas Conectadas, una por tipo")
+        if meta.get("nulls"):
+            warnings.append(f"{meta['nulls']} filas sin geometría no aparecen en las capas por tipo")
+        return specs
 
     def _end(self, result: LoadReport | BaseException) -> None:
         self._timer.stop()
