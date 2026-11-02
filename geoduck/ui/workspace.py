@@ -15,9 +15,11 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -69,6 +71,9 @@ STATE_TEXT = {
     SessionState.ERROR_RECOVERABLE: "Fallo recuperable",
 }
 
+#: Ancho inicial (px) del explorador lateral en la ventana propia, como en la maqueta.
+EXPLORER_WIDTH = 280
+
 _CAN_CLOSE = {SessionState.CONNECTING, SessionState.READY, SessionState.BUSY, SessionState.ERROR_RECOVERABLE}
 
 
@@ -99,12 +104,21 @@ class WorkspaceContent(QWidget):
         layout.setSpacing(8)
         layout.addLayout(self._build_header())
         layout.addWidget(self._build_session_card())
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_databases_card(), tr("Bases de datos"))
+        # Dos disposiciones del mismo explorador y del mismo panel SQL (ui-ux-spec §8): pestañas en el panel
+        # acoplado; explorador lateral y SQL con un divisor en la ventana propia. Nunca se recrean.
+        self.databases_card = self._build_databases_card()
         self.load_flow = LoadFlow(coordinator, self._show_plain_message, self)
         self.sql_panel = SqlPanel(coordinator, on_message=self._show_plain_message, load_flow=self.load_flow)
-        self.tabs.addTab(self.sql_panel, tr("SQL"))
+        self.tabs = QTabWidget()
+        self.side_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.side_splitter.setChildrenCollapsible(False)
+        self.side_splitter.setObjectName("geoduckSideSplitter")
+        self.side_splitter.hide()
+        self._side_sized = False
+        self.wide = False
+        self.set_presentation(wide=False)
         layout.addWidget(self.tabs, 1)
+        layout.addWidget(self.side_splitter, 1)
         layout.addWidget(self._build_message())
         layout.addWidget(self._build_env_banner())
         layout.addLayout(self._build_footer())
@@ -204,9 +218,38 @@ class WorkspaceContent(QWidget):
         buttons.addStretch(1)
         buttons.addWidget(self.detach_button)
         card_layout.addLayout(buttons)
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText(tr("Buscar bases, esquemas y tablas…"))
+        self.search_edit.setAccessibleName(tr("Buscar en el explorador"))
+        self.search_edit.setClearButtonEnabled(True)
+        card_layout.addWidget(self.search_edit)
         self.explorer = CatalogExplorer()
+        self.search_edit.textChanged.connect(self.explorer.set_filter)
         card_layout.addWidget(self.explorer, 1)
+        card_layout.addWidget(secondary(QLabel(tr("Doble clic o clic derecho → Cargar en QGIS…"))))
         return card
+
+    def set_presentation(self, *, wide: bool) -> None:
+        """Ventana (`wide`): explorador lateral | SQL. Panel: pestañas Explorador / SQL. Los mismos widgets,
+        trasladados (no se recrean: el texto, los resultados y la selección se conservan)."""
+        if wide:
+            self.side_splitter.addWidget(self.databases_card)  # addWidget saca el widget de la pestaña
+            self.side_splitter.addWidget(self.sql_panel)
+            self.side_splitter.setStretchFactor(0, 0)
+            self.side_splitter.setStretchFactor(1, 1)
+            if not self._side_sized:  # ancho inicial del explorador; luego, el del usuario (preferencia)
+                self.side_splitter.setSizes([EXPLORER_WIDTH, 4 * EXPLORER_WIDTH])
+                self._side_sized = True
+            self.tabs.hide()
+            self.side_splitter.show()
+        else:
+            self.tabs.insertTab(0, self.databases_card, tr("Explorador"))
+            self.tabs.insertTab(1, self.sql_panel, tr("SQL"))
+            self.side_splitter.hide()
+            self.tabs.show()
+        self.databases_card.show()
+        self.sql_panel.show()
+        self.wide = wide
 
     def _build_message(self) -> QLabel:
         """Errores recuperables: texto comprensible + código, seleccionable (ui-ux-spec §3)."""

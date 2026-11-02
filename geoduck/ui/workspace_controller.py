@@ -8,7 +8,8 @@ cerrar un shell no toca la sesión. Si el traslado falla, el contenido vuelve al
 operativo, y se informa (AT-UX-014).
 
 Preferencias en `QgsSettings` bajo `geoduck/workspace/` (esquema 1): modo, geometría de la ventana, zona del
-panel, divisor editor/resultados/registro por modo, pestaña activa y límite de vista previa. Nunca filas,
+panel, divisor editor/resultados/registro por modo, ancho del explorador (ventana), pestaña activa (panel) y
+límite de vista previa. Nunca filas,
 SQL ni estado de DuckDB. Cada valor se valida al leerlo; uno ausente, corrupto o de un esquema más nuevo
 usa el valor seguro.
 """
@@ -81,9 +82,9 @@ def dock_area_name(area: Qt.DockWidgetArea) -> str | None:
     return None  # flotante o sin zona: no se guarda
 
 
-def read_sizes(settings: QgsSettings, mode: WorkspaceMode, count: int) -> list[int] | None:
-    """Tamaños del divisor guardados para un modo: `count` enteros no negativos, alguno positivo."""
-    text = settings.value(PREFIX + mode.value + "/sql_splitter", None) if _schema_ok(settings) else None
+def read_sizes(settings: QgsSettings, mode: WorkspaceMode, name: str, count: int) -> list[int] | None:
+    """Tamaños de un divisor guardados para un modo: `count` enteros no negativos, alguno positivo."""
+    text = settings.value(PREFIX + mode.value + "/" + name, None) if _schema_ok(settings) else None
     if not isinstance(text, str):
         return None
     try:
@@ -140,8 +141,9 @@ class WorkspaceController(QObject):
         self._switching = False
         self.mode = read_mode(self._settings)
         self._restore_window_geometry()
-        self._restore_content()
+        self._restore_limit()
         self._shell(self.mode).slot.put(content)
+        content.set_presentation(wide=self.mode is WorkspaceMode.WINDOW)
         self._apply_sizes(self.mode)
         if self.mode is WorkspaceMode.DOCK:
             self._add_dock()
@@ -197,6 +199,7 @@ class WorkspaceController(QObject):
             source.slot.take(self.content)
             target.slot.put(self.content)
             moved = True
+            self.content.set_presentation(wide=target is self.window)
             if target is self.dock:
                 self._add_dock()
             else:
@@ -229,6 +232,8 @@ class WorkspaceController(QObject):
         if target is self.dock:
             self._remove_dock()
         source.slot.put(self.content)  # `put` del origen: el mismo contenido, nunca otro
+        self.content.set_presentation(wide=source is self.window)
+        self._apply_sizes(self.mode)
         source.show()
 
     def _on_shell_shown(self, visible: bool) -> None:
@@ -252,27 +257,41 @@ class WorkspaceController(QObject):
 
     # -- preferencias --------------------------------------------------------------------------------
 
-    def _restore_content(self) -> None:
-        tab = read_int(self._settings, "tab", list(range(self.content.tabs.count())), -1)
-        if tab >= 0:
-            self.content.tabs.setCurrentIndex(tab)
+    def _restore_limit(self) -> None:
         combo = self.content.sql_panel.limit_combo
         limit = read_int(self._settings, "preview_limit", list(PREVIEW_LIMITS), DEFAULT_PREVIEW_LIMIT)
         combo.setCurrentIndex(combo.findData(limit))
 
     def _apply_sizes(self, mode: WorkspaceMode) -> None:
+        """Divisores y pestaña guardados para el modo (cada modo, los suyos)."""
         splitter = self.content.sql_panel.splitter
-        sizes = read_sizes(self._settings, mode, splitter.count())
+        sizes = read_sizes(self._settings, mode, "sql_splitter", splitter.count())
         if sizes is not None:
             splitter.setSizes(sizes)
+        if mode is WorkspaceMode.WINDOW:
+            side = self.content.side_splitter
+            widths = read_sizes(self._settings, mode, "explorer_splitter", side.count())
+            if widths is not None:
+                side.setSizes(widths)
+        else:
+            tabs = self.content.tabs
+            tab = read_int(self._settings, "tab", list(range(tabs.count())), -1)
+            if tab >= 0:
+                tabs.setCurrentIndex(tab)
 
     def _save_sizes(self, mode: WorkspaceMode) -> None:
         sizes = self.content.sql_panel.splitter.sizes()
         if sizes and max(sizes) > 0:  # un divisor nunca mostrado da ceros: no se guarda
             self._write(mode.value + "/sql_splitter", ",".join(str(s) for s in sizes))
+        if mode is WorkspaceMode.WINDOW:
+            widths = self.content.side_splitter.sizes()
+            if widths and max(widths) > 0:
+                self._write(mode.value + "/explorer_splitter", ",".join(str(w) for w in widths))
 
     def _save_tab(self, index: int) -> None:
-        self._write("tab", index)
+        # Solo la pestaña que elige el usuario en el panel; rehacer las pestañas al alternar no cuenta
+        if not self._switching and self.mode is WorkspaceMode.DOCK and index >= 0:
+            self._write("tab", index)
 
     def _save_limit(self, _index: int) -> None:
         self._write("preview_limit", int(self.content.sql_panel.limit_combo.currentData()))

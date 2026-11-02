@@ -222,7 +222,6 @@ def test_toggling_keeps_text_cursor_selection_scroll_results_and_tabs(plugin):
     content, ws = plugin.content, plugin.workspace
     panel = content.sql_panel
     plugin.action.trigger()
-    content.tabs.setCurrentWidget(panel)
     run(panel, coordinator, "SELECT range AS n FROM range(500);\nSELECT 2 AS b;")
     assert panel.results.count() == 2
     panel.results.setCurrentIndex(0)
@@ -238,14 +237,19 @@ def test_toggling_keeps_text_cursor_selection_scroll_results_and_tabs(plugin):
     assert before[3] == 80 and scroll > 0
     events = record(plugin)
 
-    toggle(ws)  # al panel
+    assert content.side_splitter.widget(1) is panel  # ventana: explorador | SQL
+    toggle(ws)  # al panel: pestañas Explorador / SQL, con los mismos widgets
+    assert content.tabs.indexOf(panel) == 1 and content.tabs.indexOf(content.databases_card) == 0
+    content.tabs.setCurrentWidget(panel)
     assert editor_state(editor)[:3] == before[:3]
     assert panel.results.count() == 2 and panel.results.currentIndex() == 0
-    assert content.tabs.currentWidget() is panel
     toggle(ws)  # de vuelta a la ventana
     assert editor_state(editor) == before
     assert panel.results.widget(0).table is table and table.verticalScrollBar().value() == scroll
     assert panel.results.count() == 2 and panel.results.currentIndex() == 0
+    assert content.side_splitter.widget(1) is panel
+    toggle(ws)
+    assert content.tabs.currentWidget() is panel  # la pestaña elegida en el panel se conserva
     assert events == []
 
 
@@ -330,18 +334,21 @@ def test_mode_window_dock_area_splitters_tab_and_limit_are_restored(iface):
     wait_for(lambda: False, 0.2)
     saved = ws.window.geometry()  # la que Qt aceptó (respeta el tamaño mínimo del contenido)
     splitter = content.sql_panel.splitter
-    content.tabs.setCurrentWidget(content.sql_panel)
     wait_for(lambda: False, 0.2)
     splitter.setSizes([100, 250, 50])
     window_sizes = splitter.sizes()
+    content.side_splitter.setSizes([220, 480])
+    explorer_widths = content.side_splitter.sizes()
     toggle(ws)  # al panel: otro divisor para este modo
     iface.mainWindow().addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, ws.dock)  # el usuario lo mueve
+    content.tabs.setCurrentWidget(content.sql_panel)
     wait_for(lambda: False, 0.2)
     splitter.setSizes([60, 60, 200])
     dock_sizes = splitter.sizes()
     content.sql_panel.limit_combo.setCurrentIndex(content.sql_panel.limit_combo.findData(1000))
     toggle(ws)
     assert near(splitter.sizes(), window_sizes)  # cada modo, su divisor
+    assert near(content.side_splitter.sizes(), explorer_widths)  # ancho del explorador
     toggle(ws)
     assert near(splitter.sizes(), dock_sizes)
 
@@ -357,6 +364,7 @@ def test_mode_window_dock_area_splitters_tab_and_limit_are_restored(iface):
         assert near(second.content.sql_panel.splitter.sizes(), dock_sizes, 10)
         toggle(ws2)
         assert ws2.window.geometry() == saved
+        assert near(second.content.side_splitter.sizes(), explorer_widths, 10)
     finally:
         second.unload()
         new_iface.mainWindow().close()

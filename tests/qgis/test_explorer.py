@@ -48,15 +48,20 @@ def make_plugin(iface, requests):
 
 
 def tree(explorer):
-    """Texto de los nodos: {base: {esquema: [objetos]}}."""
-    out = {}
-    for i in range(explorer.topLevelItemCount()):
-        top = explorer.topLevelItem(i)
-        out[top.text(0)] = {
-            top.child(j).text(0): [top.child(j).child(k).text(0) for k in range(top.child(j).childCount())]
-            for j in range(top.childCount())
+    """Texto de los nodos visibles, a cualquier profundidad: {base: {esquema: {grupo: {objeto: {}}}}}."""
+
+    def children(item):
+        return {
+            item.child(i).text(0): children(item.child(i))
+            for i in range(item.childCount())
+            if not item.child(i).isHidden()
         }
-    return out
+
+    return {
+        explorer.topLevelItem(i).text(0): children(explorer.topLevelItem(i))
+        for i in range(explorer.topLevelItemCount())
+        if not explorer.topLevelItem(i).isHidden()
+    }
 
 
 def ready(coordinator):
@@ -73,8 +78,11 @@ def test_open_existing_without_session_starts_a_file_session_and_shows_the_catal
     assert ready(coordinator)
     shown = tree(dock.explorer)
     root = coordinator.catalog.root
-    assert shown[f"{root} · raíz, en uso"] == {"main": []}
-    assert shown["Ventas · solo lectura"] == {"main": [], "ventas": ["t (tabla)", "v (vista)"]}
+    assert shown[f"{root} · raíz, en uso"] == {"main": {}}
+    assert shown["Ventas · solo lectura"] == {
+        "main": {},
+        "ventas": {"Tablas (1)": {"t": {}}, "Vistas (1)": {"v": {}}},
+    }
     assert dock.explorer.selected_database() == "Ventas"  # la base recién abierta queda seleccionada
     assert dock.detach_button.isEnabled()
     dock.explorer.select_database(root)
@@ -138,14 +146,15 @@ def test_closing_clears_the_explorer_and_disables_detach(iface, db_file):
     plugin.unload()
 
 
-def test_temporaries_are_listed_separately(iface):
+def test_temporaries_are_grouped_under_the_root(iface):
     plugin, dock, coordinator = make_plugin(iface, Requests())
     dock.start_button.click()
     assert ready(coordinator)
     coordinator._engine.submit(lambda h, t: h.execute("CREATE TEMP TABLE tmp(a INT)")).future.result(30)
     coordinator.refresh_catalog()
-    assert wait_for(lambda: "Temporales de la sesión" in tree(dock.explorer))
-    assert tree(dock.explorer)["Temporales de la sesión"] == {"tmp (tabla)": []}
+    root = f"{coordinator.catalog.root} · raíz, en uso"
+    assert wait_for(lambda: "Tablas temporales (1)" in tree(dock.explorer)[root]["main"])
+    assert tree(dock.explorer)[root]["main"]["Tablas temporales (1)"] == {"tmp": {}}
     plugin.unload()
 
 
