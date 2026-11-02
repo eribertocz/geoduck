@@ -658,23 +658,39 @@ sequenceDiagram
 
 ### 5.1 Fuente y URI
 
-URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|fid=<key|content>|key=<pk>|type=<WkbType>`,
+URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|fid=<key|map|rowid|content>|key=<pk>|keys=<json>|type=<WkbType>`,
 más los metadatos que permiten abrir la capa sin consultar la sesión (columnas y tipos, CRS, extensión,
 conteo). Los valores van codificados como en una URL.
 
 - **Tabla o vista** del explorador: `source`.
 - **Resultado del editor:** `sql`, solo lectura.
-- **Identificador de entidad (FID)** (decisión del propietario, 2026-11-02): estable tras filtros y
-  relecturas.
-  - `fid=key`: la clave primaria entera de una columna. Única condición para editar (§5.4).
-  - `fid=content` (sin esa clave: tablas, vistas y consultas; **solo lectura**): la huella del contenido
-    de la fila, `(hash(todas las columnas) >> 1)::BIGINT`. No depende del orden de lectura, de los
-    filtros, de `CHECKPOINT` ni de cambios en otras filas. `rowid` y `row_number()` se descartaron: el
-    primero cambia tras borrar y compactar, el segundo depende de un orden que DuckDB no garantiza.
-  - Límites de `fid=content`, documentados: filas idénticas comparten FID (QGIS no las puede distinguir,
-    pero se leen todas); cambiar una fila cambia su FID; el FID puede cambiar con otra versión de DuckDB
-    (función `hash`); dos filas distintas con la misma huella de 63 bits son posibles pero improbables
-    (≈ 10⁻⁶ con 5 M de filas), y entonces se ordenan con una segunda huella y se leen ambas.
+- **Identificador de entidad (FID)**, como el proveedor `postgres` de QGIS (decisión del propietario,
+  2026-11-02). Se elige solo; el usuario no tiene que indicar nada.
+
+  | Fuente | FID | Edición (§5.4) |
+  |---|---|---|
+  | Tabla con clave primaria, o con `UNIQUE` cuyas columnas son todas `NOT NULL`, entera de una columna | `fid=key`: el valor de la clave | Sí |
+  | Tabla con cualquier otra de esas claves (texto, UUID, fecha, varias columnas) | `fid=map`: número asignado en memoria a cada valor de la clave, como `PktFidMap` de QGIS | Sí |
+  | Tabla sin clave | `fid=rowid`, como `ctid` en PostgreSQL | Sí |
+  | Vista o consulta | `fid=content`: huella del contenido de la fila | No: DuckDB no escribe en ellas |
+
+  Si hay varias claves candidatas, manda la primaria; si no, la `UNIQUE` de menos columnas, y entre
+  iguales la entera.
+
+  - **`rowid`:** mientras GeoDuck tiene la base adjunta en escritura, ningún otro proceso puede
+    modificarla (DuckDB admite un solo proceso escritor). El `rowid` solo cambia si DuckDB compacta la
+    tabla tras borrados en esta misma sesión (SQL del usuario, un guardado, un `CHECKPOINT` automático o
+    el cierre). Por eso, después de cada escritura las capas Conectadas se vuelven a dibujar. Al
+    guardar, cada fila se comprueba por su huella antes de escribirla: nunca se escribe en otra fila
+    (§5.4).
+  - **`content`:** `(hash(todas las columnas) >> 1)::BIGINT`. No depende del orden de lectura, de los
+    filtros, de `CHECKPOINT` ni de cambios en otras filas (`row_number()` se descartó: depende de un orden
+    que DuckDB no garantiza). Límites: filas idénticas comparten FID (QGIS no las distingue, pero se leen
+    todas); cambiar una fila cambia su FID; el FID puede cambiar con otra versión de DuckDB; dos filas
+    distintas con la misma huella de 63 bits son posibles pero improbables (≈ 10⁻⁶ con 5 M de filas), y
+    entonces se ordenan con una segunda huella y se leen ambas.
+  - **Memoria e Instantánea** no usan nada de esto: son copias, y QGIS (`memory`) o GDAL (columna `fid`
+    del GeoPackage) asignan su propio identificador.
 - **Tipo de geometría** (`type`): se declara o se deduce de los datos, porque DuckDB no guarda el
   subtipo (F-71).
 
@@ -683,14 +699,16 @@ conteo). Los valores van codificados como en una URL.
 | Petición | SQL |
 |---|---|
 | Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5); con `spatial` cargada, `ST_Intersects(geom, ST_MakeEnvelope(…))`, que usa el RTree si existe |
-| FID | `FID = ?` / `FID IN (…)` sobre la clave o la huella (§5.1) |
+| FID | `FID IN (…)` sobre la clave, el `rowid` o la huella; en `fid=map`, los valores de la clave de esos FID (`(k1, k2) IN (…)`) |
 | Atributos pedidos / sin geometría | solo esas columnas; sin la columna de geometría |
 | Expresión | Compilada a SQL de DuckDB cuando es posible (comparaciones, `AND`/`OR`/`NOT`, `IN`, `IS NULL`, `LIKE`/`ILIKE`, aritmética); si no, se evalúa en Python sobre lo filtrado en SQL |
 | `LIMIT`, orden | `LIMIT`; `ORDER BY` cuando la petición lo pide |
 
-Las peticiones van en **páginas** de como mucho 50 000 filas, siempre por FID: cada página empieza en el
-último FID leído (`FID >= ? ORDER BY FID[, segunda huella] LIMIT n + k`) y salta las `k` filas de ese FID
-que ya se entregaron. Así ningún empate (filas idénticas) se pierde ni se repite. No se usa `OFFSET`.
+Las peticiones van en **páginas** de como mucho 50 000 filas, siempre por el identificador: cada página
+empieza después del último leído (`> ? ORDER BY identificador LIMIT n`; en `fid=map`, comparando la
+clave entera: `(k1, k2) > (…)`). En `fid=content`, las filas idénticas comparten FID: la página empieza
+en el último (`FID >= ? ORDER BY FID, segunda huella LIMIT n + k`) y salta las `k` ya entregadas. Así
+ninguna fila se pierde ni se repite. No se usa `OFFSET`.
 Entre páginas el worker queda libre.
 
 ### 5.3 Contención con el SQL del usuario
@@ -704,22 +722,30 @@ Entre páginas el worker queda libre.
 
 ### 5.4 Edición
 
-**Qué es editable:** solo una tabla base, de una base no `READ_ONLY`, cuya clave primaria es una sola
-columna entera y coincide con `key`. También las tablas `TEMP`. Lo demás es de solo lectura, con el
-motivo visible.
+**Qué es editable** (decisión del propietario, 2026-11-02, como QGIS con PostGIS): toda tabla base de
+una base que no es `READ_ONLY`, incluidas las `TEMP`, con o sin clave (§5.1). Las vistas y las consultas
+son de solo lectura, porque DuckDB no escribe en ellas; el motivo se muestra. Las columnas que identifican
+la entidad (la clave) y las que §7 convierte con pérdida no se pueden cambiar.
 
 **Guardado atómico:** GeoDuck escucha `QgsVectorLayer.beforeCommitChanges`, lee el búfer de edición y, en
 una sola operación del worker, ejecuta:
 
 1. `BEGIN`. Si la sesión ya tiene una transacción abierta, se rechaza el guardado con aviso y QGIS
    conserva todos los cambios pendientes para guardarlos después (decisión del propietario, 2026-11-02).
-2. **Conflictos:** compara `hash(fila completa)` de cada fila cambiada o borrada con la huella registrada
-   cuando QGIS la leyó. Si alguna difiere o falta, ROLLBACK y se informa la lista de entidades en
-   conflicto.
-3. **Validación previa:** tipo de geometría compatible con la capa y prohibición de cambiar la clave.
-4. **Escrituras por lotes** con tablas Arrow registradas en la operación: `UPDATE … FROM`,
-   `INSERT … SELECT` y `DELETE … WHERE key IN (SELECT …)`. Los ids de las altas se piden antes con
-   `nextval` de la secuencia de la clave; si no hay secuencia, el usuario indica el id.
+2. **Localizar y comprobar:** cada fila cambiada o borrada se busca por su identificador (clave, valores
+   de la clave en `fid=map`, o `rowid`) y se toma su `rowid` y su `hash(fila completa)`. Si falta, o su
+   huella difiere de la registrada cuando QGIS la leyó, ROLLBACK y se informa la lista de entidades en
+   conflicto. Así, si DuckDB compactó la tabla y un `rowid` pasó a otra fila, se detecta: **nunca se
+   escribe en otra fila**.
+3. **Validación previa** (antes de tocar DuckDB): tipo de geometría compatible con la capa, columnas de
+   la clave sin cambios, columnas convertidas por §7 sin cambios, y valor para la clave de cada alta si
+   DuckDB no lo pone.
+4. **Escrituras por lotes por `rowid`** (estable dentro de la transacción) con tablas Arrow registradas en
+   la operación: `UPDATE … FROM`, `DELETE … WHERE rowid IN (SELECT …)` e `INSERT … SELECT`. Altas: con
+   clave entera, los ids se piden antes con `nextval` (o los indica el usuario); con otra clave, se
+   escriben los valores dados, y una columna sin valor en ninguna alta toma su valor por defecto en
+   DuckDB. Si hay altas sin clave entera o borrados, la capa se relee tras el `COMMIT` (los
+   identificadores nuevos o movidos se leen de DuckDB).
 5. `COMMIT`. Cualquier error o cancelación provoca ROLLBACK.
 
 Después, los métodos del proveedor solo informan el veredicto. **QGIS informa éxito solo si DuckDB

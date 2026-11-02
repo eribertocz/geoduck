@@ -188,14 +188,14 @@ def test_query_and_view_use_stable_row_numbers(session):
     assert ids(view) == list(range(100))
 
 
-def test_table_without_key_uses_the_row_content(session):
+def test_table_without_key_uses_rowid_like_ctid(session):
     session.sql("CREATE TABLE sin_clave AS SELECT * FROM puntos WHERE id < 50")
-    report, layer = session.load(
+    _, layer = session.load(
         'SELECT * FROM "memory"."main"."sin_clave"', source=("memory", "main", "sin_clave")
     )
-    assert decode_uri(layer.source())["fid"] == "content"
-    assert any("Solo lectura" in w for w in report.warnings)
+    assert decode_uri(layer.source())["fid"] == "rowid"
     assert ids(layer) == list(range(50))
+    assert {f.id(): f["id"] for f in layer.getFeatures()} == {i: i for i in range(50)}
 
 
 def test_missing_session_leaves_the_layer_empty(session):
@@ -290,15 +290,14 @@ def _fid_by_id(layer, request=None):
     return {f["id"]: f.id() for f in layer.getFeatures(request or QgsFeatureRequest())}
 
 
-def test_keyless_fids_survive_filters_rereads_reordering_and_checkpoints(session):
-    """Sin clave primaria, el FID de una fila es estable (decisión del propietario, 2026-11-02)."""
+def test_query_without_identifier_has_stable_content_fids(session):
+    """Consulta sin identificador elegido: FID por huella del contenido, estable (2026-11-02)."""
     session.sql("CREATE TABLE sin_clave AS SELECT * FROM puntos")
-    _, table = session.load(
-        'SELECT * FROM "memory"."main"."sin_clave"', name="sc", source=("memory", "main", "sin_clave")
-    )
+    _, table = session.load("SELECT * FROM sin_clave", name="sc")
     _, grouped = session.load(  # orden de salida no determinista (agregación en paralelo)
         "SELECT id % 1000 AS id, count(*) AS n, any_value(geom) AS geom FROM puntos GROUP BY ALL", name="g"
     )
+    assert decode_uri(table.source())["fid"] == "content"
     base = _fid_by_id(table)
     assert len(base) == N and len(set(base.values())) == N and min(base.values()) >= 0
     rect = QgsRectangle(10, 10, 20, 12)
@@ -307,15 +306,9 @@ def test_keyless_fids_survive_filters_rereads_reordering_and_checkpoints(session
     by_expr = _fid_by_id(table, QgsFeatureRequest().setFilterExpression("length(nombre) = 7"))
     assert by_expr and all(base[i] == fid for i, fid in by_expr.items())
     assert table.getFeature(base[4321])["id"] == 4321
-    assert {f["id"] for f in table.getFeatures(QgsFeatureRequest().setFilterFids([base[7], base[8]]))} == {
-        7,
-        8,
-    }
-
     grouped_before = _fid_by_id(grouped)
-    session.sql("DELETE FROM sin_clave WHERE id < 2000; CHECKPOINT")  # rowid cambiaría aquí
-    after = _fid_by_id(table)
-    assert after == {i: fid for i, fid in base.items() if i >= 2000}
+    session.sql("DELETE FROM sin_clave WHERE id < 2000; CHECKPOINT")
+    assert _fid_by_id(table) == {i: fid for i, fid in base.items() if i >= 2000}
     session.sql("SET threads = 1")
     assert _fid_by_id(grouped) == grouped_before
     session.sql("RESET threads")
@@ -327,11 +320,54 @@ def test_identical_rows_are_never_lost_or_repeated_across_pages(session, monkeyp
         "CREATE TABLE dup AS SELECT (range % 3)::INTEGER AS id, "
         "('POINT(0 ' || (range % 3) || ')')::GEOMETRY AS g FROM range(15)"  # cada fila aparece 5 veces
     )
-    _, layer = session.load(
-        'SELECT * FROM "memory"."main"."dup"', name="dup", source=("memory", "main", "dup")
-    )
+    _, layer = session.load("SELECT * FROM dup", name="dup")  # consulta sin identificador
     feats = list(layer.getFeatures())
     assert sorted(f["id"] for f in feats) == sorted([0, 1, 2] * 5)
     assert len({f.id() for f in feats}) == 3  # filas idénticas: el mismo FID
     request = QgsFeatureRequest().setFilterExpression("id >= 1")
     assert sorted(f["id"] for f in layer.getFeatures(request)) == sorted([1, 2] * 5)
+
+
+def test_table_with_identical_rows_uses_rowid_and_distinguishes_them(session):
+    session.sql("CREATE TABLE dup2 AS SELECT 1 AS id, 'POINT(0 0)'::GEOMETRY AS g FROM range(4)")
+    _, layer = session.load('SELECT * FROM "memory"."main"."dup2"', source=("memory", "main", "dup2"))
+    assert sorted(f.id() for f in layer.getFeatures()) == [0, 1, 2, 3]
+
+
+@pytest.mark.parametrize(
+    ("ddl", "cols", "mapped"),
+    [
+        ("CREATE TABLE k (codigo VARCHAR PRIMARY KEY, g GEOMETRY)", ["codigo"], True),
+        ("CREATE TABLE k (a VARCHAR, b DATE, g GEOMETRY, PRIMARY KEY (a, b))", ["a", "b"], True),
+        ("CREATE TABLE k (u UUID UNIQUE NOT NULL, g GEOMETRY)", ["u"], True),
+        ("CREATE TABLE k (n BIGINT UNIQUE NOT NULL, g GEOMETRY)", ["n"], False),
+    ],
+)
+def test_any_table_key_is_used_like_qgis_postgis(session, monkeypatch, ddl, cols, mapped):
+    """Clave primaria o UNIQUE NOT NULL de cualquier tipo (PktFidMap de QGIS) (2026-11-02)."""
+    monkeypatch.setattr(provider_module, "PAGE", 7)
+    session.sql(ddl)
+    values = {
+        "codigo": "'c' || lpad(range::VARCHAR, 3, '0')",
+        "a": "'a' || (range % 5)",
+        "b": "DATE '2026-01-01' + (range // 5)::INTEGER",
+        "u": "uuid()",
+        "n": "range * 10",
+    }
+    session.sql(
+        f"INSERT INTO k ({', '.join(cols)}, g) SELECT {', '.join(values[c] for c in cols)}, "
+        "('POINT(' || range || ' 0)')::GEOMETRY FROM range(40)"
+    )
+    _, layer = session.load('SELECT * FROM "memory"."main"."k"', source=("memory", "main", "k"))
+    assert decode_uri(layer.source())["fid"] == ("map" if mapped else "key")
+    feats = {f.id(): f.geometry().asPoint().x() for f in layer.getFeatures()}
+    assert len(feats) == 40 and sorted(feats.values()) == [float(i) for i in range(40)]  # páginas por clave
+    some = sorted(feats)[5:8]
+    got = {
+        f.id(): f.geometry().asPoint().x() for f in layer.getFeatures(QgsFeatureRequest().setFilterFids(some))
+    }
+    assert got == {fid: feats[fid] for fid in some}
+    rect = QgsRectangle(10, -1, 12, 1)
+    assert {f.id() for f in layer.getFeatures(QgsFeatureRequest().setFilterRect(rect))} == {
+        fid for fid, x in feats.items() if 10 <= x <= 12
+    }

@@ -10,8 +10,8 @@ Cada fila es una ejecución completa de `tests/qgis` (QGIS headless, `QT_QPA_PLA
 
 | QGIS | DuckDB 1.5.0 | DuckDB 1.5.6 | DuckDB 2.0.0 |
 |---|---|---|---|
-| 3.44.14 (Qt 5) | 96 pasan | 96 pasan | 96 pasan |
-| 4.2.3 (Qt 6) | 96 pasan | 96 pasan | 96 pasan |
+| 3.44.14 (Qt 5) | 105 pasan | 105 pasan | 105 pasan |
+| 4.2.3 (Qt 6) | 105 pasan | 105 pasan | 105 pasan |
 
 Motor y unitarias (`-m "not qgis"`): 616 pasan con DuckDB 1.5.0, 1.5.6 y 2.0.0. ruff, mypy y el test de
 fronteras de arquitectura (ADR-0010), limpios. La CI de GitHub repite la matriz en cada PR a `main`.
@@ -50,11 +50,18 @@ Instantánea siguen intactas; la Conectada queda vacía y no disponible y vuelve
 
 ## 4. Decisiones del propietario (2026-11-02), aplicadas
 
-1. **Identificadores sin clave primaria:** se sustituye `OFFSET` porque la identidad queda garantizada tras
-   filtros y relecturas: el FID es la huella del contenido de la fila (§5.1). `rowid` (cambia tras
-   borrar y compactar) y `row_number()` (orden no garantizado) se descartaron. Esas capas siguen siendo
-   de solo lectura. Evidencia: `test_load_connected::test_keyless_fids_survive_filters_rereads_reordering_and_checkpoints`,
-   `::test_identical_rows_are_never_lost_or_repeated_across_pages`.
+1. **Identificador de entidad como QGIS con PostGIS** (§5.1, §5.4): clave primaria o `UNIQUE NOT NULL`
+   de cualquier tipo (entera: su valor; otra: número en memoria, como `PktFidMap`); `rowid` en tablas
+   sin clave (como `ctid`); huella automática en vistas y consultas, sin que el usuario elija nada.
+   **Toda tabla es editable**, con o sin clave; vistas y consultas son de solo lectura porque DuckDB no
+   escribe en ellas. El guardado escribe por `rowid` dentro de la transacción tras comprobar la huella de
+   cada fila: si DuckDB compactó la tabla y un `rowid` pasó a otra fila, se detecta y no se escribe nada.
+   Evidencia: `test_load_connected::test_any_table_key_is_used_like_qgis_postgis`,
+   `::test_table_without_key_uses_rowid_like_ctid`, `::test_query_without_identifier_has_stable_content_fids`,
+   `::test_identical_rows_are_never_lost_or_repeated_across_pages`,
+   `test_edit_connected::test_table_without_key_is_editable_through_rowid`,
+   `::test_moved_rowids_are_detected_and_never_overwrite_another_row`,
+   `::test_text_and_composite_keys_are_editable`, `::test_key_with_default_is_filled_by_duckdb`.
 2. **DETACH en SQL:** se reconoce por el tipo de sentencia del parser de DuckDB y su base, no por el
    texto. Si se rechaza, el script entero no se ejecuta. Evidencia:
    `test_lifecycle_connected::test_sql_detach_with_unsaved_edits_is_rejected_but_harmless_sql_runs`,
@@ -71,8 +78,10 @@ Instantánea siguen intactas; la Conectada queda vacía y no disponible y vuelve
   Instantánea.
 - Sin la extensión `spatial` cargada, la extensión de la capa sale de las estadísticas de DuckDB: en
   tablas es una cota superior; en consultas complejas puede faltar («Zoom a la capa» no disponible).
-- Capas sin clave primaria (`fid=content`): filas idénticas comparten FID (QGIS no las distingue, pero
-  se leen todas); cambiar una fila cambia su FID; el FID puede cambiar con otra versión de DuckDB. Dibujar
-  1 M de filas sin clave: 9,4 s (con clave, 5,3 s).
+- Vistas y consultas (`fid=content`): filas idénticas comparten FID (QGIS no las distingue, pero se leen
+  todas); cambiar una fila cambia su FID. Dibujar 1 M de filas: 9,4 s (tabla con clave entera, 5,3 s).
+- Tablas sin clave (`fid=rowid`): si DuckDB compacta la tabla tras borrados, los números de entidad
+  cambian; la capa se relee tras cada guardado y el SQL del usuario la repinta. Una edición pendiente
+  sobre una fila movida se rechaza como conflicto (nunca se escribe en otra fila).
 - Las capas Conectadas de `:memory:`, `TEMP` o de un resultado del editor no sobreviven a la sesión:
   quedan no disponibles y nunca muestran datos homónimos de otra sesión.

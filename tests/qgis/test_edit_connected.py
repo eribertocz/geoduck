@@ -13,6 +13,8 @@ import pytest
 from qgis.core import QgsFeature, QgsFeatureRequest, QgsGeometry, QgsProject
 
 from geoduck.app.events import PreviewsInvalidated
+from geoduck.qgis_bridge.provider import decode_uri
+from tests.qgis.conftest import wait_for
 from tests.qgis.test_load_connected import Session
 
 pytestmark = pytest.mark.qgis
@@ -64,10 +66,14 @@ def test_editability(session):
     assert layer.startEditing()
     layer.rollBack()
     session.sql("CREATE VIEW v AS SELECT * FROM t; CREATE TABLE sin AS SELECT * FROM t LIMIT 3")
-    for name in ("v", "sin"):
-        other = load(session, name)
-        assert not other.dataProvider().editable
-        assert not other.startEditing()
+    view = load(session, "v")  # DuckDB no escribe en vistas
+    assert not view.dataProvider().editable
+    assert not view.startEditing()
+    _, query = session.load("SELECT * FROM t", name="consulta")
+    assert not query.dataProvider().editable
+    keyless = load(session, "sin")  # sin clave: rowid, como ctid en PostGIS (2026-11-02)
+    assert keyless.dataProvider().editable and keyless.startEditing()
+    keyless.rollBack()
 
 
 def test_update_delete_insert_in_one_transaction(session):
@@ -226,3 +232,121 @@ def test_batches(session, n):
     assert rows(session, f"SELECT count(*), sum(valor) FROM t WHERE id < {n}")[0] == (n, -sum(range(n)))
     assert rows(session, "SELECT count(*) FROM t")[0][0] == N - n // 10
     assert elapsed < 60
+
+
+# -- tablas sin clave (rowid) y claves de cualquier tipo (como QGIS con PostGIS, 2026-11-02) ------------
+
+
+def test_table_without_key_is_editable_through_rowid(session):
+    session.sql(
+        "CREATE TABLE libre AS SELECT range::INTEGER AS n, 'v' || range AS nombre, "
+        "('POINT(' || range || ' 0)')::GEOMETRY AS g FROM range(10); "
+        "INSERT INTO libre SELECT 99, 'copia', 'POINT(99 0)'::GEOMETRY FROM range(3)"  # 3 filas idénticas
+    )
+    layer = load(session, "libre")
+    assert decode_uri(layer.source())["fid"] == "rowid"
+    feats = {f["n"]: f.id() for f in layer.getFeatures() if f["n"] != 99}
+    copies = [f.id() for f in layer.getFeatures() if f["n"] == 99]
+    assert len(copies) == 3
+    assert layer.startEditing()
+    layer.changeAttributeValue(feats[2], layer.fields().indexOf("nombre"), "cambiada")
+    layer.changeGeometry(feats[3], QgsGeometry.fromWkt("POINT(30 30)"))
+    layer.deleteFeature(feats[4])
+    layer.deleteFeature(copies[0])  # una sola de las tres copias idénticas
+    new = QgsFeature(layer.fields())
+    new["n"], new["nombre"] = 50, "nueva"
+    new.setGeometry(QgsGeometry.fromWkt("POINT(50 0)"))
+    layer.addFeature(new)
+    assert layer.commitChanges(), layer.commitErrors()
+    assert rows(session, "SELECT nombre FROM libre WHERE n = 2")[0][0] == "cambiada"
+    assert rows(session, "SELECT st_astext(g) FROM libre WHERE n = 3")[0][0] == "POINT (30 30)"
+    assert rows(session, "SELECT count(*) FROM libre WHERE n = 4")[0][0] == 0
+    assert rows(session, "SELECT count(*) FROM libre WHERE n = 99")[0][0] == 2
+    assert rows(session, "SELECT nombre FROM libre WHERE n = 50")[0][0] == "nueva"
+    assert sorted(f["n"] for f in layer.getFeatures()) == sorted([0, 1, 2, 3, 5, 6, 7, 8, 9, 50, 99, 99])
+
+
+def test_moved_rowids_are_detected_and_never_overwrite_another_row(session, tmp_path):
+    """Si DuckDB compacta la tabla y los rowid se mueven, el guardado lo detecta por la huella."""
+    from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
+
+    session.coordinator.attach_database(
+        AttachRequest(str(tmp_path / "c.duckdb"), AccessMode.READ_WRITE, OpenAction.CREATE_NEW, alias="c")
+    )
+    assert wait_for(
+        lambda: (
+            session.coordinator.catalog is not None
+            and any(d.name == "c" for d in session.coordinator.catalog.databases)
+        ),
+        TIMEOUT,
+    )
+    session.sql("CREATE TABLE c.big AS SELECT range AS n, 'v' AS s FROM range(300000); CHECKPOINT c")
+    _, layer = session.load('SELECT * FROM "c"."main"."big"', name="big", source=("c", "main", "big"))
+    assert decode_uri(layer.source())["fid"] == "rowid"
+    target = next(layer.getFeatures(QgsFeatureRequest().setFilterExpression("n = 250000")))
+    assert layer.startEditing()
+    layer.changeAttributeValue(target.id(), layer.fields().indexOf("s"), "mía")
+    session.sql("DELETE FROM c.big WHERE n < 200000; CHECKPOINT c")  # compacta: los rowid se mueven
+    assert rows(session, "SELECT rowid FROM c.big WHERE n = 250000")[0][0] != target.id()
+    before = rows(session, "SELECT count(*), sum(hash(n, s)) FROM c.big")
+    assert not layer.commitChanges()
+    assert any("Conflicto" in e for e in layer.commitErrors())
+    assert rows(session, "SELECT count(*), sum(hash(n, s)) FROM c.big") == before  # nada escrito
+    layer.rollBack()
+    layer.reload()
+    target = next(layer.getFeatures(QgsFeatureRequest().setFilterExpression("n = 250000")))
+    assert layer.startEditing()
+    layer.changeAttributeValue(target.id(), layer.fields().indexOf("s"), "mía")
+    assert layer.commitChanges(), layer.commitErrors()
+    assert rows(session, "SELECT n FROM c.big WHERE s = 'mía'") == ((250000,),)
+
+
+def test_text_and_composite_keys_are_editable(session):
+    session.sql(
+        "CREATE TABLE tk (codigo VARCHAR PRIMARY KEY, nombre VARCHAR, g GEOMETRY); "
+        "INSERT INTO tk SELECT 'c' || range, 'n' || range, ('POINT(' || range || ' 0)')::GEOMETRY "
+        "FROM range(5); "
+        "CREATE TABLE ck (a VARCHAR, b DATE, v INTEGER, PRIMARY KEY (a, b)); "
+        "INSERT INTO ck VALUES ('x', DATE '2026-01-01', 1), ('x', DATE '2026-01-02', 2)"
+    )
+    tk = load(session, "tk")
+    assert decode_uri(tk.source())["fid"] == "map"
+    by_code = {f["codigo"]: f.id() for f in tk.getFeatures()}
+    assert tk.startEditing()
+    tk.changeAttributeValue(by_code["c1"], tk.fields().indexOf("nombre"), "uno")
+    tk.deleteFeature(by_code["c2"])
+    new = QgsFeature(tk.fields())
+    new["codigo"], new["nombre"] = "c9", "nueve"
+    tk.addFeature(new)
+    assert tk.commitChanges(), tk.commitErrors()
+    assert rows(session, "SELECT codigo, nombre FROM tk ORDER BY codigo") == (
+        ("c0", "n0"),
+        ("c1", "uno"),
+        ("c3", "n3"),
+        ("c4", "n4"),
+        ("c9", "nueve"),
+    )
+    assert tk.startEditing()  # la clave identifica la entidad: no se cambia
+    tk.changeAttributeValue(by_code["c0"], tk.fields().indexOf("codigo"), "otro")
+    assert not tk.commitChanges()
+    assert any("identifica la entidad" in e for e in tk.commitErrors())
+    tk.rollBack()
+    ck = load(session, "ck")
+    first = next(ck.getFeatures(QgsFeatureRequest().setFilterExpression("v = 2")))
+    assert ck.startEditing()
+    ck.changeAttributeValue(first.id(), ck.fields().indexOf("v"), 20)
+    assert ck.commitChanges(), ck.commitErrors()
+    assert rows(session, "SELECT v FROM ck ORDER BY b") == ((1,), (20,))
+
+
+def test_key_with_default_is_filled_by_duckdb(session):
+    session.sql("CREATE TABLE ud (id UUID PRIMARY KEY DEFAULT uuid(), nombre VARCHAR)")
+    layer = load(session, "ud")
+    assert layer.startEditing()
+    for name in ("a", "b"):
+        f = QgsFeature(layer.fields())
+        f["nombre"] = name
+        layer.addFeature(f)
+    assert layer.commitChanges(), layer.commitErrors()
+    assert rows(session, "SELECT count(DISTINCT id), count(*) FROM ud") == ((2, 2),)
+    assert sorted(f["nombre"] for f in layer.getFeatures()) == ["a", "b"]

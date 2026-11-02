@@ -11,14 +11,15 @@ La URI lleva todo lo necesario para construir el proveedor sin hablar con la ses
 identificador, CRS, extensión, conteo). Si la sesión no existe o la lectura falla (p. ej. tras un
 DETACH), la capa sigue siendo válida pero queda «no disponible»: vacía y sin errores (§5.5).
 
-Identificador de entidad (FID), estable entre peticiones aunque haya filtros (§5.2):
-- `fid=key`: la clave primaria entera de la tabla (editable en E6);
-- `fid=content`: sin esa clave (tablas, vistas, consultas; solo lectura), la huella del contenido de la
-  fila: `hash(todas las columnas) >> 1`. No depende del orden de lectura, de los filtros, de un
-  `CHECKPOINT` ni de cambios en otras filas (`rowid` y `row_number()` sí: se descartaron). Filas idénticas
-  comparten FID; cambiar una fila cambia su FID.
-Las páginas avanzan por FID (`FID >= último ORDER BY FID, desempate LIMIT n + repetidos`), saltando las
-filas del último FID ya entregadas: así ningún empate (filas idénticas) se pierde ni se repite.
+Identificador de entidad (FID), como el proveedor `postgres` de QGIS (§5.1):
+- `fid=key`: clave primaria o columna `UNIQUE NOT NULL` entera de una columna: su valor es el FID;
+- `fid=map`: cualquier otra clave de la tabla (texto, UUID, fecha, varias columnas): el FID se asigna en
+  memoria a cada valor (`PktFidMap`);
+- `fid=rowid`: tabla sin clave, como `ctid` en PostgreSQL. Puede cambiar si DuckDB compacta la tabla tras
+  borrar filas; el guardado lo detecta por la huella de cada fila y nunca escribe en otra (§5.4);
+- `fid=content`: vista o consulta, automático: huella del contenido de la fila (solo lectura). Filas
+  idénticas comparten FID; las páginas saltan los empates ya entregados.
+Las páginas avanzan por el identificador (`> último ORDER BY identificador LIMIT n`); nunca `OFFSET`.
 """
 
 from __future__ import annotations
@@ -53,7 +54,7 @@ from qgis.core import (
 )
 
 from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_terminator
-from geoduck.domain.sql_text import quote_identifier
+from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
 from geoduck.qgis_bridge.sql_compile import compile_expression
@@ -127,30 +128,77 @@ def content_fid_sql(columns: list[str]) -> tuple[str, str]:
     return f"(hash({cols}) >> 1)::BIGINT", f"hash({cols}, 1)"
 
 
+def key_alias(i: int) -> str:
+    """Columna interna con la i-ésima columna de la clave (modo `map`), sin chocar con los campos."""
+    return f"__geoduck_k{i}"
+
+
+def id_columns(fid: str, keys: list[str] | None) -> list[str]:
+    """Columnas internas que identifican la fila y ordenan las páginas, según el modo de FID."""
+    if fid == "map":
+        return [key_alias(i) for i in range(len(keys or []))]
+    if fid == "content":
+        return [FID, ORD]
+    return [FID]
+
+
 def base_sql(  # noqa: PLR0917 - las piezas de la URI que definen la consulta
-    plan: LoadPlan, inner: str, fid: str, key: str | None, columns: list[str], editable: bool = False
+    plan: LoadPlan,
+    inner: str,
+    fid: str,
+    key: str | None,
+    columns: list[str],
+    keys: list[str] | None = None,
+    source: str | None = None,
+    editable: bool = False,
 ) -> str:
-    """Consulta base de la capa: FID, columnas normalizadas (§7), geometría primaria y, en capas editables,
-    la huella de cada fila. `columns`: todas las columnas de `inner`."""
+    """Consulta base de la capa: identificador, columnas normalizadas (§7), geometría primaria y, en capas
+    editables, la huella de cada fila (`hash` de todas sus columnas: conflictos, §5.4).
+
+    `fid`: `key` (clave entera: su valor es el FID), `map` (otra clave: `keys` en columnas internas; el FID
+    se asigna en memoria), `rowid` (tabla sin clave, como `ctid` en PostgreSQL) o `content` (vista o
+    consulta sin identificador: huella del contenido). `columns`: todas las columnas de `inner`.
+    """
     body = strip_terminator(inner)
     fid_col = quote_identifier(FID)
-    hashed = editable and fid == "key" and bool(key)
+    hashed = editable and fid in ("key", "map", "rowid")
+    extra = f"{row_hash_sql(columns)} AS {quote_identifier(HASH)}, " if hashed else ""
     if fid == "key" and key:
-        ident = f"{quote_identifier(key)} AS {fid_col}"
-        if hashed:
-            ident += f", {row_hash_sql(columns)} AS {quote_identifier(HASH)}"
+        numbered = f"SELECT {quote_identifier(key)} AS {fid_col}, {extra}* FROM (\n{body}\n) AS __geoduck_s"
+    elif fid == "map" and keys:
+        ident = ", ".join(
+            f"{quote_identifier(k)} AS {quote_identifier(key_alias(i))}" for i, k in enumerate(keys)
+        )
+        numbered = f"SELECT {ident}, {extra}* FROM (\n{body}\n) AS __geoduck_s"
+    elif fid == "rowid" and source:
+        numbered = f"SELECT rowid AS {fid_col}, {extra}* FROM {source}"
     else:
         content, order = content_fid_sql(columns)
         ident = f"{content} AS {fid_col}, {order} AS {quote_identifier(ORD)}"
-    numbered = f"SELECT {ident}, * FROM (\n{body}\n) AS __geoduck_s"
-    cols = [fid_col] + [f"{f.expression} AS {quote_identifier(f.name)}" for f in plan.fields]
-    if fid != "key" or not key:
-        cols.append(quote_identifier(ORD))
+        numbered = f"SELECT {ident}, * FROM (\n{body}\n) AS __geoduck_s"
+        fid = "content"
+    ids = [quote_identifier(c) for c in id_columns(fid, keys)]
+    cols = ids + [f"{f.expression} AS {quote_identifier(f.name)}" for f in plan.fields]
     if plan.geometry is not None:
         cols.append(quote_identifier(plan.geometry.name))
     if hashed:
         cols.append(quote_identifier(HASH))
     return f"SELECT {', '.join(cols)} FROM ({numbered}) AS __geoduck_q"
+
+
+def sql_literal(value: Any, duck_type: str) -> str:
+    """Valor de una clave leído de DuckDB → literal SQL del mismo tipo (páginas y filtros por FID)."""
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, int):
+        return f"CAST({value} AS {duck_type})"
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return f"CAST(unhex('{bytes(value).hex()}') AS {duck_type})"
+    if isinstance(value, float):
+        return f"CAST({value!r} AS {duck_type})"
+    return f"CAST({quote_string_literal(str(value))} AS {duck_type})"
 
 
 def _extent_polygon(rect: QgsRectangle) -> str:
@@ -200,6 +248,8 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         #: Filas con FID == `page_after` que la página actual repite al principio y se saltan.
         self.skip = 0
         self.page_after: int | None = None
+        #: Modo `map`: la última clave leída (las claves son únicas: sin empates).
+        self.after_key: tuple[Any, ...] | None = None
         self.exhausted = False
         self.returned = 0
 
@@ -218,7 +268,9 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         has_rect = not self.rect.isNull() and geometry is not None
         self.exact = has_rect and bool(flags & Qgis.FeatureRequestFlag.ExactIntersect)
         self.return_geom = geometry is not None and not flags & Qgis.FeatureRequestFlag.NoGeometry
-        cols = [quote_identifier(FID)] + [quote_identifier(n) for n in self.wanted]
+        self.mapped = p.fid_mode == "map"
+        self.ids = id_columns(p.fid_mode, p.keys)
+        cols = [quote_identifier(c) for c in self.ids] + [quote_identifier(n) for n in self.wanted]
         #: Huellas solo mientras la capa está en edición (§5.4): se guardan al leer cada fila.
         self.capture = p.editable and p.capture
         if self.capture:
@@ -232,11 +284,12 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             g = quote_identifier(geometry.name)  # type: ignore[union-attr]
             where.append(f"st_intersects_extent({g}, {_extent_polygon(self.rect)})")
         ft = r.filterType()
-        if ft == Qgis.FeatureRequestFilterType.Fid:
-            where.append(f"{quote_identifier(FID)} = {int(r.filterFid())}")
-        elif ft == Qgis.FeatureRequestFilterType.Fids:
-            fids = sorted(int(x) for x in r.filterFids())
-            where.append(f"{quote_identifier(FID)} IN ({', '.join(map(str, fids)) or 'NULL'})")
+        if ft in (Qgis.FeatureRequestFilterType.Fid, Qgis.FeatureRequestFilterType.Fids):
+            if ft == Qgis.FeatureRequestFilterType.Fid:
+                fids = [int(r.filterFid())]
+            else:
+                fids = sorted(int(x) for x in r.filterFids())
+            where.append(self._fid_filter(fids))
         elif ft == Qgis.FeatureRequestFilterType.Expression and r.filterExpression() is not None:
             expr = r.filterExpression()
             compiled = compile_expression(expr.rootNode(), p.comparable)
@@ -250,6 +303,15 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         self.select = ", ".join(cols)
         self.where = where
 
+    def _key_tuple_sql(self, values: tuple[Any, ...]) -> str:
+        return self.p.key_tuple_sql(values)
+
+    def _key_columns_sql(self) -> str:
+        return self.p.key_columns_sql()
+
+    def _fid_filter(self, fids: list[int]) -> str:
+        return self.p.fid_filter_sql(fids)
+
     def page_size(self) -> int:
         if self.limit is not None and self.local is None and not self.exact:
             return max(0, min(PAGE, self.limit - self.returned))
@@ -257,12 +319,19 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
 
     def page_sql(self, size: int) -> str:
         where = list(self.where)
+        if self.mapped:
+            if self.after_key is not None:
+                where.append(f"{self._key_columns_sql()} > {self._key_tuple_sql(self.after_key)}")
+            clause = (" WHERE " + " AND ".join(where)) if where else ""
+            order = ", ".join(quote_identifier(c) for c in self.ids)
+            base = f"SELECT {self.select} FROM ({self.p.base}) AS __geoduck_c{clause}"
+            return f"{base} ORDER BY {order} LIMIT {size}"
         if self.after is not None:
             where.append(f"{quote_identifier(FID)} >= {self.after}")
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         order = (
             quote_identifier(FID)
-            if self.p.fid_mode == "key"
+            if self.p.fid_mode != "content"
             else f"{quote_identifier(FID)}, {quote_identifier(ORD)}"
         )
         return (
@@ -327,7 +396,12 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
                 (self.p.field_index[name], column_converter(kinds[name])(batch.column(names.index(name))))
                 for name in self.wanted
             ]
-            self.fids = batch.column(names.index(FID)).to_pylist()
+            if self.mapped:
+                columns = [batch.column(names.index(c)).to_pylist() for c in self.ids]
+                self.keyrows = list(zip(*columns, strict=True))
+                self.fids = [self.p.fid_for(k) for k in self.keyrows]
+            else:
+                self.fids = batch.column(names.index(FID)).to_pylist()
             if self.capture:
                 seen = self.p.seen
                 for fid, h in zip(self.fids, batch.column(names.index(HASH)).to_pylist(), strict=True):
@@ -355,14 +429,17 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             i = self.pos
             self.pos += 1
             fid = int(self.fids[i])
-            if self.skip and fid == self.page_after:  # ya entregada en la página anterior
-                self.skip -= 1
-                continue
-            self.skip = 0
-            if fid == self.after:
-                self.ties += 1
+            if self.mapped:
+                self.after_key = self.keyrows[i]
             else:
-                self.after, self.ties = fid, 1
+                if self.skip and fid == self.page_after:  # ya entregada en la página anterior
+                    self.skip -= 1
+                    continue
+                self.skip = 0
+                if fid == self.after:
+                    self.ties += 1
+                else:
+                    self.after, self.ties = fid, 1
             g: QgsGeometry | None = geometry_from_wkb(self.wkbs[i]) if self.wkbs is not None else None
             if self.exact and (g is None or g.isNull() or not g.intersects(self.rect)):
                 continue
@@ -422,6 +499,9 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         self.capture = False
         self.verdict: Any = None
         self.session, self.scope, self.database, self.source = "", "session", None, None
+        self._fid_lock = threading.Lock()
+        self._fid_of: dict[tuple[Any, ...], int] = {}
+        self._key_of: list[tuple[Any, ...]] = []
         self.unavailable = False
         self.last_error = ""
         self._valid = False
@@ -442,13 +522,34 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self.plan: LoadPlan = build_load_plan(
                 self.inner, list(params["columns"]), geometry=params.get("geom") or None
             )
-            if self.fid_mode != "key" or not self.key:
+            self.keys: list[str] = json.loads(params.get("keys") or "[]")
+            types = {c[0]: c[1] for c in params["columns"]}
+            self.key_types = [types[k] for k in self.keys]
+            valid = {
+                "key": bool(self.key),
+                "map": bool(self.keys),
+                "rowid": bool(self.source),
+                "content": True,
+            }
+            if not valid.get(self.fid_mode, False):
                 self.fid_mode = "content"
-            self.editable = params.get("edit") == "1" and self.fid_mode == "key" and bool(self.source)
+            self.editable = (
+                params.get("edit") == "1" and self.fid_mode in ("key", "map", "rowid") and bool(self.source)
+            )
             self.key_default: str | None = params.get("default") or None
+            self.defaults: set[str] = set(json.loads(params.get("defaults") or "[]"))
             self.columns: list[str] = [c[0] for c in params["columns"]]
             self.plan_types: dict[str, str] = {c[0]: c[1] for c in params["columns"]}
-            self.base = base_sql(self.plan, self.inner, self.fid_mode, self.key, self.columns, self.editable)
+            self.base = base_sql(
+                self.plan,
+                self.inner,
+                self.fid_mode,
+                self.key,
+                self.columns,
+                self.keys,
+                self.source,
+                self.editable,
+            )
             ext = [float(v) for v in params.get("extent", "").split(",") if v]
             count = int(params.get("count", "-1"))
             wkb = params.get("type") or ""
@@ -478,6 +579,50 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         if self.scope == "attached":
             return sessions.current()
         return sessions.get(self.session)
+
+    def fid_for(self, key: tuple[Any, ...]) -> int:
+        """Modo `map` (PktFidMap de QGIS): FID estable en esta sesión de QGIS para un valor de la clave."""
+        with self._fid_lock:
+            fid = self._fid_of.get(key)
+            if fid is None:
+                self._key_of.append(key)
+                fid = self._fid_of[key] = len(self._key_of)
+            return fid
+
+    def keys_for(self, fids: list[int]) -> list[tuple[Any, ...]]:
+        return list(self.key_map(fids).values())
+
+    def key_map(self, fids: list[int]) -> dict[int, tuple[Any, ...]]:
+        """FID → valores de la clave (modo `map`); los FID desconocidos o provisionales no aparecen."""
+        with self._fid_lock:
+            out = {}
+            for f in fids:
+                if 1 <= f <= len(self._key_of) and self._key_of[f - 1] is not None:
+                    out[f] = self._key_of[f - 1]
+            return out
+
+    def reserve_fid(self) -> int:
+        """FID provisional para una alta cuya clave pone DuckDB (por defecto): válido hasta releer la capa."""
+        with self._fid_lock:
+            self._key_of.append(None)  # type: ignore[arg-type]
+            return len(self._key_of)
+
+    def key_columns_sql(self) -> str:
+        cols = [quote_identifier(c) for c in id_columns(self.fid_mode, self.keys)]
+        return cols[0] if len(cols) == 1 else "(" + ", ".join(cols) + ")"
+
+    def key_tuple_sql(self, values: tuple[Any, ...]) -> str:
+        lits = [sql_literal(v, self.key_types[i]) for i, v in enumerate(values)]
+        return lits[0] if len(lits) == 1 else "(" + ", ".join(lits) + ")"
+
+    def fid_filter_sql(self, fids: list[int]) -> str:
+        """Condición SQL sobre la consulta base que selecciona esos FID."""
+        if self.fid_mode != "map":
+            return f"{quote_identifier(FID)} IN ({', '.join(map(str, fids)) or 'NULL'})"
+        keys = self.keys_for(fids)  # FID asignados en esta sesión de QGIS; uno desconocido no existe
+        if not keys:
+            return "FALSE"
+        return f"{self.key_columns_sql()} IN ({', '.join(self.key_tuple_sql(k) for k in keys)})"
 
     def note_error(self, message: str) -> None:
         """La capa queda no disponible (vacía). Se avisa una vez en el registro de QGIS, sin errores."""
@@ -551,12 +696,11 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         if not self._accepted():
             return False, flist
         fid_map = self.verdict.fid_map
-        key_index = self.field_index.get(self.key or "", -1)
+        key_index = self.field_index.get(self.key or "", -1) if self.fid_mode == "key" else -1
         for f in flist:
             new = fid_map.get(int(f.id()))
-            if new is None:
-                self.pushError(f"Alta sin id asignado por el guardado (entidad {f.id()})")
-                return False, flist
+            if new is None:  # ya guardada en DuckDB: FID provisional hasta releer la capa (nunca un fallo)
+                new = self.reserve_fid() if self.fid_mode == "map" else _provisional_fid()
             f.setId(new)
             if key_index >= 0:
                 f.setAttribute(key_index, new)
@@ -583,6 +727,14 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
 
     def storageType(self) -> str:
         return DESCRIPTION
+
+
+_provisional = iter(range(1 << 62, 1 << 63))
+
+
+def _provisional_fid() -> int:
+    """FID que no coincide con ningún rowid real; la capa se relee tras el guardado."""
+    return next(_provisional)
 
 
 def register_provider() -> None:
