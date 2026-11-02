@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
@@ -49,6 +50,7 @@ class GeoDuckPlugin:
     def __init__(self, iface: Any) -> None:
         self.iface = iface
         self.action: QAction | None = None
+        self.about_action: QAction | None = None
         self.dock: GeoDuckDock | None = None
         self.dispatcher: QtDispatcher | None = None
         self.coordinator: SessionCoordinator | None = None
@@ -68,12 +70,24 @@ class GeoDuckPlugin:
         self.dock.visibilityChanged.connect(self.action.setChecked)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.action)
         self.iface.addDatabaseToolBarIcon(self.action)
+        # Convención de QGIS: «Acerca de…» en el menú del complemento (Base de datos › GeoDuck).
+        self.about_action = QAction(
+            QgsApplication.getThemeIcon("mActionHelpAbout.svg"),
+            tr("Acerca de GeoDuck…"),
+            self.iface.mainWindow(),
+        )
+        self.about_action.setObjectName("geoduckAbout")
+        self.about_action.triggered.connect(self.dock.show_about)
+        self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.about_action)
 
     def unload(self) -> None:
         if self.coordinator is not None and not self.coordinator.shutdown(UNLOAD_TIMEOUT_S):
             _log.warning("GeoDuck se descargó con el motor aún terminando")
         if self.dispatcher is not None:
             self.dispatcher.close()
+        if self.about_action is not None:
+            self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), self.about_action)
+            self.about_action.deleteLater()
         if self.action is not None:
             self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), self.action)
             self.iface.removeDatabaseToolBarIcon(self.action)
@@ -84,4 +98,5 @@ class GeoDuckPlugin:
             self.dock.deleteLater()
         if self.dispatcher is not None:
             self.dispatcher.deleteLater()
-        self.action = self.dock = self.dispatcher = self.coordinator = None
+        self.action = self.about_action = None
+        self.dock = self.dispatcher = self.coordinator = None

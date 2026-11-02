@@ -163,3 +163,114 @@ def error_offset_in(text: str, message: str) -> int | None:
             return None
         return sum(len(t) + 1 for t in text_lines[:number]) + column
     return None
+
+
+# -- títulos de resultado -------------------------------------------------------------------------
+
+_TITLE_MAX = 28
+_COMMENT = re.compile(r"^\s*--\s*(.+?)\s*$")
+_IDENT = r'(?:"(?:[^"]|"")+"|[A-Za-z_À-￿][\w$À-￿]*)'
+_QUALIFIED = rf"({_IDENT}(?:\s*\.\s*{_IDENT})*)"
+_FROM = re.compile(rf"\bFROM\s+{_QUALIFIED}", re.IGNORECASE)
+_DML_TARGET = re.compile(
+    rf"\b(INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+{_QUALIFIED}", re.IGNORECASE
+)
+_ONLY_COUNT = re.compile(
+    r"^\s*(?:WITH\b.*?\)\s*)?SELECT\s+COUNT\s*\(\s*\*?\s*\)(?:\s+(?:AS\s+)?\w+)?\s+FROM\b", re.I | re.S
+)
+_SINGLE_ALIAS = re.compile(r"^\s*SELECT\s+[^,]+?\s+AS\s+(" + _IDENT + r")\s*;?\s*$", re.I | re.S)
+_STRINGS = re.compile(r"'(?:[^']|'')*'|\$\$.*?\$\$", re.S)
+_COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
+
+
+def explicit_title(editor_text: str, statement: SqlStatement) -> str | None:
+    """Nombre explícito: un comentario `-- …` en la línea inmediatamente anterior al código de la sentencia
+    (sin línea en blanco entre ambos). En 1.5.x ese comentario forma parte del texto de la sentencia (F-35);
+    en 2.0 queda antes: se busca en el texto del editor."""
+    offset = statement.start
+    for line in statement.text.split("\n"):
+        if line.strip() and not _COMMENT.match(line):
+            offset += len(line) - len(line.lstrip())
+            break
+        offset += len(line) + 1
+    line_start = editor_text.rfind("\n", 0, offset) + 1
+    if editor_text[line_start:offset].strip():
+        return None  # hay código antes en la misma línea: el comentario de arriba no describe esta sentencia
+    above_end = line_start - 1
+    if above_end < 0:
+        return None
+    above = editor_text[editor_text.rfind("\n", 0, above_end) + 1 : above_end]
+    match = _COMMENT.match(above)
+    return _short(match.group(1)) if match else None
+
+
+def automatic_title(statement: SqlStatement) -> str:
+    """Nombre legible deducido del SQL, sin ejecutar nada: «Productos», «Total productos», «Plan ventas»…"""
+    sql = _COMMENTS.sub(" ", _STRINGS.sub("''", statement.text)).strip()
+    if statement.type in {"INSERT", "UPDATE", "DELETE"}:
+        target = _DML_TARGET.search(sql)
+        verb = {"INSERT": "Insertados en", "UPDATE": "Actualizados en", "DELETE": "Eliminados de"}[
+            statement.type
+        ]
+        return _short(f"{verb} {_humanize(target.group(2), lower=True)}" if target else verb)
+    if statement.is_plan:
+        source = _FROM.search(sql)
+        return _short(f"Plan {_humanize(source.group(1), lower=True)}" if source else "Plan")
+    if not statement.is_read:
+        return _short(_command_title(statement.type, sql))  # un CREATE … AS SELECT … FROM x crea, no lee x
+    source = _FROM.search(sql)
+    if source:
+        name = _humanize(source.group(1))
+        return _short(f"Total {name[:1].lower() + name[1:]}" if _ONLY_COUNT.match(sql) else name)
+    alias = _SINGLE_ALIAS.match(sql)
+    if alias:
+        return _short(_humanize(alias.group(1)))
+    return "Resultado"
+
+
+_DDL_OBJECT = re.compile(
+    r"^\s*(CREATE|DROP|ALTER)\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?"
+    r"(?:TABLE|VIEW|SCHEMA|MACRO|FUNCTION|SEQUENCE|INDEX|TYPE|SECRET)?\s*"
+    rf"(?:IF\s+(?:NOT\s+)?EXISTS\s+)?{_QUALIFIED}",
+    re.IGNORECASE,
+)
+_ATTACH_ALIAS = re.compile(rf"\bAS\s+{_QUALIFIED}", re.IGNORECASE)
+_DETACH_NAME = re.compile(rf"^\s*DETACH\s+(?:DATABASE\s+)?(?:IF\s+EXISTS\s+)?{_QUALIFIED}", re.IGNORECASE)
+_FIRST_WORDS = re.compile(r"^\s*(\w+(?:\s+\w+)?)")
+
+
+def _command_title(kind: str, sql: str) -> str:
+    """Sentencias sin resultado de datos: verbo y objeto («Crear productos», «Adjuntar comercial»)."""
+    verbs = {"CREATE": "Crear", "DROP": "Eliminar", "ALTER": "Modificar"}
+    ddl = _DDL_OBJECT.match(sql)
+    if ddl and kind in {"CREATE", "DROP", "ALTER"}:
+        return f"{verbs[ddl.group(1).upper()]} {_humanize(ddl.group(2), lower=True)}"
+    if kind == "ATTACH":
+        alias = _ATTACH_ALIAS.search(sql)
+        return f"Adjuntar {_humanize(alias.group(1), lower=True)}" if alias else "Adjuntar"
+    if kind == "DETACH":
+        name = _DETACH_NAME.match(sql)
+        return f"Desadjuntar {_humanize(name.group(1), lower=True)}" if name else "Desadjuntar"
+    if kind in {"TRANSACTION", "SET", "PRAGMA", "VARIABLE_SET"}:
+        words = _FIRST_WORDS.match(sql)
+        return words.group(1).upper() if words else kind
+    return kind.capitalize()
+
+
+def result_title(editor_text: str, statement: SqlStatement) -> str:
+    return explicit_title(editor_text, statement) or automatic_title(statement)
+
+
+def _humanize(qualified: str, *, lower: bool = False) -> str:
+    last = re.split(r"\s*\.\s*(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", qualified)[-1]
+    if last.startswith('"'):
+        return last[1:-1].replace('""', '"')  # identificador citado: se respeta tal cual
+    words = last.replace("_", " ").strip()
+    if lower:
+        return words.lower()
+    return words[:1].upper() + words[1:].lower()
+
+
+def _short(text: str) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= _TITLE_MAX else text[: _TITLE_MAX - 1].rstrip() + "…"

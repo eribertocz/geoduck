@@ -268,3 +268,24 @@ def test_concurrent_scripts_are_serialized(worker):
     for t in threads:
         t.join(120)
     assert errors == [] and query(worker, "SELECT count(*) FROM c") == ((80,),)
+
+
+def test_result_titles_match_in_every_duckdb_version(worker):
+    """Los límites del texto de cada sentencia cambian entre 1.5 y 2.0 (F-35); el nombre no."""
+    from geoduck.domain.sql import result_title
+
+    script = (
+        "CREATE TABLE productos AS SELECT 1 AS id;\n"
+        "-- Catálogo completo\n"
+        "SELECT * FROM productos;\n"
+        "SELECT COUNT(*) AS n FROM productos;\n"
+        "\n-- comentario suelto\n\n"
+        "SELECT 42 AS respuesta;"
+    )
+    out = run(worker, script)
+    assert [result_title(script, r.statement) for r in out.results] == [
+        "Crear productos",
+        "Catálogo completo",
+        "Total productos",
+        "Respuesta",
+    ]
