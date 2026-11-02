@@ -34,6 +34,10 @@ class SessionEngine(Protocol):
         """DetachDatabase real. Devuelve la base desadjuntada y el catálogo resultante."""
         ...
 
+    def transaction_state(self) -> Future[TransactionState]:
+        """Estado transaccional real, comprobado en DuckDB sin modificarlo."""
+        ...
+
     def commit(self) -> Future[TransactionState]:
         """COMMIT de una transacción abierta y utilizable; rechaza una abortada (nunca la envía)."""
         ...

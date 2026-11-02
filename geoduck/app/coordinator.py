@@ -19,6 +19,7 @@ from geoduck.app.events import (
     AttachFailed,
     CatalogChanged,
     CatalogUnavailable,
+    CloseConfirmationRequired,
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
@@ -34,7 +35,7 @@ from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot,
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
-from geoduck.domain.transaction import TransactionState
+from geoduck.domain.transaction import CloseChoice, TransactionState
 
 _log = logging.getLogger("geoduck.app")
 
@@ -58,6 +59,10 @@ class SessionCoordinator:
         self._transaction: TransactionState | None = None
         #: Un ROLLBACK de recuperación en curso desde ERROR_RECOVERABLE (no pasa por BUSY).
         self._recovering = False
+        #: Cierre pedido por el usuario a la espera de su decisión o de que termine su COMMIT/ROLLBACK.
+        self._close_choice: CloseChoice | None = None
+        self._awaiting_close_decision = False
+        self._close_generation = 0
         self._listeners: list[Listener] = []
 
     # -- consulta ----------------------------------------------------------------------------------
@@ -178,6 +183,78 @@ class SessionCoordinator:
             raise SessionStateError(f"No se puede {action} en estado {self._sm.state.value}")
         return self._engine
 
+    def request_close(self) -> None:
+        """Cierre pedido por el usuario (decisión del 2026-11-01).
+
+        Sin transacción abierta, cierra. Con una transacción abierta emite `CloseConfirmationRequired` y
+        espera `resolve_close`: COMMIT, ROLLBACK o cancelar el cierre. En `READY` el estado se comprueba en
+        DuckDB, no se supone.
+        """
+        if self._close_choice is not None or self._awaiting_close_decision:
+            return  # ya hay un cierre en curso o una pregunta abierta
+        state = self._sm.state
+        engine = self._engine
+        if engine is not None and state is SessionState.READY:
+            self._close_generation += 1
+            generation = self._close_generation
+            engine.transaction_state().add_done_callback(
+                lambda fut: self._dispatcher.post(lambda: self._on_close_check(engine, generation, fut))
+            )
+            return
+        if engine is not None and self._transaction is not None and self._transaction.is_open:
+            # ERROR_RECOVERABLE con la transacción abortada, o una operación en curso (BUSY/DETACHING):
+            # COMMIT no es válido.
+            self._ask_close(self._transaction, commit_allowed=False)
+            return
+        self.close_session()
+
+    def resolve_close(self, choice: CloseChoice) -> None:
+        """Respuesta del usuario a `CloseConfirmationRequired`."""
+        if not self._awaiting_close_decision:
+            raise SessionStateError("No hay ninguna decisión de cierre pendiente")
+        state = self._sm.state
+        commit_valid = state is SessionState.READY and self._transaction is TransactionState.ACTIVE
+        if choice is CloseChoice.COMMIT and self._engine is not None and not commit_valid:
+            raise SessionStateError("COMMIT no es válido en este momento")  # la pregunta sigue abierta
+        self._awaiting_close_decision = False
+        if choice is CloseChoice.CANCEL:
+            return  # la sesión sigue abierta y la transacción no se toca
+        if self._engine is None:
+            self.close_session()  # la sesión ya terminó mientras se decidía
+            return
+        if choice is CloseChoice.COMMIT:
+            self._close_choice = choice
+            self.commit_transaction()
+            return
+        if state in (SessionState.BUSY, SessionState.DETACHING):
+            self.close_session()  # cancela la operación; cerrar la conexión descarta la transacción
+            return
+        self._close_choice = choice
+        self.rollback_transaction()
+
+    def _on_close_check(self, engine: SessionEngine, generation: int, fut: Future[TransactionState]) -> None:
+        if engine is not self._engine or generation != self._close_generation:
+            return
+        exc = fut.exception()
+        if exc is not None:
+            self._record_transaction(exc)
+            known = self._transaction
+            if known is not None and known.is_open:
+                self._ask_close(known, commit_allowed=False)
+            else:
+                self.close_session()  # sin transacción conocida que proteger
+            return
+        state = fut.result()
+        self._set_transaction(state)
+        if state is TransactionState.NONE or self._sm.state is not SessionState.READY:
+            self.close_session()
+            return
+        self._ask_close(state, commit_allowed=state is TransactionState.ACTIVE)
+
+    def _ask_close(self, state: TransactionState, *, commit_allowed: bool) -> None:
+        self._awaiting_close_decision = True
+        self._emit(CloseConfirmationRequired(state, commit_allowed))
+
     def close_session(self) -> Future[None]:
         """CloseSession(): cancela lo que esté en curso y cierra el motor sin bloquear la UI."""
         state = self._sm.state
@@ -189,6 +266,9 @@ class SessionCoordinator:
         self._info = None
         self._pending_attach = None
         self._recovering = False
+        self._close_choice = None
+        self._awaiting_close_decision = False
+        self._close_generation += 1
         self._set_transaction(None)
         self._drop_catalog()
         if engine is None:  # ERROR_RECOVERABLE sin motor vivo
@@ -323,11 +403,14 @@ class SessionCoordinator:
         exc = fut.exception()
         if isinstance(exc, SessionInvalidatedError):
             return  # la invalidación llega por su propio camino
+        closing, self._close_choice = self._close_choice, None
         if exc is None:
             self._set_transaction(fut.result())
             if recovering:
                 self._sm.resolve_transaction()
             self._sm.transition(SessionState.READY)
+            if closing is not None:
+                self.close_session()  # COMMIT o ROLLBACK confirmados: se completa el cierre pedido
             return
         code, message = _describe(exc)
         _log.warning("COMMIT/ROLLBACK rechazado [%s]", code.value)
@@ -336,6 +419,15 @@ class SessionCoordinator:
         else:
             self._end_failed_operation(exc)
         self._emit(TransactionFailed(code, message))
+        if closing is not None and self._transaction is not None and self._transaction.is_open:
+            # Nunca se cierra tras un COMMIT o ROLLBACK fallido: se vuelve a preguntar con el estado real.
+            self._ask_close(
+                self._transaction,
+                commit_allowed=self._transaction is TransactionState.ACTIVE
+                and self._sm.state is SessionState.READY,
+            )
+        elif closing is not None:
+            self.close_session()
 
     def _end_failed_operation(self, exc: BaseException) -> bool:
         """Cierra una operación fallida (BUSY o DETACHING). Vuelve a `READY` solo si la conexión y la
@@ -375,6 +467,8 @@ class SessionCoordinator:
         self._engine = None
         self._info = None
         self._recovering = False
+        self._close_choice = None
+        self._close_generation += 1
         self._set_transaction(None)
         self._drop_catalog()
         _log.error("Sesión invalidada [%s]: %s", cause.code.value, cause.detail)
