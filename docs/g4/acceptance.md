@@ -24,8 +24,9 @@ Motor y unitarias (`tests/unit tests/engine`): 498 pasan con DuckDB 1.5.0, 1.5.6
 PyArrow 25.0.1 y 18.1.0 (las versiones de QGIS 3.34 para Windows). Lint: ruff, mypy, test de fronteras de
 arquitectura (ADR-0010) y `tools/spec_sync.py --check`, limpios (489 pruebas unitarias y de arquitectura).
 
-E5 añade una prueba (§2, AT-SPA-004): en este PR cada celda QGIS suma una (199/200). Las cifras de la CI del
-PR se anotan en su descripción.
+E5 añade una prueba (§2, AT-SPA-004): en este PR cada celda QGIS suma una (200 pasan con DuckDB 2.0.0; 199 y
+1 omitida con 1.5.0). Resultados de la CI del PR:
+[comentario en #77](https://github.com/eribertocz/geoduck/pull/77#issuecomment-6589719341).
 
 **Regresión de G0–G3:** toda la suite anterior sigue en verde en cada celda (AT-BRD-001..012, ver
 `docs/g3/acceptance.md`); ninguna prueba de G3 se modificó para pasar.
