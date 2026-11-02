@@ -1,0 +1,26 @@
+DuckDB 1.5.0 · spatial cargada: False
+Funciones ST_ del núcleo: ['st_asbinary', 'st_astext', 'st_aswkb', 'st_aswkt', 'st_crs', 'st_geomfromwkb', 'st_intersects_extent', 'st_setcrs']
+
+1. Código de tipo ISO desde la cabecera de ST_AsWKB (1/4 punto, 2/5 línea, 3/6 polígono, 7 colección)
+  POINT(1 2)                                              → 1
+  MULTIPOINT((1 2))                                       → 4
+  LINESTRING Z(0 0 1,1 1 1)                               → 2
+  POLYGON M((0 0 1,1 0 1,1 1 1,0 0 1))                    → 3
+  MULTIPOLYGON ZM(((0 0 1 2,1 0 1 2,1 1 1 2,0 0 1 2)))    → 6
+  GEOMETRYCOLLECTION(POINT(1 2))                          → 7
+  POINT EMPTY                                             → 1
+  WKB big-endian (BLOB) normalizado a little-endian: True
+
+2. BLOB (WKB) y VARCHAR (WKT) → GEOMETRY con TRY (ilegible → NULL)
+  WKB válido                               True
+  WKB truncado                             True
+  WKB basura                               True
+  WKT válido                               True
+  WKT ilegible                             True
+  WKT de vuelta (ST_AsText)                True
+  filtro ST_Intersects_Extent sobre WKB    True
+
+3. Coste de la muestra de tipos (1 M de filas mixtas)
+  muestra de   1000 filas: 5.0 ms
+  muestra de  10000 filas: 7.2 ms
+  filtro de familia sobre 1 M filas: 149 ms

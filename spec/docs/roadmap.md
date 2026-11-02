@@ -29,7 +29,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 - **Spike G0-B**: comprobar editor SQL en bindings PyQGIS3/4, elegir una sola implementación principal con fallback si procede.
 - **Spike G2-A**: multi-statement en DuckDB 1.5.x/2.x y política para `RETURNING`/SELECT reejecutable.
 - **Spike G3-A**: límites reales de memoria y cambio worker→main con RecordBatch.
-- **Spike G4-A**: tipos `GEOMETRY('CRS')` y WKB en QGIS3/4.
+- **Spike G4-A** (reducido, decisión 2026-11-02): solo compatibilidades no demostradas — Z/M y colecciones por GeoArrow en QGIS 3.34/4.x, cabecera WKB y `ST_GeomFromWKB` sin `spatial` en DuckDB 1.5/2.0, `makeValid` en QGIS 3.34/4.x, coste de la muestra de tipos. CRS tipado y orden de ejes ya están demostrados (C4, F-10/F-14, AX).
 - **Spike G6-A**: mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
 
 ## 4. Capacidad mínima de Alpha útil

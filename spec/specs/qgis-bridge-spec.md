@@ -68,7 +68,7 @@ sequenceDiagram
 
 ### 5.1 Fuente y URI
 
-URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|fid=<key|map|rowid|content>|key=<pk>|keys=<json>|type=<WkbType>`,
+URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|geomformat=<geometry|wkb|wkt>|family=<point|line|polygon|collection>|fid=<key|map|rowid|content>|key=<pk>|keys=<json>|type=<WkbType>`,
 más los metadatos que permiten abrir la capa sin consultar la sesión (columnas y tipos, CRS, extensión,
 conteo). Los valores van codificados como en una URL.
 
@@ -102,7 +102,13 @@ conteo). Los valores van codificados como en una URL.
   - **Memoria e Instantánea** no usan nada de esto: son copias, y QGIS (`memory`) o GDAL (columna `fid`
     del GeoPackage) asignan su propio identificador.
 - **Tipo de geometría** (`type`): se declara o se deduce de los datos, porque DuckDB no guarda el
-  subtipo (F-71).
+  subtipo (F-71). Con varias familias la capa es `Unknown`, o una capa por familia con `family=`
+  (spatial-spec §6).
+- **Formato de la geometría** (`geomformat`): `geometry` (tipo `GEOMETRY`, por defecto), o `wkb`/`wkt` para
+  una columna `BLOB`/`VARCHAR` marcada como geometría por el usuario (spatial-spec §2.2). La lectura la
+  convierte en DuckDB (`TRY(ST_GeomFromWKB(…))`, `TRY(…::GEOMETRY)`, núcleo, sin `spatial`), así que
+  extensión y filtro espacial se empujan igual; al guardar se escribe de vuelta con `ST_AsWKB`/`ST_AsText`.
+- **Varias geometrías:** una capa Conectada por columna marcada, cada una con su `geom` (spatial-spec §7).
 
 ### 5.2 Peticiones de QGIS → SQL
 
@@ -148,7 +154,8 @@ una sola operación del worker, ejecuta:
    huella difiere de la registrada cuando QGIS la leyó, ROLLBACK y se informa la lista de entidades en
    conflicto. Así, si DuckDB compactó la tabla y un `rowid` pasó a otra fila, se detecta: **nunca se
    escribe en otra fila**.
-3. **Validación previa** (antes de tocar DuckDB): tipo de geometría compatible con la capa, columnas de
+3. **Validación previa** (antes de tocar DuckDB): tipo de geometría compatible con la capa (y con su
+   formato: en `geomformat=wkb|wkt` se escribe de vuelta en ese formato), columnas de
    la clave sin cambios, columnas convertidas por §7 sin cambios, y valor para la clave de cada alta si
    DuckDB no lo pone.
 4. **Escrituras por lotes por `rowid`** (estable dentro de la transacción) con tablas Arrow registradas en
@@ -202,10 +209,10 @@ Las expresiones se aplican en DuckDB, antes de Arrow:
 | `TIMESTAMP`, `TIMESTAMP_S/MS/NS` | `TIMESTAMP` (µs) | `TIMESTAMP_NS` pierde sub-µs: se avisa |
 | `TIMESTAMPTZ` | `TIMESTAMPTZ` en UTC | se documenta la zona |
 | `TIME`, `TIMETZ`, `INTERVAL` | `VARCHAR` ISO | no se inventa fecha (F-47) |
-| `BLOB`, `BIT` | igual / `VARCHAR` | no se trata un BLOB como geometría |
+| `BLOB`, `BIT` | igual / `VARCHAR` | un BLOB no es geometría salvo que el usuario lo marque (spatial-spec §2.2) |
 | `LIST`, `STRUCT`, `MAP`, `UNION`, `ARRAY` | `VARCHAR` JSON | se avisa la pérdida de estructura |
 | Geometría primaria | `geoarrow.wkb` + CRS | ADR-0008 |
-| Geometrías no primarias | se omiten | se avisa; el usuario elige otra primaria |
+| Geometrías no elegidas | se excluyen de los atributos | se avisa; el usuario puede marcarlas para crear sus capas (spatial-spec §7) |
 | `NULL` | `NULL` real de QGIS | nunca `"None"` |
 
 La Conectada aplica la misma tabla en la lectura. En la escritura convierte de vuelta solo los tipos que
@@ -227,8 +234,7 @@ se muestra antes de publicar la capa.
 ## 9. IDs, orden y atributos
 
 - **Memoria e Instantánea:** FID nativo de la capa; la columna de id del usuario queda como atributo.
-- **Conectada:** FID = clave primaria entera. Sin ella la capa es de solo lectura y su FID es
-  posicional, válido solo durante una petición.
+- **Conectada:** FID según §5.1 (`key`, `map`, `rowid` o `content`).
 - Un SQL sin `ORDER BY` no garantiza el orden; no se usa para identidad.
 - El nombre lo decide el usuario. Por defecto es el título del resultado o el nombre del objeto, con el
   sufijo de la geometría si hay varias.
