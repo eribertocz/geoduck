@@ -1,7 +1,7 @@
 # G3 · `v0.4.0a1` — evidencia de aceptación (AT-BRD-001..012)
 
-**Estado:** propuesta para revisión del propietario. El gate de G3 lo da por cumplido el propietario al
-fusionar; este documento reúne la evidencia.
+**Estado:** **Aprobado para cierre** por el propietario (2026-11-02, fusión de #62–#64). G3 queda cerrado.
+**Commit verificado:** `d977e29` en `main` (merge de #64), CI 14/14. Versión `0.4.0a1` en `metadata.txt`.
 **Contrato:** `spec/specs/qgis-bridge-spec.md`, `spec/qa/test-strategy.md` (AT-BRD), ADR-0012.
 
 ## 1. Matriz verificada

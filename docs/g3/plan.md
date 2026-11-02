@@ -1,6 +1,6 @@
 # G3 · `v0.4.0a1` QGIS Bridge — plan integral (tres modalidades)
 
-**Estado:** En ejecución (decisión del propietario, 2026-11-02). **ADR-0012.**
+**Estado:** Cerrado (2026-11-02; fusión de #62–#64). **ADR-0012.**
 **Requisitos:** GD-BRD-001..012. **Contrato:** `spec/specs/qgis-bridge-spec.md`; `spatial-spec` §4–§5 (C4);
 ADR-0006, ADR-0008, ADR-0010, ADR-0012.
 
@@ -61,9 +61,9 @@ el código del complemento se escribe de nuevo con las fronteras de ADR-0010 y s
 | E2 Memoria | Hecha | #59 |
 | E3 Instantánea | Hecha | #60 |
 | E4 Interfaz «Cargar en QGIS» | Hecha | #61 |
-| E5 Conectada (lectura) | Hecha: proveedor `geoduck`, metadatos en una operación, páginas por FID con prioridad, pushdown de extensión/FID/columnas/expresiones, «no disponible» sin sesión | en revisión |
-| E6 Conectada (edición) | Hecha: guardado atómico desde `beforeCommitChanges`, huellas, lotes Arrow, validación previa, transacción del usuario, época de datos | en revisión |
-| E7 Ciclo de vida y aceptación | Hecha: no disponible/reconexión tras DETACH, cierre y reapertura; cambios sin guardar bloquean DETACH y cierre; `docs/g3/acceptance.md` | en revisión |
+| E5 Conectada (lectura) | Hecha: proveedor `geoduck`, metadatos en una operación, páginas por FID con prioridad, pushdown de extensión/FID/columnas/expresiones, «no disponible» sin sesión | #62 |
+| E6 Conectada (edición) | Hecha: guardado atómico desde `beforeCommitChanges`, huellas, lotes Arrow, validación previa, transacción del usuario, época de datos | #63 |
+| E7 Ciclo de vida y aceptación | Hecha: no disponible/reconexión tras DETACH, cierre y reapertura; cambios sin guardar bloquean DETACH y cierre; `docs/g3/acceptance.md` | #64 |
 
 Hallazgos de implementación: QGIS asigna `EPSG:4326` en silencio a una capa memory sin CRS (se fija
 siempre explícito); GDAL mezclado en un GeoPackage → una capa por familia y otra «sin geometría» con
