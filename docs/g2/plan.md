@@ -1,7 +1,7 @@
 # G2 · `v0.3.0a1` SQL Execution — plan de inicio
 
-**Estado:** Propuesta (2026-11-01). Empieza cuando se apruebe el cierre de G1. El alcance es el del roadmap;
-no se amplía.
+**Estado:** **Autorizado** (2026-11-01), con las decisiones de §4. El alcance es el del roadmap; no se
+amplía.
 
 **Objetivo (roadmap §2):** scripts mixtos, resultados y previews; ATTACH/DETACH desde SQL conciliados con la
 UI (GD-SES-003, parte SQL).
@@ -13,11 +13,11 @@ UI (GD-SES-003, parte SQL).
 
 | Paso | Trabajo | Requisito / prueba |
 |---|---|---|
-| 1 | **Spike G2-A** (roadmap §3): `extract_statements` en 1.5.x y 2.x (tipos de sentencia, posiciones en el texto para mapear errores y selección), multisentencia, `RETURNING`, `WITH … INSERT`. Junto con el **spike G0-B** (#11): editor SQL nativo en PyQGIS 3/4 (`QgsCodeEditorSQL` u otro), con una sola implementación principal | Evidencia en `docs/evidence/g2/`; decisión del arquitecto |
+| 1 | **Pruebas breves** (decisión 1). **Spike G2-A** (roadmap §3): `extract_statements` en 1.5.x y 2.x (tipos de sentencia, posiciones en el texto para mapear errores y selección), multisentencia, `RETURNING`, `WITH … INSERT`. Junto con el **spike G0-B** (#11): editor SQL nativo en PyQGIS 3/4 (`QgsCodeEditorSQL` u otro), con una sola implementación principal | Evidencia en `docs/evidence/g2/`; decisión del arquitecto |
 | 2 | Modelo de ejecución: `run_id`, `statement_id`, tipo, estado, `duration_ms`, mensaje, `error_range`, `catalog_epoch`; tipos de salida (estado, lectura tabular, escritura con filas, plan) | sql-editor-spec §2–§3 |
-| 3 | Motor: división con el parser oficial (nunca `split(';')`), ejecución en orden en el worker serial, parada en el primer error con el estado transaccional del paso 6 de G1 | GD-SQL-001, 002; AT-SQL-001, 002 |
+| 3 | Motor: división con el parser oficial (nunca `split(';')`), ejecución en orden en el worker serial, parada en el primer error. **Estado transaccional comprobado después de cada sentencia** (decisión 2) | GD-SQL-001, 002; AT-SQL-001, 002 |
 | 4 | Vista previa acotada (50/200/500/1000; 200 por defecto) sin `fetchall()` y sin dejar lectores abiertos | GD-SQL-005; AT-SQL-005 |
-| 5 | Caso de uso «ejecutar sentencia actual / selección / todo», cancelación y eventos por sentencia; conciliación del catálogo tras ATTACH/DETACH/CREATE/DROP en SQL, con previews marcadas como posiblemente obsoletas | GD-SQL-004; GD-SES-003 (SQL); AT-SQL-004 |
+| 5 | Caso de uso «ejecutar sentencia actual / selección / todo», cancelación y eventos por sentencia; conciliación del catálogo tras ATTACH/DETACH/CREATE/DROP en SQL; **invalidación conservadora de las previews** (decisión 3) | GD-SQL-004; GD-SES-003 (SQL); AT-SQL-004 |
 | 6 | Política de repetición: qué resultados se pueden volver a ejecutar para G3 (solo lecturas) y cuáles nunca (DDL/DML, `RETURNING`, ATTACH/DETACH) | GD-SQL-006; AT-SQL-006 |
 | 7 | UI: editor, acciones, pestañas de resultados con «Vista previa», registro de ejecuciones y errores con ubicación cuando DuckDB la dé | sql-editor-spec §1, §7 (P0); AT-SQL-003 |
 
@@ -36,12 +36,14 @@ y 4.2 cuando toca la UI.
 - Certificación Windows (#10).
 - Modernización visual del panel: GD-UX-001, en G5 (decisión del 2026-11-01).
 
-## 4. Preguntas para el arquitecto
+## 4. Decisiones del arquitecto (2026-11-01)
 
-1. **Spikes primero.** ¿Se aprueba empezar G2 por los spikes G2-A y G0-B (#11), y decidir el editor con su
-   evidencia antes de construir la UI?
-2. **Seguimiento transaccional del SQL del usuario.** Comprobar el estado tras **cada** sentencia cuesta dos
-   lecturas adicionales. ¿Se acepta hacerlo solo tras sentencias que pueden cambiarlo (BEGIN, COMMIT,
-   ROLLBACK, errores, cancelaciones), identificadas por el tipo que da el parser de DuckDB?
-3. **`catalog_epoch`.** Propuesta: un contador que el coordinador incrementa con cada catálogo nuevo
-   publicado; una preview queda «posiblemente obsoleta» si su `catalog_epoch` es anterior. ¿De acuerdo?
+1. **Pruebas breves primero:** parser de DuckDB (spike G2-A) y editor SQL en QGIS 3 y 4 (spike G0-B, #11),
+   con evidencia, antes de construir la UI.
+2. **Estado transaccional después de cada sentencia ejecutada**, sin excepciones por tipo de sentencia. Se
+   usa la comprobación de G1 (dos lecturas de `txid_current()`).
+3. **Invalidación conservadora de vistas previas.** Toda sentencia que pueda cambiar estructura o datos
+   (cualquiera que no sea una lectura, según el tipo que da el parser, y también un error o una
+   cancelación) marca como **posiblemente obsoletas** todas las vistas previas anteriores de la sesión.
+   GeoDuck **no promete** detectar cambios hechos fuera de la sesión (otros procesos, archivos externos):
+   una vista previa nunca se presenta como el estado actual de los datos.

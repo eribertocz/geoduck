@@ -1,7 +1,7 @@
-# G1 · `v0.2.0a1` Connections — Documento de aceptación (propuesta de cierre)
+# G1 · `v0.2.0a1` Connections — Documento de aceptación
 
-**Estado:** Propuesta para aprobación del propietario y del arquitecto (2026-11-01). G1 se cierra al
-aprobarse y fusionarse este documento (roadmap §1). No se ha creado ningún tag ni release.
+**Estado:** **Aprobado para cierre** por el arquitecto y el propietario (2026-11-01). G1 queda cerrado al
+fusionar este documento (roadmap §1). No se ha creado ningún tag ni release.
 
 **Commit verificado:** `dc9544b` en `main` (merge del PR #48).
 
@@ -84,7 +84,7 @@ una sola vez (INV-1..INV-5)».**
 Mientras #10 no termine, no se afirma compatibilidad certificada en Windows: las notas de cualquier
 release deben decirlo.
 
-## 7. Para aprobar
+## 7. Aprobación
 
-1. Cierre de G1 con lo pendiente de §6 como trabajo no bloqueante.
-2. Tag y release `v0.2.0a1`: requieren aprobación expresa aparte.
+1. **Aprobado** (2026-11-01): cierre de G1, con lo pendiente de §6 como trabajo no bloqueante.
+2. **Pendiente:** tag y release `v0.2.0a1`. Requieren aprobación expresa aparte.
