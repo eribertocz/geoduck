@@ -17,7 +17,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import PreviewsInvalidated
+from geoduck.app.events import LoadFinished, PreviewsInvalidated
 from geoduck.app.ports import SessionEngine
 from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
 from geoduck.infra.diagnostics import collect
@@ -47,6 +47,114 @@ def run_diagnostics() -> DiagnosticReport:
     return collect(spatial_prober=probe_spatial)
 
 
+def _vector_layer_type() -> Any:
+    """Tipo vectorial para las acciones de capa (3.34: `QgsMapLayerType`; 4.x: `Qgis.LayerType`)."""
+    from qgis.core import Qgis  # noqa: PLC0415
+
+    layer_type = getattr(Qgis, "LayerType", None)
+    if layer_type is not None:
+        return layer_type.Vector
+    from qgis.core import QgsMapLayerType  # noqa: PLC0415
+
+    return QgsMapLayerType.VectorLayer
+
+
+class GeometryValidity:
+    """«Diagnosticar geometrías…» en el menú de las capas cargadas por GeoDuck (spatial-spec §9, E4).
+
+    Une la tarea de QGIS (`qgis_bridge.validity`) con el diálogo (`ui.validity_dialog`).
+    """
+
+    def __init__(self, iface: Any, on_message: Any) -> None:
+        from qgis.core import QgsProject  # noqa: PLC0415
+
+        from geoduck.ui.validity_dialog import ValidityDialog  # noqa: PLC0415
+
+        self.iface = iface
+        self._on_message = on_message
+        self.dialog_factory: Any = ValidityDialog
+        self.tasks: list[Any] = []  # referencias vivas mientras corren
+        self.action = QAction(tr("Diagnosticar geometrías…"), iface.mainWindow())
+        self.action.setObjectName("geoduckDiagnoseGeometries")
+        self.action.triggered.connect(self.diagnose_active_layer)
+        self._project = QgsProject.instance()
+        self._layer_api = hasattr(iface, "addCustomActionForLayerType")
+        if self._layer_api:
+            iface.addCustomActionForLayerType(self.action, tr("GeoDuck"), _vector_layer_type(), False)
+        self._project.layersAdded.connect(self._on_layers_added)
+
+    def register(self, layer_ids: list[str]) -> None:
+        """Capas que GeoDuck acaba de cargar: el menú de capa ofrece el diagnóstico."""
+        for layer_id in layer_ids:
+            layer = self._project.mapLayer(layer_id)
+            if layer is not None and self._layer_api:
+                self.iface.addCustomActionForLayer(self.action, layer)
+
+    def _on_layers_added(self, layers: list[Any]) -> None:
+        from geoduck.qgis_bridge.provider import KEY  # noqa: PLC0415
+
+        self.register([lyr.id() for lyr in layers if getattr(lyr, "providerType", lambda: "")() == KEY])
+
+    def diagnose_active_layer(self) -> None:
+        layer = self.iface.activeLayer() if hasattr(self.iface, "activeLayer") else None
+        if layer is not None:
+            self.diagnose(layer)
+
+    def diagnose(self, layer: Any) -> Any:
+        from geoduck.qgis_bridge.validity import DiagnoseTask  # noqa: PLC0415
+
+        layer_id = layer.id()
+        task = DiagnoseTask(layer, lambda result: self._diagnosed(layer_id, task, result))
+        return self._start(task, tr("Diagnosticando geometrías de «{}»…").format(layer.name()))
+
+    def _start(self, task: Any, message: str) -> Any:
+        self.tasks.append(task)
+        self._on_message(message)
+        QgsApplication.taskManager().addTask(task)
+        return task
+
+    def _diagnosed(self, layer_id: str, task: Any, result: Any) -> None:
+        if task in self.tasks:
+            self.tasks.remove(task)
+        layer = self._project.mapLayer(layer_id)
+        if isinstance(result, BaseException) or layer is None:
+            self._on_message(tr("Diagnóstico no completado: ") + str(getattr(result, "message", result)))
+            return
+        layer.selectByIds(list(result.selected))
+        self._on_message(
+            tr("Diagnóstico de «{}»: {} inválidas, {} ilegibles, {} sin geometría, {} vacías").format(
+                result.layer_name, result.invalid, result.unreadable, result.null, result.empty
+            )
+        )
+        dialog = self.dialog_factory(
+            result, self.iface.mainWindow(), on_repair=lambda: self.repair(layer, result.invalid_fids)
+        )
+        dialog.exec()
+
+    def repair(self, layer: Any, invalid_fids: tuple[int, ...]) -> Any:
+        from geoduck.qgis_bridge.validity import RepairTask  # noqa: PLC0415
+
+        task = RepairTask(layer, invalid_fids, lambda result: self._repaired(task, result))
+        return self._start(task, tr("Reparando geometrías de «{}» en una copia…").format(layer.name()))
+
+    def _repaired(self, task: Any, result: Any) -> None:
+        if task in self.tasks:
+            self.tasks.remove(task)
+        if isinstance(result, BaseException):
+            self._on_message(tr("Reparación no completada: ") + str(getattr(result, "message", result)))
+            return
+        self._on_message(result.message())
+
+    def unload(self) -> None:
+        import contextlib  # noqa: PLC0415
+
+        with contextlib.suppress(TypeError, RuntimeError):
+            self._project.layersAdded.disconnect(self._on_layers_added)
+        if self._layer_api:
+            self.iface.removeCustomActionForLayerType(self.action)
+        self.action.deleteLater()
+
+
 class GeoDuckPlugin:
     def __init__(self, iface: Any) -> None:
         self.iface = iface
@@ -56,6 +164,7 @@ class GeoDuckPlugin:
         self.dispatcher: QtDispatcher | None = None
         self.coordinator: SessionCoordinator | None = None
         self.loader: Any = None
+        self.validity: GeometryValidity | None = None
 
     def initGui(self) -> None:  # noqa: N802 - nombre exigido por QGIS
         self.dispatcher = QtDispatcher()
@@ -86,12 +195,19 @@ class GeoDuckPlugin:
         self.about_action.setObjectName("geoduckAbout")
         self.about_action.triggered.connect(self.dock.show_about)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.about_action)
+        self.validity = GeometryValidity(self.iface, self.dock.show_text)
 
     def _on_app_event(self, event: object) -> None:
+        if isinstance(event, LoadFinished) and self.validity is not None:
+            report = event.report
+            self.validity.register([i for i, _ in report.layers] or [report.layer_id])
         if isinstance(event, PreviewsInvalidated) and self.loader is not None:
             self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 
     def unload(self) -> None:
+        if self.validity is not None:
+            self.validity.unload()
+            self.validity = None
         if self.coordinator is not None and not self.coordinator.shutdown(UNLOAD_TIMEOUT_S):
             _log.warning("GeoDuck se descargó con el motor aún terminando")
         if self.dispatcher is not None:

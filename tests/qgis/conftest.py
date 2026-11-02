@@ -71,6 +71,23 @@ class FakeIface:
     def removeDatabaseToolBarIcon(self, action):
         self.toolbar.remove(action)
 
+    # Acciones del menú de capa (G4: «Diagnosticar geometrías…»)
+    layer_actions: dict
+    active_layer = None
+
+    def addCustomActionForLayerType(self, action, menu, layer_type, all_layers):
+        self.layer_actions = getattr(self, "layer_actions", {})
+        self.layer_actions[action] = []
+
+    def addCustomActionForLayer(self, action, layer):
+        self.layer_actions[action].append(layer.id())
+
+    def removeCustomActionForLayerType(self, action):
+        return self.layer_actions.pop(action, None) is not None
+
+    def activeLayer(self):
+        return self.active_layer
+
 
 @pytest.fixture
 def iface(qgis_app):

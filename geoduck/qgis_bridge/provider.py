@@ -54,6 +54,7 @@ from qgis.core import (
 )
 
 from geoduck.domain.bridge_types import (
+    UNREADABLE,
     GeometryFormat,
     LoadPlan,
     build_load_plan,
@@ -197,6 +198,10 @@ def base_sql(  # noqa: PLR0917 - las piezas de la URI que definen la consulta
     if plan.geometry is not None:
         g = plan.geometry
         cols.append(f"{geometry_read_sql(g.name, g.format)} AS {quote_identifier(g.name)}")
+        if g.format is not GeometryFormat.GEOMETRY:  # ilegibles: para el diagnóstico (spatial-spec §9)
+            raw = quote_identifier(g.name)
+            flag = f"({raw} IS NOT NULL AND {geometry_read_sql(g.name, g.format)} IS NULL)"
+            cols.append(f"{flag} AS {quote_identifier(UNREADABLE)}")
     if hashed:
         cols.append(quote_identifier(HASH))
     return f"SELECT {', '.join(cols)} FROM ({numbered}) AS __geoduck_q"
@@ -619,6 +624,26 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         if self.scope == "attached":
             return sessions.current()
         return sessions.get(self.session)
+
+    def unreadable_fids(self, timeout: float = 600.0) -> list[int]:
+        """FID de las entidades cuya geometría WKB/WKT no se pudo leer (spatial-spec §9). Bloquea: se usa
+        desde la tarea de diagnóstico, nunca desde el hilo principal."""
+        g = self.plan.geometry
+        engine = self.engine()
+        if g is None or g.format is GeometryFormat.GEOMETRY or engine is None:
+            return []
+        ids = id_columns(self.fid_mode, self.keys)
+        cols = ", ".join(quote_identifier(c) for c in ids)
+        sql = f"SELECT {cols} FROM ({self.base}) AS __geoduck_u WHERE {quote_identifier(UNREADABLE)}"
+        out: list[int] = []
+        for batch in engine.read_table(sql, priority=False).future.result(timeout):
+            names = batch.schema.names
+            if self.fid_mode == "map":
+                columns = [batch.column(names.index(c)).to_pylist() for c in ids]
+                out.extend(self.fid_for(k) for k in zip(*columns, strict=True))
+            else:
+                out.extend(int(v) for v in batch.column(names.index(FID)).to_pylist())
+        return out
 
     def fid_for(self, key: tuple[Any, ...]) -> int:
         """Modo `map` (PktFidMap de QGIS): FID estable en esta sesión de QGIS para un valor de la clave."""
