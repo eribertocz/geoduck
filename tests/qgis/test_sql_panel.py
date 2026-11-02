@@ -184,3 +184,12 @@ def test_about_dialog_shows_version_license_links_and_components(session):
     assert coordinator.engine_info.duckdb_version in texts
     assert "@" not in texts  # ningún correo
     assert plugin.about_action.text() == "Acerca de GeoDuck…"
+
+
+def test_displayed_version_is_the_real_package_version(session):
+    from geoduck import __version__
+    from geoduck.ui.about_dialog import version_text
+
+    plugin, _panel, _coordinator = session
+    assert plugin.dock.version_label.text() == f"v{__version__} · Alpha"
+    assert version_text() == f"Versión {__version__} · Alpha"

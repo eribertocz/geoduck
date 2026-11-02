@@ -20,11 +20,18 @@ from qgis.PyQt.QtWidgets import (
 from geoduck import __version__
 from geoduck.domain.diagnostics import DiagnosticReport
 from geoduck.domain.operations import EngineInfo
+from geoduck.domain.versions import release_stage
 from geoduck.ui.i18n import tr
 from geoduck.ui.widgets import secondary
 
 REPOSITORY = "https://github.com/eribertocz/geoduck"
 _ICON = Path(__file__).resolve().parent.parent / "resources" / "icon.svg"
+
+
+def version_text() -> str:
+    """Versión real del paquete (`geoduck.__version__`, igual a `metadata.txt`) y su etapa."""
+    stage = release_stage(__version__)
+    return tr("Versión") + f" {__version__}" + (f" · {stage}" if stage else "")
 
 
 def components(report: DiagnosticReport | None, engine: EngineInfo | None) -> list[tuple[str, str]]:
@@ -61,7 +68,7 @@ class AboutDialog(QDialog):
         font.setPointSizeF(font.pointSizeF() * 1.4)
         font.setBold(True)
         name.setFont(font)
-        version = secondary(QLabel(tr("Versión") + f" {__version__} · Alpha"))
+        version = secondary(QLabel(version_text()))
         heading = QVBoxLayout()
         heading.setSpacing(2)
         heading.addWidget(name)

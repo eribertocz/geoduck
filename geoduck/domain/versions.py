@@ -36,3 +36,16 @@ class Version:
 
     def __str__(self) -> str:
         return f"{self.major}.{self.minor}.{self.patch}"
+
+
+def release_stage(version: str) -> str:
+    """Etapa que se muestra junto a la versión del paquete, derivada de ella (PEP 440): `0.1.0a1` → «Alpha».
+
+    Así la interfaz nunca contradice la versión real.
+    """
+    tail = version.lower().split("+", 1)[0]
+    for marker, stage in (("rc", "RC"), ("b", "Beta"), ("a", "Alpha")):
+        core, sep, rest = tail.partition(marker)
+        if sep and rest[:1].isdigit() and core[-1:].isdigit():
+            return stage
+    return ""

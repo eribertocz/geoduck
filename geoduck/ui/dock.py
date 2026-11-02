@@ -44,6 +44,7 @@ from geoduck.domain.catalog import AttachRequest, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.domain.transaction import CloseChoice
+from geoduck.domain.versions import release_stage
 from geoduck.ui.about_dialog import AboutDialog
 from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.close_dialog import CloseTransactionDialog
@@ -226,7 +227,9 @@ class GeoDuckDock(QDockWidget):
         footer.addWidget(self.diagnostics_button)
         footer.addWidget(self.about_button)
         footer.addStretch(1)
-        footer.addWidget(secondary(QLabel(f"v{__version__} · Alpha")))
+        stage = release_stage(__version__)
+        self.version_label = secondary(QLabel(f"v{__version__}" + (f" · {stage}" if stage else "")))
+        footer.addWidget(self.version_label)
         return footer
 
     # -- acciones ----------------------------------------------------------------------------------
