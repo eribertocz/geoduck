@@ -192,3 +192,18 @@ def test_registered_arrow_and_execute_many(worker):
     # la vista registrada no queda en la sesión
     with pytest.raises(Exception):  # noqa: B017
         run(worker, "SELECT * FROM __upd")
+
+
+def test_geometry_preview_works_in_every_version(worker):
+    """DuckDB 1.5.0 no convierte GEOMETRY a Python: la vista previa lo describe sin fallar (G3/E4)."""
+    from geoduck.domain.sql import RunScope, StatementStatus
+
+    run = worker.run_script(
+        run_id=1,
+        text="SELECT 1 AS id, 'POINT(1 2)'::GEOMETRY('OGC:CRS84') AS g, "
+        "'POLYGON Z((0 0 0, 1 0 0, 1 1 0, 0 0 0))'::GEOMETRY AS p, NULL::GEOMETRY AS n",
+        scope=RunScope.ALL,
+    ).future.result(TIMEOUT)
+    result = run.results[0]
+    assert result.status is StatementStatus.OK
+    assert result.preview.rows[0] == (1, "POINT · 21 B", "POLYGON Z · 109 B", None)

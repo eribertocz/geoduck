@@ -31,6 +31,7 @@ from typing import Any, Generic, TypeVar
 
 import duckdb
 
+from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import (
     ActiveResultError,
@@ -123,7 +124,18 @@ class ConnectionHandle:
         description = result.description
         if not description:
             return StatementOutcome()
-        fetched = result.fetchmany(max_rows + 1)
+        types = [str(d[1]) for d in description]
+        geometry = [i for i, t in enumerate(types) if is_geometry_type(t)]
+        if geometry and not self._caps.python_geometry:
+            # DuckDB 1.5.0 no convierte GEOMETRY a Python («Unsupported type»): vista previa por Arrow.
+            fetched = _arrow_preview(result, max_rows + 1, types)
+        else:
+            fetched = result.fetchmany(max_rows + 1)
+            if geometry:  # misma presentación en todas las versiones: «TIPO · n B»
+                fetched = [
+                    tuple(describe_wkb(v) if i in geometry else v for i, v in enumerate(row))
+                    for row in fetched
+                ]
         truncated = len(fetched) > max_rows
         if self._caps.has_complete:
             self._con.complete()
@@ -652,3 +664,45 @@ def _wrap_start_error(exc: BaseException) -> BaseException:
     if isinstance(exc, duckdb.Error):
         return EngineError(f"No se pudo iniciar DuckDB: {_first_line(exc)}", detail=type(exc).__name__)
     return exc
+
+
+_WKB_NAMES = {
+    1: "POINT",
+    2: "LINESTRING",
+    3: "POLYGON",
+    4: "MULTIPOINT",
+    5: "MULTILINESTRING",
+    6: "MULTIPOLYGON",
+    7: "GEOMETRYCOLLECTION",
+}
+
+
+def describe_wkb(value: bytes | None) -> str | None:
+    """Texto breve para la vista previa: tipo de geometría y tamaño del WKB."""
+    if value is None:
+        return None
+    if len(value) < 5:
+        return f"GEOMETRY · {len(value)} B"
+    code = int.from_bytes(value[1:5], "little" if value[0] == 1 else "big")
+    name = _WKB_NAMES.get(code % 1000, "GEOMETRY")
+    suffix = {1: " Z", 2: " M", 3: " ZM"}.get(code // 1000, "")
+    return f"{name}{suffix} · {len(value)} B"
+
+
+def _arrow_preview(result: Any, limit: int, types: list[str]) -> list[tuple[Any, ...]]:
+    """Hasta `limit` filas leídas por Arrow; las columnas de geometría se describen como texto."""
+    reader = result.fetch_record_batch(limit)  # solo en 1.5.0, donde es la API vigente
+    rows: list[tuple[Any, ...]] = []
+    try:
+        for batch in reader:
+            columns = batch.to_pydict()
+            values = [
+                [describe_wkb(v) for v in col] if is_geometry_type(types[i]) else col
+                for i, col in enumerate(columns.values())
+            ]
+            rows.extend(zip(*values, strict=True))
+            if len(rows) >= limit:
+                break
+    finally:
+        reader.close()
+    return rows[:limit]

@@ -50,6 +50,8 @@ class EngineCapabilities:
     attach_accepts_parameters: bool
     #: `con.complete()` existe para terminar un resultado DB-API abierto sin leerlo (2.0+).
     has_complete: bool
+    #: `fetchmany` convierte GEOMETRY a Python (1.5.1+; en 1.5.0 «Unsupported type», hallazgo de G3/E4).
+    python_geometry: bool = True
 
     @classmethod
     def for_version(cls, text: str) -> EngineCapabilities:
@@ -63,6 +65,7 @@ class EngineCapabilities:
             engine_guards_open_result=is_2x,
             attach_accepts_parameters=is_2x,
             has_complete=is_2x,
+            python_geometry=v.at_least(1, 5, 1),
         )
 
 
