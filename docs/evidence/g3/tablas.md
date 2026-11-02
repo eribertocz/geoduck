@@ -80,6 +80,110 @@ Cancelación a mitad de la carga:
 | adbc-sql | 5,000,000 | — | 0.327 | 0.375 | 49,729 · 3.669 | 3.499 | 6.059 | 7.832 | 2.742 | (ninguno) | **no** |
 | ↳ tablas que lista ADBC: `[]` | | | | | | | | | | | |
 
+## Edición conectada con guardado previo — `pyprovider_txn_q344.json`
+
+QGIS 3.44.14-Solothurn
+
+| caso | n | estrategia | QGIS informa éxito | íntegro / DuckDB sin cambios | búfer conservado | guardado s |
+|---|---:|---|---|---|---|---:|
+| commit_ok | 100 | row | sí | sí | — | 0.297 |
+| commit_ok | 100 | many | sí | sí | — | 0.287 |
+| commit_ok | 100 | arrow | sí | sí | — | 0.032 |
+| conflict_on_edited_row | 100 | — | **no** | sí | sí | — |
+| conflict_retry_after_reread | 100 | — | sí | sí | — | — |
+| naive_provider_concurrent | 100 | — | sí | — | — | — |
+| sql_change_on_other_row | 100 | — | sí | sí | — | — |
+| error_mid_batch | 100 | — | **no** | sí | sí | — |
+| error_fixed_retry | 100 | — | sí | sí | — | — |
+| cancel_during_commit | 100 | — | **no** | sí | sí | 0.114 |
+| cancel_retry | 100 | — | sí | sí | — | — |
+| incompatible_geometry | 100 | — | **no** | sí | — | — |
+| user_transaction_open | 100 | — | **no** | — | sí | — |
+| user_transaction_retry | 100 | — | sí | sí | — | — |
+| detach_before_commit | 100 | — | **no** | — | sí | — |
+| commit_ok | 1,000 | row | sí | sí | — | 2.864 |
+| commit_ok | 1,000 | many | sí | sí | — | 2.81 |
+| commit_ok | 1,000 | arrow | sí | sí | — | 0.069 |
+| conflict_on_edited_row | 1,000 | — | **no** | sí | sí | — |
+| conflict_retry_after_reread | 1,000 | — | sí | sí | — | — |
+| naive_provider_concurrent | 1,000 | — | sí | — | — | — |
+| sql_change_on_other_row | 1,000 | — | sí | sí | — | — |
+| error_mid_batch | 1,000 | — | **no** | sí | sí | — |
+| error_fixed_retry | 1,000 | — | sí | sí | — | — |
+| cancel_during_commit | 1,000 | — | **no** | sí | sí | 0.128 |
+| cancel_retry | 1,000 | — | sí | sí | — | — |
+| incompatible_geometry | 1,000 | — | **no** | sí | — | — |
+| user_transaction_open | 1,000 | — | **no** | — | sí | — |
+| user_transaction_retry | 1,000 | — | sí | sí | — | — |
+| detach_before_commit | 1,000 | — | **no** | — | sí | — |
+| commit_ok | 10,000 | row | sí | sí | — | 29.426 |
+| commit_ok | 10,000 | many | sí | sí | — | 26.197 |
+| commit_ok | 10,000 | arrow | sí | sí | — | 0.556 |
+| conflict_on_edited_row | 10,000 | — | **no** | sí | sí | — |
+| conflict_retry_after_reread | 10,000 | — | sí | sí | — | — |
+| naive_provider_concurrent | 10,000 | — | sí | — | — | — |
+| sql_change_on_other_row | 10,000 | — | sí | sí | — | — |
+| error_mid_batch | 10,000 | — | **no** | sí | sí | — |
+| error_fixed_retry | 10,000 | — | sí | sí | — | — |
+| cancel_during_commit | 10,000 | — | **no** | sí | sí | 0.35 |
+| cancel_retry | 10,000 | — | sí | sí | — | — |
+| incompatible_geometry | 10,000 | — | **no** | sí | — | — |
+| user_transaction_open | 10,000 | — | **no** | — | sí | — |
+| user_transaction_retry | 10,000 | — | sí | sí | — | — |
+| detach_before_commit | 10,000 | — | **no** | — | sí | — |
+
+## Edición conectada con guardado previo — `pyprovider_txn_q42.json`
+
+QGIS 4.2.3-Belém do Pará
+
+| caso | n | estrategia | QGIS informa éxito | íntegro / DuckDB sin cambios | búfer conservado | guardado s |
+|---|---:|---|---|---|---|---:|
+| commit_ok | 100 | row | sí | sí | — | 0.305 |
+| commit_ok | 100 | many | sí | sí | — | 0.281 |
+| commit_ok | 100 | arrow | sí | sí | — | 0.037 |
+| conflict_on_edited_row | 100 | — | **no** | sí | sí | — |
+| conflict_retry_after_reread | 100 | — | sí | sí | — | — |
+| naive_provider_concurrent | 100 | — | sí | — | — | — |
+| sql_change_on_other_row | 100 | — | sí | sí | — | — |
+| error_mid_batch | 100 | — | **no** | sí | sí | — |
+| error_fixed_retry | 100 | — | sí | sí | — | — |
+| cancel_during_commit | 100 | — | **no** | sí | sí | 0.143 |
+| cancel_retry | 100 | — | sí | sí | — | — |
+| incompatible_geometry | 100 | — | **no** | sí | — | — |
+| user_transaction_open | 100 | — | **no** | — | sí | — |
+| user_transaction_retry | 100 | — | sí | sí | — | — |
+| detach_before_commit | 100 | — | **no** | — | sí | — |
+| commit_ok | 1,000 | row | sí | sí | — | 2.797 |
+| commit_ok | 1,000 | many | sí | sí | — | 2.382 |
+| commit_ok | 1,000 | arrow | sí | sí | — | 0.063 |
+| conflict_on_edited_row | 1,000 | — | **no** | sí | sí | — |
+| conflict_retry_after_reread | 1,000 | — | sí | sí | — | — |
+| naive_provider_concurrent | 1,000 | — | sí | — | — | — |
+| sql_change_on_other_row | 1,000 | — | sí | sí | — | — |
+| error_mid_batch | 1,000 | — | **no** | sí | sí | — |
+| error_fixed_retry | 1,000 | — | sí | sí | — | — |
+| cancel_during_commit | 1,000 | — | **no** | sí | sí | 0.132 |
+| cancel_retry | 1,000 | — | sí | sí | — | — |
+| incompatible_geometry | 1,000 | — | **no** | sí | — | — |
+| user_transaction_open | 1,000 | — | **no** | — | sí | — |
+| user_transaction_retry | 1,000 | — | sí | sí | — | — |
+| detach_before_commit | 1,000 | — | **no** | — | sí | — |
+| commit_ok | 10,000 | row | sí | sí | — | 29.056 |
+| commit_ok | 10,000 | many | sí | sí | — | 25.607 |
+| commit_ok | 10,000 | arrow | sí | sí | — | 0.608 |
+| conflict_on_edited_row | 10,000 | — | **no** | sí | sí | — |
+| conflict_retry_after_reread | 10,000 | — | sí | sí | — | — |
+| naive_provider_concurrent | 10,000 | — | sí | — | — | — |
+| sql_change_on_other_row | 10,000 | — | sí | sí | — | — |
+| error_mid_batch | 10,000 | — | **no** | sí | sí | — |
+| error_fixed_retry | 10,000 | — | sí | sí | — | — |
+| cancel_during_commit | 10,000 | — | **no** | sí | sí | 0.35 |
+| cancel_retry | 10,000 | — | sí | sí | — | — |
+| incompatible_geometry | 10,000 | — | **no** | sí | — | — |
+| user_transaction_open | 10,000 | — | **no** | — | sí | — |
+| user_transaction_retry | 10,000 | — | sí | sí | — | — |
+| detach_before_commit | 10,000 | — | **no** | — | sí | — |
+
 ## Fidelidad de tipos (driver Arrow de GDAL) — `types_q344.json`
 
 Geometría principal: tipo 1, CRS EPSG:4326, `Point (1 2)`. Segunda geometría accesible: **no**.

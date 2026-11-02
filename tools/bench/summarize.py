@@ -120,6 +120,23 @@ def ondemand(path: str) -> list[str]:
     return out
 
 
+def txn(path: str) -> list[str]:
+    data = _load(path)
+    out = [
+        f"QGIS {data['qgis']}",
+        "",
+        "| caso | n | estrategia | QGIS informa éxito | íntegro / DuckDB sin cambios | búfer conservado | guardado s |",
+        "|---|---:|---|---|---|---|---:|",
+    ]
+    for r in data["runs"]:
+        integ = r.get("integrity", r.get("db_unchanged", r.get("db_applied")))
+        out.append(
+            f"| {r['case']} | {r['n']:,} | {r.get('batch', '—')} | {_yes(r.get('qgis_ok'))} | {_yes(integ)} | "
+            f"{_yes(r.get('buffer_kept'))} | {r.get('commit_s', r.get('s', '—'))} |"
+        )
+    return out
+
+
 def main() -> None:
     folder = sys.argv[1] if len(sys.argv) > 1 else "docs/evidence/g3"
     lines = [
@@ -131,6 +148,7 @@ def main() -> None:
     sections = [
         ("compare_*.json", "Comparación de rutas", compare),
         ("ondemand_*.json", "Lectura bajo demanda", ondemand),
+        ("pyprovider_txn_*.json", "Edición conectada con guardado previo", txn),
         ("types_*.json", "Fidelidad de tipos (driver Arrow de GDAL)", types),
         ("result_q*.json", "Bench de transferencia a capa memory", bench),
         ("result_engine_*.json", "Etapa de motor (sin QGIS)", bench),

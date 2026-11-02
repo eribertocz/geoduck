@@ -26,6 +26,12 @@ cambios ni informar guardados que DuckDB no hizo? Se compara con la instantánea
   QGIS entero en **una** transacción antes de que QGIS llame al proveedor, con control optimista por
   huella de fila. Con los métodos estándar del proveedor no hay atomicidad posible: o se guarda a medias
   o QGIS pierde cambios en silencio (F-72).
+- **Probado con 100, 1 000 y 10 000 entidades en QGIS 3.44 y 4.2:**
+  - QGIS informa éxito **solo** si DuckDB confirmó;
+  - ningún fallo (conflicto, error, cancelación, transacción abierta, DETACH) escribe nada ni pierde
+    cambios del búfer;
+  - los cambios concurrentes desde SQL se detectan en lugar de perderse;
+  - con lotes Arrow, 10 000 cambios se guardan en ≈ 0,6 s (F-75..F-79).
 - **Complejidad:**
   - proveedor de lectura de calidad alfa: ≈ 2 500–3 500 líneas más pruebas;
   - edición segura: ≈ 1 000–1 500 líneas más;
@@ -121,7 +127,44 @@ transacción del worker:
 Después, los métodos del proveedor solo informan el veredicto. Así **QGIS informa éxito solo si DuckDB
 confirmó**, y si no, conserva el búfer entero para corregir y reintentar.
 
-‹RESULTADOS_EDICION›
+**Resultados** (`pyprovider_txn_*.json`). Cada guardado mezcla n cambios de dos atributos, n/2 de
+geometría, n/4 bajas y n altas; tabla de 60 000 filas con RTree. Iguales en QGIS 3.44 y 4.2, con
+n = 100, 1 000 y 10 000:
+
+| Caso | QGIS informa | DuckDB | Búfer de QGIS | Recuperación |
+|---|---|---|---|---|
+| Guardado correcto (`row`, `many`, `arrow`) | éxito | todo aplicado; filas no tocadas intactas (comprobado fila a fila) | vacío | — |
+| El panel SQL cambió una fila que QGIS editaba | **fallo: «Conflicto: k entidad(es)…»** | sin cambios; el cambio de SQL se conserva | entero | Releer la fila (sobrescribir a sabiendas) y reintentar: éxito e íntegro |
+| El panel SQL cambió una fila que QGIS no toca | éxito | se conservan ambos cambios | vacío | — |
+| Error de DuckDB en la última alta (NOT NULL) | fallo con el mensaje de DuckDB | sin cambios | entero | Corregir y reintentar: éxito |
+| Cancelación durante el guardado (interrupt del worker) | fallo («Operación cancelada») en 0,11–0,35 s | sin cambios (ROLLBACK) | entero | Reintentar: éxito e íntegro |
+| Geometría incompatible con la capa | fallo | sin cambios | entero | — |
+| Transacción del usuario abierta | fallo con aviso | sin cambios | entero | Tras COMMIT/ROLLBACK del usuario: éxito |
+| DETACH antes de guardar | fallo con el error del motor | — | entero | — |
+| *Proveedor sin guardado previo (G3-C), cambio concurrente* | *éxito* | ***el cambio de SQL se pierde sin aviso*** | — | — |
+
+**Escrituras por lotes** (tiempo del guardado; QGIS 3.44 / 4.2):
+
+| n | Una sentencia por fila (`row`) | `executemany` (`many`) | Tablas Arrow + SQL por conjuntos (`arrow`) |
+|---:|---:|---:|---:|
+| 100 | 0,30 / 0,31 s | 0,29 / 0,28 s | 0,03 / 0,04 s |
+| 1 000 | 2,9 / 2,8 s | 2,8 / 2,4 s | 0,07 / 0,06 s |
+| 10 000 | 29,4 / 29,1 s | 26,2 / 25,6 s | **0,56 / 0,61 s** |
+
+`executemany` apenas mejora: DuckDB lo ejecuta fila a fila. El modo Arrow registra tablas temporales y
+aplica `UPDATE … FROM`, `INSERT … SELECT` y `DELETE … IN (SELECT …)`. Es ≈ 50× más rápido, sin perder
+integridad, porque todo ocurre dentro de la misma transacción.
+
+**Límites del prototipo que la versión definitiva debe resolver:**
+
+- La huella solo protege las filas que QGIS **leyó** durante la edición. En el prototipo se guarda de
+  todo lo leído en modo edición (≈ 16 B por fila).
+- La recuperación de un conflicto es «releer y sobrescribir». Una interfaz definitiva ofrecería
+  descartar, sobrescribir o comparar.
+- El prototipo usa la conexión interna (`handle._con`) para `register` y `executemany`: hace falta una
+  API de lotes en `ConnectionHandle`.
+- Tras un guardado correcto hay que avisar al coordinador (época de datos), porque las previsualizaciones
+  SQL quedan obsoletas.
 
 ## 7. Alternativas nativas
 
