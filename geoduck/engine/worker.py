@@ -315,7 +315,7 @@ class SessionWorker:
 
     def prepare_load(self, sql: str, geometry: str | None = None) -> Future[Any]:
         """Plan de carga (columnas normalizadas, geometrías, avisos) sin leer los datos."""
-        return self._submit_future(lambda h, _t: prepare_load(h, sql, geometry))
+        return self._submit_future(lambda h, _t: prepare_load(h, sql, geometry, pick_first=True))
 
     def load_query(
         self,

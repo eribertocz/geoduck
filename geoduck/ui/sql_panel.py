@@ -11,6 +11,7 @@ caracteres), nunca con posiciones absolutas de QScintilla, que son bytes (F-41).
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from qgis.core import QgsApplication
 from qgis.gui import QgsCodeEditorSQL
@@ -140,10 +141,20 @@ class ResultView(QWidget):
             )
         )
         self.stale_label.hide()
+        self.load_button = _tool_button(
+            "mActionAddLayer.svg", tr("Cargar en QGIS"), tr("Carga el resultado completo como capa de QGIS")
+        )
+        self.load_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.loadable = self.statement.replayable
+        if not self.loadable:
+            self.load_button.setToolTip(
+                tr("Solo se pueden cargar consultas de lectura: esta sentencia no se repite")
+            )
         caption_row = QHBoxLayout()
         caption_row.addWidget(self.caption)
         caption_row.addStretch(1)
         caption_row.addWidget(self.stale_label)
+        caption_row.addWidget(self.load_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 0)
@@ -201,9 +212,11 @@ class SqlPanel(QWidget):
         parent: QWidget | None = None,
         *,
         on_message: Callable[[str], None] | None = None,
+        load_flow: Any = None,
     ) -> None:
         super().__init__(parent)
         self._coordinator = coordinator
+        self._load_flow = load_flow
         self._on_message = on_message or (lambda _m: None)
         self._running = False
         self._run_text = ""
@@ -359,6 +372,8 @@ class SqlPanel(QWidget):
         self._add_log(event, title)
         if result.preview is not None:
             view = ResultView(event, title)
+            view.load_button.clicked.connect(lambda _c=False, v=view: self._load(v))
+            view.load_button.setEnabled(view.loadable and self._coordinator.state is SessionState.READY)
             index = self.results.addTab(view, f"{result.statement.index + 1} · {title}")
             self.results.setTabToolTip(index, result.statement.text.strip()[:500])
             self.results_stack.setCurrentWidget(self.results)
@@ -432,6 +447,10 @@ class SqlPanel(QWidget):
                 widget.deleteLater()
         self.results_stack.setCurrentWidget(self.empty_results)
 
+    def _load(self, view: ResultView) -> None:
+        if self._load_flow is not None and view.loadable:
+            self._load_flow.start(view.statement.text, view.title)
+
     def result_views(self) -> list[ResultView]:
         views = [self.results.widget(i) for i in range(self.results.count())]
         return [v for v in views if isinstance(v, ResultView)]
@@ -440,4 +459,7 @@ class SqlPanel(QWidget):
         ready = state is SessionState.READY
         for button in (self.run_current_button, self.run_selection_button, self.run_all_button):
             button.setEnabled(ready)
-        self.cancel_button.setEnabled(state is SessionState.BUSY and self._running)
+        loading = self._load_flow is not None and self._load_flow.loading
+        self.cancel_button.setEnabled(state is SessionState.BUSY and (self._running or loading))
+        for view in self.result_views():
+            view.load_button.setEnabled(view.loadable and ready and self._load_flow is not None)

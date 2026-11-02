@@ -7,18 +7,26 @@ con éxito; nunca la modifica por su cuenta ni la anticipa.
 
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QTreeWidget, QTreeWidgetItem, QWidget
+from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtWidgets import QMenu, QTreeWidget, QTreeWidgetItem, QWidget
 
 from geoduck.domain.catalog import AccessMode, CatalogObject, CatalogSnapshot, ObjectKind
+from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui.i18n import tr
 
 _DATABASE_ROLE = int(Qt.ItemDataRole.UserRole)
+_OBJECT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
 
 class CatalogExplorer(QTreeWidget):
+    #: (consulta de lectura, nombre propuesto) al elegir «Cargar en QGIS…» sobre una tabla o vista.
+    load_requested = pyqtSignal(str, str)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._context_menu)
+        self.loading_enabled = False
         self.setHeaderHidden(True)
         self.setAccessibleName(tr("Explorador de bases de datos"))
         self.setMinimumHeight(140)
@@ -60,7 +68,20 @@ class CatalogExplorer(QTreeWidget):
         kind = tr("tabla") if obj.kind is ObjectKind.TABLE else tr("vista")
         item = QTreeWidgetItem([f"{obj.name} ({kind})"])
         item.setData(0, _DATABASE_ROLE, database)
+        item.setData(0, _OBJECT_ROLE, object_sql(obj))
         return item
+
+    def _context_menu(self, pos: object) -> None:
+        item = self.itemAt(pos)  # type: ignore[arg-type]
+        sql = item.data(0, _OBJECT_ROLE) if item is not None else None
+        if not sql:
+            return
+        menu = QMenu(self)
+        action = menu.addAction(tr("Cargar en QGIS…"))
+        action.setEnabled(self.loading_enabled)
+        name = item.text(0).rsplit(" (", 1)[0]
+        action.triggered.connect(lambda: self.load_requested.emit(sql, name))
+        menu.exec(self.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
 
     def selected_database(self) -> str | None:
         """Base a la que pertenece el elemento seleccionado; `None` si no hay o es un temporal."""
@@ -76,3 +97,9 @@ class CatalogExplorer(QTreeWidget):
             if item is not None and item.data(0, _DATABASE_ROLE) == name:
                 self.setCurrentItem(item)
                 return
+
+
+def object_sql(obj: CatalogObject) -> str:
+    """Consulta de lectura de una tabla o vista del catálogo, con identificadores citados."""
+    parts = [obj.database, obj.schema, obj.name]
+    return "SELECT * FROM " + ".".join(quote_identifier(p) for p in parts)

@@ -38,8 +38,10 @@ def describe_query(handle: ConnectionHandle, sql: str) -> list[tuple[str, str]]:
     return [(str(r[0]), str(r[1])) for r in out.rows]
 
 
-def prepare_load(handle: ConnectionHandle, sql: str, geometry: str | None = None) -> LoadPlan:
-    return build_load_plan(sql, describe_query(handle, sql), geometry=geometry)
+def prepare_load(
+    handle: ConnectionHandle, sql: str, geometry: str | None = None, *, pick_first: bool = False
+) -> LoadPlan:
+    return build_load_plan(sql, describe_query(handle, sql), geometry=geometry, pick_first=pick_first)
 
 
 def load_query(
