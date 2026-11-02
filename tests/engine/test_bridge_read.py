@@ -207,3 +207,28 @@ def test_geometry_preview_works_in_every_version(worker):
     result = run.results[0]
     assert result.status is StatementStatus.OK
     assert result.preview.rows[0] == (1, "POINT · 21 B", "POLYGON Z · 109 B", None)
+
+
+def test_map_reads_go_before_queued_work_but_never_interrupt(worker):
+    """ADR-0012 §5: prioridad sobre lo que espera en la cola; la operación en curso termina primero."""
+    gate, started, order = threading.Event(), threading.Event(), []
+
+    def blocking(h, _t):
+        started.set()
+        gate.wait(TIMEOUT)
+        order.append("en curso")
+
+    running = worker.submit(blocking)
+    assert started.wait(TIMEOUT)
+    normal = worker.submit(lambda h, t: order.append("normal"))
+    page = worker.submit(lambda h, t: order.append("mapa"), priority=True)
+    gate.set()
+    for handle in (running, normal, page):
+        handle.future.result(TIMEOUT)
+    assert order == ["en curso", "mapa", "normal"]
+
+
+def test_read_table_returns_a_bounded_page(worker):
+    batches = worker.read_table("SELECT range AS id FROM range(100000) LIMIT 50000").future.result(TIMEOUT)
+    assert sum(b.num_rows for b in batches) == 50000
+    assert worker.query("SELECT 41 + 1").future.result(TIMEOUT).rows == ((42,),)

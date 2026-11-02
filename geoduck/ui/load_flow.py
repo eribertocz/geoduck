@@ -11,6 +11,7 @@ La cancelación es la de la sesión (`cancel_current_operation`).
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from qgis.PyQt.QtWidgets import QDialog, QWidget
 
@@ -45,27 +46,28 @@ class LoadFlow:
         self._on_message = on_message
         self._parent = parent
         self._dialog_factory = dialog_factory or LoadDialog
-        self._pending: dict[int, tuple[str, str]] = {}
+        self._pending: dict[int, tuple[str, str, tuple[str, str, str] | None]] = {}
         self._names: dict[int, str] = {}
         self.loading = False
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
-    def start(self, sql: str, title: str) -> None:
-        """Comienza el flujo para una consulta de lectura repetible (o una tabla/vista del explorador)."""
+    def start(self, sql: str, title: str, source: tuple[str, str, str] | None = None) -> None:
+        """Comienza el flujo para una consulta de lectura repetible (o una tabla/vista del explorador,
+        con su `source`)."""
         try:
             token = self._coordinator.prepare_load(sql)
         except GeoDuckError as exc:
             self._on_message(exc.message)
             return
-        self._pending[token] = (sql, title)
+        self._pending[token] = (sql, title, tuple(source) if source else None)  # type: ignore[arg-type]
 
     def detach(self) -> None:
         self._unsubscribe()
 
     def _on_event(self, event: AppEvent) -> None:
         if isinstance(event, LoadPrepared) and event.token in self._pending:
-            sql, title = self._pending.pop(event.token)
-            self._ask(sql, title, event.plan)
+            sql, title, source = self._pending.pop(event.token)
+            self._ask(sql, title, event.plan, source)
         elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
             self._pending.pop(event.token)
             self._on_message(tr("No se puede cargar: ") + event.message)
@@ -91,11 +93,11 @@ class LoadFlow:
                 tr("Carga cancelada.") if event.cancelled else tr("La carga falló: ") + event.message
             )
 
-    def _ask(self, sql: str, title: str, plan: LoadPlan) -> None:
+    def _ask(self, sql: str, title: str, plan: LoadPlan, source: tuple[str, str, str] | None = None) -> None:
         dialog = self._dialog_factory(sql, title, plan, self._coordinator.load_modes(), self._parent)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
-            self._coordinator.load(dialog.request())
+            self._coordinator.load(replace(dialog.request(), source=source))
         except GeoDuckError as exc:
             self._on_message(tr("No se puede cargar: ") + exc.message)

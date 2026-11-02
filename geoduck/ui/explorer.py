@@ -16,11 +16,12 @@ from geoduck.ui.i18n import tr
 
 _DATABASE_ROLE = int(Qt.ItemDataRole.UserRole)
 _OBJECT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+_SOURCE_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 
 
 class CatalogExplorer(QTreeWidget):
-    #: (consulta de lectura, nombre propuesto) al elegir «Cargar en QGIS…» sobre una tabla o vista.
-    load_requested = pyqtSignal(str, str)
+    #: (consulta de lectura, nombre propuesto, `(base, esquema, nombre)`) al elegir «Cargar en QGIS…».
+    load_requested = pyqtSignal(str, str, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -69,6 +70,7 @@ class CatalogExplorer(QTreeWidget):
         item = QTreeWidgetItem([f"{obj.name} ({kind})"])
         item.setData(0, _DATABASE_ROLE, database)
         item.setData(0, _OBJECT_ROLE, object_sql(obj))
+        item.setData(0, _SOURCE_ROLE, (obj.database, obj.schema, obj.name))
         return item
 
     def _context_menu(self, pos: object) -> None:
@@ -80,7 +82,8 @@ class CatalogExplorer(QTreeWidget):
         action = menu.addAction(tr("Cargar en QGIS…"))
         action.setEnabled(self.loading_enabled)
         name = item.text(0).rsplit(" (", 1)[0]
-        action.triggered.connect(lambda: self.load_requested.emit(sql, name))
+        source = item.data(0, _SOURCE_ROLE)
+        action.triggered.connect(lambda: self.load_requested.emit(sql, name, source))
         menu.exec(self.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
 
     def selected_database(self) -> str | None:

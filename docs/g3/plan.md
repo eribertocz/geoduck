@@ -61,10 +61,30 @@ el código del complemento se escribe de nuevo con las fronteras de ADR-0010 y s
 | E2 Memoria | Hecha | #59 |
 | E3 Instantánea | Hecha | #60 |
 | E4 Interfaz «Cargar en QGIS» | Hecha | #61 |
-| E5 Conectada (lectura) | Pendiente: base en `tools/bench/pyprovider_probe.py`; falta compilador de expresiones, páginas por clave y prioridad en la cola del worker | — |
+| E5 Conectada (lectura) | Hecha: proveedor `geoduck`, metadatos en una operación, páginas por FID con prioridad, pushdown de extensión/FID/columnas/expresiones, «no disponible» sin sesión | en revisión |
 | E6 Conectada (edición) | Pendiente: base en `tools/bench/pyprovider_txn_probe.py` (guardado previo, huellas, lotes Arrow con `ConnectionHandle.registered`) | — |
 | E7 Ciclo de vida y aceptación | Pendiente | — |
 
 Hallazgos de implementación: QGIS asigna `EPSG:4326` en silencio a una capa memory sin CRS (se fija
 siempre explícito); GDAL mezclado en un GeoPackage → una capa por familia y otra «sin geometría» con
 `subset="<geom>" IS NULL`; `/vsimem` solo se libera tras quitar la última capa que lo usa.
+
+Hallazgos de E5 (Conectada, lectura):
+
+- **FID estable** en los tres casos: clave primaria entera; `rowid` de una tabla sin clave adecuada;
+  `row_number() OVER ()` para vistas y consultas. Con filtros de extensión el FID no puede ser la
+  posición dentro del resultado filtrado (identificar o abrir la tabla de atributos devolvería otra
+  fila), así que **todas** las páginas avanzan por FID (`FID > último ORDER BY FID LIMIT n`), también
+  sin clave. Esto se aparta del `LIMIT n OFFSET m` que §5.2 prevé sin clave: **pendiente de decisión
+  del propietario** (la SPEC no se ha cambiado). Coste: en vistas y consultas cada página vuelve a
+  numerar la consulta entera.
+- **Metadatos sin `spatial`:** el núcleo de DuckDB no tiene agregado de extensión ni tipo de geometría.
+  El tipo sale de la cabecera WKB (`hex(st_aswkb(g))[1:10]`); la extensión, de `ST_Extent_Agg` si
+  `spatial` ya está cargada y, si no, de `stats(geom)` (texto en 1.5, estructura en 2.x). No se carga
+  ninguna extensión (ADR-0011).
+- **Hilos de dibujo de QGIS:** Python creaba y destruía su estado de hilo en cada entidad (~13 µs). Se
+  conserva una vez por hilo (`keep_thread_state`). Dibujar 1 M de puntos: 19 s → 5,3 s (GeoPackage:
+  1,4 s); zoom de 5×5° o filtro compilado: ~0,05 s.
+- **Hilo principal:** espera una página como mucho 5 s (`MAIN_WAIT`); si la sesión está ocupada (p. ej.
+  por una carga Memoria, que a su vez espera al hilo principal), la petición termina vacía con aviso en
+  vez de congelar QGIS.

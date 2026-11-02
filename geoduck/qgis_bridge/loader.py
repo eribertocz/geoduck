@@ -14,7 +14,10 @@ from qgis.core import QgsProject
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.qgis_bridge import sessions
+from geoduck.qgis_bridge.connected import ConnectedLoad
 from geoduck.qgis_bridge.memory import MemoryLoad
+from geoduck.qgis_bridge.provider import register_provider
 from geoduck.qgis_bridge.snapshot import SnapshotLoad, unavailable_reason
 from geoduck.qgis_bridge.vsimem import VsimemRegistry
 
@@ -23,18 +26,23 @@ class BridgeLoader:
     def __init__(self, project: QgsProject | None = None) -> None:
         self._project = project
         self.vsimem = VsimemRegistry(project)
+        register_provider()
+        #: Capas Conectadas creadas en esta sesión de QGIS (ciclo de vida: E7).
+        self.connected: list[str] = []
 
     def availability(self) -> dict[LoadMode, str | None]:
         """Modalidad → motivo por el que no está disponible (None = disponible)."""
         return {
             LoadMode.MEMORY: None,
             LoadMode.SNAPSHOT: unavailable_reason(),
-            LoadMode.CONNECTED: "Disponible en una próxima entrega de G3",
+            LoadMode.CONNECTED: None,
         }
 
     def shutdown(self) -> None:
-        """Descarga de GeoDuck: deja de seguir `/vsimem` sin liberar archivos de capas presentes."""
+        """Descarga de GeoDuck: deja de seguir `/vsimem` sin liberar archivos de capas presentes. Las
+        capas Conectadas quedan no disponibles (su sesión deja de existir)."""
         self.vsimem.disconnect()
+        sessions.clear()
 
     def start(
         self,
@@ -47,7 +55,7 @@ class BridgeLoader:
         reason = self.availability().get(request.mode)
         if reason is not None:
             raise GeoDuckError(reason, code=ErrorCode.INVALID_ARGUMENT)
-        task: MemoryLoad | SnapshotLoad
+        task: MemoryLoad | SnapshotLoad | ConnectedLoad
         if request.mode is LoadMode.MEMORY:
             task = MemoryLoad(
                 engine, request, on_progress=on_progress, on_done=on_done, project=self._project
@@ -61,7 +69,14 @@ class BridgeLoader:
                 registry=self.vsimem,
                 project=self._project,
             )
-        else:  # pragma: no cover - la modalidad Conectada llega en E5
-            raise GeoDuckError(f"Modalidad no implementada: {request.mode.value}")
+        else:
+            task = ConnectedLoad(
+                engine,
+                request,
+                on_progress=on_progress,
+                on_done=on_done,
+                on_layer=lambda layer: self.connected.append(layer.id()),
+                project=self._project,
+            )
         task.start()
         return task
