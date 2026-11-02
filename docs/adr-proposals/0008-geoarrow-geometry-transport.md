@@ -1,7 +1,7 @@
 # ADR-0008: transporte de geometría y CRS con el esquema GeoArrow nativo
 
-**Estado:** Propuesto — recoge la decisión arquitectónica del 2026-11-01 · **Requiere:** aprobación del arquitecto y enmienda de `spec/specs/spatial-spec.md` §5
-**Fase de implementación:** G3/G4 (no forma parte de v0.1.0a1)
+**Estado:** **Aprobado** (dictamen del arquitecto, 2026-11-01); enmienda de `spec/specs/spatial-spec.md` §5 incorporada
+**Fase de implementación:** G3 (una geometría) y G4 (varias)
 
 ## Contexto
 
@@ -25,6 +25,8 @@ La auditoría G0 (F-10) mostró que:
 3. `ST_AsWKB` queda solo como alternativa explícita para tipos espaciales que DuckDB no exporte como
    GeoArrow, y se documenta que pierde el CRS.
 4. La lectura usa `to_arrow_reader()`, no `to_arrow_table()` (F-04 en 1.5.0–1.5.3).
+5. No se impone `ST_AsWKB` ni se añade ninguna extensión o paquete adicional (p. ej. `duck_geoarrow`): basta
+   la exportación GeoArrow que DuckDB ya hace (dictamen del 2026-11-01).
 
 ## Consecuencias
 
@@ -33,5 +35,5 @@ La auditoría G0 (F-10) mostró que:
 
 ## Verificación
 
-Tests G4: columna con CRS (`OGC:CRS84`, EPSG con spatial), sin CRS, dos columnas, nulos; comparación
+Tests G3/G4: columna con CRS (`OGC:CRS84`, EPSG con spatial), sin CRS, dos columnas, nulos; comparación
 del CRS resultante en QGIS 3 y 4.

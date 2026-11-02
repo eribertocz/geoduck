@@ -9,6 +9,7 @@
 | [ADR-0005](0005-compatibility-alpha.md) | Aceptado sujeto a pruebas | Soporte probado QGIS3 y 4, Windows-first y Alpha prolongada |
 | [ADR-0006](0006-connection-ownership.md) | Aceptado (2026-11-01) | Propiedad exclusiva de la conexión, cola serial y ciclo de vida de lectores Arrow |
 | [ADR-0007](0007-cancellation-interrupt.md) | Aceptado (2026-11-01) | `interrupt()` solo en versiones verificadas; conexión no recuperable se invalida; validación transaccional antes de reutilizarla |
+| [ADR-0008](0008-geoarrow-geometry-transport.md) | Aceptado (2026-11-01) | Geometría y CRS con la exportación GeoArrow nativa (`geoarrow.wkb` + PROJJSON); sin `ST_AsWKB` impuesto ni extensiones adicionales |
 | [ADR-0009](0009-pyarrow-selection-by-matrix.md) | Aceptado (2026-11-01) | PyArrow ≥ 18.1.0; prioridad a la incluida por QGIS; matriz real |
 | [ADR-0010](0010-package-boundaries.md) | Aceptado (2026-11-01) | Paquetes y fronteras de importación verificadas por test |
 | [ADR-0011](0011-coexistence-with-other-duckdb-plugins.md) | Aceptado (2026-11-01) | Convivencia con otros complementos DuckDB; sin modificaciones silenciosas |
