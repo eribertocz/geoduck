@@ -140,9 +140,10 @@ def test_failure_at_row_30001_publishes_nothing(session):
         "END::GEOMETRY AS g FROM range(30010)"
     )
     layers_before = set(QgsProject.instance().mapLayers())
-    ev = session.load(sql)
+    # G4: por defecto los tipos mixtos se separan (spatial-spec §6); sin esa opción, fila 30 001 = fallo
+    ev = session.load(sql, split_families=False)
     assert isinstance(ev, LoadFailed)
-    assert "tipos distintos" in ev.message or "Polygon" in ev.message
+    assert "tipos distintos" in ev.message
     assert set(QgsProject.instance().mapLayers()) == layers_before
     assert session.coordinator.state is SessionState.READY
 

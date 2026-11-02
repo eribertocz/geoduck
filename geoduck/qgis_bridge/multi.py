@@ -122,6 +122,7 @@ class MultiLoad:
                 origin=first.origin,
                 access=first.access,
                 layers=tuple((layer.id(), layer.name()) for layer in layers),
+                rows_each=True,
             )
         )
 

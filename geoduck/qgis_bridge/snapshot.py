@@ -180,6 +180,14 @@ class _Writer:
             for k, multi in sorted(found.items())
         }
 
+    def mixed_dimensions(self) -> bool:
+        """Alguna familia tiene geometrías con y sin Z/M (la capa declara todas: spatial-spec §6)."""
+        dims: dict[int, set[int]] = {}
+        for code in self.geom_codes:
+            base = code % 1000
+            dims.setdefault(base - 3 if base in (4, 5, 6) else base, set()).add(code // 1000)
+        return any(len(d) > 1 for d in dims.values())
+
     def _declare_geometry_type(self) -> None:
         """Si todas las geometrías son de una familia (X o MultiX), la capa lo declara (si no, GEOMETRY)."""
         if self.plan.geometry is None or not self.geom_codes:
@@ -187,12 +195,12 @@ class _Writer:
         bases = {c % 1000 for c in self.geom_codes}
         dims = {c // 1000 for c in self.geom_codes}
         singles = {b - 3 if b in (4, 5, 6) else b for b in bases}
-        if len(singles) != 1 or len(dims) != 1 or 7 in bases:
+        if len(singles) != 1 or 7 in bases:
             return
         base = next(iter(singles)) + (3 if any(b in (4, 5, 6) for b in bases) else 0)
         name = _WKB_NAMES[base]
-        dim = next(iter(dims))
-        z, m = int(dim in (1, 3)), int(dim in (2, 3))
+        # Todas las dimensiones presentes (spatial-spec §6): Z/M si alguna geometría la tiene
+        z, m = int(any(d in (1, 3) for d in dims)), int(any(d in (2, 3) for d in dims))
         self.ds.ExecuteSQL(
             f"UPDATE gpkg_geometry_columns SET geometry_type_name = '{name}', z = {z}, m = {m} "
             "WHERE table_name = 'datos'"
@@ -368,6 +376,12 @@ class SnapshotLoad:
             return
         plan, written, read, families, nulls = value
         try:
+            if len(families) > 1 and not self._request.split_families:
+                raise GeoDuckError(
+                    f"Geometrías de tipos distintos ({', '.join(families.values())}) y la opción "
+                    "«Tipos mixtos: una capa por tipo» está desactivada: no se cargó nada",
+                    code=ErrorCode.INVALID_ARGUMENT,
+                )
             layers = self._open_layers(families, nulls)
             count = sum(layer.featureCount() for layer in layers)
             if not (read == written == count):
@@ -384,6 +398,8 @@ class SnapshotLoad:
         warnings = plan.warnings
         if self._reprojector is not None:
             warnings = (*warnings, self._reprojector.note)
+        if self._writer is not None and self._writer.mixed_dimensions():
+            warnings = (*warnings, "Dimensiones Z/M mixtas: las geometrías sin ellas se muestran con NaN")
         if len(layers) > 1:
             warnings = (*warnings, f"Tipos de geometría mixtos: {len(layers)} capas, una por tipo")
         if plan.geometry is not None and not layer.crs().isValid():
@@ -398,5 +414,6 @@ class SnapshotLoad:
                 warnings,
                 origin=describe_origin(self._request),
                 access=COPY_ACCESS,
+                layers=tuple((lyr.id(), lyr.name()) for lyr in layers) if len(layers) > 1 else (),
             )
         )

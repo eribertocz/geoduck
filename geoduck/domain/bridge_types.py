@@ -342,3 +342,33 @@ def missing_crs_warning(geometry: GeometryColumn | None, override: str | None) -
     if override is None and declared:
         return f"SRC «{declared}» no reconocido por QGIS: sin SRC asignado"
     return "Sin SRC asignado"
+
+
+#: Códigos de tipo ISO (`código % 1000`) de cada familia de geometría (spatial-spec §6; F-92).
+FAMILY_CODES: dict[str, tuple[int, ...]] = {
+    "Point": (1, 4),
+    "LineString": (2, 5, 8, 9, 11),  # también CircularString, CompoundCurve, MultiCurve
+    "Polygon": (3, 6, 10, 12, 15, 16, 17),  # también CurvePolygon, MultiSurface, superficies
+    "GeometryCollection": (7,),
+}
+
+
+def wkb_family(code: int) -> str:
+    """Familia de un código de tipo WKB ISO (con o sin Z/M)."""
+    base = code % 1000
+    return next((name for name, codes in FAMILY_CODES.items() if base in codes), "GeometryCollection")
+
+
+def family_code_sql(geometry: str) -> str:
+    """Código de tipo ISO `% 1000` de una expresión GEOMETRY, leído de la cabecera de `ST_AsWKB` (núcleo
+    de DuckDB, siempre little-endian: F-92). NULL si la geometría es NULL."""
+    h = f"hex(ST_AsWKB({geometry}))"
+    return f"(('0x' || substr({h}, 5, 2) || substr({h}, 3, 2))::INTEGER % 1000)"
+
+
+def family_filter_sql(geometry: str, family: str) -> str:
+    """Condición SQL: la geometría es de la familia (filtro empujado a DuckDB, sin `spatial`)."""
+    codes = FAMILY_CODES.get(family)
+    if codes is None:
+        raise GeoDuckError(f"Familia de geometría desconocida: «{family}»", code=ErrorCode.INVALID_ARGUMENT)
+    return f"{family_code_sql(geometry)} IN ({', '.join(str(c) for c in codes)})"

@@ -38,6 +38,12 @@ class LoadRequest:
     crs_overrides: tuple[tuple[str, str], ...] = ()
     #: «Reproyectar a…» (solo Memoria e Instantánea): SRC de destino (authid o WKT); None = no reproyectar.
     reproject_to: str | None = None
+    #: Copias: varias familias de geometría → una capa por familia (True) o error (False) (spatial-spec §6).
+    split_families: bool = True
+    #: Conectada: «Separar por tipo» → una capa por familia con su filtro en DuckDB (spatial-spec §6).
+    separate_types: bool = False
+    #: Familia de una capa Conectada separada («Point», «LineString», «Polygon», «GeometryCollection»).
+    family: str | None = None
 
     @property
     def format_map(self) -> dict[str, str]:
@@ -78,6 +84,8 @@ class LoadReport:
     access: str = ""
     #: Todas las capas publicadas juntas por esta carga, (id, nombre); vacío = solo `layer_id`.
     layers: tuple[tuple[str, str], ...] = ()
+    #: `rows` es de cada capa (una por columna geométrica) y no el total (una por familia).
+    rows_each: bool = False
 
 
 _KINDS = {"table": "tabla", "view": "vista"}

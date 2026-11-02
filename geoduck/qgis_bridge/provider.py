@@ -57,12 +57,14 @@ from geoduck.domain.bridge_types import (
     GeometryFormat,
     LoadPlan,
     build_load_plan,
+    family_filter_sql,
     geometry_read_sql,
     strip_terminator,
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
+from geoduck.qgis_bridge.families import fit_to
 from geoduck.qgis_bridge.qgis_compat import (
     FilterType,
     ProviderCapability,
@@ -464,6 +466,8 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
                 f.setAttribute(index, col[i])
             f.setId(fid)
             if self.return_geom and g is not None and not g.isNull():
+                if self.p.fit and g.wkbType() != self.p.wkbType():
+                    g = fit_to(g, self.p.wkbType())[0]  # Multi y dimensiones de la capa (NaN si faltan)
                 f.setGeometry(g)
                 self.geometryToDestinationCrs(f, self.transform)
             else:
@@ -526,6 +530,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         self._extent = QgsRectangle()
         self._count = -1
         self._wkb = Qgis.WkbType.Unknown
+        self.fit = False
         try:
             params = decode_uri(uri)
             self.session = params.get("session", "")
@@ -573,6 +578,10 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
                 self.source,
                 self.editable,
             )
+            self.family: str | None = params.get("family") or None
+            if self.family and self.plan.geometry is not None:  # «Separar por tipo» (spatial-spec §6)
+                g = quote_identifier(self.plan.geometry.name)
+                self.base = filtered_sql(self.base, family_filter_sql(g, self.family))
             #: Sin el filtro de la capa: sobre ella se aplica `subset` (Capa → Filtrar…, §5.2).
             self.full_base = self.base
             self._params = params
@@ -599,6 +608,8 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self._wkb = Qgis.WkbType.NoGeometry
         elif wkb:
             self._wkb = getattr(Qgis.WkbType, wkb, Qgis.WkbType.Unknown)
+        #: Ajustar cada geometría al tipo declarado (spatial-spec §6); nunca en `Unknown`.
+        self.fit = self._wkb not in (Qgis.WkbType.Unknown, Qgis.WkbType.NoGeometry)
         self._valid = True
 
     # -- estado de la sesión -------------------------------------------------------------------
