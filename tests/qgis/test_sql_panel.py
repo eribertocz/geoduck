@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Editor SQL del panel con PyQGIS y DuckDB reales (G2; AT-SQL-001..005, GD-SES-003 SQL)."""
+"""Editor SQL del panel con PyQGIS y DuckDB reales (G2; AT-SQL-001..005, GD-SES-003 SQL) y su interfaz:
+divisor redimensionable, nombres descriptivos, jerarquía, navegación y «Acerca de»."""
 
 import duckdb
 import pytest
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QLabel, QSplitter
 
 import geoduck
 from geoduck.domain.session import ErrorCause, SessionState
@@ -30,15 +33,19 @@ def run(panel, coordinator, text, scope=RunScope.ALL):
 
 
 def tabs(panel):
-    return [panel.results.tabText(i) for i in range(1, panel.results.count())]
+    return [panel.results.tabText(i) for i in range(panel.results.count())]
 
 
 def log(panel):
+    """(#, resultado, estado) de cada fila del registro."""
     return [tuple(panel.log.item(r, c).text() for c in (1, 2, 3)) for r in range(panel.log.rowCount())]
 
 
+# -- funcionamiento (G2) ------------------------------------------------------------------------------
+
+
 def test_script_with_create_and_two_selects(session):
-    """Gate de G2 (sql-editor-spec §8): tres registros, dos pestañas de datos."""
+    """Gate de G2 (sql-editor-spec §8): tres registros y dos pestañas con nombres descriptivos."""
     _plugin, panel, coordinator = session
     run(
         panel,
@@ -46,12 +53,16 @@ def test_script_with_create_and_two_selects(session):
         "CREATE TABLE productos AS SELECT 1 AS id, 'Medidor' AS nombre;\n"
         "SELECT * FROM productos;\nSELECT COUNT(*) AS n FROM productos;",
     )
-    assert log(panel) == [("1", "CREATE", "OK"), ("2", "SELECT", "OK"), ("3", "SELECT", "OK")]
-    assert tabs(panel) == ["2 · SELECT", "3 · SELECT"]
-    first = panel.results.widget(1)
+    assert log(panel) == [
+        ("1", "Crear productos", "OK"),
+        ("2", "Productos", "OK"),
+        ("3", "Total productos", "OK"),
+    ]
+    assert tabs(panel) == ["2 · Productos", "3 · Total productos"]  # número de sentencia + nombre
+    first = panel.results.widget(0)
     assert first.table.item(0, 1).text() == "Medidor"
-    assert first.caption.text().startswith("Vista previa")
-    assert wait_for(lambda: any("productos" in o.name for o in coordinator.catalog.objects))  # explorador
+    assert first.caption.text().startswith("Vista previa") and not first.stale
+    assert wait_for(lambda: any("productos" in o.name for o in coordinator.catalog.objects))
 
 
 def test_attach_in_sql_is_reflected_in_the_explorer(session, tmp_path):
@@ -60,6 +71,7 @@ def test_attach_in_sql_is_reflected_in_the_explorer(session, tmp_path):
     duckdb.connect(path).close()
     run(panel, coordinator, f"ATTACH '{path}' AS b;")
     assert wait_for(lambda: coordinator.catalog.get("b") is not None)
+    assert log(panel)[-1] == ("1", "Adjuntar b", "OK")
     run(panel, coordinator, "DETACH b;")
     assert wait_for(lambda: coordinator.catalog.get("b") is None)
 
@@ -69,6 +81,7 @@ def test_error_marks_the_line_and_stops(session):
     run(panel, coordinator, "SELECT 1;\nSELECT * FROM nada;\nCREATE TABLE nunca(x INT);")
     assert [s for _n, _t, s in log(panel)] == ["OK", "Error", "No ejecutada"]
     assert panel.editor.getCursorPosition()[0] == 1  # el cursor va a la línea del error
+    assert panel.log.item(1, 3).font().bold()  # el error destaca en el registro
     assert "nada" in plugin.dock.message_label.text()
 
 
@@ -78,22 +91,22 @@ def test_current_statement_only(session):
     panel.editor.setCursorPosition(0, 3)
     panel.run_current_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY and not panel._running)
-    assert log(panel) == [("1", "CREATE", "OK")]
+    assert log(panel) == [("1", "Crear a", "OK")]
 
 
 def test_previous_preview_is_marked_possibly_stale(session):
     _plugin, panel, coordinator = session
     run(panel, coordinator, "CREATE TABLE a AS SELECT 1 AS x; SELECT * FROM a; INSERT INTO a VALUES (2);")
-    view = panel.results.widget(1)
-    assert view.caption.text().startswith("Posiblemente obsoleta")
+    view = panel.results.widget(0)
+    assert view.stale and not view.stale_label.isHidden()
 
 
 def test_preview_is_bounded_by_the_selected_limit(session):
     _plugin, panel, coordinator = session
     panel.limit_combo.setCurrentIndex(panel.limit_combo.findData(50))
     run(panel, coordinator, "SELECT range FROM range(100000);")
-    view = panel.results.widget(1)
-    assert view.table.rowCount() == 50 and "hay más filas" in view.caption.text()
+    view = panel.results.widget(0)
+    assert view.table.rowCount() == 50 and "hay más" in view.caption.text()
 
 
 def test_aborted_transaction_shows_rollback_and_recovers(session):
@@ -107,3 +120,67 @@ def test_aborted_transaction_shows_rollback_and_recovers(session):
     dock.rollback_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY)
     assert dock.rollback_button.isHidden() and panel.run_all_button.isEnabled()
+
+
+# -- interfaz: divisor, nombres, jerarquía y navegación ---------------------------------------------
+
+
+def test_editor_results_and_log_are_in_a_resizable_splitter(session):
+    plugin, panel, _coordinator = session
+    splitter = panel.splitter
+    assert isinstance(splitter, QSplitter) and splitter.orientation() == Qt.Orientation.Vertical
+    assert splitter.count() == 3  # editor | resultados | registro
+    assert splitter.isAncestorOf(panel.editor)
+    assert splitter.isAncestorOf(panel.results_stack) and splitter.isAncestorOf(panel.log)
+    assert not splitter.isCollapsible(0) and not splitter.isCollapsible(1)  # el registro sí se puede plegar
+    plugin.dock.resize(460, 900)
+    plugin.dock.show()
+    plugin.dock.tabs.setCurrentWidget(panel)
+    splitter.setSizes([500, 200, 100])
+    first = splitter.sizes()[0]
+    splitter.setSizes([150, 550, 100])
+    assert splitter.sizes()[0] < first  # el usuario ajusta la altura del editor
+
+
+def test_explicit_names_from_comments_and_empty_state(session):
+    _plugin, panel, coordinator = session
+    assert panel.results_stack.currentWidget() is panel.empty_results
+    run(
+        panel,
+        coordinator,
+        "CREATE TABLE v AS SELECT 1 AS x;\n-- Ventas del mes\nSELECT * FROM v;\nSELECT 2 AS total;",
+    )
+    assert tabs(panel) == ["2 · Ventas del mes", "3 · Total"]
+    assert "SELECT * FROM v" in panel.results.tabToolTip(0)
+    assert panel.results_stack.currentWidget() is panel.results
+
+
+def test_log_double_click_selects_the_statement(session):
+    _plugin, panel, coordinator = session
+    run(panel, coordinator, "CREATE TABLE a(x INT);\nSELECT * FROM a;")
+    panel.log.cellDoubleClicked.emit(1, 0)
+    assert panel.editor.selectedText().strip().rstrip(";") == "SELECT * FROM a"
+
+
+def test_numbers_are_right_aligned_and_nulls_marked(session):
+    _plugin, panel, coordinator = session
+    run(panel, coordinator, "SELECT 1 AS n, NULL AS vacio, 'x' AS t;")
+    table = panel.results.widget(0).table
+    assert table.item(0, 0).textAlignment() & int(Qt.AlignmentFlag.AlignRight)
+    assert table.item(0, 1).text() == "NULL" and table.item(0, 1).font().italic()
+    assert not table.item(0, 2).textAlignment() & int(Qt.AlignmentFlag.AlignRight)
+    assert table.horizontalHeaderItem(0).toolTip() == "INTEGER"
+
+
+def test_about_dialog_shows_version_license_links_and_components(session):
+    from geoduck import __version__
+    from geoduck.ui.about_dialog import AboutDialog
+
+    plugin, _panel, coordinator = session
+    dialog = AboutDialog(plugin.dock._report, coordinator.engine_info, plugin.dock)
+    texts = " ".join(w.text() for w in dialog.findChildren(QLabel))
+    assert __version__ in texts and "GPL-2.0-or-later" in dialog.links.text()
+    assert "github.com/eribertocz/geoduck" in dialog.links.text() and dialog.links.openExternalLinks()
+    assert coordinator.engine_info.duckdb_version in texts
+    assert "@" not in texts  # ningún correo
+    assert plugin.about_action.text() == "Acerca de GeoDuck…"

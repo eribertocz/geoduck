@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont, QPalette
+from qgis.PyQt.QtGui import QFont
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QFrame,
@@ -44,12 +44,14 @@ from geoduck.domain.catalog import AttachRequest, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.domain.transaction import CloseChoice
+from geoduck.ui.about_dialog import AboutDialog
 from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.close_dialog import CloseTransactionDialog
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
 from geoduck.ui.explorer import CatalogExplorer
 from geoduck.ui.i18n import tr
 from geoduck.ui.sql_panel import SqlPanel
+from geoduck.ui.widgets import secondary
 
 STATE_TEXT = {
     SessionState.DISCONNECTED: "Sin sesión",
@@ -62,20 +64,6 @@ STATE_TEXT = {
 }
 
 _CAN_CLOSE = {SessionState.CONNECTING, SessionState.READY, SessionState.BUSY, SessionState.ERROR_RECOVERABLE}
-
-
-def _secondary(label: QLabel) -> QLabel:
-    """Texto secundario derivado del color de texto del tema activo (claro u oscuro).
-
-    No se usa `PlaceholderText`: en Qt5 puede ser transparente y ocultar el texto (visto en QGIS 3.44).
-    """
-    palette = label.palette()
-    color = palette.color(QPalette.ColorRole.WindowText)
-    color.setAlpha(170)
-    palette.setColor(QPalette.ColorRole.WindowText, color)
-    label.setPalette(palette)
-    label.setWordWrap(True)
-    return label
 
 
 class GeoDuckDock(QDockWidget):
@@ -98,8 +86,8 @@ class GeoDuckDock(QDockWidget):
 
         body = QWidget(self)
         layout = QVBoxLayout(body)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(8, 8, 8, 6)
+        layout.setSpacing(8)
         layout.addLayout(self._build_header())
         layout.addWidget(self._build_session_card())
         self.tabs = QTabWidget()
@@ -116,6 +104,7 @@ class GeoDuckDock(QDockWidget):
         self.rollback_button.clicked.connect(self._coordinator.rollback_transaction)
         self.close_button.clicked.connect(self._close)
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
+        self.about_button.clicked.connect(self.show_about)
         self.open_button.clicked.connect(lambda: self._attach(OpenAction.OPEN_EXISTING))
         self.create_button.clicked.connect(lambda: self._attach(OpenAction.CREATE_NEW))
         self.detach_button.clicked.connect(self._detach)
@@ -149,20 +138,16 @@ class GeoDuckDock(QDockWidget):
     def _build_session_card(self) -> QFrame:
         card = QFrame()
         card.setFrameShape(QFrame.Shape.StyledPanel)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 12, 12, 12)
-        card_layout.setSpacing(8)
-        card_layout.addWidget(self._bold(QLabel(tr("En memoria"))))
-        card_layout.addWidget(
-            _secondary(
-                QLabel(
-                    tr(
-                        "Sesión DuckDB temporal (:memory:). Las tablas que cree desaparecen al cerrar "
-                        "la sesión; las capas ya entregadas a QGIS no dependen de ella."
-                    )
-                )
+        # Compacta: el espacio es para las bases y el editor SQL. La explicación queda en la ayuda emergente.
+        card.setToolTip(
+            tr(
+                "Sesión DuckDB temporal (:memory:). Las tablas que cree desaparecen al cerrar la sesión; "
+                "las capas ya entregadas a QGIS no dependen de ella."
             )
         )
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(10, 8, 10, 8)
+        card_layout.setSpacing(6)
         self.start_button = QPushButton(tr("Iniciar sesión"))
         self.start_button.setAccessibleName(tr("Iniciar sesión en memoria"))
         self.start_button.setDefault(True)
@@ -179,7 +164,7 @@ class GeoDuckDock(QDockWidget):
         buttons.addWidget(self.rollback_button)
         buttons.addStretch(1)
         card_layout.addLayout(buttons)
-        self.engine_label = _secondary(QLabel())
+        self.engine_label = secondary(QLabel())
         card_layout.addWidget(self.engine_label)
         return card
 
@@ -235,9 +220,13 @@ class GeoDuckDock(QDockWidget):
         self.diagnostics_button.setToolTip(
             tr("Comprueba Python, QGIS, DuckDB, PyArrow y la extensión spatial")
         )
+        self.about_button = QPushButton(tr("Acerca de…"))
+        self.about_button.setFlat(True)
+        self.about_button.setToolTip(tr("Versión, licencia, enlaces y componentes detectados"))
         footer.addWidget(self.diagnostics_button)
+        footer.addWidget(self.about_button)
         footer.addStretch(1)
-        footer.addWidget(_secondary(QLabel(f"v{__version__} · Alpha")))
+        footer.addWidget(secondary(QLabel(f"v{__version__} · Alpha")))
         return footer
 
     # -- acciones ----------------------------------------------------------------------------------
@@ -284,6 +273,9 @@ class GeoDuckDock(QDockWidget):
     def show_diagnostics(self) -> None:
         report = self.refresh_environment()
         DiagnosticsDialog(report, self).exec()
+
+    def show_about(self) -> None:
+        AboutDialog(self._report, self._coordinator.engine_info, self).exec()
 
     def detach(self) -> None:
         self._unsubscribe()

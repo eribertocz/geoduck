@@ -25,7 +25,8 @@ def test_every_module_imports(qgis_app):
 def test_init_gui_registers_and_unload_removes(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    assert len(iface.docks) == 1 and len(iface.menu) == 1 and len(iface.toolbar) == 1
+    assert len(iface.docks) == 1 and len(iface.toolbar) == 1
+    assert [action.objectName() for _menu, action in iface.menu] == ["geoduckToggleDock", "geoduckAbout"]
     dock = iface.docks[0]
     assert dock.objectName() == "GeoDuckDock"
     assert dock.isHidden()
