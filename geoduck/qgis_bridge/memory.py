@@ -17,7 +17,7 @@ from typing import Any
 from qgis.core import QgsFeature, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
-from geoduck.domain.bridge_types import LoadPlan
+from geoduck.domain.bridge_types import LoadPlan, missing_crs_warning
 from geoduck.domain.channel import BatchChannel
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
@@ -31,6 +31,7 @@ from geoduck.qgis_bridge.convert import (
     layer_type_for,
     strip_unreadable,
 )
+from geoduck.qgis_bridge.reproject import Reprojector
 
 #: Filas convertidas por tramo en el hilo principal (F-44: bloqueo ≤ 200 ms).
 CHUNK = 1024
@@ -68,6 +69,7 @@ class MemoryLoad:
         self._handle: Any = None
         self._layer: QgsVectorLayer | None = None
         self._layer_type: Any = None
+        self._reprojector: Reprojector | None = None
         self._pending: list[QgsFeature] = []  # entidades sin geometría antes de conocer el tipo
         self._batch: Any = None
         self._offset = 0
@@ -154,6 +156,8 @@ class MemoryLoad:
             f.setAttributes([col[i] for col in columns])
             g = geoms[i] if geoms is not None else None
             if g is not None and not g.isNull():
+                if self._reprojector is not None and not g.isEmpty():
+                    g = self._reprojector.geometry(g, self._rows + i + 1)
                 if self._layer_type is not None:
                     g = fit_geometry(g, self._layer_type)
                 f.setGeometry(g)
@@ -183,7 +187,11 @@ class MemoryLoad:
         layer = QgsVectorLayer(uri, self._request.layer_name, "memory")
         if plan.geometry is not None and self._layer_type is not None:
             # Siempre explícito: sin CRS en la URI, QGIS asignaría uno por defecto en silencio (C4).
-            layer.setCrs(crs_from_field(piece.schema.field(plan.geometry.name), self._request.crs_override))
+            crs = crs_from_field(piece.schema.field(plan.geometry.name), self._request.crs_override)
+            if self._request.reproject_to:  # QGIS/PROJ, nunca DuckDB (spatial-spec §4)
+                self._reprojector = Reprojector(crs, self._request.reproject_to)
+                crs = self._reprojector.target
+            layer.setCrs(crs)
         if not layer.isValid():
             raise GeoDuckError("QGIS no pudo crear la capa en memoria")
         provider = layer.dataProvider()
@@ -233,10 +241,12 @@ class MemoryLoad:
         self._finished = True
         self._project.addMapLayer(layer)
         warnings = plan.warnings
+        if self._reprojector is not None:
+            warnings = (*warnings, self._reprojector.note)
         if plan.geometry is not None and self._layer_type is None:
             warnings = (*warnings, "Sin geometrías: se carga como tabla")
         elif plan.geometry is not None and not layer.crs().isValid():
-            warnings = (*warnings, "Sin SRC asignado")
+            warnings = (*warnings, missing_crs_warning(plan.geometry, self._request.crs_override))
         self._on_progress(self._rows)
         self._on_done(
             LoadReport(

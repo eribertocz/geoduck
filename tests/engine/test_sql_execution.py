@@ -305,3 +305,11 @@ def test_guard_vetoes_the_whole_script_before_running_anything(worker):
     assert query(worker, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'antes'") == ((0,),)
     ok = run(worker, "SELECT 'DETACH d' AS t; -- DETACH d\nCREATE TABLE despues (x INTEGER)", guard=guard)
     assert [r.status for r in ok.results] == [StatementStatus.OK, StatementStatus.OK]
+
+
+def test_axis_order_is_reported_only_with_spatial_and_geometry(worker):
+    """AX-2 (spatial-spec §4): sin `spatial` el ajuste no existe y no se informa; GeoDuck no lo fija."""
+    run_ = run(worker, "SELECT 'POINT(1 2)'::GEOMETRY AS g; SELECT 1 AS n")
+    assert all("geometry_always_xy" not in r.message for r in run_.results)
+    state = worker.spatial_state().result(TIMEOUT)
+    assert not state.loaded and state.always_xy is None

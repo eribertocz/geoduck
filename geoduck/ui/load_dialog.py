@@ -91,6 +91,19 @@ class LoadDialog(QDialog):
         self.crs_widgets: dict[str, QgsProjectionSelectionWidget] = {}
         layout.addLayout(geo_form)
         layout.addLayout(self.crs_form)
+        # «Reproyectar a…»: solo copias y con SRC conocido; QGIS/PROJ (spatial-spec §4)
+        self.reproject_check = QCheckBox(tr("Reproyectar a…"))
+        self.reproject_check.setToolTip(
+            tr(
+                "Transforma las coordenadas al copiar. La capa Conectada no se reproyecta: "
+                "QGIS lo hace al vuelo."
+            )
+        )
+        self.reproject_widget = QgsProjectionSelectionWidget()
+        self.reproject_widget.setEnabled(False)
+        reproject_form = QFormLayout()
+        reproject_form.addRow(self.reproject_check, self.reproject_widget)
+        layout.addLayout(reproject_form)
 
         self.mode_group = QButtonGroup(self)
         self.mode_buttons: dict[LoadMode, QRadioButton] = {}
@@ -137,6 +150,9 @@ class LoadDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
         self.candidate_combo.currentIndexChanged.connect(self._mark_candidate)
+        self.reproject_check.toggled.connect(self._refresh)
+        for button in self.mode_buttons.values():
+            button.toggled.connect(lambda _checked: self._refresh())
         self._refresh()
 
     # -- geometrías ----------------------------------------------------------------------------
@@ -168,7 +184,13 @@ class LoadDialog(QDialog):
 
     def _unknown_crs(self) -> list[str]:
         """Columnas marcadas sin CRS declarado (WKB/WKT nunca lo declaran, spatial-spec §4)."""
-        return [n for n in self.checked_geometries() if n in self._formats or not self._declared.get(n)]
+        return [
+            n
+            for n in self.checked_geometries()
+            if n in self._formats
+            or not self._declared.get(n)
+            or not QgsCoordinateReferenceSystem(self._declared[n]).isValid()  # p. ej. «FOO:123» (AX-4b)
+        ]
 
     def _refresh(self) -> None:
         self.geometry_label.setVisible(len(self.geometry_checks) > 1 or bool(self._formats))
@@ -185,6 +207,7 @@ class LoadDialog(QDialog):
                 widget = QgsProjectionSelectionWidget()
                 widget.setOptionVisible(QgsProjectionSelectionWidget.CrsOption.CrsNotSet, True)
                 widget.setCrs(QgsCoordinateReferenceSystem())
+                widget.crsChanged.connect(lambda _crs: self._refresh())
                 self.crs_widgets[name] = widget
                 self.crs_form.addRow(
                     tr("SRC de «{}»").format(name) if len(checked) > 1 else tr("SRC"), widget
@@ -195,13 +218,37 @@ class LoadDialog(QDialog):
             warnings.append(tr("Geometrías que no se cargan: ") + ", ".join(others))
         if len(checked) > 1:
             warnings.append(tr("Se crea una capa por geometría: {} capas").format(len(checked)))
-        if unknown:
+        unrecognized = [
+            self._declared[n] for n in unknown if self._declared.get(n) and n not in self._formats
+        ]
+        if unrecognized:
+            warnings.append(
+                tr("QGIS no reconoce el SRC declarado ({}). Elija uno o continúe sin SRC.").format(
+                    ", ".join(f"«{c}»" for c in unrecognized)
+                )
+            )
+        elif unknown:
             warnings.append(tr("Los datos no declaran SRC. Elija uno o continúe sin SRC."))
         if self.geometry_checks and not checked:
             warnings.append(tr("Marque al menos una geometría."))
+        can_reproject = self._can_reproject(checked)
+        self.reproject_check.setEnabled(can_reproject)
+        self.reproject_widget.setEnabled(can_reproject and self.reproject_check.isChecked())
+        if checked and not can_reproject and self.mode() in (LoadMode.MEMORY, LoadMode.SNAPSHOT):
+            self.reproject_check.setToolTip(tr("Para reproyectar, cada geometría necesita un SRC."))
         self.warnings_label.setText("\n".join(f"• {w}" for w in warnings))
         self.warnings_label.setVisible(bool(warnings))
         self._ok.setEnabled(self._has_mode and (not self.geometry_checks or bool(checked)))
+
+    def _can_reproject(self, checked: list[str]) -> bool:
+        """Solo en copias, con al menos una geometría y SRC conocido (declarado o elegido) en todas."""
+        if self.mode() not in (LoadMode.MEMORY, LoadMode.SNAPSHOT) or not checked:
+            return False
+        for name in checked:
+            widget = self.crs_widgets.get(name)
+            if widget is not None and not widget.crs().isValid():
+                return False
+        return True
 
     def mode(self) -> LoadMode | None:
         return next((m for m, b in self.mode_buttons.items() if b.isChecked()), None)
@@ -228,4 +275,11 @@ class LoadDialog(QDialog):
             geometries=tuple(checked) if len(checked) > 1 else (),
             formats=tuple((n, f.value) for n, f in self._formats.items() if n in checked),
             crs_overrides=tuple(overrides),
+            reproject_to=self._reproject_target(),
         )
+
+    def _reproject_target(self) -> str | None:
+        if not (self.reproject_widget.isEnabled() and self.reproject_check.isChecked()):
+            return None
+        crs = self.reproject_widget.crs()
+        return (crs.authid() or crs.toWkt()) if crs.isValid() else None

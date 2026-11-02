@@ -36,6 +36,8 @@ class LoadRequest:
     formats: tuple[tuple[str, str], ...] = ()
     #: CRS elegido por columna cuando el de sus datos es desconocido: ((columna, authid o WKT o ""), …).
     crs_overrides: tuple[tuple[str, str], ...] = ()
+    #: «Reproyectar a…» (solo Memoria e Instantánea): SRC de destino (authid o WKT); None = no reproyectar.
+    reproject_to: str | None = None
 
     @property
     def format_map(self) -> dict[str, str]:

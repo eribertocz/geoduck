@@ -180,6 +180,28 @@ class LoadFailed:
     cancelled: bool
 
 
+@dataclass(frozen=True)
+class SpatialChecked:
+    """Estado de `spatial` en la sesión, pedido por «Activar spatial…» (spatial-spec §10)."""
+
+    installed: bool
+    loaded: bool
+
+
+@dataclass(frozen=True)
+class SpatialActivated:
+    """`spatial` cargada con consentimiento del usuario: versión y `geometry_always_xy` (sin modificar)."""
+
+    version: str
+    always_xy: str | None
+
+
+@dataclass(frozen=True)
+class SpatialActivationFailed:
+    code: ErrorCode
+    message: str
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -204,4 +226,7 @@ AppEvent = (
     | LoadProgressed
     | LoadFinished
     | LoadFailed
+    | SpatialChecked
+    | SpatialActivated
+    | SpatialActivationFailed
 )

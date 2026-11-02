@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import duckdb
 
+from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import ErrorCode, InvalidArgumentError, SessionStateError
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.sql import (
@@ -147,6 +148,10 @@ def _execute_one(handle: ConnectionHandle, st: SqlStatement, limit: int) -> Stat
     duration = _ms(started)
     transaction = probe_transaction(handle)
     output, message, preview = _describe(st, out, limit)
+    if preview is not None and any(is_geometry_type(t) for t in preview.types):
+        axis = axis_order_setting(handle)  # AX-2: se muestra, nunca se modifica
+        if axis is not None:
+            message = f"{message} · geometry_always_xy: {axis}" if message else f"geometry_always_xy: {axis}"
     return StatementResult(
         st, StatementStatus.OK, output, duration, message, preview, transaction=transaction
     )
@@ -169,6 +174,22 @@ def _describe(st: SqlStatement, out: StatementOutcome, limit: int) -> tuple[Outp
     if st.type in _DML:
         return OutputKind.MUTATION_ROWS, "Resultado de escritura: no se repite al cargar", preview
     return OutputKind.TABULAR, "", preview
+
+
+def axis_order_setting(handle: ConnectionHandle) -> str | None:
+    """Valor efectivo de `geometry_always_xy` (extensión `spatial`; F-14): «true», «false» o «sin fijar».
+    None si `spatial` no está cargada (el ajuste no existe). Se lee de `duckdb_settings()`: `current_setting`
+    falla mientras no se fija."""
+    try:
+        rows = handle.execute(
+            "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'", max_rows=1
+        ).rows
+    except duckdb.Error:
+        return None
+    if not rows:
+        return None
+    value = rows[0][0]
+    return "sin fijar" if value is None or str(value) == "" else str(value).lower()
 
 
 def _type_name(value: Any) -> str:

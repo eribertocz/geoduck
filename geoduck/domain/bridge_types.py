@@ -334,3 +334,11 @@ def unreadable_error(geometry: GeometryColumn, row: int) -> GeoDuckError:
         f"fila {row}: no se cargó nada",
         code=ErrorCode.INVALID_ARGUMENT,
     )
+
+
+def missing_crs_warning(geometry: GeometryColumn | None, override: str | None) -> str:
+    """Aviso de capa sin CRS (spatial-spec §4): conserva el texto declarado si QGIS no lo reconoce."""
+    declared = geometry.declared_crs if geometry is not None else None
+    if override is None and declared:
+        return f"SRC «{declared}» no reconocido por QGIS: sin SRC asignado"
+    return "Sin SRC asignado"

@@ -99,6 +99,14 @@ class SessionEngine(Protocol):
 
     def cancel(self, op_id: int) -> bool: ...
 
+    def spatial_state(self) -> Future[Any]:
+        """Estado de la extensión `spatial` en la sesión (`SpatialState`)."""
+        ...
+
+    def activate_spatial(self, *, install: bool) -> Future[Any]:
+        """`INSTALL` (si `install`) y `LOAD spatial` con consentimiento del usuario (spatial-spec §10)."""
+        ...
+
     def prepare_load(
         self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
     ) -> Future[Any]:

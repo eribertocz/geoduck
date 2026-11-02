@@ -52,6 +52,7 @@ from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, p
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
+from geoduck.engine.spatial import activate_spatial, spatial_state
 from geoduck.engine.sql import StatementListener, run_script
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
@@ -327,6 +328,14 @@ class SessionWorker:
         """«Abrir existente» o «Crear nueva» (`geoduck.engine.attach`), en una sola operación serial."""
         root = self._root
         return self._submit_future(lambda h, _t: attach_database(h, request, root))
+
+    def spatial_state(self) -> Future[Any]:
+        """Estado de `spatial` en la sesión (sin instalar ni cargar nada)."""
+        return self._submit_future(lambda h, _t: spatial_state(h))
+
+    def activate_spatial(self, *, install: bool) -> Future[Any]:
+        """`INSTALL` (si `install`) y `LOAD spatial`, con consentimiento del usuario (spatial-spec §10)."""
+        return self._submit_future(lambda h, _t: activate_spatial(h, install=install))
 
     def prepare_load(
         self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
