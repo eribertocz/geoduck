@@ -167,6 +167,10 @@ def build_provider():
                 wanted = [f.name() for f in p._fields]
             self.wanted = wanted
             cols = [_q(p.key)] + [_q(n) for n in wanted if n != p.key]
+            # Edición: huella de la fila completa al leerla, para detectar cambios concurrentes al guardar.
+            self.capture = bool(getattr(p, "capture", False)) and getattr(p, "hash_expr", None)
+            if self.capture:
+                cols.insert(1, f"{p.hash_expr} AS __gd_hash")
             self.with_geom = not no_geom
             if self.with_geom:
                 cols.append(_q(p.geom))
@@ -277,6 +281,7 @@ def build_provider():
             names = item.schema.names
             cols = [item.column(i).to_pylist() for i in range(item.num_columns)]
             self.ids = cols[0]
+            self.hashes = cols[1] if self.capture else None
             self.attr_cols = {n: cols[names.index(n)] for n in self.wanted if n in names}
             self.geoms = cols[-1] if self.with_geom else None
             self.n = item.num_rows
@@ -304,6 +309,8 @@ def build_provider():
                 for name, col in self.attr_cols.items():
                     f.setAttribute(name, col[i])
                 f.setId(self.ids[i])
+                if self.hashes is not None:
+                    p.seen[self.ids[i]] = self.hashes[i]
                 if self.geoms is not None and self.geoms[i] is not None:
                     g = QgsGeometry()
                     g.fromWkb(self.geoms[i])
