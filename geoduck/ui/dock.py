@@ -415,6 +415,10 @@ class GeoDuckDock(QDockWidget):
             )
             self.message_label.show()
 
+    def show_text(self, text: str) -> None:
+        """Mensaje para el usuario desde fuera del panel (p. ej. el diagnóstico de geometrías)."""
+        self._show_plain_message(text)
+
     def _show_plain_message(self, text: str) -> None:
         self.message_label.setText(text)
         self.message_label.show()
