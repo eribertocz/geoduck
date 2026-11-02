@@ -57,7 +57,9 @@ class GeoDuckPlugin:
 
     def initGui(self) -> None:  # noqa: N802 - nombre exigido por QGIS
         self.dispatcher = QtDispatcher()
-        self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher)
+        from geoduck.qgis_bridge.loader import BridgeLoader  # noqa: PLC0415 - importa qgis y pyarrow
+
+        self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, BridgeLoader())
         self.dock = GeoDuckDock(self.coordinator, run_diagnostics, self.iface.mainWindow())
         self.dock.hide()
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)

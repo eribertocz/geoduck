@@ -9,6 +9,7 @@ from typing import Any, Protocol
 
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import SessionInvalidatedError
+from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.sql import RunScope, ScriptRun, StatementResult
 from geoduck.domain.transaction import TransactionState
@@ -95,12 +96,42 @@ class SessionEngine(Protocol):
 
     def cancel(self, op_id: int) -> bool: ...
 
+    def prepare_load(self, sql: str, geometry: str | None = None) -> Future[Any]:
+        """`LoadPlan` de la consulta sin leer datos (qgis-bridge-spec §2)."""
+        ...
+
     def invalidation(self) -> Future[SessionInvalidatedError | None]:
         """Se resuelve una sola vez, al terminar el motor: la causa si se invalidó, `None` si no."""
         ...
 
 
 EngineFactory = Callable[[], SessionEngine]
+
+
+class LoadTask(Protocol):
+    """Carga en curso en QGIS."""
+
+    def cancel(self) -> None: ...
+
+
+class LayerLoader(Protocol):
+    """Lleva resultados a QGIS en una de las modalidades de ADR-0012. Implementación: `qgis_bridge`.
+
+    `on_progress` y `on_done` se llaman en el hilo principal.
+    """
+
+    def availability(self) -> dict[LoadMode, str | None]:
+        """Modalidad → motivo por el que no está disponible (None = disponible)."""
+        ...
+
+    def start(
+        self,
+        engine: SessionEngine,
+        request: LoadRequest,
+        *,
+        on_progress: Callable[[int], None],
+        on_done: Callable[[LoadReport | BaseException], None],
+    ) -> LoadTask: ...
 
 
 class Dispatcher(Protocol):

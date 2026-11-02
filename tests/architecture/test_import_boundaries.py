@@ -24,6 +24,8 @@ RULES: dict[str, tuple[set[str], set[str]]] = {
     "engine": ({"duckdb", "pyarrow"}, {"domain", "engine"}),
     "infra": (set(), {"", "domain", "infra"}),
     "ui": ({"qgis"}, {"", "domain", "app", "infra", "ui"}),
+    # ADR-0010 + ADR-0012: GDAL (`osgeo`) para la modalidad Instantánea; nunca duckdb, engine, app ni ui.
+    "qgis_bridge": ({"pyarrow", "qgis", "osgeo"}, {"domain", "qgis_bridge"}),
 }
 
 

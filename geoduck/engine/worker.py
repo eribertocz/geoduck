@@ -47,7 +47,7 @@ from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, Stat
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.attach import attach_database
-from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query
+from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, prepare_load
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
@@ -312,6 +312,10 @@ class SessionWorker:
         """«Abrir existente» o «Crear nueva» (`geoduck.engine.attach`), en una sola operación serial."""
         root = self._root
         return self._submit_future(lambda h, _t: attach_database(h, request, root))
+
+    def prepare_load(self, sql: str, geometry: str | None = None) -> Future[Any]:
+        """Plan de carga (columnas normalizadas, geometrías, avisos) sin leer los datos."""
+        return self._submit_future(lambda h, _t: prepare_load(h, sql, geometry))
 
     def load_query(
         self,
