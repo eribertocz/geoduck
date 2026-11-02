@@ -54,7 +54,7 @@ def run_sql(plugin, sql):
     return panel.result_views()[-1]
 
 
-@pytest.mark.parametrize("mode", [LoadMode.MEMORY, LoadMode.SNAPSHOT])
+@pytest.mark.parametrize("mode", list(LoadMode))
 def test_load_button_loads_the_result(plugin, mode):
     AutoDialog.choice = mode
     view = run_sql(
@@ -67,10 +67,10 @@ def test_load_button_loads_the_result(plugin, mode):
     )
     layer = next(lyr for lyr in QgsProject.instance().mapLayers().values() if lyr.name() == view.title)
     assert layer.featureCount() == 500
-    assert layer.providerType() == ("memory" if mode is LoadMode.MEMORY else "ogr")
+    assert layer.providerType() == {LoadMode.MEMORY: "memory", LoadMode.SNAPSHOT: "ogr"}.get(mode, "geoduck")
     assert QgsSettings().value(SETTING) == mode.value
     dialog = AutoDialog.seen[-1]
-    assert not dialog.mode_buttons[LoadMode.CONNECTED].isEnabled()  # llega en E5, con motivo visible
+    assert all(button.isEnabled() for button in dialog.mode_buttons.values())
     assert "cargada: 500 filas" in plugin.dock.message_label.text()
 
 
@@ -88,3 +88,21 @@ def test_unknown_crs_is_asked(plugin):
     dialog = AutoDialog.seen[-1]
     assert dialog._crs_unknown
     assert dialog.request().crs_override == ""  # sin elegir: continuar sin CRS, con aviso
+
+
+def test_explorer_loads_a_table_connected_with_its_key(plugin):
+    AutoDialog.choice = LoadMode.CONNECTED
+    run_sql(
+        plugin,
+        "CREATE TABLE t (id INTEGER PRIMARY KEY, g GEOMETRY); INSERT INTO t VALUES (7, 'POINT(1 2)'); "
+        "SELECT * FROM t",
+    )
+    plugin.dock.explorer.load_requested.emit(
+        'SELECT * FROM "memory"."main"."t"', "t", ("memory", "main", "t")
+    )
+    assert wait_for(
+        lambda: any(lyr.name() == "t" for lyr in QgsProject.instance().mapLayers().values()), TIMEOUT
+    )
+    layer = next(lyr for lyr in QgsProject.instance().mapLayers().values() if lyr.name() == "t")
+    assert layer.providerType() == "geoduck"
+    assert [f.id() for f in layer.getFeatures()] == [7]

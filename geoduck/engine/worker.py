@@ -250,7 +250,10 @@ class SessionWorker:
     def __init__(self, database: str = ":memory:", *, name: str = "geoduck-session") -> None:
         self._database = database
         self._name = name
-        self._queue: queue.Queue[_Job[Any] | None] = queue.Queue()
+        #: (nivel, orden de llegada, trabajo). Nivel 0: lecturas del mapa (ADR-0012 §5); 1: el resto;
+        #: 2: fin del bucle. Dentro de cada nivel se respeta el orden de llegada.
+        self._queue: queue.PriorityQueue[tuple[int, int, _Job[Any] | None]] = queue.PriorityQueue()
+        self._order = itertools.count()
         self._lock = threading.Lock()
         self._ids = itertools.count(1)
         self._pending: dict[int, _Job[Any]] = {}
@@ -294,7 +297,7 @@ class SessionWorker:
                 job.token.cancel()
             self._interrupt_current_locked()
         if was_accepting or not self._started.done():
-            self._queue.put(None)
+            self._queue.put((_STOP, next(self._order), None))
         return self._stopped
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:
@@ -348,6 +351,29 @@ class SessionWorker:
             )
         )
 
+    def read_table(self, sql: str, *, priority: bool = True) -> OperationHandle[Any]:
+        """Lee entera una consulta acotada (una página de una capa Conectada) como `pyarrow.Table`.
+
+        Quien llama limita la consulta (`LIMIT`); el worker queda libre en cuanto termina la lectura.
+        """
+
+        def op(handle: ConnectionHandle, token: CancelToken) -> Any:
+            batches: list[Any] = []
+            summary = handle.read_arrow(sql, batch_size=DEFAULT_BATCH, on_batch=batches.append, token=token)
+            if summary.outcome is ReadOutcome.CANCELLED:
+                raise OperationCancelledError("Lectura cancelada")
+            if summary.outcome is ReadOutcome.FAILED:
+                raise EngineError(summary.error)
+            return batches
+
+        return self.submit(op, priority=priority)
+
+    def query(
+        self, sql: str, *, max_rows: int = 1000, priority: bool = True
+    ) -> OperationHandle[StatementOutcome]:
+        """Consulta corta de metadatos (columnas, clave, extensión) con prioridad de lectura del mapa."""
+        return self.submit(lambda h, _t: h.execute(sql, max_rows=max_rows), priority=priority)
+
     def detach(self, alias: str) -> Future[DetachResult]:
         """DetachDatabase (`geoduck.engine.detach`), en una sola operación serial."""
         root = self._root
@@ -400,7 +426,9 @@ class SessionWorker:
             failed.set_exception(exc)
             return failed
 
-    def submit(self, fn: Operation[T]) -> OperationHandle[T]:
+    def submit(self, fn: Operation[T], *, priority: bool = False) -> OperationHandle[T]:
+        """Encola una operación. `priority`: lectura corta del mapa (página de una capa Conectada), que se
+        atiende antes que el trabajo en cola sin interrumpir la operación en curso (ADR-0012 §5)."""
         with self._lock:
             if not self._accepting:
                 if self._invalidated is not None:
@@ -408,7 +436,7 @@ class SessionWorker:
                 raise SessionClosedError("La sesión no acepta operaciones")
             job: _Job[T] = _Job(next(self._ids), fn)
             self._pending[job.op_id] = job
-            self._queue.put(job)
+            self._queue.put((_PRIORITY if priority else _NORMAL, next(self._order), job))
         return OperationHandle(job.op_id, job.future, job.token)
 
     def cancel(self, op_id: int) -> bool:
@@ -519,7 +547,7 @@ class SessionWorker:
     def _loop(self, handle: ConnectionHandle) -> SessionInvalidatedError | None:
         """Ejecuta trabajos hasta un cierre pedido (`None`) o una invalidación (la causa)."""
         while True:
-            job = self._queue.get()
+            _level, _order, job = self._queue.get()
             if job is None:
                 return None
             if not job.future.set_running_or_notify_cancel():
@@ -665,6 +693,8 @@ def _wrap_start_error(exc: BaseException) -> BaseException:
         return EngineError(f"No se pudo iniciar DuckDB: {_first_line(exc)}", detail=type(exc).__name__)
     return exc
 
+
+_PRIORITY, _NORMAL, _STOP = 0, 1, 2
 
 _WKB_NAMES = {
     1: "POINT",

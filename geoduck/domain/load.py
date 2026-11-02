@@ -25,6 +25,9 @@ class LoadRequest:
     geometry: str | None = None
     #: CRS elegido por el usuario cuando el de los datos es desconocido (`authid` o WKT); "" = sin CRS.
     crs_override: str | None = None
+    #: Tabla o vista del explorador `(base, esquema, nombre)`; None para un resultado del editor. La
+    #: modalidad Conectada la usa para la clave y la editabilidad (qgis-bridge-spec §5.1).
+    source: tuple[str, str, str] | None = None
 
 
 @dataclass(frozen=True)
