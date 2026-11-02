@@ -144,10 +144,16 @@ def _qgis(  # noqa: PLR0915 - un solo bucle medido, más claro sin trocear
         "bool": QMetaType.Type.Bool,
         "timestamp[us]": QMetaType.Type.QDateTime,
     }
+    # DuckDB entrega `range * 0.5` como DECIMAL: QGIS 3.44 rechaza Decimal de Python y 4.2 lo guarda
+    # como texto (F-45). La ruta propia tiene que convertirlo explícitamente a Double.
+    decimals = {i for i in range(len(schema)) if pa.types.is_decimal(schema[i].type)}
     fields = QgsFields()
     attr_idx = [i for i in range(len(schema)) if i != geom_index]
     for i in attr_idx:
-        fields.append(QgsField(schema[i].name, kinds.get(str(schema[i].type), QMetaType.Type.QString)))
+        kind = (
+            QMetaType.Type.Double if i in decimals else kinds.get(str(schema[i].type), QMetaType.Type.QString)
+        )
+        fields.append(QgsField(schema[i].name, kind))
     uri = GEOMETRY_TYPE.get(dataset, "None")
     layer = QgsVectorLayer(uri, "bench", "memory")
     provider = layer.dataProvider()
@@ -157,7 +163,10 @@ def _qgis(  # noqa: PLR0915 - un solo bucle medido, más claro sin trocear
     temporal = {i for i in range(len(schema)) if str(schema[i].type).startswith("timestamp")}
 
     def to_lists(batch):
-        cols = [batch.column(i).to_pylist() for i in range(batch.num_columns)]
+        cols = [
+            (batch.column(i).cast(pa.float64()) if i in decimals else batch.column(i)).to_pylist()
+            for i in range(batch.num_columns)
+        ]
         for i in temporal:  # QGIS no convierte datetime de Python por sí solo: hace falta QDateTime
             if temporal_mode == "msecs":  # timestamp[us] → int64 µs → ms; evita QDateTime(datetime) (F-43)
                 us = batch.column(i).cast(pa.int64()).to_pylist()
@@ -185,47 +194,62 @@ def _qgis(  # noqa: PLR0915 - un solo bucle medido, más claro sin trocear
     q: queue.Queue = queue.Queue(maxsize=2)  # backpressure: como mucho 2 lotes en vuelo
     done = object()
 
+    stop = threading.Event()  # si el hilo principal falla, el productor no queda bloqueado en put()
+
+    def put(item) -> None:
+        while not stop.is_set():
+            try:
+                q.put(item, timeout=0.1)
+                return
+            except queue.Full:
+                continue
+
     def producer():
         try:
             for b in reader:
+                if stop.is_set():
+                    return
                 if strategy == "main":
-                    q.put(b)
+                    put(b)
                 elif strategy == "worker-lists":
-                    q.put(to_lists(b))
+                    put(to_lists(b))
                 else:
-                    q.put(to_features(to_lists(b)))
+                    put(to_features(to_lists(b)))
         finally:
-            q.put(done)
+            put(done)
 
-    worker = threading.Thread(target=producer)
+    worker = threading.Thread(target=producer, daemon=True)
     worker.start()
     main_busy = 0.0
     max_block = 0.0
     added = 0
-    while True:
-        item = q.get()
-        if item is done:
-            break
-        if strategy == "main" and chunk:
-            pieces = [item.slice(o, chunk) for o in range(0, item.num_rows, chunk)]
-        else:
-            pieces = [item]
-        for piece in pieces:
-            t0 = time.perf_counter()
-            if strategy == "main":
-                features = to_features(to_lists(piece))
-            elif strategy == "worker-lists":
-                features = to_features(piece)
+    try:
+        while True:
+            item = q.get()
+            if item is done:
+                break
+            if strategy == "main" and chunk:
+                pieces = [item.slice(o, chunk) for o in range(0, item.num_rows, chunk)]
             else:
-                features = piece
-            ok, _ = provider.addFeatures(features)
-            if not ok:
-                raise RuntimeError(f"addFeatures falló: {provider.lastError()}")
-            added += len(features)
-            spent = time.perf_counter() - t0
-            main_busy += spent
-            max_block = max(max_block, spent)
-            QCoreApplication.processEvents()  # la interfaz atiende eventos entre lotes/tramos
+                pieces = [item]
+            for piece in pieces:
+                t0 = time.perf_counter()
+                if strategy == "main":
+                    features = to_features(to_lists(piece))
+                elif strategy == "worker-lists":
+                    features = to_features(piece)
+                else:
+                    features = piece
+                ok, _ = provider.addFeatures(features)
+                if not ok:
+                    raise RuntimeError(f"addFeatures falló: {provider.lastError()}")
+                added += len(features)
+                spent = time.perf_counter() - t0
+                main_busy += spent
+                max_block = max(max_block, spent)
+                QCoreApplication.processEvents()  # la interfaz atiende eventos entre lotes/tramos
+    finally:
+        stop.set()
     worker.join()
     count = layer.featureCount()
     return {
@@ -314,7 +338,10 @@ def matrix(out_path: str, quick: bool, python: str, engine_only: bool = False) -
             "--temporal",
             temporal,
         ]
-        done = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        try:
+            done = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=900)
+        except subprocess.TimeoutExpired:
+            done = subprocess.CompletedProcess(cmd, -1, "", "timeout: más de 900 s")
         line = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
         try:
             result = json.loads(line)
