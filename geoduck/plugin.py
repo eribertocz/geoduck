@@ -17,6 +17,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from geoduck.app.coordinator import SessionCoordinator
+from geoduck.app.events import PreviewsInvalidated
 from geoduck.app.ports import SessionEngine
 from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
 from geoduck.infra.diagnostics import collect
@@ -62,6 +63,8 @@ class GeoDuckPlugin:
 
         self.loader = BridgeLoader()
         self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, self.loader)
+        self.loader.on_data_changed = self.coordinator.mark_data_changed
+        self.coordinator.subscribe(self._on_app_event)
         self.dock = GeoDuckDock(self.coordinator, run_diagnostics, self.iface.mainWindow())
         self.dock.hide()
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
@@ -83,6 +86,10 @@ class GeoDuckPlugin:
         self.about_action.setObjectName("geoduckAbout")
         self.about_action.triggered.connect(self.dock.show_about)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.about_action)
+
+    def _on_app_event(self, event: object) -> None:
+        if isinstance(event, PreviewsInvalidated) and self.loader is not None:
+            self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 
     def unload(self) -> None:
         if self.coordinator is not None and not self.coordinator.shutdown(UNLOAD_TIMEOUT_S):

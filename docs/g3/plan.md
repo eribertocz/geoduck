@@ -62,7 +62,7 @@ el código del complemento se escribe de nuevo con las fronteras de ADR-0010 y s
 | E3 Instantánea | Hecha | #60 |
 | E4 Interfaz «Cargar en QGIS» | Hecha | #61 |
 | E5 Conectada (lectura) | Hecha: proveedor `geoduck`, metadatos en una operación, páginas por FID con prioridad, pushdown de extensión/FID/columnas/expresiones, «no disponible» sin sesión | en revisión |
-| E6 Conectada (edición) | Pendiente: base en `tools/bench/pyprovider_txn_probe.py` (guardado previo, huellas, lotes Arrow con `ConnectionHandle.registered`) | — |
+| E6 Conectada (edición) | Hecha: guardado atómico desde `beforeCommitChanges`, huellas, lotes Arrow, validación previa, transacción del usuario, época de datos | en revisión |
 | E7 Ciclo de vida y aceptación | Pendiente | — |
 
 Hallazgos de implementación: QGIS asigna `EPSG:4326` en silencio a una capa memory sin CRS (se fija
@@ -88,3 +88,18 @@ Hallazgos de E5 (Conectada, lectura):
 - **Hilo principal:** espera una página como mucho 5 s (`MAIN_WAIT`); si la sesión está ocupada (p. ej.
   por una carga Memoria, que a su vez espera al hilo principal), la petición termina vacía con aviso en
   vez de congelar QGIS.
+
+Hallazgos de E6 (Conectada, edición):
+
+- **Huellas sin lectura previa:** una fila editada sin haberse leído durante la edición (p. ej. desde una
+  tabla de atributos abierta antes de activar la edición) obtiene su huella en cuanto se edita, en una
+  sola consulta por ráfaga de cambios. Sin esto, esas ediciones darían siempre conflicto.
+- **Reintento tras un conflicto:** se registra la huella actual de las filas en conflicto; guardar otra
+  vez sobrescribe a sabiendas (§5.4). Mientras, el búfer de QGIS queda intacto.
+- **Comprobación de filas afectadas:** si un `UPDATE` o `DELETE` afecta menos filas de las esperadas, se
+  revierte todo.
+- **Columnas convertidas (§7, `writable=False`)** y la clave: no se pueden cambiar; se rechaza el guardado
+  antes de tocar DuckDB.
+- **Capacidades del proveedor en QGIS 3.44:** las banderas se combinan de izquierda a derecha
+  (`flag | Capabilities` falla y aborta el proceso).
+- Lotes de 100 / 1 000 / 10 000 cambios (más 10 % de borrados): 0,15 / 0,12 / 0,23 s en el guardado.

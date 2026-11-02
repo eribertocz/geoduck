@@ -59,6 +59,22 @@ def _source_info(handle: Any, source: tuple[str, str, str]) -> tuple[bool, str |
     return True, None
 
 
+def _edit_info(handle: Any, source: tuple[str, str, str], key: str) -> tuple[str | None, str | None]:
+    """(motivo por el que no es editable o None, expresión por defecto de la clave: `nextval(...)`)."""
+    db, schema, name = (quote_string_literal(p) for p in source)
+    readonly = _rows(handle, f"SELECT readonly FROM duckdb_databases() WHERE database_name = {db}", 1)
+    if readonly and readonly[0][0]:
+        return "base de datos de solo lectura", None
+    default = _rows(
+        handle,
+        f"SELECT column_default FROM duckdb_columns() WHERE database_name = {db} AND schema_name = {schema} "
+        f"AND table_name = {name} AND column_name = {quote_string_literal(key)}",
+        1,
+    )
+    expr = str(default[0][0]) if default and default[0][0] is not None else None
+    return None, expr if expr and expr.lower().startswith("nextval(") else None
+
+
 def _extent_from_stats(value: Any) -> tuple[float, float, float, float] | None:
     """Extensión desde `stats(geom)`: dict en DuckDB 2.x, texto en 1.5."""
     try:
@@ -105,14 +121,18 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     plan = build_load_plan(inner, columns, geometry=request.geometry)
     token.raise_if_cancelled()
     fid, key, source_sql = "row", None, None
+    readonly: str | None = "vista o consulta"
+    key_default: str | None = None
     if request.source is not None:
         is_table, pk = _source_info(handle, request.source)
         source_sql = ".".join(quote_identifier(p) for p in request.source)
         kinds = {f.name: f for f in plan.fields}
         if pk is not None and pk in kinds and dict(columns)[pk] in _INTEGER_KEYS:
             fid, key = "key", pk
+            readonly, key_default = _edit_info(handle, request.source, pk)
         elif is_table:
             fid = "rowid"
+            readonly = "sin clave primaria entera de una columna"
     count = int(_rows(handle, f"SELECT count(*) FROM (\n{inner}\n) AS __geoduck_q", 1)[0][0])
     token.raise_if_cancelled()
     out: dict[str, Any] = {
@@ -120,6 +140,8 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         "columns": columns,
         "fid": fid,
         "key": key,
+        "readonly": readonly,
+        "default": key_default,
         "source": source_sql,
         "count": count,
         "headers": [],
@@ -235,6 +257,8 @@ class ConnectedLoad:
             "geom": plan.geometry.name if plan.geometry is not None else None,
             "fid": meta["fid"],
             "key": meta["key"],
+            "edit": "1" if meta["readonly"] is None else None,
+            "default": meta["default"],
             "count": meta["count"],
             "columns": meta["columns"],
         }
@@ -252,8 +276,8 @@ class ConnectedLoad:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
                 warnings.append("Extensión desconocida: «Zoom a la capa» no está disponible")
-        if meta["fid"] != "key":
-            warnings.append("Solo lectura: sin clave primaria entera de una columna")
+        if meta["readonly"] is not None:
+            warnings.append(f"Solo lectura: {meta['readonly']}")
         layer = QgsVectorLayer(encode_uri(params), self._request.layer_name, KEY)
         if not layer.isValid():
             raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
