@@ -701,6 +701,7 @@ conteo). Los valores van codificados como en una URL.
 | Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5); con `spatial` cargada, `ST_Intersects(geom, ST_MakeEnvelope(…))`, que usa el RTree si existe |
 | FID | `FID IN (…)` sobre la clave, el `rowid` o la huella; en `fid=map`, los valores de la clave de esos FID (`(k1, k2) IN (…)`) |
 | Atributos pedidos / sin geometría | solo esas columnas; sin la columna de geometría |
+| Filtro de la capa (Capa → Filtrar…, `subsetString`) | Condición de DuckDB sobre los campos de la capa, aplicada a la consulta base (`WHERE (filtro)`). Se comprueba en DuckDB antes de aplicarla; si no es válida, se rechaza con el motivo y la capa no cambia. Se guarda en la URI (`subset=`) y sobrevive a la reapertura del proyecto |
 | Expresión | Compilada a SQL de DuckDB cuando es posible (comparaciones, `AND`/`OR`/`NOT`, `IN`, `IS NULL`, `LIKE`/`ILIKE`, aritmética); si no, se evalúa en Python sobre lo filtrado en SQL |
 | `LIMIT`, orden | `LIMIT`; `ORDER BY` cuando la petición lo pide |
 
@@ -1046,8 +1047,14 @@ No publicar Alpha externa si carga extensiones no firmadas por defecto, si ignor
 
 ## 1. Horizonte y política
 - Host: QGIS Desktop **3.x y 4.x**, sin QGIS 2.
+- **Versión mínima: QGIS 3.34** (`qgisMinimumVersion`, D8). Desde ella, GeoDuck debe funcionar en **todas**
+  las versiones posteriores de 3.x y 4.x (decisión del propietario, 2026-11-02). Las diferencias de la
+  API de QGIS entre versiones se resuelven en un único módulo de compatibilidad
+  (`geoduck/qgis_bridge/qgis_compat.py`), nunca con suposiciones sobre la versión.
+- **Matriz de la CI (Linux, PyQGIS sin interfaz):** la mínima (3.34), cada LTR (3.40, 3.44) y la última
+  publicada (4.2), con DuckDB 1.5.0 y 2.0.0. Al publicarse una LTR o una versión mayor nueva, se añade.
+  Las versiones intermedias comparten API con sus vecinas y quedan cubiertas por ellas.
 - **Anclas de prueba iniciales al 2026-11-01**: QGIS 3.44.15 LTR (Qt5) y QGIS 4.2.3 (Qt6).
-- QGIS 4.0.x: segunda prioridad de certificación. QGIS 3.x anteriores: best-effort hasta que existan pruebas efectivas.
 - Windows 11 x64 primero. Otros SO en fases posteriores mediante decisiones registradas.
 - DuckDB >= 1.5.0: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
 - PyArrow requiere coincidencia de ABI, arquitectura y wheels reales; verificar en `sys.executable` de QGIS.

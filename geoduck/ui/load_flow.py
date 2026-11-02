@@ -27,8 +27,39 @@ from geoduck.app.events import (
 )
 from geoduck.domain.bridge_types import LoadPlan
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.load import LoadMode, LoadReport
 from geoduck.ui.i18n import tr
 from geoduck.ui.load_dialog import LoadDialog
+
+_MODES = {
+    LoadMode.MEMORY: tr("Copia en memoria"),
+    LoadMode.SNAPSHOT: tr("Copia rápida"),
+    LoadMode.CONNECTED: tr("Conectada"),
+}
+
+
+def _count(n: int) -> str:
+    return f"{n:,}".replace(",", " ")
+
+
+def finished_message(report: LoadReport) -> str:
+    """Mensaje al terminar una carga: capa, modalidad y entidades; origen y acceso; avisos."""
+    lines = [
+        tr("Capa «{}» cargada · {} · {} entidades").format(
+            report.layer_name, _MODES[report.mode], _count(report.rows)
+        )
+    ]
+    if report.origin:
+        access = (
+            report.access[:1].upper() + report.access[1:]
+            if report.mode is not LoadMode.CONNECTED
+            else tr("Acceso: ") + report.access
+        )
+        lines.append(tr("Origen: {}").format(report.origin) + (f" · {access}" if report.access else ""))
+    if report.warnings:
+        lines.append(tr("Avisos: ") + "; ".join(report.warnings))
+    return "\n".join(lines)
+
 
 DialogFactory = Callable[[str, str, LoadPlan, dict, QWidget | None], LoadDialog]
 
@@ -48,6 +79,8 @@ class LoadFlow:
         self._dialog_factory = dialog_factory or LoadDialog
         self._pending: dict[int, tuple[str, str, tuple[str, str, str] | None]] = {}
         self._names: dict[int, str] = {}
+        self._kinds: dict[int, str | None] = {}
+        self._kind: str | None = None
         self.loading = False
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
@@ -60,6 +93,7 @@ class LoadFlow:
             self._on_message(exc.message)
             return
         self._pending[token] = (sql, title, tuple(source) if source else None)  # type: ignore[arg-type]
+        self._kinds[token] = source[3] if source and len(source) > 3 else None
 
     def detach(self) -> None:
         self._unsubscribe()
@@ -67,30 +101,26 @@ class LoadFlow:
     def _on_event(self, event: AppEvent) -> None:
         if isinstance(event, LoadPrepared) and event.token in self._pending:
             sql, title, source = self._pending.pop(event.token)
-            self._ask(sql, title, event.plan, source)
+            self._kind = self._kinds.pop(event.token, None)
+            self._ask(sql, title, event.plan, tuple(source[:3]) if source else None)  # type: ignore[arg-type]
         elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
             self._pending.pop(event.token)
             self._on_message(tr("No se puede cargar: ") + event.message)
+            self._kinds.pop(event.token, None)
         elif isinstance(event, LoadStarted):
             self.loading = True
             self._names[event.load_id] = event.request.layer_name
             self._on_message(tr("Cargando «{}»…").format(event.request.layer_name))
         elif isinstance(event, LoadProgressed):
             name = self._names.get(event.load_id, "")
-            self._on_message(tr("Cargando «{}»: {} filas…").format(name, f"{event.rows:,}".replace(",", " ")))
+            self._on_message(tr("Cargando «{}»: {} entidades…").format(name, _count(event.rows)))
         elif isinstance(event, LoadFinished):
             self.loading = False
-            report = event.report
-            text = tr("Capa «{}» cargada: {} filas.").format(
-                report.layer_name, f"{report.rows:,}".replace(",", " ")
-            )
-            if report.warnings:
-                text += " " + tr("Avisos: ") + "; ".join(report.warnings)
-            self._on_message(text)
+            self._on_message(finished_message(event.report))
         elif isinstance(event, LoadFailed):
             self.loading = False
             self._on_message(
-                tr("Carga cancelada.") if event.cancelled else tr("La carga falló: ") + event.message
+                tr("Carga cancelada.") if event.cancelled else tr("Error al cargar: ") + event.message
             )
 
     def _ask(self, sql: str, title: str, plan: LoadPlan, source: tuple[str, str, str] | None = None) -> None:
@@ -98,6 +128,6 @@ class LoadFlow:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
-            self._coordinator.load(replace(dialog.request(), source=source))
+            self._coordinator.load(replace(dialog.request(), source=source, source_kind=self._kind))
         except GeoDuckError as exc:
             self._on_message(tr("No se puede cargar: ") + exc.message)

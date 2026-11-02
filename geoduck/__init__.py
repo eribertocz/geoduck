@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__version__ = "0.4.0a1"
+__version__ = "0.4.0a2"
 
 
 def classFactory(iface: Any) -> Any:  # noqa: N802 - nombre exigido por QGIS

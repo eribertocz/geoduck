@@ -53,6 +53,13 @@ def main(out_dir: str) -> None:
     dock.grab().save(str(out / f"dock_{tag}_lista.png"))
     coordinator.shutdown(10)
     print("capturas en", out)
+    # Cierre ordenado, como QGIS al salir: sin él, QGIS 3.34–3.40 fallan al terminar el proceso (señal 11).
+    dock.detach()
+    dock.close()
+    window.close()
+    del dock, window
+    QCoreApplication.processEvents()
+    app.exitQgis()
 
 
 if __name__ == "__main__":

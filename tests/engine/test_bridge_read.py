@@ -96,7 +96,7 @@ def test_every_type_follows_section_7(worker):
     assert row["nan"] != row["nan"]
     assert row["fecha"] == dt.date(2026, 11, 1)
     assert row["blo"] == b"\xaa\xbb"
-    warned = {w.split("»")[0].lstrip("«") for w in plan.warnings}
+    warned = {w.split("«")[1].split("»")[0] for w in plan.warnings}
     assert warned == {"hi", "ub", "d38", "tm", "iv", "tns", "li", "st", "mp", "bi"}
 
 

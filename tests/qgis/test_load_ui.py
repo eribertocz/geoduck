@@ -71,7 +71,11 @@ def test_load_button_loads_the_result(plugin, mode):
     assert QgsSettings().value(SETTING) == mode.value
     dialog = AutoDialog.seen[-1]
     assert all(button.isEnabled() for button in dialog.mode_buttons.values())
-    assert "cargada: 500 filas" in plugin.dock.message_label.text()
+    assert (
+        "cargada · " in plugin.dock.message_label.text()
+        and "· 500 entidades" in plugin.dock.message_label.text()
+    )
+    assert "Origen: consulta SQL" in plugin.dock.message_label.text()
 
 
 def test_write_results_cannot_be_loaded(plugin):
@@ -106,3 +110,32 @@ def test_explorer_loads_a_table_connected_with_its_key(plugin):
     layer = next(lyr for lyr in QgsProject.instance().mapLayers().values() if lyr.name() == "t")
     assert layer.providerType() == "geoduck"
     assert [f.id() for f in layer.getFeatures()] == [7]
+
+
+def test_double_click_on_a_table_loads_it_like_the_menu(plugin):
+    """Issue #67: doble clic sobre una tabla = «Cargar en QGIS…»; sobre una base o esquema, nada."""
+    AutoDialog.choice = LoadMode.CONNECTED
+    run_sql(plugin, "CREATE TABLE dc (id INTEGER PRIMARY KEY, g GEOMETRY); SELECT * FROM dc")
+    explorer = plugin.dock.explorer
+    plugin.coordinator.refresh_catalog()
+
+    def find(item):
+        if item.text(0).startswith("dc ("):
+            return item
+        return next((f for i in range(item.childCount()) if (f := find(item.child(i)))), None)
+
+    def table_item():
+        tops = [explorer.topLevelItem(i) for i in range(explorer.topLevelItemCount())]
+        return next((f for top in tops if (f := find(top))), None)
+
+    assert wait_for(lambda: explorer.loading_enabled and table_item() is not None, TIMEOUT)
+    requests = []
+    explorer.load_requested.connect(lambda *args: requests.append(args))
+    database = explorer.topLevelItem(0)
+    explorer.itemDoubleClicked.emit(database, 0)
+    assert requests == []
+    explorer.itemDoubleClicked.emit(table_item(), 0)
+    assert requests == [('SELECT * FROM "memory"."main"."dc"', "dc", ("memory", "main", "dc", "table"))]
+    assert wait_for(
+        lambda: any(lyr.name() == "dc" for lyr in QgsProject.instance().mapLayers().values()), TIMEOUT
+    )

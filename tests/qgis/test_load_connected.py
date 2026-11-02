@@ -26,6 +26,7 @@ from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.connected import wkb_type_name
 from geoduck.qgis_bridge.loader import BridgeLoader
 from geoduck.qgis_bridge.provider import decode_uri
+from geoduck.qgis_bridge.qgis_compat import RequestFlag
 from geoduck.qgis_bridge.sql_compile import compile_expression
 from geoduck.ui.dispatcher import QtDispatcher
 from tests.qgis.conftest import wait_for
@@ -120,9 +121,7 @@ def test_extent_fid_and_attribute_pushdown(session):
     request = QgsFeatureRequest().setFilterFids([3, 7, 4999])
     assert ids(layer, request) == [3, 7, 4999]
     request = (
-        QgsFeatureRequest()
-        .setFlags(Qgis.FeatureRequestFlag.NoGeometry)
-        .setSubsetOfAttributes(["id"], layer.fields())
+        QgsFeatureRequest().setFlags(RequestFlag.NoGeometry).setSubsetOfAttributes(["id"], layer.fields())
     )
     request.setLimit(10)
     feats = list(layer.getFeatures(request))
@@ -371,3 +370,60 @@ def test_any_table_key_is_used_like_qgis_postgis(session, monkeypatch, ddl, cols
     assert {f.id() for f in layer.getFeatures(QgsFeatureRequest().setFilterRect(rect))} == {
         fid for fid, x in feats.items() if 10 <= x <= 12
     }
+
+
+def test_layer_filter_like_any_qgis_layer(session):
+    """Capa → Filtrar… (subset): SQL de DuckDB sobre los campos de la capa; se guarda en la fuente."""
+    _, layer = load_table(session)
+    assert layer.dataProvider().supportsSubsetString()
+    assert layer.setSubsetString("id < 10 AND nombre LIKE 'n ñ %'")
+    assert layer.featureCount() == 10
+    assert ids(layer) == list(range(10))
+    assert ids(layer, QgsFeatureRequest().setFilterExpression("id >= 5")) == [5, 6, 7, 8, 9]
+    assert decode_uri(layer.source())["subset"] == "id < 10 AND nombre LIKE 'n ñ %'"
+    assert not layer.setSubsetString("columna_que_no_existe = 1")  # inválido: se rechaza, sin cambios
+    assert layer.subsetString() == "id < 10 AND nombre LIKE 'n ñ %'" and layer.featureCount() == 10
+    from qgis.core import QgsVectorLayer
+
+    copy = QgsVectorLayer(layer.source(), "copia", "geoduck")  # p. ej. al reabrir el proyecto
+    assert copy.subsetString() == "id < 10 AND nombre LIKE 'n ñ %'" and len(ids(copy)) == 10
+    assert layer.setSubsetString("")
+    assert layer.featureCount() == N and len(ids(layer)) == N
+
+
+def test_extent_with_empty_geometries_is_computed(session):
+    """Con geometrías vacías, las estadísticas de DuckDB dan -inf…inf: se recorre la geometría."""
+    session.sql(
+        "CREATE TABLE vacias AS SELECT range AS id, CASE WHEN range % 10 = 0 THEN 'POINT EMPTY' "
+        "ELSE 'POINT(' || range || ' ' || (range * 2) || ')' END::GEOMETRY AS g FROM range(100)"
+    )
+    report, layer = session.load(
+        'SELECT * FROM "memory"."main"."vacias"', name="vacias", source=("memory", "main", "vacias")
+    )
+    assert layer.extent() == QgsRectangle(1, 2, 99, 198)
+    assert not any("Extensión no disponible" in w for w in report.warnings)
+    assert layer.dataProvider().editable  # tabla cargada desde el explorador: editable
+
+
+def test_query_result_explains_how_to_edit(session):
+    report, layer = session.load("SELECT * FROM puntos", name="consulta")
+    assert not layer.dataProvider().editable
+    assert report.origin == "consulta SQL"
+    assert report.access.startswith("solo lectura") and "doble clic" in report.access
+    assert not any("lectura" in w for w in report.warnings)
+
+
+def test_messages_name_the_origin_and_access(session):
+    """Mensajes de carga (decisión del propietario, 2026-11-02): origen y acceso explícitos."""
+    from geoduck.ui.load_flow import finished_message
+
+    report, _ = load_table(session)
+    assert (report.origin, report.access) == ("tabla memory.main.puntos", "lectura y escritura")
+    session.sql("CREATE VIEW vp AS SELECT * FROM puntos")
+    view, _ = session.load(
+        'SELECT * FROM "memory"."main"."vp"', name="vp", source=("memory", "main", "vp"), source_kind="view"
+    )
+    assert (view.origin, view.access) == ("vista memory.main.vp", "solo lectura")
+    text = finished_message(report)
+    assert text.splitlines()[0] == f"Capa «capa» cargada · Conectada · {N:,} entidades".replace(",", " ")
+    assert text.splitlines()[1] == "Origen: tabla memory.main.puntos · Acceso: lectura y escritura"

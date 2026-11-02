@@ -69,7 +69,7 @@ class LoadDialog(QDialog):
             form.addRow(tr("Geometría"), self.geometry_combo)
         self.crs_widget = QgsProjectionSelectionWidget()
         self.crs_widget.setOptionVisible(QgsProjectionSelectionWidget.CrsOption.CrsNotSet, True)
-        self.crs_label = QLabel(tr("CRS"))
+        self.crs_label = QLabel(tr("SRC"))
         form.addRow(self.crs_label, self.crs_widget)
         layout.addLayout(form)
 
@@ -128,12 +128,12 @@ class LoadDialog(QDialog):
         self.crs_widget.setVisible(unknown)
         if unknown:
             self.crs_widget.setCrs(QgsCoordinateReferenceSystem())
-        warnings = [w for w in self._plan.warnings if "geometría no primaria" not in w]
+        warnings = [w for w in self._plan.warnings if "geometría secundaria" not in w]
         others = [g.name for g in self._plan.geometries if g.name != name]
         if others:
-            warnings.append(tr("Otras geometrías que no se cargan: ") + ", ".join(others))
+            warnings.append(tr("Geometrías secundarias que no se cargan: ") + ", ".join(others))
         if unknown:
-            warnings.append(tr("Los datos no declaran CRS: elija uno o continúe sin CRS."))
+            warnings.append(tr("Los datos no declaran SRC. Elija uno o continúe sin SRC."))
         self.warnings_label.setText("\n".join(f"• {w}" for w in warnings))
         self.warnings_label.setVisible(bool(warnings))
 

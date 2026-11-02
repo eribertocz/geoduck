@@ -4,8 +4,14 @@
 
 ## 1. Horizonte y política
 - Host: QGIS Desktop **3.x y 4.x**, sin QGIS 2.
+- **Versión mínima: QGIS 3.34** (`qgisMinimumVersion`, D8). Desde ella, GeoDuck debe funcionar en **todas**
+  las versiones posteriores de 3.x y 4.x (decisión del propietario, 2026-11-02). Las diferencias de la
+  API de QGIS entre versiones se resuelven en un único módulo de compatibilidad
+  (`geoduck/qgis_bridge/qgis_compat.py`), nunca con suposiciones sobre la versión.
+- **Matriz de la CI (Linux, PyQGIS sin interfaz):** la mínima (3.34), cada LTR (3.40, 3.44) y la última
+  publicada (4.2), con DuckDB 1.5.0 y 2.0.0. Al publicarse una LTR o una versión mayor nueva, se añade.
+  Las versiones intermedias comparten API con sus vecinas y quedan cubiertas por ellas.
 - **Anclas de prueba iniciales al 2026-11-01**: QGIS 3.44.15 LTR (Qt5) y QGIS 4.2.3 (Qt6).
-- QGIS 4.0.x: segunda prioridad de certificación. QGIS 3.x anteriores: best-effort hasta que existan pruebas efectivas.
 - Windows 11 x64 primero. Otros SO en fases posteriores mediante decisiones registradas.
 - DuckDB >= 1.5.0: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
 - PyArrow requiere coincidencia de ABI, arquitectura y wheels reales; verificar en `sys.executable` de QGIS.

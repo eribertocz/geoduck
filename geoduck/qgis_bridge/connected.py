@@ -16,12 +16,12 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer, QgsWkbTypes
+from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_terminator
 from geoduck.domain.errors import GeoDuckError
-from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import crs_from_field
@@ -78,7 +78,7 @@ def _edit_info(
     db, schema, name = (quote_string_literal(p) for p in source)
     readonly = _rows(handle, f"SELECT readonly FROM duckdb_databases() WHERE database_name = {db}", 1)
     if readonly and readonly[0][0]:
-        return "base de datos de solo lectura", None, []
+        return "solo lectura (base en modo lectura)", None, []
     rows = _rows(
         handle,
         f"SELECT column_name, column_default FROM duckdb_columns() WHERE database_name = {db} "
@@ -105,6 +105,27 @@ def _extent_from_stats(value: Any) -> tuple[float, float, float, float] | None:
     return box if finite and box[0] <= box[2] and box[1] <= box[3] else None
 
 
+def _scan_extent(handle: Any, token: Any, sql: str) -> tuple[float, float, float, float] | None:
+    """Extensión exacta recorriendo la geometría una vez, en el worker; ignora nulas y vacías."""
+    xmin = ymin = math.inf
+    xmax = ymax = -math.inf
+    with handle.arrow_batches(sql, batch_size=65_536) as reader:
+        for batch in reader:
+            token.raise_if_cancelled()
+            for wkb in batch.column(0).to_pylist():
+                if wkb is None:
+                    continue
+                g = QgsGeometry()
+                g.fromWkb(wkb)
+                if g.isNull() or g.isEmpty():
+                    continue
+                box = g.boundingBox()
+                xmin, ymin = min(xmin, box.xMinimum()), min(ymin, box.yMinimum())
+                xmax, ymax = max(xmax, box.xMaximum()), max(ymax, box.yMaximum())
+    finite = all(math.isfinite(v) for v in (xmin, ymin, xmax, ymax))
+    return (xmin, ymin, xmax, ymax) if finite else None
+
+
 def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
     """Tipo de capa (`Qgis.WkbType` por nombre) desde cabeceras WKB ISO en hex, y un aviso si hay mezcla."""
     types = set()
@@ -115,20 +136,17 @@ def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
         code = int.from_bytes(raw, "little" if h[:2] == "01" else "big")
         types.add(Qgis.WkbType(code))
     if not types:
-        return "Unknown", "Ninguna geometría no nula: tipo de geometría desconocido"
+        return "Unknown", "Sin geometrías: tipo de geometría desconocido"
     if len(types) == 1:
         return Qgis.WkbType(next(iter(types))).name, None
     flat = {QgsWkbTypes.flatType(QgsWkbTypes.multiType(t)) for t in types}
     dims = {(QgsWkbTypes.hasZ(t), QgsWkbTypes.hasM(t)) for t in types}
     if len(flat) == 1 and len(dims) == 1:  # p. ej. Point y MultiPoint: la capa es Multi
         return Qgis.WkbType(QgsWkbTypes.multiType(next(iter(types)))).name, None
-    return (
-        "Unknown",
-        "Geometrías de tipos distintos: la capa se dibuja, pero QGIS no puede simbolizarla por tipo",
-    )
+    return "Unknown", "Tipos de geometría mixtos: simbología por tipo no disponible"
 
 
-def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
+def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912
     """Operación del worker: todo lo que la URI necesita, sin leer los datos en Python."""
     inner = strip_terminator(request.sql)
     described = _rows(handle, f"DESCRIBE SELECT * FROM (\n{inner}\n) AS __geoduck_q", 10_000)
@@ -155,7 +173,14 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         fid, key = "rowid", None  # como `ctid` en PostgreSQL
     else:
         fid, key = "content", None
-    readonly: str | None = None if is_table else "DuckDB no escribe en vistas ni en consultas"
+    readonly: str | None = None
+    if request.source is not None and not is_table:
+        readonly = "solo lectura"
+    elif not is_table:
+        readonly = (
+            "solo lectura. Para editar, cargue la tabla desde el explorador "
+            "(clic derecho o doble clic → Cargar en QGIS…)"
+        )
     key_default: str | None = None
     defaults: list[str] = []
     if is_table and request.source is not None:
@@ -168,6 +193,7 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         "fid": fid,
         "key": key,
         "readonly": readonly,
+        "kind": "table" if is_table else ("view" if request.source is not None else None),
         "default": key_default,
         "defaults": defaults,
         "keys": keys,
@@ -204,6 +230,9 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     else:
         stats = _rows(handle, f"SELECT stats({g}) FROM (\n{inner}\n) AS __geoduck_q LIMIT 1", 1)
         out["extent"] = _extent_from_stats(stats[0][0]) if stats else None
+    if out["extent"] is None and count:
+        # Estadísticas inservibles (p. ej. geometrías vacías dan -inf…inf): un recorrido de la geometría.
+        out["extent"] = _scan_extent(handle, token, f"SELECT {g} FROM (\n{inner}\n) AS __geoduck_q")
     batches: list[Any] = []  # el campo GeoArrow (con su CRS) de una fila
     handle.read_arrow(
         f"SELECT {g} FROM ({plan.sql}) AS __geoduck_c WHERE {g} IS NOT NULL LIMIT 1",
@@ -306,13 +335,11 @@ class ConnectedLoad:
             if crs.isValid():
                 params["crs"] = crs.authid() or crs.toWkt()
             else:
-                warnings.append("Capa sin CRS")
+                warnings.append("Sin SRC asignado")
             if meta["extent"] is not None:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
-                warnings.append("Extensión desconocida: «Zoom a la capa» no está disponible")
-        if meta["readonly"] is not None:
-            warnings.append(f"Solo lectura: {meta['readonly']}")
+                warnings.append("Extensión no disponible")
         layer = QgsVectorLayer(encode_uri(params), self._request.layer_name, KEY)
         if not layer.isValid():
             raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
@@ -323,7 +350,15 @@ class ConnectedLoad:
         if self._on_layer is not None:
             self._on_layer(layer)
         self._on_progress(meta["count"])
-        return LoadReport(layer.id(), layer.name(), LoadMode.CONNECTED, meta["count"], tuple(warnings))
+        return LoadReport(
+            layer.id(),
+            layer.name(),
+            LoadMode.CONNECTED,
+            meta["count"],
+            tuple(warnings),
+            origin=describe_origin(self._request, meta["kind"]),
+            access=meta["readonly"] or "lectura y escritura",
+        )
 
     def _end(self, result: LoadReport | BaseException) -> None:
         self._timer.stop()

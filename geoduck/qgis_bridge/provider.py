@@ -57,6 +57,13 @@ from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_termina
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
+from geoduck.qgis_bridge.qgis_compat import (
+    FilterType,
+    ProviderCapability,
+    RequestFlag,
+    calculate_transform,
+    read_flags,
+)
 from geoduck.qgis_bridge.sql_compile import compile_expression
 
 KEY = "geoduck"
@@ -186,6 +193,11 @@ def base_sql(  # noqa: PLR0917 - las piezas de la URI que definen la consulta
     return f"SELECT {', '.join(cols)} FROM ({numbered}) AS __geoduck_q"
 
 
+def filtered_sql(base: str, subset: str) -> str:
+    """La consulta base con el filtro de la capa: una condición de DuckDB sobre los campos de la capa."""
+    return f"SELECT * FROM ({base}) AS __geoduck_f WHERE ({subset}\n)"
+
+
 def sql_literal(value: Any, duck_type: str) -> str:
     """Valor de una clave leído de DuckDB → literal SQL del mismo tipo (páginas y filtros por FID)."""
     if value is None:
@@ -226,7 +238,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         self.local: QgsExpression | None = None
         self.limit: int | None = int(self.r.limit()) if self.r.limit() >= 0 else None
         self._reset()
-        self.transform = self.r.calculateTransform(provider.crs())
+        self.transform = calculate_transform(self.r, provider.crs())
         try:
             self.rect = self.filterRectToSourceCrs(self.transform)
         except QgsCsException:
@@ -261,13 +273,13 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         geometry = plan.geometry
         flags = r.flags()
         names = [f.name for f in plan.fields]
-        if flags & Qgis.FeatureRequestFlag.SubsetOfAttributes:
+        if flags & RequestFlag.SubsetOfAttributes:
             self.wanted = [names[i] for i in r.subsetOfAttributes() if 0 <= i < len(names)]
         else:
             self.wanted = names
         has_rect = not self.rect.isNull() and geometry is not None
-        self.exact = has_rect and bool(flags & Qgis.FeatureRequestFlag.ExactIntersect)
-        self.return_geom = geometry is not None and not flags & Qgis.FeatureRequestFlag.NoGeometry
+        self.exact = has_rect and bool(flags & RequestFlag.ExactIntersect)
+        self.return_geom = geometry is not None and not flags & RequestFlag.NoGeometry
         self.mapped = p.fid_mode == "map"
         self.ids = id_columns(p.fid_mode, p.keys)
         cols = [quote_identifier(c) for c in self.ids] + [quote_identifier(n) for n in self.wanted]
@@ -284,13 +296,10 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             g = quote_identifier(geometry.name)  # type: ignore[union-attr]
             where.append(f"st_intersects_extent({g}, {_extent_polygon(self.rect)})")
         ft = r.filterType()
-        if ft in (Qgis.FeatureRequestFilterType.Fid, Qgis.FeatureRequestFilterType.Fids):
-            if ft == Qgis.FeatureRequestFilterType.Fid:
-                fids = [int(r.filterFid())]
-            else:
-                fids = sorted(int(x) for x in r.filterFids())
+        if ft in (FilterType.Fid, FilterType.Fids):
+            fids = [int(r.filterFid())] if ft == FilterType.Fid else sorted(int(x) for x in r.filterFids())
             where.append(self._fid_filter(fids))
-        elif ft == Qgis.FeatureRequestFilterType.Expression and r.filterExpression() is not None:
+        elif ft == FilterType.Expression and r.filterExpression() is not None:
             expr = r.filterExpression()
             compiled = compile_expression(expr.rootNode(), p.comparable)
             if compiled:
@@ -490,7 +499,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         super().__init__(
             uri,
             options if options is not None else QgsDataProvider.ProviderOptions(),
-            flags if flags is not None else Qgis.DataProviderReadFlags(),
+            flags if flags is not None else read_flags(),
         )
         self._uri = uri
         self.editable = False
@@ -550,8 +559,14 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
                 self.source,
                 self.editable,
             )
+            #: Sin el filtro de la capa: sobre ella se aplica `subset` (Capa → Filtrar…, §5.2).
+            self.full_base = self.base
+            self._params = params
+            self._subset = params.get("subset", "")
+            if self._subset:
+                self.base = filtered_sql(self.full_base, self._subset)
             ext = [float(v) for v in params.get("extent", "").split(",") if v]
-            count = int(params.get("count", "-1"))
+            count = int(params.get("count", "-1")) if not self._subset else -1
             wkb = params.get("type") or ""
         except Exception as exc:
             self.last_error = f"URI no válida: {exc}"
@@ -665,7 +680,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         return self._valid
 
     def capabilities(self) -> Any:
-        cap = Qgis.VectorProviderCapability
+        cap = ProviderCapability
         if not self.editable:
             return cap.SelectAtId
         if self.plan.geometry is None:  # combinadas de izquierda a derecha: así funciona en 3.44 y 4.2
@@ -721,6 +736,53 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
 
     def dataSourceUri(self, expandAuthConfig: bool = True) -> str:
         return self._uri
+
+    # -- filtro de la capa (Capa → Filtrar…), en SQL de DuckDB sobre los campos de la capa (§5.2) -----
+
+    def supportsSubsetString(self) -> bool:
+        return self._valid
+
+    def subsetString(self) -> str:
+        return str(self._subset)
+
+    def subsetStringDialect(self) -> str:
+        return "SQL de DuckDB (cláusula WHERE)"
+
+    def subsetStringHelpUrl(self) -> str:
+        return "https://duckdb.org/docs/stable/sql/query_syntax/where"
+
+    def setSubsetString(self, subset: str, updateFeatureCount: bool = True) -> bool:
+        """Aplica el filtro tras comprobarlo en DuckDB; uno inválido se rechaza y la capa no cambia."""
+        subset = (subset or "").strip()
+        base = filtered_sql(self.full_base, subset) if subset else self.full_base
+        count = -1
+        engine = self.engine()
+        if engine is not None:
+            handle = engine.query(f"SELECT count(*) FROM ({base}) AS __geoduck_n", max_rows=1)
+            try:
+                count = int(handle.future.result(MAIN_WAIT).rows[0][0])
+            except FutureTimeout:
+                engine.cancel(handle.op_id)
+                self.pushError(
+                    "La sesión está ocupada: aplique el filtro cuando termine la operación en curso"
+                )
+                return False
+            except Exception as exc:
+                self.pushError(
+                    f"Filtro no válido para DuckDB: {str(exc).splitlines()[0] if str(exc) else exc}"
+                )
+                return False
+        self._subset = subset
+        self.base = base
+        if not subset:
+            count = int(self._params.get("count", "-1")) if count < 0 else count
+        self._count = count
+        params = dict(self._params)
+        params["subset"] = subset or None
+        self._uri = encode_uri(params)
+        self.clearMinMaxCache()
+        self.dataChanged.emit()
+        return True
 
     def name(self) -> str:
         return KEY

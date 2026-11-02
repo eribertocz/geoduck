@@ -96,7 +96,7 @@ def test_mixed_geometry_types_become_one_layer_per_type(session):
         "capa — Polygon": 400,
         "capa — sin geometría": 100,
     }
-    assert any("varios tipos" in w for w in ev.report.warnings)
+    assert any("mixtos" in w for w in ev.report.warnings)
 
 
 def test_uniform_multi_family_is_declared(session):
@@ -166,7 +166,7 @@ def test_crs_override_and_unknown_crs(session):
     ev = session.load("SELECT 'POINT(1 2)'::GEOMETRY AS g", crs_override="EPSG:32719")
     assert QgsProject.instance().mapLayer(ev.report.layer_id).crs().authid() == "EPSG:32719"
     ev = session.load("SELECT 'POINT(1 2)'::GEOMETRY AS g")
-    assert "Capa sin CRS" in ev.report.warnings
+    assert "Sin SRC asignado" in ev.report.warnings
 
 
 def test_layers_survive_detach_and_close(qgis_app, tmp_path):

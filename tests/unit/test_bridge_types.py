@@ -102,7 +102,7 @@ def test_several_geometries_require_a_choice():
         build_load_plan("SELECT 1", cols)
     plan = build_load_plan("SELECT 1", cols, geometry="b")
     assert plan.geometry.name == "b"
-    assert any("«a»: geometría no primaria omitida" in w for w in plan.warnings)
+    assert any("Columna «a» omitida (geometría secundaria)" in w for w in plan.warnings)
 
 
 def test_unknown_geometry_name_is_rejected():

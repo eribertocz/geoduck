@@ -20,7 +20,7 @@ from qgis.PyQt.QtCore import QTimer
 from geoduck.domain.bridge_types import LoadPlan
 from geoduck.domain.channel import BatchChannel
 from geoduck.domain.errors import ErrorCode, GeoDuckError
-from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
 from geoduck.qgis_bridge.convert import (
     column_converter,
@@ -228,11 +228,21 @@ class MemoryLoad:
         self._project.addMapLayer(layer)
         warnings = plan.warnings
         if plan.geometry is not None and self._layer_type is None:
-            warnings = (*warnings, "Ninguna geometría no nula: capa sin geometría")
+            warnings = (*warnings, "Sin geometrías: se carga como tabla")
         elif plan.geometry is not None and not layer.crs().isValid():
-            warnings = (*warnings, "Capa sin CRS")
+            warnings = (*warnings, "Sin SRC asignado")
         self._on_progress(self._rows)
-        self._on_done(LoadReport(layer.id(), layer.name(), LoadMode.MEMORY, self._rows, warnings))
+        self._on_done(
+            LoadReport(
+                layer.id(),
+                layer.name(),
+                LoadMode.MEMORY,
+                self._rows,
+                warnings,
+                origin=describe_origin(self._request),
+                access=COPY_ACCESS,
+            )
+        )
 
     def _fail(self, exc: BaseException) -> None:
         if self._finished:
