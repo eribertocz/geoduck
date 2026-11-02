@@ -54,7 +54,7 @@ Una ejecución = una versión de QGIS × un método (M1, M2 o M3) × una versió
 
 | Celda | QGIS | Archivo de restricciones | Estado |
 |---|---|---|---|
-| `win-qgis-3.34-py312` | 3.34.x LTR (mínimo soportado, D8) | `constraints/win-qgis-3.34-py312.txt` | Prueba de humo aprobada (2026-11-01); certificación pendiente |
+| `win-qgis-3.34-py312` | 3.34.x LTR (mínimo soportado, D8) | `constraints/win-qgis-3.34-py312.txt` | Prueba de humo aprobada (2026-11-01). Prueba funcional manual de G3 aprobada con 0.4.0a2, DuckDB 2.0.0 (2026-11-02, [evidencia](../evidence/g3/windows/win11-qgis-3.34.15/README.md)). Certificación con este procedimiento pendiente |
 | `win-qgis-3.44-py312` | 3.44.x LTR | `constraints/win-qgis-3.44-py312.txt` | No probado |
 | `win-qgis-4.2` | 4.2.3 | `constraints/win-qgis-4.2.txt` (se completa tras leer su `facts.json`) | No probado |
 
