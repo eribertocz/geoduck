@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Panel acoplable de GeoDuck (G0): estado de sesión, inicio/cierre en memoria y diagnóstico.
+"""Panel acoplable de GeoDuck: estado de sesión, inicio/cierre, bases de datos y diagnóstico.
 
-El alcance de v0.1.0a1 es deliberadamente mínimo (spec/docs/roadmap.md, G0): sin editor SQL, sin
-explorador y sin ATTACH. Esas superficies llegan en G1–G2 dentro de este mismo dock.
+G1 añade el explorador del catálogo y los controles «Abrir existente», «Crear nueva» y «Desadjuntar»
+(GD-SES-002..004, GD-CAT-001). El editor SQL llega en G2 (spec/docs/roadmap.md).
 """
 
 from __future__ import annotations
@@ -26,18 +26,27 @@ from geoduck import __version__
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.app.events import (
     AppEvent,
+    AttachFailed,
+    CatalogChanged,
+    CatalogUnavailable,
     CloseConfirmationRequired,
+    DatabaseAttached,
+    DatabaseDetached,
+    DetachFailed,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
     TransactionFailed,
 )
+from geoduck.domain.catalog import AttachRequest, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.session import SessionState
 from geoduck.domain.transaction import CloseChoice
+from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.close_dialog import CloseTransactionDialog
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
+from geoduck.ui.explorer import CatalogExplorer
 from geoduck.ui.i18n import tr
 
 STATE_TEXT = {
@@ -50,7 +59,6 @@ STATE_TEXT = {
     SessionState.ERROR_RECOVERABLE: "Fallo recuperable",
 }
 
-_CAN_START = {SessionState.DISCONNECTED, SessionState.ERROR_RECOVERABLE}
 _CAN_CLOSE = {SessionState.CONNECTING, SessionState.READY, SessionState.BUSY, SessionState.ERROR_RECOVERABLE}
 
 
@@ -76,6 +84,7 @@ class GeoDuckDock(QDockWidget):
         parent: QWidget | None = None,
         *,
         ask_close_choice: Callable[[CloseConfirmationRequired, QWidget], CloseChoice] | None = None,
+        ask_attach_request: Callable[[OpenAction, QWidget], AttachRequest | None] | None = None,
     ) -> None:
         super().__init__(tr("GeoDuck"), parent)
         self.setObjectName("GeoDuckDock")
@@ -83,6 +92,7 @@ class GeoDuckDock(QDockWidget):
         self._run_diagnostics = run_diagnostics
         self._report: DiagnosticReport | None = None
         self._ask_close_choice = ask_close_choice or CloseTransactionDialog.ask
+        self._ask_attach_request = ask_attach_request or AttachDialog.ask
 
         body = QWidget(self)
         layout = QVBoxLayout(body)
@@ -90,15 +100,19 @@ class GeoDuckDock(QDockWidget):
         layout.setSpacing(12)
         layout.addLayout(self._build_header())
         layout.addWidget(self._build_session_card())
+        layout.addWidget(self._build_databases_card(), 1)
         layout.addWidget(self._build_message())
         layout.addWidget(self._build_env_banner())
-        layout.addStretch(1)
         layout.addLayout(self._build_footer())
         self.setWidget(body)
 
         self.start_button.clicked.connect(self._start)
         self.close_button.clicked.connect(self._close)
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
+        self.open_button.clicked.connect(lambda: self._attach(OpenAction.OPEN_EXISTING))
+        self.create_button.clicked.connect(lambda: self._attach(OpenAction.CREATE_NEW))
+        self.detach_button.clicked.connect(self._detach)
+        self.explorer.itemSelectionChanged.connect(lambda: self._render(self._coordinator.state))
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
         self.refresh_environment()
@@ -156,6 +170,30 @@ class GeoDuckDock(QDockWidget):
         card_layout.addWidget(self.engine_label)
         return card
 
+    def _build_databases_card(self) -> QFrame:
+        """Bases de la sesión y sus esquemas, tablas y vistas (GD-CAT-001)."""
+        card = QFrame()
+        card.setFrameShape(QFrame.Shape.StyledPanel)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)
+        card_layout.addWidget(self._bold(QLabel(tr("Bases de datos"))))
+        self.open_button = QPushButton(tr("Abrir existente…"))
+        self.open_button.setToolTip(tr("Adjunta un archivo DuckDB existente; nunca crea uno"))
+        self.create_button = QPushButton(tr("Crear nueva…"))
+        self.create_button.setToolTip(tr("Crea un archivo DuckDB nuevo; nunca sobrescribe uno existente"))
+        self.detach_button = QPushButton(tr("Desadjuntar"))
+        self.detach_button.setToolTip(tr("Desadjunta la base seleccionada y libera el archivo"))
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.open_button)
+        buttons.addWidget(self.create_button)
+        buttons.addStretch(1)
+        buttons.addWidget(self.detach_button)
+        card_layout.addLayout(buttons)
+        self.explorer = CatalogExplorer()
+        card_layout.addWidget(self.explorer, 1)
+        return card
+
     def _build_message(self) -> QLabel:
         """Errores recuperables: texto comprensible + código, seleccionable (ui-ux-spec §3)."""
         self.message_label = QLabel()
@@ -198,6 +236,22 @@ class GeoDuckDock(QDockWidget):
     def _close(self) -> None:
         self._coordinator.request_close()
 
+    def _attach(self, action: OpenAction) -> None:
+        request = self._ask_attach_request(action, self)
+        if request is None:
+            return
+        self.message_label.hide()
+        if self._coordinator.can_start:
+            self._coordinator.start_file_session(request)  # StartSession(mode=file)
+        else:
+            self._coordinator.attach_database(request)
+
+    def _detach(self) -> None:
+        name = self.explorer.selected_database()
+        if name is not None:
+            self.message_label.hide()
+            self._coordinator.detach_database(name)
+
     def refresh_environment(self) -> DiagnosticReport:
         self._report = self._run_diagnostics()
         if self._report.ok:
@@ -234,6 +288,19 @@ class GeoDuckDock(QDockWidget):
                 else tr("cancelación entre lotes")
             )
             self.engine_label.setText(f"DuckDB {info.duckdb_version} · {cancel}")
+        elif isinstance(event, CatalogChanged):
+            self.explorer.show_catalog(event.catalog)
+            self._render(self._coordinator.state)
+        elif isinstance(event, CatalogUnavailable):
+            self._show_message(tr("No se pudo leer el catálogo."), event.code.value, event.message)
+        elif isinstance(event, DatabaseAttached):
+            self.explorer.select_database(event.database.name)
+        elif isinstance(event, DatabaseDetached):
+            self._render(self._coordinator.state)
+        elif isinstance(event, AttachFailed):
+            self._show_message(tr("No se adjuntó la base."), event.code.value, event.message)
+        elif isinstance(event, DetachFailed):
+            self._show_message(tr("No se desadjuntó la base."), event.code.value, event.message)
         elif isinstance(event, CloseConfirmationRequired):
             self._coordinator.resolve_close(self._ask_close_choice(event, self))
         elif isinstance(event, SessionInvalidated):
@@ -255,10 +322,23 @@ class GeoDuckDock(QDockWidget):
             )
             self.message_label.show()
 
+    def _show_message(self, summary: str, code: str, detail: str) -> None:
+        self.message_label.setText(f"{summary} [{code}] {detail}")
+        self.message_label.show()
+
     def _render(self, state: SessionState) -> None:
         env_ok = self._report is None or self._report.ok
+        can_start = env_ok and self._coordinator.can_start
+        ready = state is SessionState.READY
         self.state_label.setText(tr(STATE_TEXT[state]))
-        self.start_button.setEnabled(env_ok and state in _CAN_START)
+        self.start_button.setEnabled(can_start)
+        self.open_button.setEnabled(can_start or ready)
+        self.create_button.setEnabled(can_start or ready)
+        selected = self.explorer.selected_database()
+        catalog = self._coordinator.catalog
+        self.detach_button.setEnabled(
+            ready and selected is not None and catalog is not None and not catalog.is_root(selected)
+        )
         self.close_button.setEnabled(state in _CAN_CLOSE)
         if state is SessionState.DISCONNECTED:
             self.engine_label.setText(tr("Sin sesión activa."))

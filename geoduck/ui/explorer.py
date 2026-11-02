@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Explorador del catálogo de la sesión: bases, esquemas, tablas y vistas (GD-CAT-001, AT-CAT-001).
+
+Solo muestra la instantánea que publica la capa de aplicación, leída de DuckDB después de cada operación
+con éxito; nunca la modifica por su cuenta ni la anticipa.
+"""
+
+from __future__ import annotations
+
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QTreeWidget, QTreeWidgetItem, QWidget
+
+from geoduck.domain.catalog import AccessMode, CatalogObject, CatalogSnapshot, ObjectKind
+from geoduck.ui.i18n import tr
+
+_DATABASE_ROLE = int(Qt.ItemDataRole.UserRole)
+
+
+class CatalogExplorer(QTreeWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setHeaderHidden(True)
+        self.setAccessibleName(tr("Explorador de bases de datos"))
+        self.setMinimumHeight(140)
+        self._catalog: CatalogSnapshot | None = None
+
+    def show_catalog(self, catalog: CatalogSnapshot | None) -> None:
+        self._catalog = catalog
+        self.clear()
+        if catalog is None:
+            return
+        for db in catalog.databases:
+            notes = []
+            if catalog.is_root(db.name):
+                notes.append(tr("raíz"))
+            if catalog.default_database.key == db.key:
+                notes.append(tr("en uso"))
+            if db.access is AccessMode.READ_ONLY:
+                notes.append(tr("solo lectura"))
+            label = db.name + (f" · {', '.join(notes)}" if notes else "")
+            item = QTreeWidgetItem([label])
+            item.setData(0, _DATABASE_ROLE, db.name)
+            item.setToolTip(0, db.path or tr("En memoria"))
+            for schema in catalog.schemas_of(db.name):
+                schema_item = QTreeWidgetItem([schema])
+                schema_item.setData(0, _DATABASE_ROLE, db.name)
+                for obj in catalog.objects_in(db.name, schema):
+                    schema_item.addChild(self._object_item(obj, db.name))
+                item.addChild(schema_item)
+            self.addTopLevelItem(item)
+            item.setExpanded(True)
+        if catalog.temporaries:
+            temp = QTreeWidgetItem([tr("Temporales de la sesión")])
+            for obj in catalog.temporaries:
+                temp.addChild(self._object_item(obj, None))
+            self.addTopLevelItem(temp)
+
+    @staticmethod
+    def _object_item(obj: CatalogObject, database: str | None) -> QTreeWidgetItem:
+        kind = tr("tabla") if obj.kind is ObjectKind.TABLE else tr("vista")
+        item = QTreeWidgetItem([f"{obj.name} ({kind})"])
+        item.setData(0, _DATABASE_ROLE, database)
+        return item
+
+    def selected_database(self) -> str | None:
+        """Base a la que pertenece el elemento seleccionado; `None` si no hay o es un temporal."""
+        items = self.selectedItems()
+        if not items:
+            return None
+        value = items[0].data(0, _DATABASE_ROLE)
+        return str(value) if value else None
+
+    def select_database(self, name: str) -> None:
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item is not None and item.data(0, _DATABASE_ROLE) == name:
+                self.setCurrentItem(item)
+                return

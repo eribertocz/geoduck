@@ -137,3 +137,27 @@ def test_read_catalog_after_close_fails_without_touching_duckdb():
     w.close().result(TIMEOUT)
     with pytest.raises(SessionClosedError):
         w.read_catalog().result(TIMEOUT)
+
+
+def test_catalog_lists_schemas_tables_views_and_temporaries(worker, db_file):
+    """GD-CAT-001 / AT-CAT-001: `main` es un esquema del usuario aunque DuckDB lo marque como interno."""
+    con = duckdb.connect(db_file)
+    con.execute("CREATE SCHEMA ventas; CREATE TABLE ventas.t(a INT); CREATE VIEW ventas.v AS SELECT 1 AS a")
+    con.close()
+    run_sql(worker, f"ATTACH {quote_string_literal(db_file)} AS d (READ_ONLY)")
+    run_sql(worker, "CREATE TABLE r(a INT)")
+    run_sql(worker, "CREATE TEMP TABLE tmp(a INT)")
+    snap = worker.read_catalog().result(TIMEOUT)
+    assert snap.schemas_of("d") == ("main", "ventas")
+    assert {(o.name, o.kind.value) for o in snap.objects_in("d", "ventas")} == {("t", "TABLE"), ("v", "VIEW")}
+    assert [o.name for o in snap.objects_in(snap.root, "main")] == ["r"]
+    assert [o.name for o in snap.temporaries] == ["tmp"]
+    assert all(o.database not in ("system",) for o in snap.objects)  # nada interno de DuckDB
+
+
+def test_object_list_is_never_truncated(worker, monkeypatch):
+    run_sql(worker, "CREATE TABLE a(x INT)")
+    run_sql(worker, "CREATE TABLE b(x INT)")
+    monkeypatch.setattr(engine_catalog, "OBJECT_LIMIT", 1)
+    with pytest.raises(EngineError, match="incompleto"):
+        worker.read_catalog().result(TIMEOUT)

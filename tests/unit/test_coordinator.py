@@ -873,3 +873,38 @@ def test_answer_after_invalidation_just_closes(env):
     dispatcher.drain()
     coordinator.resolve_close(CloseChoice.COMMIT)
     assert coordinator.state is S.DISCONNECTED and engines[0].commits == []
+
+
+# -- regresión: no se inicia otra sesión con un motor vivo (G1 paso 8) -------------------------------
+
+
+def test_cannot_start_while_an_aborted_transaction_keeps_the_engine_alive(env):
+    """Antes, «Iniciar» en ERROR_RECOVERABLE(TRANSACTION_ABORTED) creaba otro motor y dejaba vivo el
+    anterior, con su conexión y sus bloqueos."""
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator.commit_transaction()
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE and not coordinator.can_start
+    for start in (coordinator.start_memory_session, lambda: coordinator.start_file_session(REQUEST)):
+        with pytest.raises(SessionStateError):
+            start()
+    assert len(engines) == 1
+
+
+def test_can_start_after_start_failure_and_after_invalidation(env):
+    coordinator, dispatcher, engines, _events = env
+    coordinator.start_memory_session()
+    engines[0].started.set_exception(UnsupportedEngineError("DuckDB 1.4"))
+    dispatcher.drain()
+    assert coordinator.can_start
+    coordinator.start_memory_session()
+    engines[1].started.set_result(INFO)
+    dispatcher.drain()
+    engines[1].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    assert coordinator.can_start
