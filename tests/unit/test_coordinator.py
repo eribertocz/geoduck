@@ -10,6 +10,7 @@ from geoduck.app.events import (
     AttachFailed,
     CatalogChanged,
     CatalogUnavailable,
+    CloseConfirmationRequired,
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
@@ -40,6 +41,7 @@ from geoduck.domain.errors import (
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause
 from geoduck.domain.session import SessionState as S
+from geoduck.domain.transaction import CloseChoice
 from geoduck.domain.transaction import TransactionState as T
 
 
@@ -66,6 +68,7 @@ class FakeEngine:
         self.attaches: list[tuple[AttachRequest, Future]] = []
         self.detaches: list[tuple[str, Future]] = []
         self.commits: list[Future] = []
+        self.tx_checks: list[Future] = []
         self.rollbacks: list[Future] = []
         self.cancelled = False
 
@@ -89,6 +92,10 @@ class FakeEngine:
     def detach(self, alias):
         self.detaches.append((alias, Future()))
         return self.detaches[-1][1]
+
+    def transaction_state(self):
+        self.tx_checks.append(Future())
+        return self.tx_checks[-1]
 
     def commit(self):
         self.commits.append(Future())
@@ -738,3 +745,131 @@ def test_transaction_use_cases_require_a_session(env, use_case):
     coordinator, _dispatcher, _engines, _events = env
     with pytest.raises(SessionStateError):
         getattr(coordinator, use_case)()
+
+
+# -- cierre con transacción abierta (G1 paso 7) ------------------------------------------------------
+
+
+def asks(events):
+    return [e for e in events if isinstance(e, CloseConfirmationRequired)]
+
+
+def _request_close_with(env, state):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.request_close()
+    assert coordinator.state is S.READY and len(engines[0].tx_checks) == 1  # se comprueba en DuckDB
+    engines[0].tx_checks[0].set_result(state)
+    dispatcher.drain()
+    return coordinator, dispatcher, engines, events
+
+
+def test_close_without_transaction_closes_directly(env):
+    coordinator, _dispatcher, engines, events = _request_close_with(env, T.NONE)
+    assert coordinator.state is S.CLOSING and asks(events) == []
+    assert engines[0].commits == [] and engines[0].rollbacks == []
+
+
+def test_close_with_active_transaction_asks_with_commit_allowed(env):
+    coordinator, _dispatcher, _engines, events = _request_close_with(env, T.ACTIVE)
+    assert coordinator.state is S.READY
+    assert asks(events) == [CloseConfirmationRequired(T.ACTIVE, commit_allowed=True)]
+    coordinator.request_close()  # una pregunta a la vez
+    assert len(asks(events)) == 1
+
+
+def test_cancel_close_keeps_the_session_and_does_not_touch_the_transaction(env):
+    coordinator, dispatcher, engines, _events = _request_close_with(env, T.ACTIVE)
+    coordinator.resolve_close(CloseChoice.CANCEL)
+    dispatcher.drain()
+    assert coordinator.state is S.READY and coordinator.transaction_state is T.ACTIVE
+    assert engines[0].commits == [] and engines[0].rollbacks == [] and not engines[0].stopped.done()
+    with pytest.raises(SessionStateError):
+        coordinator.resolve_close(CloseChoice.CANCEL)  # la pregunta ya se respondió
+    coordinator.request_close()  # se puede volver a pedir
+    assert len(engines[0].tx_checks) == 2
+
+
+def test_commit_and_close(env):
+    coordinator, dispatcher, engines, _events = _request_close_with(env, T.ACTIVE)
+    coordinator.resolve_close(CloseChoice.COMMIT)
+    assert coordinator.state is S.BUSY and len(engines[0].commits) == 1
+    engines[0].commits[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.CLOSING  # el cierre solo sigue tras el COMMIT confirmado
+
+
+def test_rollback_and_close(env):
+    coordinator, dispatcher, engines, _events = _request_close_with(env, T.ACTIVE)
+    coordinator.resolve_close(CloseChoice.ROLLBACK)
+    engines[0].rollbacks[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.CLOSING and engines[0].commits == []
+
+
+def test_failed_commit_never_closes_and_asks_again_with_the_real_state(env):
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, events = _request_close_with(env, T.ACTIVE)
+    coordinator.resolve_close(CloseChoice.COMMIT)
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    assert coordinator.state is S.ERROR_RECOVERABLE and not engines[0].stopped.done()
+    assert asks(events)[-1] == CloseConfirmationRequired(T.ABORTED, commit_allowed=False)
+    with pytest.raises(SessionStateError):
+        coordinator.resolve_close(CloseChoice.COMMIT)  # COMMIT no es válido con la transacción abortada
+    coordinator.resolve_close(CloseChoice.ROLLBACK)  # la pregunta sigue abierta: se elige otra opción
+    engines[0].rollbacks[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.CLOSING
+
+
+def test_aborted_transaction_disables_commit(env):
+    _coordinator, _dispatcher, _engines, events = _request_close_with(env, T.ABORTED)
+    assert asks(events) == [CloseConfirmationRequired(T.ABORTED, commit_allowed=False)]
+
+
+def test_close_from_error_recoverable_with_aborted_transaction_rolls_back_first(env):
+    from geoduck.domain.errors import TransactionError
+
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.commit_transaction()
+    engines[0].commits[0].set_exception(
+        failed_with(TransactionError, ErrorCode.TRANSACTION_ABORTED, T.ABORTED)
+    )
+    dispatcher.drain()
+    coordinator.request_close()
+    assert asks(events) == [CloseConfirmationRequired(T.ABORTED, commit_allowed=False)]
+    coordinator.resolve_close(CloseChoice.ROLLBACK)
+    engines[0].rollbacks[0].set_result(T.NONE)
+    dispatcher.drain()
+    assert coordinator.state is S.CLOSING
+
+
+def test_close_during_an_operation_with_open_transaction_asks_without_commit(env):
+    coordinator, _dispatcher, _engines, events = _ready_with_sales(env)
+    coordinator._set_transaction(T.ACTIVE)
+    coordinator.detach_database("ventas")
+    coordinator.request_close()
+    assert asks(events) == [CloseConfirmationRequired(T.ACTIVE, commit_allowed=False)]
+    assert coordinator.state is S.DETACHING  # nada se canceló todavía
+    coordinator.resolve_close(CloseChoice.ROLLBACK)
+    assert coordinator.state is S.CLOSING  # cerrar la conexión descarta la transacción
+
+
+def test_failed_transaction_check_with_unknown_state_closes(env):
+    coordinator, dispatcher, engines, _events = _ready(env)
+    coordinator._transaction = None
+    coordinator.request_close()
+    engines[0].tx_checks[0].set_exception(EngineError("no se pudo comprobar"))
+    dispatcher.drain()
+    assert coordinator.state is S.CLOSING
+
+
+def test_answer_after_invalidation_just_closes(env):
+    coordinator, dispatcher, engines, _events = _request_close_with(env, T.ACTIVE)
+    engines[0].invalidated.set_result(CAUSE)
+    dispatcher.drain()
+    coordinator.resolve_close(CloseChoice.COMMIT)
+    assert coordinator.state is S.DISCONNECTED and engines[0].commits == []

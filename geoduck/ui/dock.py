@@ -26,13 +26,17 @@ from geoduck import __version__
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.app.events import (
     AppEvent,
+    CloseConfirmationRequired,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    TransactionFailed,
 )
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.session import SessionState
+from geoduck.domain.transaction import CloseChoice
+from geoduck.ui.close_dialog import CloseTransactionDialog
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
 from geoduck.ui.i18n import tr
 
@@ -70,12 +74,15 @@ class GeoDuckDock(QDockWidget):
         coordinator: SessionCoordinator,
         run_diagnostics: Callable[[], DiagnosticReport],
         parent: QWidget | None = None,
+        *,
+        ask_close_choice: Callable[[CloseConfirmationRequired, QWidget], CloseChoice] | None = None,
     ) -> None:
         super().__init__(tr("GeoDuck"), parent)
         self.setObjectName("GeoDuckDock")
         self._coordinator = coordinator
         self._run_diagnostics = run_diagnostics
         self._report: DiagnosticReport | None = None
+        self._ask_close_choice = ask_close_choice or CloseTransactionDialog.ask
 
         body = QWidget(self)
         layout = QVBoxLayout(body)
@@ -189,7 +196,7 @@ class GeoDuckDock(QDockWidget):
         self._coordinator.start_memory_session()
 
     def _close(self) -> None:
-        self._coordinator.close_session()
+        self._coordinator.request_close()
 
     def refresh_environment(self) -> DiagnosticReport:
         self._report = self._run_diagnostics()
@@ -227,11 +234,19 @@ class GeoDuckDock(QDockWidget):
                 else tr("cancelación entre lotes")
             )
             self.engine_label.setText(f"DuckDB {info.duckdb_version} · {cancel}")
+        elif isinstance(event, CloseConfirmationRequired):
+            self._coordinator.resolve_close(self._ask_close_choice(event, self))
         elif isinstance(event, SessionInvalidated):
             self.message_label.setText(
                 tr("Sesión invalidada:")
                 + f" {event.message} [{event.code.value}] "
                 + tr("Inicie una sesión nueva o cierre.")
+            )
+            self.message_label.show()
+        elif isinstance(event, TransactionFailed):
+            self.message_label.setText(
+                tr("No se completó la operación sobre la transacción.")
+                + f" [{event.code.value}] {event.message}"
             )
             self.message_label.show()
         elif isinstance(event, SessionFailed):

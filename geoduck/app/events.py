@@ -94,6 +94,17 @@ class TransactionFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class CloseConfirmationRequired:
+    """Hay una transacción abierta: el usuario elige COMMIT, ROLLBACK o cancelar el cierre.
+
+    `commit_allowed` es False si COMMIT no es válido (transacción abortada, o una operación en curso).
+    """
+
+    transaction: TransactionState
+    commit_allowed: bool
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -107,4 +118,5 @@ AppEvent = (
     | DetachFailed
     | TransactionStateChanged
     | TransactionFailed
+    | CloseConfirmationRequired
 )

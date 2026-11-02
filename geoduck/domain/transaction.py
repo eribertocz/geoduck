@@ -17,3 +17,12 @@ class TransactionState(str, Enum):
     @property
     def is_open(self) -> bool:
         return self is not TransactionState.NONE
+
+
+class CloseChoice(str, Enum):
+    """Decisión del usuario al cerrar con una transacción abierta (session-spec §2, CloseSession)."""
+
+    COMMIT = "COMMIT"
+    ROLLBACK = "ROLLBACK"
+    #: Cancelar el cierre: la sesión sigue abierta y la transacción no se modifica.
+    CANCEL = "CANCEL"
