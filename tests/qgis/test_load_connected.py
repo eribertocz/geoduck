@@ -370,3 +370,22 @@ def test_any_table_key_is_used_like_qgis_postgis(session, monkeypatch, ddl, cols
     assert {f.id() for f in layer.getFeatures(QgsFeatureRequest().setFilterRect(rect))} == {
         fid for fid, x in feats.items() if 10 <= x <= 12
     }
+
+
+def test_layer_filter_like_any_qgis_layer(session):
+    """Capa → Filtrar… (subset): SQL de DuckDB sobre los campos de la capa; se guarda en la fuente."""
+    _, layer = load_table(session)
+    assert layer.dataProvider().supportsSubsetString()
+    assert layer.setSubsetString("id < 10 AND nombre LIKE 'n ñ %'")
+    assert layer.featureCount() == 10
+    assert ids(layer) == list(range(10))
+    assert ids(layer, QgsFeatureRequest().setFilterExpression("id >= 5")) == [5, 6, 7, 8, 9]
+    assert decode_uri(layer.source())["subset"] == "id < 10 AND nombre LIKE 'n ñ %'"
+    assert not layer.setSubsetString("columna_que_no_existe = 1")  # inválido: se rechaza, sin cambios
+    assert layer.subsetString() == "id < 10 AND nombre LIKE 'n ñ %'" and layer.featureCount() == 10
+    from qgis.core import QgsVectorLayer
+
+    copy = QgsVectorLayer(layer.source(), "copia", "geoduck")  # p. ej. al reabrir el proyecto
+    assert copy.subsetString() == "id < 10 AND nombre LIKE 'n ñ %'" and len(ids(copy)) == 10
+    assert layer.setSubsetString("")
+    assert layer.featureCount() == N and len(ids(layer)) == N
