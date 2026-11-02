@@ -1,6 +1,6 @@
 # G4 · `v0.5.0a1` Spatial Confidence — plan
 
-**Estado:** En curso (SPEC aprobada por el propietario, 2026-11-02).
+**Estado:** En aceptación (E0–E4 fusionados, #70–#74; E5 en revisión). Evidencia: `docs/g4/acceptance.md`.
 **Requisitos:** GD-SPA-001..004 (IDs originales de product-spec). **Contrato:** `spec/specs/spatial-spec.md`;
 `qgis-bridge-spec.md` §5.1, §7, §9; `ui-ux-spec.md` §2; propuesta C4 y pruebas AX; ADR-0008, ADR-0011, ADR-0012.
 
@@ -44,10 +44,11 @@ El cierre de G4 no autoriza `v0.5.0a1`: tag y release los decide el propietario.
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, plan y spike | En revisión | #70 |
-| E1 Multi-geometría y WKB/WKT | En revisión: una capa por columna en las tres modalidades (preparación privada y publicación conjunta), «Usar como geometría» con `TRY(…)` en DuckDB, ilegibles (copias: error con fila; Conectada: aviso), escritura de vuelta en WKB/WKT | #71 |
-| E2 SRC y ejes | En revisión: AX-1..AX-5 en las tres modalidades (las de `spatial` se omiten si no está instalada; la CI la instala para las pruebas); `geometry_always_xy` visible en el diagnóstico y en resultados con geometría, nunca modificado; «Reproyectar a…» en copias con QGIS/PROJ; SRC no reconocido conservado en el aviso y preguntado en el diálogo; «Activar spatial…» con consentimiento de `LOAD` y, aparte, de `INSTALL` | #72 |
-| E3 Familias y dimensiones | En revisión: Memoria con una capa por familia (o error si se desactiva) y tipo con todas las dimensiones y Multi (F-96, F-97); Instantánea con el mismo criterio; Conectada `Unknown` o «Separar por tipo» con filtro de familia en DuckDB por cabecera WKB; Z/M mixtas con NaN y aviso | #73 |
-| E4 Validez y reparación | En revisión: «Diagnosticar geometrías…» en el menú de las capas de GeoDuck (QgsTask cancelable, contadores NULL/vacía/ilegible/inválida/válida, motivos de GEOS, selección); «Reparar en una copia…» con `makeValid` y cambios informados | — |
+| E0 SPEC, plan y spike | Fusionado | #70 |
+| E1 Multi-geometría y WKB/WKT | Fusionado: una capa por columna en las tres modalidades (preparación privada y publicación conjunta), «Usar como geometría» con `TRY(…)` en DuckDB, ilegibles (copias: error con fila; Conectada: aviso), escritura de vuelta en WKB/WKT | #71 |
+| E2 SRC y ejes | Fusionado: AX-1..AX-5 en las tres modalidades (las de `spatial` se omiten si no está instalada; la CI la instala para las pruebas); `geometry_always_xy` visible en el diagnóstico y en resultados con geometría, nunca modificado; «Reproyectar a…» en copias con QGIS/PROJ; SRC no reconocido conservado en el aviso y preguntado en el diálogo; «Activar spatial…» con consentimiento de `LOAD` y, aparte, de `INSTALL` | #72 |
+| E3 Familias y dimensiones | Fusionado: Memoria con una capa por familia (o error si se desactiva) y tipo con todas las dimensiones y Multi (F-96, F-97); Instantánea con el mismo criterio; Conectada `Unknown` o «Separar por tipo» con filtro de familia en DuckDB por cabecera WKB (todas las cabeceras, sin muestra: F-93); Z/M mixtas con NaN y aviso | #73 |
+| E4 Validez y reparación | Fusionado: «Diagnosticar geometrías…» en el menú de las capas de GeoDuck (QgsTask cancelable, contadores NULL/vacía/ilegible/inválida/válida, motivos de GEOS, selección); «Reparar en una copia…» con `makeValid` y cambios informados | #74 |
+| E5 Aceptación | En revisión: `docs/g4/acceptance.md` (AT-SPA-001..004 → pruebas), guía manual Windows en `docs/certification/spatial.md` §7, F-93 corregido en el spike, prueba de regresión del tipo leído de todas las cabeceras | — |
 
 Hallazgo de E1: cada columna se lee con su propia consulta (una lectura por capa). Para tablas el resultado es el mismo; una consulta no determinista (p. ej. `random()`) puede dar valores distintos en cada capa.

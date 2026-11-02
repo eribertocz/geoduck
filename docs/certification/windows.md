@@ -111,7 +111,7 @@ esa instalación de QGIS no trae PyArrow, se añade al archivo la versión que i
 | Panel abre, sesión inicia y cierra, QGIS cierra limpio | paso 5 | Sí |
 | Diagnóstico de la GUI sin `FAIL` | paso 5.5 | Sí |
 | Bloqueo liberado tras `DETACH` (proceso externo) | `verify_env.py` | Sí (semántica Windows de bloqueos) |
-| Spatial carga y transforma EPSG | `spatial.md` | No para G0; sí para G4 |
+| Spatial carga y transforma EPSG | `spatial.md` | No para G0; para G4, la prueba manual de `spatial.md` §7 |
 | Tema oscuro y 150 % legibles | capturas | Sí (GD-UX-001 parcial) |
 
 Los jobs del CI en Ubuntu que reproducen las versiones de dependencias de una celda **no** equivalen a
