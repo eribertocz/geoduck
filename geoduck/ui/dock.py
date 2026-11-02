@@ -42,6 +42,7 @@ from geoduck.app.events import (
 )
 from geoduck.domain.catalog import AttachRequest, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
+from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.domain.transaction import CloseChoice
 from geoduck.domain.versions import release_stage
@@ -242,7 +243,10 @@ class GeoDuckDock(QDockWidget):
         self._coordinator.start_memory_session()
 
     def _close(self) -> None:
-        self._coordinator.request_close()
+        try:
+            self._coordinator.request_close()
+        except GeoDuckError as exc:  # p. ej. capas Conectadas con cambios sin guardar (§5.5)
+            self._show_plain_message(exc.message)
 
     def _attach(self, action: OpenAction) -> None:
         request = self._ask_attach_request(action, self)
@@ -258,7 +262,10 @@ class GeoDuckDock(QDockWidget):
         name = self.explorer.selected_database()
         if name is not None:
             self.message_label.hide()
-            self._coordinator.detach_database(name)
+            try:
+                self._coordinator.detach_database(name)
+            except GeoDuckError as exc:
+                self._show_plain_message(exc.message)
 
     def refresh_environment(self) -> DiagnosticReport:
         self._report = self._run_diagnostics()

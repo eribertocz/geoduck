@@ -137,6 +137,16 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     token.raise_if_cancelled()
     source_sql = ".".join(quote_identifier(p) for p in request.source) if request.source else None
     is_table, keys = _source_info(handle, request.source) if request.source else (False, None)
+    scope = "session"
+    if request.source is not None:
+        path = _rows(
+            handle,
+            "SELECT path FROM duckdb_databases() WHERE NOT internal AND path IS NOT NULL "
+            f"AND database_name = {quote_string_literal(request.source[0])}",
+            1,
+        )
+        if path:  # base adjunta desde un archivo: la capa sobrevive a la sesión (§5.5)
+            scope = "attached"
     if keys and len(keys) == 1 and dict(columns).get(keys[0]) in _INTEGER_KEYS:
         fid, key = "key", keys[0]  # el valor es el FID
     elif keys:
@@ -163,6 +173,7 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         "keys": keys,
         "table": is_table,
         "source": source_sql,
+        "scope": scope,
         "count": count,
         "headers": [],
         "extent": None,
@@ -273,6 +284,8 @@ class ConnectedLoad:
         params: dict[str, Any] = {
             "session": sessions.register(self._engine),
             "source": meta["source"],
+            "scope": meta["scope"],
+            "database": self._request.source[0] if self._request.source else None,
             "sql": strip_terminator(self._request.sql),
             "geom": plan.geometry.name if plan.geometry is not None else None,
             "fid": meta["fid"],

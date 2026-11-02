@@ -46,7 +46,15 @@ from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedErr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, StatementResult, StatementStatus
+from geoduck.domain.sql import (
+    DEFAULT_PREVIEW_LIMIT,
+    RunScope,
+    ScriptRun,
+    SqlStatement,
+    StatementResult,
+    StatementStatus,
+    detach_target,
+)
 from geoduck.domain.transaction import CloseChoice, TransactionState
 
 _log = logging.getLogger("geoduck.app")
@@ -168,13 +176,50 @@ class SessionCoordinator:
         attaching = engine.attach(request)
         attaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_attached(engine, fut)))
 
+    def _guard_unsaved(self, action: str, database: str | None = None) -> None:
+        """qgis-bridge-spec §5.5: no se desadjunta ni se cierra con capas Conectadas sin guardar."""
+        layers = self._loader.unsaved_layers(database) if self._loader is not None else []
+        if layers:
+            names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
+            raise SessionStateError(
+                f"No se puede {action}: {names} tiene(n) cambios sin guardar. "
+                "Guárdelos o descártelos primero."
+            )
+
+    def _detach_guard(self) -> Callable[[SqlStatement], str | None] | None:
+        """Veto de un `DETACH` real (tipo del parser de DuckDB) de una base con capas Conectadas sin
+        guardar (§5.5). Las bases y capas se leen aquí, en el hilo principal; el veto corre en el motor."""
+        blocked = self._loader.unsaved_by_database() if self._loader is not None else {}
+        if not blocked:
+            return None
+
+        def guard(statement: SqlStatement) -> str | None:
+            target = detach_target(statement)
+            if target is None:
+                return None
+            if not target:  # nombre ilegible: se protege todo
+                layers = [n for v in blocked.values() for n in v]
+            else:
+                layers = blocked.get(target.lower(), []) + blocked.get("", [])
+            if not layers:
+                return None
+            names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
+            return (
+                f"No se ejecutó nada: DETACH {target or '(base desconocida)'} con {names} sin guardar. "
+                "Guarde o descarte esos cambios primero."
+            )
+
+        return guard
+
     def detach_database(self, alias: str) -> None:
         """DetachDatabase: `DETACH` real. La sesión pasa por `DETACHING`.
 
         Al ejecutarse en el worker serial, nunca se adelanta a una lectura en curso (session-spec §6).
+        Rechazado si una capa Conectada de esa base tiene cambios sin guardar.
         """
         if self._sm.state is not SessionState.READY or self._engine is None:
             raise SessionStateError(f"No se puede desadjuntar una base en estado {self._sm.state.value}")
+        self._guard_unsaved(f"desadjuntar «{alias}»", alias)
         engine = self._engine
         self._sm.transition(SessionState.DETACHING)
         detaching = engine.detach(alias)
@@ -211,6 +256,7 @@ class SessionCoordinator:
             self._dispatcher.post(lambda: self._on_statement(engine, run_id, result))
 
         handle = engine.run_script(
+            guard=self._detach_guard(),
             run_id=run_id,
             text=text,
             scope=scope,
@@ -314,6 +360,7 @@ class SessionCoordinator:
         """
         if self._close_choice is not None or self._awaiting_close_decision:
             return  # ya hay un cierre en curso o una pregunta abierta
+        self._guard_unsaved("cerrar la sesión")
         state = self._sm.state
         engine = self._engine
         if engine is not None and state is SessionState.READY:
@@ -385,6 +432,8 @@ class SessionCoordinator:
             done.set_result(None)
             return done
         engine, self._engine = self._engine, None
+        if self._loader is not None and engine is not None:
+            self._loader.session_changed(None)  # las capas Conectadas quedan no disponibles
         self._info = None
         self._pending_attach = None
         self._recovering = False
@@ -516,6 +565,8 @@ class SessionCoordinator:
             return
         self._info = fut.result()
         self._sm.transition(SessionState.READY)
+        if self._loader is not None:
+            self._loader.session_changed(self._engine)
         self._emit(SessionStarted(self._info))
         self._set_transaction(TransactionState.NONE)  # una conexión nueva empieza en autocommit
         engine.invalidation().add_done_callback(

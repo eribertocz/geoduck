@@ -45,7 +45,7 @@ from geoduck.domain.errors import (
     WrongThreadError,
 )
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun
+from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.attach import attach_database
 from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, prepare_load
@@ -400,6 +400,7 @@ class SessionWorker:
         base: int = 0,
         preview_limit: int = DEFAULT_PREVIEW_LIMIT,
         on_statement: StatementListener | None = None,
+        guard: Callable[[SqlStatement], str | None] | None = None,
     ) -> OperationHandle[ScriptRun]:
         """Ejecuta SQL del usuario en una sola operación serial (`geoduck.engine.sql`). Se cancela con
         `cancel(handle.op_id)`."""
@@ -414,6 +415,7 @@ class SessionWorker:
                 base=base,
                 preview_limit=preview_limit,
                 on_statement=on_statement,
+                guard=guard,
             )
         )
 

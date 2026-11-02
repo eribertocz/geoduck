@@ -20,6 +20,7 @@ from geoduck.domain.bridge_types import build_load_plan
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionStateError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.session import SessionState as S
+from geoduck.domain.sql import RunScope, ScriptRun, SqlStatement, detach_target
 from tests.unit.test_coordinator import INFO, FakeEngine, QueueDispatcher
 
 
@@ -41,6 +42,21 @@ class FakeLoader:
 
     def availability(self):
         return {LoadMode.MEMORY: None, LoadMode.SNAPSHOT: "sin GDAL", LoadMode.CONNECTED: None}
+
+    unsaved: dict  # base → capas con cambios sin guardar
+    sessions: list
+
+    def unsaved_layers(self, database=None):
+        layers = getattr(self, "unsaved", {})
+        if database is None:
+            return [n for names in layers.values() for n in names]
+        return list(layers.get(database, []))
+
+    def unsaved_by_database(self):
+        return {k.lower(): list(v) for k, v in getattr(self, "unsaved", {}).items() if v}
+
+    def session_changed(self, engine):
+        self.__dict__.setdefault("sessions", []).append(engine)
 
     def start(self, engine, request, *, on_progress, on_done):
         if self.fail_start:
@@ -151,3 +167,61 @@ def test_prepare_publishes_the_plan_or_the_error(env):
     dispatcher.drain()
     assert any(isinstance(e, LoadPrepareFailed) and e.token == token2 for e in events)
     assert coordinator.state is S.READY
+
+
+# -- capas Conectadas con cambios sin guardar (qgis-bridge-spec §5.5, G3/E7) ---------------------------
+
+
+def test_loader_follows_the_session(env):
+    coordinator, _, engines, _, loader = env
+    assert loader.sessions == [engines[-1]]
+    coordinator.close_session()
+    assert loader.sessions[-1] is None
+
+
+def test_unsaved_connected_edits_block_detach_close_and_sql_detach(env):
+    coordinator, _, _, _, loader = env
+    loader.unsaved = {"datos": ["parcelas"]}
+    with pytest.raises(SessionStateError, match="«parcelas»"):
+        coordinator.detach_database("datos")
+    with pytest.raises(SessionStateError, match="cerrar la sesión"):
+        coordinator.request_close()
+    assert coordinator.state is S.READY
+    coordinator.detach_database("otra")  # otra base: permitido
+    assert coordinator.state is S.DETACHING
+
+
+def _statement(kind, text):
+    return SqlStatement(0, kind, text, 0, len(text))
+
+
+def test_sql_detach_is_vetoed_only_for_real_detach_statements(env):
+    """§5.5 (decisión del propietario, 2026-11-02): tipo de sentencia del parser, no búsqueda de texto."""
+    coordinator, dispatcher, engines, _, loader = env
+    coordinator.execute_sql("SELECT 1", RunScope.ALL)
+    assert engines[-1].scripts[-1]["guard"] is None  # sin cambios sin guardar: sin veto
+    engines[-1].scripts[-1]["future"].set_result(ScriptRun(1, RunScope.ALL, ()))
+    dispatcher.drain()
+    loader.unsaved = {"Datos": ["parcelas"]}
+    coordinator.execute_sql("x", RunScope.ALL)
+    guard = engines[-1].scripts[-1]["guard"]
+    assert "«parcelas»" in guard(_statement("DETACH", "DETACH datos"))
+    assert "«parcelas»" in guard(_statement("DETACH", '/* c */ detach DATABASE IF EXISTS "DATOS"'))
+    assert guard(_statement("DETACH", "DETACH otra")) is None
+    assert guard(_statement("SELECT", "SELECT 'DETACH datos' -- DETACH datos")) is None
+    assert guard(_statement("ATTACH", "ATTACH 'x.duckdb' AS detach_datos")) is None
+    assert "«parcelas»" in guard(_statement("DETACH", "DETACH"))  # nombre ilegible: se protege
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "target"),
+    [
+        ("DETACH", "DETACH d", "d"),
+        ("DETACH", 'detach database if exists "Mi ""Base""";', 'Mi "Base"'),
+        ("DETACH", "-- comentario\nDETACH /* x */ DATABASE d2", "d2"),
+        ("SELECT", "SELECT 'DETACH d'", None),
+        ("DETACH", "DETACH", ""),
+    ],
+)
+def test_detach_target(kind, text, target):
+    assert detach_target(_statement(kind, text)) == target
