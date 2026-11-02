@@ -1,0 +1,190 @@
+{
+ "qgis": "3.44.14-Solothurn",
+ "editable": {
+  "e.t": {
+   "valid": true,
+   "supports_editing": true,
+   "start_editing": true,
+   "reason": ""
+  },
+  "e.sin_pk": {
+   "valid": true,
+   "supports_editing": false,
+   "start_editing": false,
+   "reason": "sin clave primaria única en «id»"
+  },
+  "e.v": {
+   "valid": true,
+   "supports_editing": false,
+   "start_editing": false,
+   "reason": "vista"
+  },
+  "(SELECT * FROM e.t)": {
+   "valid": true,
+   "supports_editing": false,
+   "start_editing": false,
+   "reason": "consulta SQL"
+  },
+  "ro.t": {
+   "valid": true,
+   "supports_editing": false,
+   "start_editing": false,
+   "reason": "base de datos READ_ONLY"
+  },
+  "temp.tmp": {
+   "valid": true,
+   "supports_editing": true,
+   "start_editing": true,
+   "reason": ""
+  }
+ },
+ "commit_ok_per-call": {
+  "ok": true,
+  "s": 0.043,
+  "calls": [
+   "enterUpdateMode",
+   "changeGeometryValues(1)",
+   "changeAttributeValues(1)",
+   "deleteFeatures(1)",
+   "addFeatures(2)",
+   "leaveUpdateMode"
+  ],
+  "new_ids_db": [
+   10000000,
+   10000001
+  ],
+  "new_fids_layer": [
+   10000000,
+   10000001
+  ],
+  "attr_changed": "cambiado-per-call",
+  "geom_moved_found_by_rtree": [
+   11
+  ],
+  "deleted_gone": true
+ },
+ "commit_ok_group": {
+  "ok": true,
+  "s": 0.017,
+  "calls": [
+   "enterUpdateMode",
+   "changeGeometryValues(1)",
+   "changeAttributeValues(1)",
+   "deleteFeatures(1)",
+   "addFeatures(2)",
+   "leaveUpdateMode"
+  ],
+  "new_ids_db": [
+   10000002,
+   10000003
+  ],
+  "new_fids_layer": [
+   10000000,
+   10000001,
+   10000002,
+   10000003
+  ],
+  "attr_changed": "cambiado-group",
+  "geom_moved_found_by_rtree": [
+   11
+  ],
+  "deleted_gone": true
+ },
+ "commit_fail_per-call": {
+  "ok": false,
+  "errors": [
+   "SUCCESS: 1 attribute value(s) changed.",
+   "ERROR: 1 feature(s) not added.",
+   "\n  Provider errors:",
+   "    [ENGINE_ERROR] Constraint Error: Duplicate key \"id: 21\" violates primary key constraint."
+  ],
+  "calls": [
+   "enterUpdateMode",
+   "changeAttributeValues(1)",
+   "addFeatures(1)",
+   "leaveUpdateMode"
+  ],
+  "attr_change_persisted": true,
+  "still_editing": true,
+  "attr_change_still_in_buffer": false,
+  "value_qgis_shows": "parcial-per-call",
+  "added_still_in_buffer": 1
+ },
+ "commit_fail_group": {
+  "ok": false,
+  "errors": [
+   "SUCCESS: 1 attribute value(s) changed.",
+   "ERROR: 1 feature(s) not added.",
+   "\n  Provider errors:",
+   "    [ENGINE_ERROR] Constraint Error: Duplicate key \"id: 21\" violates primary key constraint."
+  ],
+  "calls": [
+   "enterUpdateMode",
+   "changeAttributeValues(1)",
+   "addFeatures(1)",
+   "leaveUpdateMode"
+  ],
+  "attr_change_persisted": false,
+  "still_editing": true,
+  "attr_change_still_in_buffer": false,
+  "value_qgis_shows": "n20",
+  "added_still_in_buffer": 1
+ },
+ "not_null": {
+  "ok": false,
+  "errors": [
+   "ERROR: 1 attribute value change(s) not applied.",
+   "\n  Provider errors:",
+   "    [ENGINE_ERROR] Constraint Error: NOT NULL constraint failed: t.nombre"
+  ]
+ },
+ "change_pk": {
+  "ok": false,
+  "errors": [
+   "ERROR: 1 attribute value change(s) not applied.",
+   "\n  Provider errors:",
+   "    No se puede cambiar la clave primaria (es el FID de QGIS)"
+  ]
+ },
+ "user_transaction_open": {
+  "ok": false,
+  "errors": [
+   "ERROR: 1 attribute value change(s) not applied.",
+   "\n  Provider errors:",
+   "    La sesión tiene una transacción abierta: confírmela o reviértala antes de guardar"
+  ],
+  "buffer_kept": true,
+  "commit_after_user_rollback": true,
+  "value": "durante-transaccion"
+ },
+ "concurrent_sql_edit": "desde-qgis",
+ "temp_table_commit_without_type": {
+  "ok": false,
+  "errors": [
+   "ERROR: 1 feature(s) not added - geometry type is not compatible with the current layer."
+  ]
+ },
+ "temp_table_commit": {
+  "ok": true,
+  "errors": [
+   "SUCCESS: 1 feature(s) added."
+  ],
+  "rows": 1
+ },
+ "bulk_add_5000": {
+  "ok": true,
+  "s": 5.731
+ },
+ "bulk_update_5000": {
+  "ok": true,
+  "s": 5.509
+ },
+ "detach_with_pending_edits": {
+  "ok": false,
+  "errors": [
+   "ERROR: 1 attribute value change(s) not applied.",
+   "\n  Provider errors:"
+  ],
+  "buffer_kept": true
+ }
+}
