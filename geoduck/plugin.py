@@ -54,12 +54,14 @@ class GeoDuckPlugin:
         self.dock: GeoDuckDock | None = None
         self.dispatcher: QtDispatcher | None = None
         self.coordinator: SessionCoordinator | None = None
+        self.loader: Any = None
 
     def initGui(self) -> None:  # noqa: N802 - nombre exigido por QGIS
         self.dispatcher = QtDispatcher()
         from geoduck.qgis_bridge.loader import BridgeLoader  # noqa: PLC0415 - importa qgis y pyarrow
 
-        self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, BridgeLoader())
+        self.loader = BridgeLoader()
+        self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, self.loader)
         self.dock = GeoDuckDock(self.coordinator, run_diagnostics, self.iface.mainWindow())
         self.dock.hide()
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
@@ -87,6 +89,9 @@ class GeoDuckPlugin:
             _log.warning("GeoDuck se descargó con el motor aún terminando")
         if self.dispatcher is not None:
             self.dispatcher.close()
+        if self.loader is not None:
+            self.loader.shutdown()
+            self.loader = None
         if self.about_action is not None:
             self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), self.about_action)
             self.about_action.deleteLater()

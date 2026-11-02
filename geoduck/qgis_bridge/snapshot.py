@@ -1,0 +1,361 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Modalidad Instantánea: DuckDB → GeoArrow → GDAL `WriteArrow` → GeoPackage en `/vsimem` (§4).
+
+GDAL escribe cada lote dentro de la operación del worker (sin objetos de QGIS) en un GeoPackage nuevo y en
+una transacción de GDAL. Al terminar, el hilo principal abre la capa con el proveedor `ogr`, comprueba el
+conteo y la publica. En error o cancelación se revierte, se libera el archivo y no se publica nada.
+
+GDAL se usa sin activar sus excepciones globales (ADR-0011): se comprueban los códigos de retorno y los
+mensajes se silencian con un manejador propio del hilo del worker.
+"""
+
+from __future__ import annotations
+
+import json
+import threading
+import uuid
+from collections.abc import Callable
+from typing import Any
+
+import pyarrow as pa
+import pyarrow.compute as pc
+from osgeo import gdal, ogr, osr
+from qgis.core import QgsProject, QgsVectorLayer
+from qgis.PyQt.QtCore import QTimer
+
+from geoduck.domain.bridge_types import FieldKind, LoadPlan
+from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.domain.operations import ReadOutcome
+from geoduck.qgis_bridge.memory import LoadCancelledError
+from geoduck.qgis_bridge.vsimem import PREFIX, VsimemRegistry, unlink
+
+#: GDAL ≥ 3.8: `OGRLayer.WriteArrowBatch` con geometrías GeoArrow (qgis-bridge-spec §4).
+MIN_GDAL = 3_08_00_00
+
+_OGR_TYPE = {
+    FieldKind.BOOL: (ogr.OFTInteger, ogr.OFSTBoolean),
+    FieldKind.INT: (ogr.OFTInteger, ogr.OFSTNone),
+    FieldKind.INT64: (ogr.OFTInteger64, ogr.OFSTNone),
+    FieldKind.DOUBLE: (ogr.OFTReal, ogr.OFSTNone),
+    FieldKind.TEXT: (ogr.OFTString, ogr.OFSTNone),
+    FieldKind.DATE: (ogr.OFTDate, ogr.OFSTNone),
+    FieldKind.DATETIME: (ogr.OFTDateTime, ogr.OFSTNone),
+    FieldKind.DATETIME_TZ: (ogr.OFTDateTime, ogr.OFSTNone),
+    FieldKind.BINARY: (ogr.OFTBinary, ogr.OFSTNone),
+}
+
+_WKB_NAMES = {
+    1: "POINT",
+    2: "LINESTRING",
+    3: "POLYGON",
+    4: "MULTIPOINT",
+    5: "MULTILINESTRING",
+    6: "MULTIPOLYGON",
+    7: "GEOMETRYCOLLECTION",
+}
+
+
+def unavailable_reason() -> str | None:
+    """None si la Instantánea está disponible; si no, el motivo para mostrarlo en la interfaz."""
+    if int(gdal.VersionInfo()) < MIN_GDAL:
+        return f"Necesita GDAL 3.8 o posterior (este QGIS trae GDAL {gdal.__version__})"
+    if not hasattr(ogr.Layer, "WritePyArrow") or ogr.GetDriverByName("GPKG") is None:
+        return "El GDAL de este QGIS no puede escribir GeoPackage desde Arrow"
+    return None
+
+
+def _last_error(default: str) -> str:
+    return gdal.GetLastErrorMsg() or default
+
+
+class _Writer:
+    """Escritor GDAL. Solo se usa en el hilo del worker (creación, lotes y cierre)."""
+
+    def __init__(self, path: str, plan: LoadPlan, crs_override: str | None) -> None:
+        self.path = path
+        self.plan = plan
+        self.crs_override = crs_override
+        self.ds: Any = None
+        self.layer: Any = None
+        self.rows = 0
+        self.nulls = 0
+        self.geom_codes: set[int] = set()
+
+    def _srs(self, schema: pa.Schema | None) -> Any:
+        if self.crs_override is not None:
+            if not self.crs_override:
+                return None
+            srs = osr.SpatialReference()
+            if srs.SetFromUserInput(self.crs_override) != 0:
+                raise GeoDuckError(f"CRS no reconocido: {self.crs_override}", code=ErrorCode.INVALID_ARGUMENT)
+            srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            return srs
+        info = None
+        if schema is not None and self.plan.geometry is not None:
+            meta = schema.field(self.plan.geometry.name).metadata or {}
+            try:
+                info = json.loads(meta.get(b"ARROW:extension:metadata") or b"{}").get("crs")
+            except ValueError:
+                info = None
+        if info is None and self.plan.geometry is not None:
+            info = self.plan.geometry.declared_crs
+        if not info:
+            return None
+        srs = osr.SpatialReference()
+        if srs.SetFromUserInput(json.dumps(info) if isinstance(info, dict) else str(info)) != 0:
+            return None
+        srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)  # C4: sin reordenar ejes
+        return srs
+
+    def open(self, schema: pa.Schema | None) -> None:
+        driver = ogr.GetDriverByName("GPKG")
+        self.ds = driver.CreateDataSource(self.path)
+        if self.ds is None:
+            raise GeoDuckError(_last_error("GDAL no pudo crear el GeoPackage"))
+        names = {f.name.lower() for f in self.plan.fields}
+        fid = "fid" if "fid" not in names else "geoduck_fid"
+        geom = self.plan.geometry
+        options = [f"FID={fid}", "SPATIAL_INDEX=YES"]
+        if geom is not None:
+            options.append(f"GEOMETRY_NAME={geom.name}")
+        self.layer = self.ds.CreateLayer(
+            "datos", self._srs(schema), ogr.wkbUnknown if geom is not None else ogr.wkbNone, options
+        )
+        if self.layer is None:
+            raise GeoDuckError(_last_error("GDAL no pudo crear la capa"))
+        for f in self.plan.fields:
+            kind, subtype = _OGR_TYPE[f.kind]
+            definition = ogr.FieldDefn(f.name, kind)
+            definition.SetSubType(subtype)
+            if self.layer.CreateField(definition) != 0:
+                raise GeoDuckError(_last_error(f"GDAL rechazó el campo «{f.name}»"))
+        if self.ds.StartTransaction() != 0:
+            raise GeoDuckError(_last_error("GDAL no pudo iniciar la transacción"))
+
+    def write(self, batch: pa.RecordBatch) -> None:
+        if self.ds is None:
+            self.open(batch.schema)
+        geom = self.plan.geometry
+        options = [f"GEOMETRY_NAME={geom.name}"] if geom is not None else []
+        if geom is not None:
+            self._collect_types(batch.column(batch.schema.get_field_index(geom.name)))
+        if self.layer.WritePyArrow(batch, options=options) != 0:
+            raise GeoDuckError(_last_error("GDAL no pudo escribir el lote"))
+        self.rows += batch.num_rows
+
+    def _collect_types(self, wkb: pa.Array) -> None:
+        """Tipos de geometría presentes, leyendo solo la cabecera WKB de los valores distintos (C++)."""
+        self.nulls += wkb.null_count
+        heads = pc.unique(pc.binary_slice(wkb.drop_null(), 0, 5)).to_pylist()
+        for head in heads:
+            if head and len(head) == 5:
+                self.geom_codes.add(int.from_bytes(head[1:5], "little" if head[0] == 1 else "big"))
+
+    def commit(self) -> None:
+        if self.ds is None:
+            self.open(None)
+        if self.ds.CommitTransaction() != 0:
+            raise GeoDuckError(_last_error("GDAL no pudo confirmar el GeoPackage"))
+        self._declare_geometry_type()
+        self.ds = None  # cierra y vuelca el archivo
+        self.layer = None
+
+    def families(self) -> dict[str, str]:
+        """Familia de geometría → nombre para `geometrytype=` (X, o MultiX si hay alguna múltiple)."""
+        found: dict[int, bool] = {}
+        for code in self.geom_codes:
+            base = code % 1000
+            single = base - 3 if base in (4, 5, 6) else base
+            found[single] = found.get(single, False) or base in (4, 5, 6)
+        names = {1: "Point", 2: "LineString", 3: "Polygon", 7: "GeometryCollection"}
+        return {
+            names.get(k, "Unknown"): ("Multi" if multi and k != 7 else "") + names.get(k, "Unknown")
+            for k, multi in sorted(found.items())
+        }
+
+    def _declare_geometry_type(self) -> None:
+        """Si todas las geometrías son de una familia (X o MultiX), la capa lo declara (si no, GEOMETRY)."""
+        if self.plan.geometry is None or not self.geom_codes:
+            return
+        bases = {c % 1000 for c in self.geom_codes}
+        dims = {c // 1000 for c in self.geom_codes}
+        singles = {b - 3 if b in (4, 5, 6) else b for b in bases}
+        if len(singles) != 1 or len(dims) != 1 or 7 in bases:
+            return
+        base = next(iter(singles)) + (3 if any(b in (4, 5, 6) for b in bases) else 0)
+        name = _WKB_NAMES[base]
+        dim = next(iter(dims))
+        z, m = int(dim in (1, 3)), int(dim in (2, 3))
+        self.ds.ExecuteSQL(
+            f"UPDATE gpkg_geometry_columns SET geometry_type_name = '{name}', z = {z}, m = {m} "
+            "WHERE table_name = 'datos'"
+        )
+
+    def abort(self) -> None:
+        if self.ds is not None:
+            self.ds.RollbackTransaction()
+        self.ds = None
+        self.layer = None
+        unlink(self.path)
+
+
+class SnapshotLoad:
+    """Una carga Instantánea. Se crea en el hilo principal; GDAL escribe en el hilo del worker."""
+
+    mode = LoadMode.SNAPSHOT
+
+    def __init__(
+        self,
+        engine: Any,
+        request: LoadRequest,
+        *,
+        on_progress: Callable[[int], None],
+        on_done: Callable[[LoadReport | BaseException], None],
+        registry: VsimemRegistry,
+        project: QgsProject | None = None,
+    ) -> None:
+        self._engine = engine
+        self._request = request
+        self._on_progress = on_progress
+        self._on_done = on_done
+        self._registry = registry
+        self._project = project or QgsProject.instance()
+        self._path = f"{PREFIX}{uuid.uuid4().hex}.gpkg"
+        self._writer: _Writer | None = None
+        self._handle: Any = None
+        self._lock = threading.Lock()
+        self._result: tuple[str, Any] | None = None  # ("ok", (plan, rows)) | ("error", exc)
+        self._cancelled = threading.Event()
+        self._finished = False
+        self._reported = -1
+        self._timer = QTimer()
+        self._timer.setInterval(50)
+        self._timer.timeout.connect(self._poll)
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    def start(self) -> None:
+        def on_plan(plan: LoadPlan) -> None:  # hilo del worker
+            self._writer = _Writer(self._path, plan, self._request.crs_override)
+
+        def on_batch(batch: pa.RecordBatch) -> None:  # hilo del worker
+            if self._cancelled.is_set():
+                raise LoadCancelledError("Carga cancelada")
+            assert self._writer is not None
+            gdal.PushErrorHandler("CPLQuietErrorHandler")  # propio de este hilo: no toca a QGIS
+            try:
+                self._writer.write(batch)
+            finally:
+                gdal.PopErrorHandler()
+
+        self._handle = self._engine.load_query(
+            self._request.sql, geometry=self._request.geometry, on_plan=on_plan, on_batch=on_batch
+        )
+        self._handle.future.add_done_callback(self._on_read_done)
+        self._timer.start()
+
+    def cancel(self) -> None:
+        if self._finished:
+            return
+        self._cancelled.set()
+        if self._handle is not None and not self._handle.future.done():
+            self._engine.cancel(self._handle.op_id)
+
+    def _on_read_done(self, fut: Any) -> None:  # hilo del worker: cierra GDAL aquí mismo
+        writer = self._writer
+        gdal.PushErrorHandler("CPLQuietErrorHandler")
+        try:
+            exc = fut.exception()
+            if exc is None:
+                outcome = fut.result()
+                if self._cancelled.is_set() or outcome.summary.outcome is ReadOutcome.CANCELLED:
+                    exc = LoadCancelledError("Carga cancelada")
+                elif outcome.summary.outcome is not ReadOutcome.EXHAUSTED:
+                    exc = GeoDuckError(f"La lectura falló: {outcome.summary.error}")
+            if exc is None and writer is not None:
+                writer.commit()
+                families = writer.families() if writer.plan.geometry is not None else {}
+                result: tuple[str, Any] = (
+                    "ok",
+                    (writer.plan, writer.rows, fut.result().summary.rows, families, writer.nulls),
+                )
+            else:
+                if writer is not None:
+                    writer.abort()
+                else:
+                    unlink(self._path)
+                result = ("error", exc or GeoDuckError("La lectura terminó sin plan"))
+        except BaseException as err:
+            if writer is not None:
+                writer.abort()
+            result = ("error", err)
+        finally:
+            gdal.PopErrorHandler()
+        with self._lock:
+            self._result = result
+
+    # -- hilo principal --------------------------------------------------------------------------
+
+    def _open_layers(self, families: dict[str, str], nulls: int) -> list[QgsVectorLayer]:
+        """Una capa; o, con geometrías de varios tipos, una por familia (+ «sin geometría» si hay nulas)."""
+        name = self._request.layer_name
+        if len(families) <= 1:
+            specs = [(self._path, name)]
+        else:
+            base = f"{self._path}|layername=datos|geometrytype="
+            specs = [(base + gtype, f"{name} — {family}") for family, gtype in families.items()]
+            if nulls:  # ningún `geometrytype=` selecciona las nulas: filtro por atributo (medido en E3)
+                plan = self._writer.plan if self._writer is not None else None
+                column = plan.geometry.name if plan is not None and plan.geometry is not None else "geom"
+                quoted = '"' + column.replace('"', '""') + '"'
+                specs.append(
+                    (f"{self._path}|layername=datos|subset={quoted} IS NULL", f"{name} — sin geometría")
+                )
+        layers = []
+        for uri, layer_name in specs:
+            layer = QgsVectorLayer(uri, layer_name, "ogr")
+            if not layer.isValid():
+                raise GeoDuckError("QGIS no pudo abrir el GeoPackage creado")
+            layers.append(layer)
+        return layers
+
+    def _poll(self) -> None:
+        with self._lock:
+            result = self._result
+        writer = self._writer
+        if result is None:
+            if writer is not None and writer.rows != self._reported:
+                self._reported = writer.rows
+                self._on_progress(writer.rows)
+            return
+        self._timer.stop()
+        self._finished = True
+        kind, value = result
+        if kind == "error":
+            self._on_done(value)
+            return
+        plan, written, read, families, nulls = value
+        try:
+            layers = self._open_layers(families, nulls)
+            count = sum(layer.featureCount() for layer in layers)
+            if not (read == written == count):
+                raise GeoDuckError(
+                    f"Conteos distintos: leídas {read}, escritas {written}, en las capas {count}"
+                )
+            self._registry.track(self._path)
+            self._project.addMapLayers(layers)  # todas o ninguna (§8)
+        except BaseException as exc:
+            unlink(self._path)
+            self._on_done(exc)
+            return
+        layer = layers[0]
+        warnings = plan.warnings
+        if len(layers) > 1:
+            warnings = (*warnings, f"Geometrías de varios tipos: {len(layers)} capas, una por tipo")
+        if plan.geometry is not None and not layer.crs().isValid():
+            warnings = (*warnings, "Capa sin CRS")
+        self._on_progress(written)
+        self._on_done(LoadReport(layer.id(), layer.name(), LoadMode.SNAPSHOT, written, warnings))
