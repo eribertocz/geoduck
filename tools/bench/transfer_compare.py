@@ -10,6 +10,10 @@ Rutas comparadas (`--route`):
   arrow-disk    Igual que arrow-vsimem, pero el archivo IPC va a un directorio temporal en disco.
   gpkg-vsimem   DuckDB → GeoArrow → OGRLayer.WriteArrow (C++) en un GeoPackage en /vsimem/ →
                 proveedor OGR. Capa editable.
+  gdal-materialize  Como arrow-vsimem, pero la capa OGR privada se copia en C++ a una capa «memory»
+                nativa (QgsVectorLayer.materialize) y el archivo /vsimem se libera al terminar.
+  geoparquet    DuckDB escribe GeoParquet (COPY … TO, en C++) y QGIS lo lee bajo demanda con el
+                proveedor OGR (archivo persistente; lectura por grupos de filas).
 
 Para cada ruta se verifica, en un proceso nuevo:
   - tiempo total, tiempo del hilo principal y bloqueo máximo;
@@ -19,6 +23,7 @@ Para cada ruta se verifica, en un proceso nuevo:
   - cancelación a mitad de la carga: ninguna capa en el proyecto, nada en /vsimem, sesión usable;
   - persistencia: la capa se lee completa e igual tras DETACH de la base, cierre de la conexión
     y borrado del archivo .duckdb.
+  - reapertura del proyecto QGIS guardado (.qgz).
 
 Uso: python transfer_compare.py run --route arrow-vsimem --rows 100000
      python transfer_compare.py matrix --out resultado.json
@@ -38,7 +43,7 @@ import tempfile
 import threading
 import time
 
-ROUTES = ("memory", "arrow-vsimem", "arrow-disk", "gpkg-vsimem")
+ROUTES = ("memory", "arrow-vsimem", "arrow-disk", "gpkg-vsimem", "gdal-materialize", "geoparquet")
 
 # Tabla con atributos habituales, NULL, texto no ASCII y una geometría con CRS (OGC:CRS84 es el único
 # CRS que DuckDB 2.0 acepta sin la extensión spatial; con spatial cargada vale cualquier EPSG).
@@ -286,9 +291,14 @@ def route_memory(reader, cancel_after: int | None):
         i for i, f in enumerate(schema) if (f.metadata or {}).get(b"ARROW:extension:name") == b"geoarrow.wkb"
     )
     attr_i = [i for i in range(len(schema)) if i != geom_i]
+    # DECIMAL: QGIS 3.44 rechaza Decimal de Python y 4.2 lo guarda como texto; hay que convertirlo.
+    decimals = {i for i in attr_i if pa.types.is_decimal(schema[i].type)}
     fields = QgsFields()
     for i in attr_i:
-        fields.append(QgsField(schema[i].name, kinds.get(str(schema[i].type), QMetaType.Type.QString)))
+        kind = (
+            QMetaType.Type.Double if i in decimals else kinds.get(str(schema[i].type), QMetaType.Type.QString)
+        )
+        fields.append(QgsField(schema[i].name, kind))
     layer = QgsVectorLayer("Point?crs=OGC:CRS84", "datos", "memory")  # CRS: lo tendría que traducir GeoDuck
     provider = layer.dataProvider()
     provider.addAttributes(list(fields))
@@ -309,6 +319,8 @@ def route_memory(reader, cancel_after: int | None):
                             None if v is None else QDateTime.fromMSecsSinceEpoch(v // 1000, Qt.TimeSpec.UTC)
                             for v in us
                         ]
+                    elif i in decimals:
+                        cols[i] = piece.column(i).cast(pa.float64()).to_pylist()
                     else:
                         cols[i] = piece.column(i).to_pylist()
                 wkbs = piece.column(geom_i).to_pylist()
@@ -334,10 +346,43 @@ def route_memory(reader, cancel_after: int | None):
     return state, max_block, layer
 
 
+def route_geoparquet(con, path: str, cancel: bool):
+    """DuckDB escribe GeoParquet (C++) en el hilo del motor; la cancelación usa interrupt() (ADR-0007)."""
+    from qgis.PyQt.QtCore import QCoreApplication
+
+    state: dict = {"rows": 0, "error": None}
+
+    def target():
+        try:
+            n = con.execute(f"COPY ({QUERY}) TO '{path}' (FORMAT parquet, ROW_GROUP_SIZE 65536)").fetchone()[
+                0
+            ]
+            state["rows"] = n
+        except Exception as exc:
+            state["error"] = Cancelled() if cancel else exc
+
+    worker = threading.Thread(target=target)
+    worker.start()
+    started = time.perf_counter()
+    max_gap = 0.0
+    last = started
+    while worker.is_alive():
+        QCoreApplication.processEvents()
+        if cancel:  # cancelar en cuanto empieza: con 100 000 filas la copia dura pocas décimas
+            con.interrupt()
+        worker.join(0.01)
+        now = time.perf_counter()
+        max_gap = max(max_gap, now - last)
+        last = now
+    if cancel and state["error"] is None:
+        state["error"] = RuntimeError("interrupt() llegó tarde: la copia terminó antes")
+    return state, max_gap
+
+
 # ---------------------------------------------------------------- escenario
 
 
-def run(route: str, rows: int, cancel: bool) -> dict:  # noqa: PLR0915 - un escenario medido de principio a fin
+def run(route: str, rows: int, cancel: bool) -> dict:  # noqa: PLR0912, PLR0915 - un escenario medido entero
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     import duckdb
     from osgeo import gdal
@@ -363,13 +408,20 @@ def run(route: str, rows: int, cancel: bool) -> dict:  # noqa: PLR0915 - un esce
     cancel_after = rows // 2 if cancel else None
     base_rss = _rss_now_mb()
     started = time.perf_counter()
-    reader = con.sql(QUERY).to_arrow_reader(BATCH)
+    reader = None if route == "geoparquet" else con.sql(QUERY).to_arrow_reader(BATCH)
     path = ""
     layer = None
-    if route == "memory":
+    if route == "geoparquet":
+        path = os.path.join(work, "datos.parquet")
+        state, block = route_geoparquet(con, path, cancel)
+        if state["error"] is None:
+            t0 = time.perf_counter()
+            layer = QgsVectorLayer(path, "datos", "ogr")
+            block = max(block, time.perf_counter() - t0)
+    elif route == "memory":
         state, block, layer = route_memory(reader, cancel_after)
     else:
-        if route == "arrow-vsimem":
+        if route in {"arrow-vsimem", "gdal-materialize"}:
             path = f"/vsimem/geoduck/{os.getpid()}/datos.arrow"
             state, block = route_arrow(reader, path, cancel_after, vsimem=True)
         elif route == "arrow-disk":
@@ -381,8 +433,17 @@ def run(route: str, rows: int, cancel: bool) -> dict:  # noqa: PLR0915 - un esce
         if state["error"] is None:
             t0 = time.perf_counter()
             layer = QgsVectorLayer(path, "datos", "ogr")
+            if route == "gdal-materialize":  # copia en C++ a una capa memory nativa y libera /vsimem
+                from qgis.core import QgsFeatureRequest
+
+                private = layer
+                layer = private.materialize(QgsFeatureRequest())
+                del private
+                gdal.Unlink(path)
+                path = ""
             block = max(block, time.perf_counter() - t0)
-    reader.close()
+    if reader is not None:
+        reader.close()
     out["max_main_block_ms"] = round(block * 1000, 1)
 
     if state["error"] is not None:  # cancelación (o fallo): no queda nada
@@ -417,6 +478,8 @@ def run(route: str, rows: int, cancel: bool) -> dict:  # noqa: PLR0915 - un esce
     out["peak_rss_growth_mb"] = round(_rss_peak_mb() - base_rss, 1)
     out["resident_after_load_mb"] = round(_rss_now_mb() - base_rss, 1)
     out["vsimem_mb"] = round(gdal.VSIStatL(path).size / 2**20, 1) if path.startswith("/vsimem/") else 0
+    out["disk_mb"] = round(os.path.getsize(path) / 2**20, 1) if path and os.path.exists(path) else 0
+    out["provider"] = layer.providerType()
     out["crs"] = layer.crs().authid() if layer.crs().isValid() else ""
     out["fields"] = {f.name(): f.typeName() for f in layer.fields()}
     caps = layer.dataProvider().capabilities()
@@ -435,9 +498,21 @@ def run(route: str, rows: int, cancel: bool) -> dict:  # noqa: PLR0915 - un esce
     os.remove(db)
     n2, h2, _ = _fingerprint_layer(layer)
     out["survives_detach_close"] = n2 == ref_rows and h2 == ref_hash
-    QgsProject.instance().removeAllMapLayers()
+
+    # Reapertura del proyecto QGIS (en el mismo proceso; /vsimem sigue vivo, por eso se libera antes,
+    # como ocurriría al cerrar QGIS).
+    project = QgsProject.instance()
+    qgz = os.path.join(work, "proyecto.qgz")
+    project.write(qgz)
+    project.clear()
     if path.startswith("/vsimem/"):
         gdal.Unlink(path)
+    project.read(qgz)
+    reopened = list(project.mapLayers().values())
+    out["survives_project_reopen"] = (
+        bool(reopened) and reopened[0].isValid() and reopened[0].featureCount() == ref_rows
+    )
+    project.clear()
     shutil.rmtree(work, ignore_errors=True)
     app.exitQgis()
     return out
