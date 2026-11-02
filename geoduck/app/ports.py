@@ -10,7 +10,15 @@ from typing import Protocol
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.operations import EngineInfo
+from geoduck.domain.sql import RunScope, ScriptRun, StatementResult
 from geoduck.domain.transaction import TransactionState
+
+
+class ScriptHandle(Protocol):
+    """Ejecución de un script en curso."""
+
+    @property
+    def future(self) -> Future[ScriptRun]: ...
 
 
 class SessionEngine(Protocol):
@@ -44,6 +52,20 @@ class SessionEngine(Protocol):
 
     def rollback(self) -> Future[TransactionState]:
         """ROLLBACK de una transacción abierta o abortada."""
+        ...
+
+    def run_script(
+        self,
+        *,
+        run_id: int,
+        text: str,
+        scope: RunScope,
+        cursor: int = 0,
+        base: int = 0,
+        preview_limit: int = 200,
+        on_statement: Callable[[StatementResult], None] | None = None,
+    ) -> ScriptHandle:
+        """Ejecuta SQL del usuario en una operación serial; `on_statement` llega en el hilo del motor."""
         ...
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:

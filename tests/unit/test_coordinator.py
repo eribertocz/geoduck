@@ -14,10 +14,14 @@ from geoduck.app.events import (
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
+    PreviewsInvalidated,
+    ScriptFinished,
+    ScriptRejected,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    StatementFinished,
     TransactionFailed,
     TransactionStateChanged,
 )
@@ -69,6 +73,7 @@ class FakeEngine:
         self.detaches: list[tuple[str, Future]] = []
         self.commits: list[Future] = []
         self.tx_checks: list[Future] = []
+        self.scripts: list[dict] = []
         self.rollbacks: list[Future] = []
         self.cancelled = False
 
@@ -92,6 +97,13 @@ class FakeEngine:
     def detach(self, alias):
         self.detaches.append((alias, Future()))
         return self.detaches[-1][1]
+
+    def run_script(self, **kw):
+        from types import SimpleNamespace
+
+        kw["future"] = Future()
+        self.scripts.append(kw)
+        return SimpleNamespace(future=kw["future"])
 
     def transaction_state(self):
         self.tx_checks.append(Future())
@@ -908,3 +920,120 @@ def test_can_start_after_start_failure_and_after_invalidation(env):
     engines[1].invalidated.set_result(CAUSE)
     dispatcher.drain()
     assert coordinator.can_start
+
+
+# -- ejecución de SQL (G2) ----------------------------------------------------------------------------
+
+from geoduck.domain.sql import RunScope, ScriptRun, SqlStatement, StatementResult, StatementStatus  # noqa: E402
+
+
+def stmt(i, kind):
+    return SqlStatement(i, kind, f"{kind} …", i * 10, i * 10 + 9)
+
+
+def result(i, kind, status=StatementStatus.OK, tx=T.NONE):
+    return StatementResult(stmt(i, kind), status, transaction=tx)
+
+
+def run_sql(env, *results, parse_error=""):
+    coordinator, dispatcher, engines, _events = env
+    run_id = coordinator.execute_sql("SQL", RunScope.ALL)
+    script = engines[0].scripts[-1]
+    assert coordinator.state is S.BUSY and script["run_id"] == run_id
+    for res in results:
+        script["on_statement"](res)  # llega desde el hilo del motor
+    script["future"].set_result(ScriptRun(run_id, RunScope.ALL, tuple(results), parse_error=parse_error))
+    dispatcher.drain()
+    return run_id
+
+
+def test_sql_run_goes_busy_then_ready_with_events_in_order(env):
+    coordinator, _dispatcher, _engines, events = _ready(env)
+    run_id = run_sql(env, result(0, "CREATE"), result(1, "SELECT"), result(2, "SELECT"))
+    assert coordinator.state is S.READY
+    finished = [e for e in events if isinstance(e, StatementFinished)]
+    assert [e.result.statement.index for e in finished] == [0, 1, 2] and {e.run_id for e in finished} == {
+        run_id
+    }
+    assert isinstance([e for e in events if isinstance(e, ScriptFinished)][-1], ScriptFinished)
+
+
+def test_previews_are_invalidated_conservatively(env):
+    """Decisión del 2026-11-01: lo que no es lectura, o falla, deja obsoletas las vistas previas previas."""
+    coordinator, _dispatcher, _engines, events = _ready(env)
+    run_sql(env, result(0, "SELECT"), result(1, "INSERT"), result(2, "SELECT"))
+    epochs = [e.epoch for e in events if isinstance(e, StatementFinished)]
+    assert coordinator.is_stale(epochs[0])  # la lectura previa al INSERT
+    assert not coordinator.is_stale(epochs[2])  # la lectura posterior
+    run_sql(env, result(0, "SELECT"), result(1, "SELECT", StatementStatus.FAILED))
+    assert coordinator.is_stale(epochs[2])  # un error también invalida
+    assert any(isinstance(e, PreviewsInvalidated) for e in events)
+
+
+def test_reads_only_do_not_invalidate_or_refresh_the_catalog(env):
+    coordinator, _dispatcher, engines, _events = _ready(env)
+    epoch = coordinator.data_epoch
+    run_sql(env, result(0, "SELECT"), result(1, "EXPLAIN"))
+    assert coordinator.data_epoch == epoch and len(engines[0].catalog_reads) == 1
+
+
+def test_state_changing_sql_refreshes_the_catalog(env):
+    """GD-SES-003 (SQL): un ATTACH escrito en SQL se refleja en el panel."""
+    _coordinator, _dispatcher, engines, _events = _ready(env)
+    run_sql(env, result(0, "ATTACH"))
+    assert len(engines[0].catalog_reads) == 2
+
+
+def test_aborted_transaction_after_sql_goes_to_error_recoverable(env):
+    coordinator, _dispatcher, engines, _events = _ready(env)
+    run_sql(
+        env, result(0, "TRANSACTION", tx=T.ACTIVE), result(1, "INSERT", StatementStatus.FAILED, T.ABORTED)
+    )
+    assert coordinator.state is S.ERROR_RECOVERABLE
+    assert coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
+    assert coordinator.transaction_state is T.ABORTED
+    assert len(engines[0].catalog_reads) == 1  # no se relee con la transacción abortada
+
+
+def test_open_transaction_from_sql_is_tracked(env):
+    coordinator, _dispatcher, _engines, _events = _ready(env)
+    run_sql(env, result(0, "TRANSACTION", tx=T.ACTIVE))
+    assert coordinator.state is S.READY and coordinator.transaction_state is T.ACTIVE
+
+
+def test_sql_requires_ready_and_text(env):
+    coordinator, _dispatcher, _engines, _events = env
+    with pytest.raises(SessionStateError):
+        coordinator.execute_sql("SELECT 1", RunScope.ALL)
+    _ready(env)
+    with pytest.raises(SessionStateError):
+        coordinator.execute_sql("   ", RunScope.ALL)
+    coordinator.execute_sql("SELECT 1", RunScope.ALL)
+    with pytest.raises(SessionStateError):
+        coordinator.execute_sql("SELECT 2", RunScope.ALL)  # una ejecución a la vez
+
+
+def test_rejected_script_returns_to_ready(env):
+    from geoduck.domain.errors import InvalidArgumentError
+
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.execute_sql("SELECT 1", RunScope.ALL)
+    exc = InvalidArgumentError("límite")
+    exc.transaction = T.NONE
+    engines[0].scripts[-1]["future"].set_exception(exc)
+    dispatcher.drain()
+    assert coordinator.state is S.READY
+    assert [e.code for e in events if isinstance(e, ScriptRejected)] == [ErrorCode.INVALID_ARGUMENT]
+
+
+def test_close_during_sql_ignores_late_results(env):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.execute_sql("SELECT 1", RunScope.ALL)
+    script = engines[0].scripts[-1]
+    coordinator.close_session()
+    script["on_statement"](result(0, "SELECT"))
+    script["future"].set_result(ScriptRun(1, RunScope.ALL, ()))
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    assert coordinator.state is S.DISCONNECTED
+    assert not any(isinstance(e, (StatementFinished, ScriptFinished)) for e in events)
