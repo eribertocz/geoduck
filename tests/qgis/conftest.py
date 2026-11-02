@@ -21,7 +21,11 @@ def qgis_app():
     if _APP is None:
         _APP = qgis_core.QgsApplication([], True)
         _APP.initQgis()
-    return _APP
+    yield _APP
+    # Como QGIS al cerrarse: sin exitQgis(), las conexiones GDAL del pool (p. ej. GeoPackage en /vsimem
+    # de la Instantánea) se destruyen tras finalizar GDAL y QGIS 4.2 termina con un fallo de segmentación.
+    qgis_core.QgsProject.instance().removeAllMapLayers()
+    _APP.exitQgis()
 
 
 def wait_for(predicate, timeout=20.0):

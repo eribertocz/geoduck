@@ -37,7 +37,8 @@ POINTS = (
 class Session:
     def __init__(self):
         self.events = []
-        self.coordinator = SessionCoordinator(SessionWorker, QtDispatcher(), BridgeLoader())
+        self.loader = BridgeLoader()
+        self.coordinator = SessionCoordinator(SessionWorker, QtDispatcher(), self.loader)
         self.coordinator.subscribe(self.events.append)
         self.coordinator.start_memory_session()
         assert wait_for(lambda: self.coordinator.state is SessionState.READY, TIMEOUT)
@@ -59,6 +60,7 @@ class Session:
 
     def close(self):
         self.coordinator.shutdown()
+        self.loader.shutdown()  # como plugin.unload: sin señales de QgsProject hacia Python al salir
 
 
 @pytest.fixture
