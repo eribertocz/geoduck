@@ -22,6 +22,7 @@ from geoduck.domain.errors import (
     ActiveResultError,
     DetachError,
     ErrorCode,
+    GeoDuckError,
     OperationCancelledError,
     SessionClosedError,
     SessionInvalidatedError,
@@ -271,3 +272,15 @@ def test_detach_after_close_fails_without_touching_duckdb(db_file):
     with pytest.raises(SessionClosedError) as info:
         w.detach("b").result(TIMEOUT)
     assert info.value.code is ErrorCode.SESSION_CLOSED
+
+
+def test_detach_invalidates_future_reads_of_that_alias(worker, db_file):
+    """session-spec §6: «DETACH en UI invalida futuras lecturas de ese alias»; no hay reconexión implícita."""
+    attach(worker, db_file, RO)
+    assert run(worker, "SELECT count(*) FROM b.t").rows == ((1000,),)
+    worker.detach("b").result(TIMEOUT)
+    for sql in ("SELECT count(*) FROM b.t", "SELECT count(*) FROM b.main.t"):
+        with pytest.raises(GeoDuckError) as info:
+            run(worker, sql)
+        assert info.value.code is ErrorCode.ENGINE_ERROR
+    assert catalog(worker).get("b") is None  # sigue desadjuntada: nada la volvió a adjuntar
