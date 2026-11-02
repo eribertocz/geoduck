@@ -89,6 +89,13 @@ class FakeIface:
         return self.active_layer
 
 
+def reset_workspace_settings():
+    """Preferencias de presentación de G5 como en una instalación limpia (ui-ux-spec §8)."""
+    qgis_core.QgsSettings().remove("geoduck/workspace")
+
+
 @pytest.fixture
 def iface(qgis_app):
-    return FakeIface()
+    reset_workspace_settings()
+    yield FakeIface()
+    reset_workspace_settings()

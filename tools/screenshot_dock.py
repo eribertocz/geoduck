@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Genera capturas del panel en sus estados de G0 (evidencia de UI para PR/gates).
+"""Genera capturas de GeoDuck en ventana propia y en panel, sin sesión y con sesión (evidencia de UI).
 
 Uso (dentro del Python de QGIS):  python tools/screenshot_dock.py <carpeta_salida>
 """
@@ -22,7 +22,8 @@ from geoduck.app.coordinator import SessionCoordinator
 from geoduck.domain.session import SessionState
 from geoduck.plugin import make_memory_engine, run_diagnostics
 from geoduck.ui.dispatcher import QtDispatcher
-from geoduck.ui.dock import GeoDuckDock
+from geoduck.ui.shells import DockShell, WindowShell
+from geoduck.ui.workspace import WorkspaceContent
 
 
 def pump(predicate, timeout=20.0):
@@ -41,23 +42,39 @@ def main(out_dir: str) -> None:
     window = QMainWindow()
     dispatcher = QtDispatcher()
     coordinator = SessionCoordinator(make_memory_engine, dispatcher)
-    dock = GeoDuckDock(coordinator, run_diagnostics, window)
+    content = WorkspaceContent(coordinator, run_diagnostics)
+    shell = WindowShell(window)
+    shell.slot.put(content)
+    dock = DockShell(window)
     dock.setFloating(True)
-    dock.resize(380, 420)
-    dock.show()
-    pump(lambda: False, 0.3)
-    dock.grab().save(str(out / f"dock_{tag}_sin_sesion.png"))
-    dock.start_button.click()
+    dock.resize(380, 620)
+
+    def grab_both(state: str) -> None:
+        shell.show()
+        pump(lambda: False, 0.3)
+        shell.grab().save(str(out / f"ventana_{tag}_{state}.png"))
+        shell.slot.take(content)  # el mismo contenido, trasladado al panel (ADR-0013)
+        dock.slot.put(content)
+        shell.hide()
+        dock.show()
+        pump(lambda: False, 0.3)
+        dock.grab().save(str(out / f"dock_{tag}_{state}.png"))
+        dock.slot.take(content)
+        shell.slot.put(content)
+        dock.hide()
+
+    grab_both("sin_sesion")
+    content.start_button.click()
     pump(lambda: coordinator.state is SessionState.READY)
-    pump(lambda: False, 0.2)
-    dock.grab().save(str(out / f"dock_{tag}_lista.png"))
+    grab_both("lista")
     coordinator.shutdown(10)
     print("capturas en", out)
     # Cierre ordenado, como QGIS al salir: sin él, QGIS 3.34–3.40 fallan al terminar el proceso (señal 11).
-    dock.detach()
+    content.detach()
+    shell.close()
     dock.close()
     window.close()
-    del dock, window
+    content = shell = dock = window = None  # sin referencias vivas antes de exitQgis()
     QCoreApplication.processEvents()
     app.exitQgis()
 

@@ -36,7 +36,7 @@ class AutoDialog(LoadDialog):
 def plugin(iface):
     p = geoduck.classFactory(iface)
     p.initGui()
-    p.dock.load_flow._dialog_factory = AutoDialog
+    p.content.load_flow._dialog_factory = AutoDialog
     p.coordinator.start_memory_session()
     assert wait_for(lambda: p.coordinator.state is SessionState.READY, TIMEOUT)
     yield p
@@ -45,7 +45,7 @@ def plugin(iface):
 
 
 def run_sql(plugin, sql):
-    panel = plugin.dock.sql_panel
+    panel = plugin.content.sql_panel
     panel.editor.setText(sql)
     from geoduck.domain.sql import RunScope
 
@@ -72,10 +72,10 @@ def test_load_button_loads_the_result(plugin, mode):
     dialog = AutoDialog.seen[-1]
     assert all(button.isEnabled() for button in dialog.mode_buttons.values())
     assert (
-        "cargada · " in plugin.dock.message_label.text()
-        and "· 500 entidades" in plugin.dock.message_label.text()
+        "cargada · " in plugin.content.message_label.text()
+        and "· 500 entidades" in plugin.content.message_label.text()
     )
-    assert "Origen: consulta SQL" in plugin.dock.message_label.text()
+    assert "Origen: consulta SQL" in plugin.content.message_label.text()
 
 
 def test_write_results_cannot_be_loaded(plugin):
@@ -101,7 +101,7 @@ def test_explorer_loads_a_table_connected_with_its_key(plugin):
         "CREATE TABLE t (id INTEGER PRIMARY KEY, g GEOMETRY); INSERT INTO t VALUES (7, 'POINT(1 2)'); "
         "SELECT * FROM t",
     )
-    plugin.dock.explorer.load_requested.emit(
+    plugin.content.explorer.load_requested.emit(
         'SELECT * FROM "memory"."main"."t"', "t", ("memory", "main", "t")
     )
     assert wait_for(
@@ -116,7 +116,7 @@ def test_double_click_on_a_table_loads_it_like_the_menu(plugin):
     """Issue #67: doble clic sobre una tabla = «Cargar en QGIS…»; sobre una base o esquema, nada."""
     AutoDialog.choice = LoadMode.CONNECTED
     run_sql(plugin, "CREATE TABLE dc (id INTEGER PRIMARY KEY, g GEOMETRY); SELECT * FROM dc")
-    explorer = plugin.dock.explorer
+    explorer = plugin.content.explorer
     plugin.coordinator.refresh_catalog()
 
     def find(item):

@@ -19,19 +19,18 @@ def test_every_module_imports(qgis_app):
     names = [m.name for m in pkgutil.walk_packages(geoduck.__path__, "geoduck.")]
     for name in names:
         importlib.import_module(name)
-    assert "geoduck.ui.dock" in names and "geoduck.engine.worker" in names
+    assert "geoduck.ui.workspace" in names and "geoduck.engine.worker" in names
 
 
 def test_init_gui_registers_and_unload_removes(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    assert len(iface.docks) == 1 and len(iface.toolbar) == 1
+    assert len(iface.toolbar) == 1
     assert [action.objectName() for _menu, action in iface.menu] == ["geoduckToggleDock", "geoduckAbout"]
-    dock = iface.docks[0]
-    assert dock.objectName() == "GeoDuckDock"
-    assert dock.isHidden()
-    plugin.action.setChecked(True)
-    assert not dock.isHidden()
+    window = plugin.workspace.window
+    assert window.isHidden() and plugin.workspace.dock.isHidden()  # nada se abre solo al iniciar QGIS
+    plugin.action.trigger()
+    assert not window.isHidden() and plugin.action.isChecked()
     plugin.unload()
     assert iface.docks == [] and iface.menu == [] and iface.toolbar == []
 
@@ -39,7 +38,7 @@ def test_init_gui_registers_and_unload_removes(iface):
 def test_start_and_close_memory_session_from_the_dock(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    dock, coordinator = plugin.dock, plugin.coordinator
+    dock, coordinator = plugin.content, plugin.coordinator
     assert dock.start_button.isEnabled()
     assert not dock.close_button.isEnabled()
 
@@ -69,7 +68,7 @@ def test_invalidated_session_is_shown_once_and_new_session_recovers(iface):
 
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    dock, coordinator = plugin.dock, plugin.coordinator
+    dock, coordinator = plugin.content, plugin.coordinator
     notices = []
     coordinator.subscribe(lambda e: notices.append(e) if isinstance(e, SessionInvalidated) else None)
     dock.start_button.click()
@@ -99,7 +98,7 @@ def test_invalidated_session_is_shown_once_and_new_session_recovers(iface):
 def test_unload_with_open_session_stops_the_worker(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    plugin.dock.start_button.click()
+    plugin.content.start_button.click()
     assert wait_for(lambda: plugin.coordinator.state is SessionState.READY)
     worker_thread = plugin.coordinator._engine.thread
     plugin.unload()
@@ -151,9 +150,9 @@ def test_broken_environment_disables_start(iface, monkeypatch):
     monkeypatch.setattr(plugin_module, "run_diagnostics", lambda: collect(import_module=missing_duckdb))
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    assert not plugin.dock.start_button.isEnabled()
-    assert not plugin.dock.env_banner.isHidden()
-    assert "DuckDB" in plugin.dock.env_label.text()
+    assert not plugin.content.start_button.isEnabled()
+    assert not plugin.content.env_banner.isHidden()
+    assert "DuckDB" in plugin.content.env_label.text()
     plugin.unload()
 
 

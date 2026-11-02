@@ -43,8 +43,8 @@ def db_file(tmp_path):
 def make_plugin(iface, requests):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    plugin.dock._ask_attach_request = requests
-    return plugin, plugin.dock, plugin.coordinator
+    plugin.content._ask_attach_request = requests
+    return plugin, plugin.content, plugin.coordinator
 
 
 def tree(explorer):
