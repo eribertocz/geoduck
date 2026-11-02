@@ -1,0 +1,604 @@
+[
+ {
+  "route": "memory",
+  "rows": 100000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 69.4,
+  "seconds": 1.088,
+  "rows_per_s": 91911,
+  "peak_rss_growth_mb": 70.9,
+  "resident_after_load_mb": 71.0,
+  "vsimem_mb": 0,
+  "disk_mb": 0,
+  "provider": "memory",
+  "crs": "OGC:CRS84",
+  "fields": {
+   "id": "int8",
+   "nombre": "string",
+   "valor": "double",
+   "instante": "datetime",
+   "activo": "boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.09,
+  "iterate_geom_rows": 100000,
+  "render_s": [
+   0.108,
+   0.099
+  ],
+  "layer_rows": 100000,
+  "integrity": true,
+  "iterate_s": 0.722,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "memory",
+  "rows": 100000,
+  "cancel": true,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 80.7,
+  "seconds": 0.676,
+  "cancelled": true,
+  "error": "",
+  "rows_before_cancel": 50176,
+  "project_layers": 0,
+  "leftover_file": false,
+  "session_usable": true
+ },
+ {
+  "route": "arrow-vsimem",
+  "rows": 100000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 90.7,
+  "seconds": 0.134,
+  "rows_per_s": 746268,
+  "peak_rss_growth_mb": 35.9,
+  "resident_after_load_mb": 36.2,
+  "vsimem_mb": 7.3,
+  "disk_mb": 0,
+  "provider": "ogr",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": false,
+  "iterate_geom_s": 0.126,
+  "iterate_geom_rows": 100000,
+  "render_s": [
+   0.18,
+   0.197
+  ],
+  "layer_rows": 100000,
+  "integrity": true,
+  "iterate_s": 5.199,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "arrow-vsimem",
+  "rows": 100000,
+  "cancel": true,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 10.4,
+  "seconds": 0.041,
+  "cancelled": true,
+  "error": "",
+  "rows_before_cancel": 57344,
+  "project_layers": 0,
+  "leftover_file": false,
+  "session_usable": true
+ },
+ {
+  "route": "arrow-disk",
+  "rows": 100000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 95.2,
+  "seconds": 0.13,
+  "rows_per_s": 769230,
+  "peak_rss_growth_mb": 26.2,
+  "resident_after_load_mb": 26.4,
+  "vsimem_mb": 0,
+  "disk_mb": 7.3,
+  "provider": "ogr",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": false,
+  "iterate_geom_s": 0.135,
+  "iterate_geom_rows": 100000,
+  "render_s": [
+   0.142,
+   0.22
+  ],
+  "layer_rows": 100000,
+  "integrity": true,
+  "iterate_s": 5.59,
+  "survives_detach_close": true,
+  "survives_project_reopen": true
+ },
+ {
+  "route": "arrow-disk",
+  "rows": 100000,
+  "cancel": true,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 10.3,
+  "seconds": 0.029,
+  "cancelled": true,
+  "error": "",
+  "rows_before_cancel": 57344,
+  "project_layers": 0,
+  "leftover_file": false,
+  "session_usable": true
+ },
+ {
+  "route": "gpkg-vsimem",
+  "rows": 100000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 83.1,
+  "seconds": 0.398,
+  "rows_per_s": 251256,
+  "peak_rss_growth_mb": 49.5,
+  "resident_after_load_mb": 49.9,
+  "vsimem_mb": 8.3,
+  "disk_mb": 0,
+  "provider": "ogr",
+  "crs": "OGC:CRS84",
+  "fields": {
+   "fid": "Integer64",
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.117,
+  "iterate_geom_rows": 100000,
+  "render_s": [
+   0.235,
+   0.146
+  ],
+  "layer_rows": 100000,
+  "integrity": true,
+  "iterate_s": 5.23,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "gpkg-vsimem",
+  "rows": 100000,
+  "cancel": true,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 21.6,
+  "seconds": 0.192,
+  "cancelled": true,
+  "error": "",
+  "rows_before_cancel": 57344,
+  "project_layers": 0,
+  "leftover_file": false,
+  "session_usable": true
+ },
+ {
+  "route": "gdal-materialize",
+  "rows": 100000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 4442.1,
+  "seconds": 4.486,
+  "rows_per_s": 22291,
+  "peak_rss_growth_mb": 73.7,
+  "resident_after_load_mb": 73.9,
+  "vsimem_mb": 0,
+  "disk_mb": 0,
+  "provider": "memory",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "int8",
+   "nombre": "string",
+   "valor": "double",
+   "instante": "datetime",
+   "activo": "boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.058,
+  "iterate_geom_rows": 100000,
+  "render_s": [
+   0.121,
+   0.146
+  ],
+  "layer_rows": 100000,
+  "integrity": true,
+  "iterate_s": 0.673,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "gdal-materialize",
+  "rows": 100000,
+  "cancel": true,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 10.3,
+  "seconds": 0.031,
+  "cancelled": true,
+  "error": "",
+  "rows_before_cancel": 57344,
+  "project_layers": 0,
+  "leftover_file": false,
+  "session_usable": true
+ },
+ {
+  "route": "geoparquet",
+  "rows": 100000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 85.5,
+  "seconds": 0.142,
+  "rows_per_s": 704225,
+  "peak_rss_growth_mb": 48.3,
+  "resident_after_load_mb": 48.6,
+  "vsimem_mb": 0,
+  "disk_mb": 2.5,
+  "provider": "ogr",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.15,
+  "iterate_geom_rows": 100000,
+  "render_s": [
+   0.159,
+   0.134
+  ],
+  "layer_rows": 100000,
+  "integrity": true,
+  "iterate_s": 5.267,
+  "survives_detach_close": true,
+  "survives_project_reopen": true
+ },
+ {
+  "route": "geoparquet",
+  "rows": 100000,
+  "cancel": true,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 10.4,
+  "seconds": 0.013,
+  "cancelled": true,
+  "error": "",
+  "rows_before_cancel": 0,
+  "project_layers": 0,
+  "leftover_file": false,
+  "session_usable": true
+ },
+ {
+  "route": "memory",
+  "rows": 1000000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 71.0,
+  "seconds": 8.698,
+  "rows_per_s": 114968,
+  "peak_rss_growth_mb": 547.5,
+  "resident_after_load_mb": 547.5,
+  "vsimem_mb": 0,
+  "disk_mb": 0,
+  "provider": "memory",
+  "crs": "OGC:CRS84",
+  "fields": {
+   "id": "int8",
+   "nombre": "string",
+   "valor": "double",
+   "instante": "datetime",
+   "activo": "boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.698,
+  "iterate_geom_rows": 1000000,
+  "render_s": [
+   0.929,
+   1.048
+  ],
+  "layer_rows": 1000000,
+  "integrity": true,
+  "iterate_s": 10.482,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "arrow-vsimem",
+  "rows": 1000000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 115.7,
+  "seconds": 0.316,
+  "rows_per_s": 3164556,
+  "peak_rss_growth_mb": 134.7,
+  "resident_after_load_mb": 134.9,
+  "vsimem_mb": 73.6,
+  "disk_mb": 0,
+  "provider": "ogr",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": false,
+  "iterate_geom_s": 1.037,
+  "iterate_geom_rows": 1000000,
+  "render_s": [
+   1.353,
+   1.429
+  ],
+  "layer_rows": 1000000,
+  "integrity": true,
+  "iterate_s": 54.772,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "arrow-disk",
+  "rows": 1000000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 130.0,
+  "seconds": 0.353,
+  "rows_per_s": 2832861,
+  "peak_rss_growth_mb": 27.1,
+  "resident_after_load_mb": 27.3,
+  "vsimem_mb": 0,
+  "disk_mb": 73.6,
+  "provider": "ogr",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": false,
+  "iterate_geom_s": 1.103,
+  "iterate_geom_rows": 1000000,
+  "render_s": [
+   1.603,
+   1.626
+  ],
+  "layer_rows": 1000000,
+  "integrity": true,
+  "iterate_s": 60.303,
+  "survives_detach_close": true,
+  "survives_project_reopen": true
+ },
+ {
+  "route": "gpkg-vsimem",
+  "rows": 1000000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 99.2,
+  "seconds": 2.172,
+  "rows_per_s": 460405,
+  "peak_rss_growth_mb": 174.5,
+  "resident_after_load_mb": 174.8,
+  "vsimem_mb": 83.2,
+  "disk_mb": 0,
+  "provider": "ogr",
+  "crs": "OGC:CRS84",
+  "fields": {
+   "fid": "Integer64",
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 1.271,
+  "iterate_geom_rows": 1000000,
+  "render_s": [
+   1.878,
+   1.634
+  ],
+  "layer_rows": 1000000,
+  "integrity": true,
+  "iterate_s": 60.615,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "gdal-materialize",
+  "rows": 1000000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 45307.6,
+  "seconds": 45.51,
+  "rows_per_s": 21973,
+  "peak_rss_growth_mb": 655.1,
+  "resident_after_load_mb": 655.2,
+  "vsimem_mb": 0,
+  "disk_mb": 0,
+  "provider": "memory",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "int8",
+   "nombre": "string",
+   "valor": "double",
+   "instante": "datetime",
+   "activo": "boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.565,
+  "iterate_geom_rows": 1000000,
+  "render_s": [
+   0.943,
+   1.024
+  ],
+  "layer_rows": 1000000,
+  "integrity": true,
+  "iterate_s": 10.849,
+  "survives_detach_close": true,
+  "survives_project_reopen": false
+ },
+ {
+  "route": "geoparquet",
+  "rows": 1000000,
+  "cancel": false,
+  "qgis": "4.2.3-Belém do Pará",
+  "gdal": "3.13.3",
+  "duckdb": "2.0.0",
+  "drivers": {
+   "Arrow": true,
+   "GPKG": true
+  },
+  "max_main_block_ms": 75.7,
+  "seconds": 0.407,
+  "rows_per_s": 2457002,
+  "peak_rss_growth_mb": 93.2,
+  "resident_after_load_mb": 77.1,
+  "vsimem_mb": 0,
+  "disk_mb": 24.6,
+  "provider": "ogr",
+  "crs": "EPSG:4326",
+  "fields": {
+   "id": "Integer64",
+   "nombre": "String",
+   "valor": "Real",
+   "instante": "DateTime",
+   "activo": "Boolean"
+  },
+  "editable": true,
+  "iterate_geom_s": 0.995,
+  "iterate_geom_rows": 1000000,
+  "render_s": [
+   1.466,
+   1.241
+  ],
+  "layer_rows": 1000000,
+  "integrity": true,
+  "iterate_s": 56.755,
+  "survives_detach_close": true,
+  "survives_project_reopen": true
+ }
+]

@@ -1,0 +1,394 @@
+{
+ "qgis": "4.2.3-Belém do Pará",
+ "sizes": [
+  100,
+  1000,
+  10000
+ ],
+ "runs": [
+  {
+   "case": "commit_ok",
+   "n": 100,
+   "batch": "row",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.031,
+   "commit_s": 0.305,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": true
+  },
+  {
+   "case": "commit_ok",
+   "n": 100,
+   "batch": "many",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.022,
+   "commit_s": 0.281,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": true
+  },
+  {
+   "case": "commit_ok",
+   "n": 100,
+   "batch": "arrow",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.01,
+   "commit_s": 0.037,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": true
+  },
+  {
+   "case": "conflict_on_edited_row",
+   "n": 100,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "sql_change_kept": true,
+   "buffer_kept": true,
+   "errors": [
+    "    Conflicto: 1 entidad(es) cambiaron o desaparecieron en DuckDB desde que QGIS las leyó (p. ej. [1])"
+   ]
+  },
+  {
+   "case": "conflict_retry_after_reread",
+   "n": 100,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "naive_provider_concurrent",
+   "n": 100,
+   "qgis_ok": true,
+   "final_nombre": "desde-qgis",
+   "final_valor": 123.0,
+   "silent_overwrite": true
+  },
+  {
+   "case": "sql_change_on_other_row",
+   "n": 100,
+   "qgis_ok": true,
+   "integrity": true,
+   "sql_change_kept": true
+  },
+  {
+   "case": "error_mid_batch",
+   "n": 100,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "buffer_kept": true,
+   "errors": [
+    "    [ENGINE_ERROR] Constraint Error: NOT NULL constraint failed: t.nombre"
+   ]
+  },
+  {
+   "case": "error_fixed_retry",
+   "n": 100,
+   "qgis_ok": true,
+   "db_applied": true
+  },
+  {
+   "case": "cancel_during_commit",
+   "n": 100,
+   "qgis_ok": false,
+   "s": 0.143,
+   "db_unchanged": true,
+   "buffer_kept": true,
+   "errors": [
+    "    [CANCELLED] Operación cancelada"
+   ]
+  },
+  {
+   "case": "cancel_retry",
+   "n": 100,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "incompatible_geometry",
+   "n": 100,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "errors": [
+    "    Geometría incompatible con la capa en la entidad 200"
+   ]
+  },
+  {
+   "case": "user_transaction_open",
+   "n": 100,
+   "qgis_ok": false,
+   "buffer_kept": true
+  },
+  {
+   "case": "user_transaction_retry",
+   "n": 100,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "detach_before_commit",
+   "n": 100,
+   "qgis_ok": false,
+   "buffer_kept": true,
+   "errors": [
+    "    [ENGINE_ERROR] Catalog Error: Table with name \"e.t\" does not exist because schema \"e\" does not exist."
+   ]
+  },
+  {
+   "case": "commit_ok",
+   "n": 1000,
+   "batch": "row",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.064,
+   "commit_s": 2.797,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": true
+  },
+  {
+   "case": "commit_ok",
+   "n": 1000,
+   "batch": "many",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.087,
+   "commit_s": 2.382,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": true
+  },
+  {
+   "case": "commit_ok",
+   "n": 1000,
+   "batch": "arrow",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.07,
+   "commit_s": 0.063,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": true
+  },
+  {
+   "case": "conflict_on_edited_row",
+   "n": 1000,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "sql_change_kept": true,
+   "buffer_kept": true,
+   "errors": [
+    "    Conflicto: 1 entidad(es) cambiaron o desaparecieron en DuckDB desde que QGIS las leyó (p. ej. [1])"
+   ]
+  },
+  {
+   "case": "conflict_retry_after_reread",
+   "n": 1000,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "naive_provider_concurrent",
+   "n": 1000,
+   "qgis_ok": true,
+   "final_nombre": "desde-qgis",
+   "final_valor": 123.0,
+   "silent_overwrite": true
+  },
+  {
+   "case": "sql_change_on_other_row",
+   "n": 1000,
+   "qgis_ok": true,
+   "integrity": true,
+   "sql_change_kept": true
+  },
+  {
+   "case": "error_mid_batch",
+   "n": 1000,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "buffer_kept": true,
+   "errors": [
+    "    [ENGINE_ERROR] Constraint Error: NOT NULL constraint failed: t.nombre"
+   ]
+  },
+  {
+   "case": "error_fixed_retry",
+   "n": 1000,
+   "qgis_ok": true,
+   "db_applied": true
+  },
+  {
+   "case": "cancel_during_commit",
+   "n": 1000,
+   "qgis_ok": false,
+   "s": 0.132,
+   "db_unchanged": true,
+   "buffer_kept": true,
+   "errors": [
+    "    [CANCELLED] Operación cancelada"
+   ]
+  },
+  {
+   "case": "cancel_retry",
+   "n": 1000,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "incompatible_geometry",
+   "n": 1000,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "errors": [
+    "    Geometría incompatible con la capa en la entidad 2000"
+   ]
+  },
+  {
+   "case": "user_transaction_open",
+   "n": 1000,
+   "qgis_ok": false,
+   "buffer_kept": true
+  },
+  {
+   "case": "user_transaction_retry",
+   "n": 1000,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "detach_before_commit",
+   "n": 1000,
+   "qgis_ok": false,
+   "buffer_kept": true,
+   "errors": [
+    "    [ENGINE_ERROR] Catalog Error: Table with name \"e.t\" does not exist because schema \"e\" does not exist."
+   ]
+  },
+  {
+   "case": "commit_ok",
+   "n": 10000,
+   "batch": "row",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.845,
+   "commit_s": 29.056,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": null
+  },
+  {
+   "case": "commit_ok",
+   "n": 10000,
+   "batch": "many",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.79,
+   "commit_s": 25.607,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": null
+  },
+  {
+   "case": "commit_ok",
+   "n": 10000,
+   "batch": "arrow",
+   "qgis_ok": true,
+   "edit_buffer_s": 0.674,
+   "commit_s": 0.608,
+   "integrity": true,
+   "db_applied": true,
+   "fids_from_sequence": null
+  },
+  {
+   "case": "conflict_on_edited_row",
+   "n": 10000,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "sql_change_kept": true,
+   "buffer_kept": true,
+   "errors": [
+    "    Conflicto: 1 entidad(es) cambiaron o desaparecieron en DuckDB desde que QGIS las leyó (p. ej. [1])"
+   ]
+  },
+  {
+   "case": "conflict_retry_after_reread",
+   "n": 10000,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "naive_provider_concurrent",
+   "n": 10000,
+   "qgis_ok": true,
+   "final_nombre": "desde-qgis",
+   "final_valor": 123.0,
+   "silent_overwrite": true
+  },
+  {
+   "case": "sql_change_on_other_row",
+   "n": 10000,
+   "qgis_ok": true,
+   "integrity": true,
+   "sql_change_kept": true
+  },
+  {
+   "case": "error_mid_batch",
+   "n": 10000,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "buffer_kept": true,
+   "errors": [
+    "    [ENGINE_ERROR] Constraint Error: NOT NULL constraint failed: t.nombre"
+   ]
+  },
+  {
+   "case": "error_fixed_retry",
+   "n": 10000,
+   "qgis_ok": true,
+   "db_applied": true
+  },
+  {
+   "case": "cancel_during_commit",
+   "n": 10000,
+   "qgis_ok": false,
+   "s": 0.35,
+   "db_unchanged": true,
+   "buffer_kept": true,
+   "errors": [
+    "    [CANCELLED] Operación cancelada"
+   ]
+  },
+  {
+   "case": "cancel_retry",
+   "n": 10000,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "incompatible_geometry",
+   "n": 10000,
+   "qgis_ok": false,
+   "db_unchanged": true,
+   "errors": [
+    "    Geometría incompatible con la capa en la entidad 20000"
+   ]
+  },
+  {
+   "case": "user_transaction_open",
+   "n": 10000,
+   "qgis_ok": false,
+   "buffer_kept": true
+  },
+  {
+   "case": "user_transaction_retry",
+   "n": 10000,
+   "qgis_ok": true,
+   "integrity": true
+  },
+  {
+   "case": "detach_before_commit",
+   "n": 10000,
+   "qgis_ok": false,
+   "buffer_kept": true,
+   "errors": [
+    "    [ENGINE_ERROR] Catalog Error: Table with name \"e.t\" does not exist because schema \"e\" does not exist."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,45 @@
+{
+ "qgis": "4.2.3-Belém do Pará",
+ "attached_table": {
+  "valid": true,
+  "rows": 10000
+ },
+ "temp_table": {
+  "valid": true,
+  "rows": 10
+ },
+ "view": {
+  "valid": true,
+  "rows": 5000
+ },
+ "uncommitted_visible": true,
+ "after_rollback": true,
+ "render_while_session_busy_s": 118.181,
+ "busy_query_s": 118.34,
+ "session_free_after_render_cancel_s": 0.003,
+ "session_free_after_iterator_close_s": 0.001,
+ "project_reopen_same_session": true,
+ "after_detach": {
+  "rows": 0,
+  "valid": true,
+  "s": 0.004,
+  "error": "EngineError: [ENGINE_ERROR] Catalog Error: Table with name \"d10000.puntos\" does not exist because schema \"d10000\" does n"
+ },
+ "after_close": {
+  "rows": 0,
+  "s": 0.0,
+  "error": "SessionClosedError: [SESSION_CLOSED] La sesión no acepta operaciones"
+ },
+ "project_reopen_without_session": {
+  "layers": 1,
+  "valid": false
+ },
+ "sql_examples": [
+  "SELECT \"id\", \"nombre\", \"valor\" FROM d10000.puntos",
+  "SELECT \"id\", \"nombre\", \"valor\" FROM temp.tmp",
+  "SELECT \"id\", \"nombre\", \"valor\" FROM d10000.v_pares",
+  "SELECT \"id\", \"nombre\", \"valor\" FROM d10000.puntos",
+  "SELECT \"id\", \"nombre\", \"valor\" FROM d10000.puntos",
+  "SELECT \"id\", \"geom\" FROM d10000.puntos WHERE ST_Intersects(\"geom\", ST_MakeEnvelope(-0.08333333333333337, 0.0, 0.5833333333333334, 0.5))"
+ ]
+}

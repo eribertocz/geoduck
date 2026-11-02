@@ -1,0 +1,229 @@
+{
+ "qgis": "4.2.3-Belém do Pará",
+ "gdal": "3.13.3",
+ "duckdb": "2.0.0",
+ "geometria": {
+  "tipo": 1,
+  "crs": "EPSG:4326",
+  "wkt": "Point (1 2)"
+ },
+ "segunda_geometria_accesible": false,
+ "campos": [
+  {
+   "columna": "b",
+   "duckdb": "",
+   "arrow": "bool",
+   "valor_duckdb": "True",
+   "qgis": "Boolean",
+   "valor_qgis": "True"
+  },
+  {
+   "columna": "ti",
+   "duckdb": "TINYINT",
+   "arrow": "int8",
+   "valor_duckdb": "127",
+   "qgis": "Integer",
+   "valor_qgis": "127"
+  },
+  {
+   "columna": "i",
+   "duckdb": "INTEGER",
+   "arrow": "int32",
+   "valor_duckdb": "2147483647",
+   "qgis": "Integer",
+   "valor_qgis": "2147483647"
+  },
+  {
+   "columna": "bi",
+   "duckdb": "BIGINT",
+   "arrow": "int64",
+   "valor_duckdb": "9223372036854775807",
+   "qgis": "Integer64",
+   "valor_qgis": "9223372036854775807"
+  },
+  {
+   "columna": "ubi",
+   "duckdb": "UBIGINT",
+   "arrow": "uint64",
+   "valor_duckdb": "18446744073709551615",
+   "qgis": "Real",
+   "valor_qgis": "1.8446744073709552e+19"
+  },
+  {
+   "columna": "hi",
+   "duckdb": "HUGEINT",
+   "arrow": "decimal128(38, 0)",
+   "valor_duckdb": "170141183460469231731687303715884105727",
+   "qgis": "Real",
+   "valor_qgis": "1.7014118346046923e+38"
+  },
+  {
+   "columna": "f",
+   "duckdb": "FLOAT",
+   "arrow": "float",
+   "valor_duckdb": "1.5",
+   "qgis": "Float32",
+   "valor_qgis": "1.5"
+  },
+  {
+   "columna": "d_nan",
+   "duckdb": "DOUBLE",
+   "arrow": "double",
+   "valor_duckdb": "nan",
+   "qgis": "Real",
+   "valor_qgis": "nan"
+  },
+  {
+   "columna": "d_inf",
+   "duckdb": "DOUBLE",
+   "arrow": "double",
+   "valor_duckdb": "inf",
+   "qgis": "Real",
+   "valor_qgis": "inf"
+  },
+  {
+   "columna": "dec_9_2",
+   "duckdb": "DECIMAL(9,2)",
+   "arrow": "decimal128(9, 2)",
+   "valor_duckdb": "Decimal('1234567.89')",
+   "qgis": "Real",
+   "valor_qgis": "1234567.89"
+  },
+  {
+   "columna": "dec_18_3",
+   "duckdb": "DECIMAL(18,3)",
+   "arrow": "decimal128(18, 3)",
+   "valor_duckdb": "Decimal('123456789012345.678')",
+   "qgis": "Real",
+   "valor_qgis": "123456789012345.67"
+  },
+  {
+   "columna": "dec_38_10",
+   "duckdb": "DECIMAL(38,10)",
+   "arrow": "decimal128(38, 10)",
+   "valor_duckdb": "Decimal('1234567890123456789012345678.0123456789')",
+   "qgis": "Real",
+   "valor_qgis": "1.2345678901234569e+27"
+  },
+  {
+   "columna": "vc",
+   "duckdb": "",
+   "arrow": "string",
+   "valor_duckdb": "'ñandú 🦆'",
+   "qgis": "String",
+   "valor_qgis": "'ñandú 🦆'"
+  },
+  {
+   "columna": "en",
+   "duckdb": "ENUM('a','b')",
+   "arrow": "dictionary<values=string, indices=uint8, ordered=0>",
+   "valor_duckdb": "'b'",
+   "qgis": "Integer",
+   "valor_qgis": "1"
+  },
+  {
+   "columna": "uu",
+   "duckdb": "UUID",
+   "arrow": "string",
+   "valor_duckdb": "UUID('550e8400-e29b-41d4-a716-446655440000')",
+   "qgis": "String",
+   "valor_qgis": "'550e8400-e29b-41d4-a716-446655440000'"
+  },
+  {
+   "columna": "dt",
+   "duckdb": "",
+   "arrow": "date32[day]",
+   "valor_duckdb": "datetime.date(2026, 11, 1)",
+   "qgis": "Date",
+   "valor_qgis": "PyQt6.QtCore.QDate(2026, 11, 1)"
+  },
+  {
+   "columna": "ts",
+   "duckdb": "",
+   "arrow": "timestamp[us]",
+   "valor_duckdb": "datetime.datetime(2026, 11, 1, 12, 34, 56, 789123)",
+   "qgis": "DateTime",
+   "valor_qgis": "PyQt6.QtCore.QDateTime(2026, 11, 1, 12, 34, 56, 789)"
+  },
+  {
+   "columna": "tstz",
+   "duckdb": "",
+   "arrow": "timestamp[us, tz=UTC]",
+   "valor_duckdb": "datetime.datetime(2026, 11, 1, 10, 34, 56, tzinfo=<UTC>)",
+   "qgis": "DateTime",
+   "valor_qgis": "PyQt6.QtCore.QDateTime(2026, 11, 1, 10, 34, 56, 0, PyQt6.QtC"
+  },
+  {
+   "columna": "tm",
+   "duckdb": "",
+   "arrow": "time64[us]",
+   "valor_duckdb": "datetime.time(12, 34, 56)",
+   "qgis": "Integer64",
+   "valor_qgis": "45296000000"
+  },
+  {
+   "columna": "iv",
+   "duckdb": "",
+   "arrow": "month_day_nano_interval",
+   "valor_duckdb": "datetime.timedelta(days=3)",
+   "qgis": "(no es campo)",
+   "valor_qgis": ""
+  },
+  {
+   "columna": "bl",
+   "duckdb": "BLOB",
+   "arrow": "binary",
+   "valor_duckdb": "b'\\xaa\\xbb'",
+   "qgis": "Binary",
+   "valor_qgis": "PyQt6.QtCore.QByteArray(b'\\xaa\\xbb')"
+  },
+  {
+   "columna": "li",
+   "duckdb": "",
+   "arrow": "list<l: int32>",
+   "valor_duckdb": "[1, 2, 3]",
+   "qgis": "IntegerList",
+   "valor_qgis": "[1, 2, 3]"
+  },
+  {
+   "columna": "st",
+   "duckdb": "",
+   "arrow": "struct<x: int32, y: string>",
+   "valor_duckdb": "{'x': 1, 'y': 'z'}",
+   "qgis": "(no es campo)",
+   "valor_qgis": ""
+  },
+  {
+   "columna": "mp",
+   "duckdb": "",
+   "arrow": "map<string, int32>",
+   "valor_duckdb": "{'k': 1}",
+   "qgis": "JSON",
+   "valor_qgis": "{'k': 1}"
+  },
+  {
+   "columna": "nul",
+   "duckdb": "INTEGER",
+   "arrow": "int32",
+   "valor_duckdb": "None",
+   "qgis": "Integer",
+   "valor_qgis": "None"
+  },
+  {
+   "columna": "geom",
+   "duckdb": "GEOMETRY('OGC:CRS84')",
+   "arrow": "binary",
+   "valor_duckdb": "b'\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xf0?\\x00\\x00\\",
+   "qgis": "(no es campo)",
+   "valor_qgis": ""
+  },
+  {
+   "columna": "geom2",
+   "duckdb": "GEOMETRY",
+   "arrow": "binary",
+   "valor_duckdb": "b'\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x08@\\x00\\x00\\",
+   "qgis": "(no es campo)",
+   "valor_qgis": ""
+  }
+ ]
+}
