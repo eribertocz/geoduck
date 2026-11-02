@@ -37,6 +37,9 @@ from geoduck.app.events import (
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    SpatialActivated,
+    SpatialActivationFailed,
+    SpatialChecked,
     StatementFinished,
     TransactionFailed,
     TransactionStateChanged,
@@ -504,6 +507,35 @@ class SessionCoordinator:
             self._emit(LoadPrepareFailed(token, code, message))
             return
         self._emit(LoadPrepared(token, fut.result()))  # type: ignore[arg-type]
+
+    # -- extensión spatial (spatial-spec §10, ADR-0011) ------------------------------------------
+
+    def check_spatial(self) -> None:
+        """Estado de `spatial` en la sesión: responde con `SpatialChecked` (no instala ni carga nada)."""
+        engine = self._require_ready("consultar la extensión spatial")
+        fut = engine.spatial_state()
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, None)))
+
+    def activate_spatial(self, *, install: bool) -> None:
+        """Solo tras el consentimiento del usuario: `INSTALL` (si `install`) y `LOAD spatial`, para esta
+        sesión. Responde con `SpatialActivated` o `SpatialActivationFailed`."""
+        engine = self._require_ready("activar la extensión spatial")
+        fut = engine.activate_spatial(install=install)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, True)))
+
+    def _on_spatial(self, engine: SessionEngine, fut: Future[Any], activated: bool | None) -> None:
+        if engine is not self._engine:
+            return
+        exc = fut.exception()
+        if exc is not None:
+            code, message = _describe(exc)
+            self._emit(SpatialActivationFailed(code, message))
+            return
+        state = fut.result()
+        if activated:
+            self._emit(SpatialActivated(state.version, state.always_xy))
+        else:
+            self._emit(SpatialChecked(state.installed, state.loaded))
 
     def load(self, request: LoadRequest) -> int:
         """Carga en QGIS. Memoria e Instantánea ocupan la sesión (BUSY) hasta publicar o descartar;

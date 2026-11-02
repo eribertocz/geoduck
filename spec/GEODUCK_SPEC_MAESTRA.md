@@ -941,7 +941,7 @@ El panel detecta `centro` y `poligono` y permite marcar una o ambas. Por cada co
 |---|---|---|---|---|
 | AX-1a | `GEOMETRY('OGC:CRS84')` | válido, `OGC:CRS84` | x = −68,15, y = −16,5 | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
 | AX-1b | `EPSG:4326` con `spatial` | válido, `EPSG:4326` | x = −68,15, y = −16,5 aunque `hasAxisInverted()` sea verdadero | QGIS → EPSG:32719 = `590716.04, 8175564.99` |
-| AX-1c | `ST_Transform(…, 'EPSG:4326', 'EPSG:32719', true)` | válido, `EPSG:32719` | `590716.04, 8175564.99` | igual a AX-1a/b transformado por QGIS |
+| AX-1c | `ST_Transform(GEOMETRY('EPSG:4326'), 'EPSG:32719', true)` | válido, `EPSG:32719` | `590716.04, 8175564.99` | igual a AX-1a/b transformado por QGIS. Con la forma de cuatro argumentos `ST_Transform(g, 'EPSG:4326', 'EPSG:32719', true)` DuckDB 2.0 no declara CRS en el resultado (F-99): la capa queda sin CRS asignado, con las mismas coordenadas |
 | AX-2 | `geometry_always_xy` en `true`, `false` y sin fijar | — | — | valor mostrado en el diagnóstico y en un resultado con geometría = `duckdb_settings()`; GeoDuck no lo modifica |
 | AX-3 | `ST_Transform` sin orden declarado, DuckDB 2.0, ajuste sin fijar | sin capa | — | error SQL del usuario; sin reintentos ni ajustes automáticos |
 | AX-4a | sin CRS declarado | no válido; no se asigna ninguno | x = −68,15, y = −16,5 | no se publica sin decisión del usuario; advertencia visible |

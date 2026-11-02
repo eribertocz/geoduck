@@ -253,7 +253,8 @@ def _check_spatial(prober: SpatialProber | None) -> Check:
             "Desactive allow_unsigned_extensions (spec/docs/security.md §2).",
         )
     if probe.loaded:
-        return Check("spatial", title, CheckStatus.OK, f"Cargable ({probe.version or 'versión ?'})")
+        axis = f" · geometry_always_xy: {probe.always_xy}" if probe.always_xy else ""
+        return Check("spatial", title, CheckStatus.OK, f"Cargable ({probe.version or 'versión ?'}){axis}")
     if probe.installed:
         return Check(
             "spatial",

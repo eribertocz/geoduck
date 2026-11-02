@@ -93,6 +93,10 @@ jobs:
           cache-environment: true
       - run: python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==25.0.1"
       - run: python -c "from qgis.core import Qgis; print(Qgis.version())"
+      # Entorno de pruebas, no GeoDuck: las pruebas AX con `spatial` (spatial-spec §8) la necesitan instalada.
+      # GeoDuck nunca la instala por su cuenta (§10). Sin red hacia extensions.duckdb.org, se omiten.
+      - name: extensión spatial para las pruebas AX
+        run: python -c "import duckdb; duckdb.connect().execute('INSTALL spatial')" || echo "spatial no disponible"
       - name: tests/qgis
         env:
           QT_QPA_PLATFORM: offscreen

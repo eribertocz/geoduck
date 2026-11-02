@@ -23,12 +23,13 @@ from osgeo import gdal, ogr, osr
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QTimer
 
-from geoduck.domain.bridge_types import FieldKind, LoadPlan
+from geoduck.domain.bridge_types import FieldKind, LoadPlan, missing_crs_warning
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
-from geoduck.qgis_bridge.convert import strip_unreadable
+from geoduck.qgis_bridge.convert import crs_from_field, strip_unreadable
 from geoduck.qgis_bridge.memory import LoadCancelledError
+from geoduck.qgis_bridge.reproject import Reprojector
 from geoduck.qgis_bridge.vsimem import PREFIX, VsimemRegistry, unlink
 
 #: GDAL ≥ 3.8: `OGRLayer.WriteArrowBatch` con geometrías GeoArrow (qgis-bridge-spec §4).
@@ -234,6 +235,7 @@ class SnapshotLoad:
         self._cancelled = threading.Event()
         self._finished = False
         self._reported = -1
+        self._reprojector: Reprojector | None = None
         self._timer = QTimer()
         self._timer.setInterval(50)
         self._timer.timeout.connect(self._poll)
@@ -243,8 +245,23 @@ class SnapshotLoad:
         return self._path
 
     def start(self) -> None:
+        target = self._request.reproject_to
+        context = QgsProject.instance().transformContext()  # copia: se usa en el hilo del worker
+
         def on_plan(plan: LoadPlan) -> None:  # hilo del worker
-            self._writer = _Writer(self._path, plan, self._request.crs_override)
+            # Con «Reproyectar a…», el GeoPackage se crea ya en el SRC de destino (spatial-spec §4)
+            self._writer = _Writer(self._path, plan, target or self._request.crs_override)
+
+        def reproject(batch: pa.RecordBatch, writer: _Writer) -> pa.RecordBatch:  # hilo del worker
+            geom = writer.plan.geometry
+            if not target or geom is None:
+                return batch
+            if self._reprojector is None:
+                source = crs_from_field(batch.schema.field(geom.name), self._request.crs_override)
+                if not source.isValid() and geom.declared_crs and self._request.crs_override is None:
+                    source = QgsCoordinateReferenceSystem(geom.declared_crs)
+                self._reprojector = Reprojector(source, target, context)
+            return self._reprojector.batch(batch, geom.name, writer.rows)
 
         def on_batch(batch: pa.RecordBatch) -> None:  # hilo del worker
             if self._cancelled.is_set():
@@ -252,7 +269,7 @@ class SnapshotLoad:
             assert self._writer is not None
             gdal.PushErrorHandler("CPLQuietErrorHandler")  # propio de este hilo: no toca a QGIS
             try:
-                self._writer.write(batch)
+                self._writer.write(reproject(batch, self._writer))
             finally:
                 gdal.PopErrorHandler()
 
@@ -365,10 +382,12 @@ class SnapshotLoad:
             return
         layer = layers[0]
         warnings = plan.warnings
+        if self._reprojector is not None:
+            warnings = (*warnings, self._reprojector.note)
         if len(layers) > 1:
             warnings = (*warnings, f"Tipos de geometría mixtos: {len(layers)} capas, una por tipo")
         if plan.geometry is not None and not layer.crs().isValid():
-            warnings = (*warnings, "Sin SRC asignado")
+            warnings = (*warnings, missing_crs_warning(plan.geometry, self._request.crs_override))
         self._on_progress(written)
         self._on_done(
             LoadReport(

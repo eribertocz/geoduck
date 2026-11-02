@@ -39,6 +39,8 @@ class SpatialProbe:
     extension_directory: str = ""
     allow_unsigned_extensions: bool = False
     version: str = ""
+    #: Valor de `geometry_always_xy` con `spatial` cargada: «true», «false», «sin fijar»; "" si no se leyó.
+    always_xy: str = ""
 
 
 @dataclass(frozen=True)

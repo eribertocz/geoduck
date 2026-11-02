@@ -39,8 +39,16 @@ def probe_spatial() -> SpatialProbe:
                 loaded = True
             except duckdb.Error as exc:
                 load_error = str(exc).strip().splitlines()[0]
+        always_xy = ""
+        if loaded:  # AX-2: se muestra, nunca se modifica (spatial-spec §4)
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'"
+            ).fetchone()
+            if row is not None:
+                always_xy = "sin fijar" if row[0] in (None, "") else str(row[0]).lower()
         return SpatialProbe(
             installed=installed,
+            always_xy=always_xy,
             loaded=loaded,
             load_error=load_error,
             extension_directory=ext_dir,

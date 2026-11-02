@@ -19,6 +19,7 @@ pruebas AX) y no se repiten.
 | F-96 | El proveedor `memory` no admite el tipo `Unknown` (capa no válida); sí `GeometryCollection` | QGIS 3.34.6, 4.2.3 | En Memoria, varias familias = una capa por familia o error (§6) |
 | F-97 | El proveedor `memory` **acepta en silencio** una geometría `PointZ` en una capa `Point` (y 2D en `PointZ`) sin cambiar el tipo de la capa; rechaza otra familia | QGIS 3.34.6, 4.2.3 | GeoDuck fija el tipo con todas las dimensiones presentes (§6) |
 | F-98 | `isGeosValid`/`validateGeometry(GEOS)` y `makeValid()` dan el mismo resultado: pajarita → `MultiPolygon`; anillo degenerado → `LineString` (cambio de familia); Z conservada | QGIS 3.34.6, 4.2.3 | La reparación informa cambios de tipo y dimensión (§9) |
+| F-99 | `ST_Transform(g, 'EPSG:4326', 'EPSG:32719', true)` (cuatro argumentos) devuelve `GEOMETRY` **sin** CRS; la forma de tres argumentos sobre `GEOMETRY('EPSG:4326')` devuelve `GEOMETRY('EPSG:32719')` | DuckDB 2.0.0 + spatial (E2) | AX-1c usa la forma tipada; la de cuatro argumentos queda sin CRS asignado (C4: no se inventa) |
 
 ## Reproducir
 

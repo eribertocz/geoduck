@@ -129,6 +129,11 @@ class BridgeLoader:
         reason = self.availability().get(request.mode)
         if reason is not None:
             raise GeoDuckError(reason, code=ErrorCode.INVALID_ARGUMENT)
+        if request.reproject_to and request.mode is LoadMode.CONNECTED:
+            raise GeoDuckError(
+                "La capa Conectada no se reproyecta: QGIS lo hace al vuelo (spatial-spec §4)",
+                code=ErrorCode.INVALID_ARGUMENT,
+            )
         requests = request.split()
 
         def factory(req: LoadRequest, project: Any, progress: Callable[[int], None], done: Any) -> Any:

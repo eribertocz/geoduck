@@ -16,6 +16,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QTabWidget,
@@ -38,6 +39,9 @@ from geoduck.app.events import (
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    SpatialActivated,
+    SpatialActivationFailed,
+    SpatialChecked,
     TransactionFailed,
 )
 from geoduck.domain.catalog import AttachRequest, OpenAction
@@ -78,6 +82,7 @@ class GeoDuckDock(QDockWidget):
         *,
         ask_close_choice: Callable[[CloseConfirmationRequired, QWidget], CloseChoice] | None = None,
         ask_attach_request: Callable[[OpenAction, QWidget], AttachRequest | None] | None = None,
+        ask_yes_no: Callable[[QWidget, str, str], bool] | None = None,
     ) -> None:
         super().__init__(tr("GeoDuck"), parent)
         self.setObjectName("GeoDuckDock")
@@ -86,6 +91,7 @@ class GeoDuckDock(QDockWidget):
         self._report: DiagnosticReport | None = None
         self._ask_close_choice = ask_close_choice or CloseTransactionDialog.ask
         self._ask_attach_request = ask_attach_request or AttachDialog.ask
+        self._ask_yes_no = ask_yes_no or _ask_yes_no
 
         body = QWidget(self)
         layout = QVBoxLayout(body)
@@ -107,6 +113,7 @@ class GeoDuckDock(QDockWidget):
         self.start_button.clicked.connect(self._start)
         self.rollback_button.clicked.connect(self._coordinator.rollback_transaction)
         self.close_button.clicked.connect(self._close)
+        self.spatial_button.clicked.connect(self._check_spatial)
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
         self.about_button.clicked.connect(self.show_about)
         self.open_button.clicked.connect(lambda: self._attach(OpenAction.OPEN_EXISTING))
@@ -163,10 +170,15 @@ class GeoDuckDock(QDockWidget):
             tr("La transacción está abortada: ROLLBACK para volver a usar la sesión")
         )
         self.rollback_button.hide()
+        self.spatial_button = QPushButton(tr("Activar spatial…"))
+        self.spatial_button.setToolTip(
+            tr("Carga la extensión spatial de DuckDB en esta sesión, con su permiso. GeoDuck no la necesita.")
+        )
         buttons = QHBoxLayout()
         buttons.addWidget(self.start_button)
         buttons.addWidget(self.close_button)
         buttons.addWidget(self.rollback_button)
+        buttons.addWidget(self.spatial_button)
         buttons.addStretch(1)
         card_layout.addLayout(buttons)
         self.engine_label = secondary(QLabel())
@@ -258,6 +270,48 @@ class GeoDuckDock(QDockWidget):
         else:
             self._coordinator.attach_database(request)
 
+    def _check_spatial(self) -> None:
+        try:
+            self._coordinator.check_spatial()
+        except GeoDuckError as exc:
+            self._show_plain_message(exc.message)
+
+    def _confirm_spatial(self, event: SpatialChecked) -> None:
+        """Consentimiento de `LOAD` y, aparte, de `INSTALL` (spatial-spec §10). Vale para esta sesión."""
+        if event.loaded:
+            self._show_plain_message(tr("La extensión spatial ya está cargada en esta sesión."))
+            return
+        if not self._ask_yes_no(
+            self,
+            tr("Activar spatial"),
+            tr(
+                "¿Cargar la extensión spatial de DuckDB en esta sesión (LOAD spatial)?\n\n"
+                "Añade funciones ST_* y SRC EPSG para su SQL. GeoDuck no la necesita para cargar capas. "
+                "El permiso vale solo para esta sesión."
+            ),
+        ):
+            self._show_plain_message(tr("No se cargó spatial. Todo lo demás sigue funcionando."))
+            return
+        install = False
+        if not event.installed:
+            install = self._ask_yes_no(
+                self,
+                tr("Instalar spatial"),
+                tr(
+                    "La extensión spatial no está instalada. ¿Descargarla e instalarla ahora "
+                    "(INSTALL spatial)?\n\nSe descarga del repositorio oficial de DuckDB, con firma "
+                    "verificada. Necesita conexión a internet."
+                ),
+            )
+            if not install:
+                self._show_plain_message(tr("No se instaló spatial. Todo lo demás sigue funcionando."))
+                return
+        self._show_plain_message(tr("Activando spatial…"))
+        try:
+            self._coordinator.activate_spatial(install=install)
+        except GeoDuckError as exc:
+            self._show_plain_message(exc.message)
+
     def _detach(self) -> None:
         name = self.explorer.selected_database()
         if name is not None:
@@ -297,7 +351,26 @@ class GeoDuckDock(QDockWidget):
 
     # -- render ------------------------------------------------------------------------------------
 
-    def _on_event(self, event: AppEvent) -> None:
+    def _on_spatial_event(self, event: AppEvent) -> bool:
+        if isinstance(event, SpatialChecked):
+            self._confirm_spatial(event)
+        elif isinstance(event, SpatialActivated):
+            axis = f" · geometry_always_xy: {event.always_xy}" if event.always_xy else ""
+            version = f" {event.version}" if event.version else ""
+            self._show_plain_message(tr("Extensión spatial{} cargada en esta sesión").format(version) + axis)
+        elif isinstance(event, SpatialActivationFailed):
+            self._show_message(
+                tr("No se pudo activar spatial. Todo lo demás sigue funcionando."),
+                event.code.value,
+                event.message,
+            )
+        else:
+            return False
+        return True
+
+    def _on_event(self, event: AppEvent) -> None:  # noqa: PLR0912 - un despacho por evento
+        if self._on_spatial_event(event):
+            return
         if isinstance(event, SessionStateChanged):
             self._render(event.current)
         elif isinstance(event, SessionStarted):
@@ -370,5 +443,17 @@ class GeoDuckDock(QDockWidget):
             ready and selected is not None and catalog is not None and not catalog.is_root(selected)
         )
         self.close_button.setEnabled(state in _CAN_CLOSE)
+        self.spatial_button.setEnabled(ready)
         if state is SessionState.DISCONNECTED:
             self.engine_label.setText(tr("Sin sesión activa."))
+
+
+def _ask_yes_no(parent: QWidget, title: str, text: str) -> bool:
+    answer = QMessageBox.question(
+        parent,
+        title,
+        text,
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    return answer == QMessageBox.StandardButton.Yes

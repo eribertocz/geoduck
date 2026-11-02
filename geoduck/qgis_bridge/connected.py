@@ -24,6 +24,7 @@ from geoduck.domain.bridge_types import (
     LoadPlan,
     build_load_plan,
     geometry_read_sql,
+    missing_crs_warning,
     strip_terminator,
     unreadable_warning,
 )
@@ -363,7 +364,7 @@ class ConnectedLoad:
             if crs.isValid():
                 params["crs"] = crs.authid() or crs.toWkt()
             else:
-                warnings.append("Sin SRC asignado")
+                warnings.append(missing_crs_warning(plan.geometry, self._request.crs_override))
             if meta["extent"] is not None:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
