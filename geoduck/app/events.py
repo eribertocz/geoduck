@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from geoduck.domain.bridge_types import LoadPlan
 from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot
 from geoduck.domain.errors import ErrorCode
+from geoduck.domain.load import LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import ScriptRun, StatementResult
@@ -137,6 +139,47 @@ class PreviewsInvalidated:
     epoch: int
 
 
+@dataclass(frozen=True)
+class LoadPrepared:
+    """Plan de carga listo (geometrías, CRS declarado, avisos) para que la UI confirme."""
+
+    token: int
+    plan: LoadPlan
+
+
+@dataclass(frozen=True)
+class LoadPrepareFailed:
+    token: int
+    code: ErrorCode
+    message: str
+
+
+@dataclass(frozen=True)
+class LoadStarted:
+    load_id: int
+    request: LoadRequest
+
+
+@dataclass(frozen=True)
+class LoadProgressed:
+    load_id: int
+    rows: int
+
+
+@dataclass(frozen=True)
+class LoadFinished:
+    load_id: int
+    report: LoadReport
+
+
+@dataclass(frozen=True)
+class LoadFailed:
+    load_id: int
+    code: ErrorCode
+    message: str
+    cancelled: bool
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -155,4 +198,10 @@ AppEvent = (
     | ScriptFinished
     | ScriptRejected
     | PreviewsInvalidated
+    | LoadPrepared
+    | LoadPrepareFailed
+    | LoadStarted
+    | LoadProgressed
+    | LoadFinished
+    | LoadFailed
 )

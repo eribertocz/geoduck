@@ -23,6 +23,12 @@ from geoduck.app.events import (
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
+    LoadFailed,
+    LoadFinished,
+    LoadPrepared,
+    LoadPrepareFailed,
+    LoadProgressed,
+    LoadStarted,
     PreviewsInvalidated,
     ScriptFinished,
     ScriptRejected,
@@ -34,9 +40,10 @@ from geoduck.app.events import (
     TransactionFailed,
     TransactionStateChanged,
 )
-from geoduck.app.ports import Dispatcher, EngineFactory, SessionEngine
+from geoduck.app.ports import Dispatcher, EngineFactory, LayerLoader, LoadTask, SessionEngine
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
+from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, StatementResult, StatementStatus
@@ -48,8 +55,15 @@ Listener = Callable[[AppEvent], None]
 
 
 class SessionCoordinator:
-    def __init__(self, engine_factory: EngineFactory, dispatcher: Dispatcher) -> None:
+    def __init__(
+        self, engine_factory: EngineFactory, dispatcher: Dispatcher, loader: LayerLoader | None = None
+    ) -> None:
         self._factory = engine_factory
+        self._loader = loader
+        #: Carga en QGIS en curso (Memoria o Instantánea); la sesión está en BUSY mientras dura.
+        self._load: LoadTask | None = None
+        self._load_ids = 0
+        self._prepare_tokens = 0
         self._dispatcher = dispatcher
         self._sm = SessionStateMachine()
         self._sm.subscribe(lambda a, b: self._emit(SessionStateChanged(a, b)))
@@ -403,7 +417,78 @@ class SessionCoordinator:
         )
 
     def cancel_current_operation(self) -> bool:
+        if self._load is not None:
+            self._load.cancel()
+            return True
         return self._engine.cancel_current() if self._engine is not None else False
+
+    # -- carga en QGIS (qgis-bridge-spec, ADR-0012) ----------------------------------------------
+
+    def load_modes(self) -> dict[LoadMode, str | None]:
+        """Modalidad → motivo por el que no está disponible (None = disponible)."""
+        if self._loader is None:
+            return dict.fromkeys(LoadMode, "La carga en QGIS no está disponible")
+        return self._loader.availability()
+
+    def prepare_load(self, sql: str, geometry: str | None = None) -> int:
+        """Pide el plan de carga (sin leer datos). Responde con `LoadPrepared` o `LoadPrepareFailed`."""
+        engine = self._require_ready("preparar la carga")
+        self._prepare_tokens += 1
+        token = self._prepare_tokens
+        fut = engine.prepare_load(sql, geometry)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_prepared(engine, token, f)))
+        return token
+
+    def _on_prepared(self, engine: SessionEngine, token: int, fut: Future[object]) -> None:
+        if engine is not self._engine:
+            return
+        exc = fut.exception()
+        if exc is not None:
+            code, message = _describe(exc)
+            self._emit(LoadPrepareFailed(token, code, message))
+            return
+        self._emit(LoadPrepared(token, fut.result()))  # type: ignore[arg-type]
+
+    def load(self, request: LoadRequest) -> int:
+        """Carga en QGIS. Memoria e Instantánea ocupan la sesión (BUSY) hasta publicar o descartar;
+        se cancelan con `cancel_current_operation`. Devuelve el id de la carga."""
+        engine = self._require_ready("cargar en QGIS")
+        if self._loader is None:
+            raise SessionStateError("La carga en QGIS no está disponible")
+        reason = self.load_modes().get(request.mode)
+        if reason is not None:
+            raise SessionStateError(reason)
+        self._load_ids += 1
+        load_id = self._load_ids
+        self._sm.transition(SessionState.BUSY)
+        self._emit(LoadStarted(load_id, request))
+        try:
+            self._load = self._loader.start(
+                engine,
+                request,
+                on_progress=lambda rows: self._emit(LoadProgressed(load_id, rows)),
+                on_done=lambda result: self._on_load_done(engine, load_id, result),
+            )
+        except BaseException as exc:
+            self._load = None
+            if self._sm.state is SessionState.BUSY:
+                self._sm.transition(SessionState.READY)
+            code, message = _describe(exc)
+            self._emit(LoadFailed(load_id, code, message, cancelled=False))
+            raise
+        return load_id
+
+    def _on_load_done(self, engine: SessionEngine, load_id: int, result: LoadReport | BaseException) -> None:
+        self._load = None
+        if engine is not self._engine:
+            return
+        if self._sm.state is SessionState.BUSY:
+            self._sm.transition(SessionState.READY)
+        if isinstance(result, BaseException):
+            code, message = _describe(result)
+            self._emit(LoadFailed(load_id, code, message, cancelled=code is ErrorCode.CANCELLED))
+            return
+        self._emit(LoadFinished(load_id, result))
 
     def shutdown(self, timeout: float = 10.0) -> bool:
         """Cierre bloqueante para la descarga del complemento. Devuelve False si venció el plazo."""
