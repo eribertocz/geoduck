@@ -1,0 +1,55 @@
+1. GeoArrow → QgsGeometry.fromWkb
+  POINT(1 2)                                              → Point                  empty=False Point (1 2)
+  POINT Z(1 2 3)                                          → PointZ                 empty=False PointZ (1 2 3)
+  POINT M(1 2 4)                                          → PointM                 empty=False PointM (1 2 4)
+  POINT ZM(1 2 3 4)                                       → PointZM                empty=False PointZM (1 2 3 4)
+  MULTIPOINT((1 2),(3 4))                                 → MultiPoint             empty=False MultiPoint ((1 2),(3 4))
+  LINESTRING Z(0 0 1,1 1 2)                               → LineStringZ            empty=False LineStringZ (0 0 1, 1 1 2)
+  POLYGON M((0 0 1,1 0 1,1 1 1,0 0 1))                    → PolygonM               empty=False PolygonM ((0 0 1, 1 0 1, 1 1 1, 0 0 1))
+  MULTIPOLYGON ZM(((0 0 1 2,1 0 1 2,1 1 1 2,0 0 1 2)))    → MultiPolygonZM         empty=False MultiPolygonZM (((0 0 1 2, 1 0 1 2, 1 1 
+  GEOMETRYCOLLECTION(POINT(1 2),LINESTRING(0 0,1 1))      → GeometryCollection     empty=False GeometryCollection (Point (1 2),LineStri
+  POINT EMPTY                                             → Point                  empty=True Point EMPTY
+  POLYGON EMPTY                                           → Polygon                empty=True Polygon EMPTY
+2. Capas memory
+  memory 'Unknown': valid=False type=Unknown
+  memory 'GeometryCollection': valid=True type=GeometryCollection
+  memory 'Point': valid=True type=Point
+  memory 'PointZ': valid=True type=PointZ
+  Point    ← POINT Z(1 2 3)               ok=True stored=PointZ (1 2 3)
+  PointZ   ← POINT(1 2)                   ok=True stored=Point (1 2)
+  Unknown  ← POLYGON((0 0,1 0,1 1,0 0))   ok=False stored=-
+  Unknown  ← POINT Z(1 2 3)               ok=False stored=-
+  Point    ← LINESTRING(0 0,1 1)          ok=False stored=-
+3. Validez y makeValid
+  POLYGON((0 0,1 1,1 0,0 1,0 0))             geosValid=False errors=['Self-intersection'] → MultiPolygon MultiPolygon (((0 1, 0.5 0.5, 0 0, 0 1)),((1 0, 0.
+  POLYGON((0 0,1 0,1 1,0 1,0 0))             geosValid=True errors=[] → Polygon Polygon ((0 0, 1 0, 1 1, 0 1, 0 0))
+  POLYGON((0 0,1 0,0 0))                     geosValid=False errors=['Too few points in geometry component'] → LineString LineString (0 0, 1 0)
+  POLYGON Z((0 0 1,1 1 1,1 0 1,0 1 1,0 0 1)) geosValid=False errors=['Self-intersection'] → MultiPolygonZ MultiPolygonZ (((0 1 1, 0.5 0.5 1, 0 0 1, 0 1 1)),
+1. GeoArrow → QgsGeometry.fromWkb
+  POINT(1 2)                                              → Point                  empty=False Point (1 2)
+  POINT Z(1 2 3)                                          → PointZ                 empty=False Point Z (1 2 3)
+  POINT M(1 2 4)                                          → PointM                 empty=False Point M (1 2 4)
+  POINT ZM(1 2 3 4)                                       → PointZM                empty=False Point ZM (1 2 3 4)
+  MULTIPOINT((1 2),(3 4))                                 → MultiPoint             empty=False MultiPoint ((1 2),(3 4))
+  LINESTRING Z(0 0 1,1 1 2)                               → LineStringZ            empty=False LineString Z (0 0 1, 1 1 2)
+  POLYGON M((0 0 1,1 0 1,1 1 1,0 0 1))                    → PolygonM               empty=False Polygon M ((0 0 1, 1 0 1, 1 1 1, 0 0 1))
+  MULTIPOLYGON ZM(((0 0 1 2,1 0 1 2,1 1 1 2,0 0 1 2)))    → MultiPolygonZM         empty=False MultiPolygon ZM (((0 0 1 2, 1 0 1 2, 1 1
+  GEOMETRYCOLLECTION(POINT(1 2),LINESTRING(0 0,1 1))      → GeometryCollection     empty=False GeometryCollection (Point (1 2),LineStri
+  POINT EMPTY                                             → Point                  empty=True Point EMPTY
+  POLYGON EMPTY                                           → Polygon                empty=True Polygon EMPTY
+2. Capas memory
+  memory 'Unknown': valid=False type=Unknown
+  memory 'GeometryCollection': valid=True type=GeometryCollection
+  memory 'Point': valid=True type=Point
+  memory 'PointZ': valid=True type=PointZ
+  Point    ← POINT Z(1 2 3)               ok=True stored=Point Z (1 2 3)
+  PointZ   ← POINT(1 2)                   ok=True stored=Point (1 2)
+  Unknown  ← POLYGON((0 0,1 0,1 1,0 0))   ok=False stored=-
+  Unknown  ← POINT Z(1 2 3)               ok=False stored=-
+  Point    ← LINESTRING(0 0,1 1)          ok=False stored=-
+3. Validez y makeValid
+  POLYGON((0 0,1 1,1 0,0 1,0 0))             geosValid=False errors=['Self-intersection'] → MultiPolygon MultiPolygon (((0 1, 0.5 0.5, 0 0, 0 1)),((1 0, 0.
+  POLYGON((0 0,1 0,1 1,0 1,0 0))             geosValid=True errors=[] → Polygon Polygon ((0 0, 1 0, 1 1, 0 1, 0 0))
+  POLYGON((0 0,1 0,0 0))                     geosValid=False errors=['Too few points in geometry component'] → LineString LineString (0 0, 1 0)
+  POLYGON Z((0 0 1,1 1 1,1 0 1,0 1 1,0 0 1)) geosValid=False errors=['Self-intersection'] → MultiPolygonZ MultiPolygon Z (((0 1 1, 0.5 0.5 1, 0 0 1, 0 1 1))
+[exited with code 0]

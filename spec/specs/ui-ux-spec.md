@@ -25,11 +25,14 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 - **Inicio:** tarjeta discreta «En memoria» / «Archivo DuckDB», selector de archivo, toggle «Solo lectura / Lectura y escritura», botón «Iniciar sesión». La UI se desbloquea al confirmar la sesión.
 - **ATTACH:** icono `+` al lado de catálogos; diálogo path, alias, RO/RW; feedback al finalizar.
 - **DETACH:** menú contextual «Desadjuntar» con confirmación si hay operaciones propias activas. No mostrar advertencia falsa de que se perderán capas QGIS ya entregadas. Si hay capas conectadas a esa base, avisar de que quedarán no disponibles hasta adjuntarla de nuevo.
-- **Tabla/Vista:** doble clic abre preview opcional o añade una consulta en editor; clic derecho «Cargar en QGIS» con las tres modalidades y selector espacial si aplica. Una tabla con clave primaria entera ofrece «Conectada a DuckDB (editable)».
+- **Tabla/Vista:** doble clic o clic derecho «Cargar en QGIS…» con las tres modalidades y selector espacial si aplica. Toda tabla cargada como Conectada es editable; vistas y consultas, de solo lectura (qgis-bridge-spec §5.1).
 - **Modalidad de carga:** un solo diálogo pequeño con tres opciones y una línea de ayuda cada una: «Copia en memoria — compatible, para resultados pequeños», «Copia rápida — rápida y con poca memoria», «Conectada a DuckDB — sin copiar, siempre al día». Recuerda la última elección. Las opciones no disponibles se muestran desactivadas con el motivo. Sin términos técnicos (`/vsimem`, GeoArrow, proveedor).
 - **SQL:** botón principal «Ejecutar» opera sobre sentencia actual si no hay selección, o selección según preferencia explícita; comandos «Todo» y «Selección» inequívocos.
 - **Resultados:** pestañas por sentencia con nombre legible y ID; cambiar pestaña selecciona solo ese resultado. `Cargar en QGIS` siempre etiqueta el resultado objetivo.
-- **Múltiples geometrías:** selector pequeño con radiobutton/checkbox por columna, nombre/tipo/CRS; permitir uno o varios. No modal por cada consulta cuando no hay ambigüedad.
+- **Múltiples geometrías:** selector pequeño con una casilla por columna, nombre/tipo/CRS; permitir una o varias (una capa por columna). No modal por cada consulta cuando no hay ambigüedad.
+- **Opciones espaciales del diálogo de carga (G4, spatial-spec):** «Usar como geometría: WKB/WKT» para columnas `BLOB`/`VARCHAR` (nunca marcadas por defecto); «Tipos mixtos: una capa por tipo» (Memoria e Instantánea, activada) o «Separar por tipo» (Conectada, desactivada); «Reproyectar a…» (solo Memoria e Instantánea, desactivada, con CRS conocido).
+- **Capa cargada por GeoDuck:** menú contextual «Diagnosticar geometrías…»; el resultado ofrece «Reparar en una copia…» (spatial-spec §9).
+- **Sesión:** acción «Activar spatial…» con confirmación de `LOAD` y, si hace falta, confirmación separada de `INSTALL`; válida solo para la sesión (spatial-spec §10).
 - **Progreso:** nombre operación, estado, filas procesadas, tiempo, cancelar; sin porcentaje inventado cuando no existe total.
 - **Errores:** título comprensible, detalle expandible, acción de recuperación; conservar SQL para corregirlo.
 

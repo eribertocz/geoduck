@@ -1,30 +1,32 @@
 # SPEC GD-SPA — Geometría, CRS y selección multi-geometría
 
-**Estado:** baseline Alpha · **IDs:** GD-SPA-001..004
+**Estado:** Alpha · G4 Spatial Confidence (decisiones del propietario, 2026-11-02) · **IDs:** GD-SPA-001..004
 
 ## 1. Meta
-Una tabla, vista o consulta puede contener cero, una o múltiples columnas geoespaciales. GeoDuck debe decidir con el usuario la(s) geometría(s) de cada capa, preservar los valores, asignar CRS solo cuando esté fundamentado y entregar capas nativas QGIS completas.
+Una tabla, vista o consulta puede contener cero, una o múltiples columnas geoespaciales. GeoDuck debe decidir con el usuario la(s) geometría(s) de cada capa, preservar los valores, asignar CRS solo cuando esté fundamentado y entregar capas nativas QGIS completas, en las tres modalidades de qgis-bridge-spec (Memoria, Instantánea y Conectada).
 
-## 2. Detección
+**Principio de G4:** ninguna pérdida silenciosa. Lo que no se puede representar se bloquea o se avisa con nombre de columna, motivo y número de filas afectadas.
+
+## 2. Detección (GD-SPA-001)
 1. Inspeccionar esquema tipado de relación/consulta y catálogos, buscando `GEOMETRY` y tipos espaciales DuckDB 1.5+/2.x compatibles, incluidos tipos especializados cuando se soporten.
-2. Verificar funciones espaciales instaladas; para columnas BLOB/WKB o textos WKT exigir confirmación de origen/tipo, **no** inferir por nombre `geom` o por primeros bytes únicamente.
-3. En `GEOMETRY` genérico, explorar tipos de valores con funciones espaciales cuando sea necesario para elegir la geometría del proveedor `memory`.
-4. Distinguir `NULL`, `EMPTY`, `POINT`/`MULTIPOINT`, `LINESTRING`/`MULTILINESTRING`, `POLYGON`/`MULTIPOLYGON`, `GEOMETRYCOLLECTION`, subtipos con Z/M cuando PyQGIS lo permita.
+2. **Columnas `BLOB` (WKB) y `VARCHAR` (WKT)** solo son geometría si el usuario lo indica en el diálogo de carga («Usar como geometría: WKB» o «WKT»). GeoDuck **no infiere** por nombre (`geom`, `wkt`…), por los primeros bytes ni por el contenido, y **no modifica el origen**: la conversión ocurre al leer. Su CRS es desconocido (§4): el usuario elige uno o continúa sin CRS. Un valor que no se puede leer como WKB/WKT es una geometría ilegible (§9).
+3. En `GEOMETRY` genérico, el tipo de capa se deduce de los valores leídos (DuckDB no guarda el subtipo, F-71); en la modalidad Conectada, sin recorrer toda la fuente al abrir (§6).
+4. Distinguir `NULL`, `EMPTY`, `POINT`/`MULTIPOINT`, `LINESTRING`/`MULTILINESTRING`, `POLYGON`/`MULTIPOLYGON`, `GEOMETRYCOLLECTION`, y las dimensiones Z, M y ZM.
 
 ## 3. Selección
 | Situación | Acción |
 |---|---|
-| 0 geometrías | entregar tabla QGIS sin geometría |
+| 0 geometrías | entregar tabla QGIS sin geometría; el diálogo ofrece marcar columnas `BLOB`/`VARCHAR` como geometría (§2.2) |
 | 1 geometría con tipo + CRS inequívocos | seleccionarla automáticamente |
-| 2+ geometrías | selector: elegir una o «crear una capa por columna» |
-| CRS ausente/ambiguo | pedir elección explícita o marcar como desconocido, sin inventar EPSG |
-| mezcla de familias no compatible con layer tipo único | proponer dividir por familias o cancelar; nunca truncar geometría silenciosamente |
-| geometría corrupta | reportar fallo de conversión; cancelar transferencia por defecto |
+| 2+ geometrías | selector múltiple: el usuario marca una o varias columnas; **una capa por columna marcada** (§7) |
+| CRS ausente/ambiguo | pedir elección explícita o marcar como desconocido, sin inventar EPSG (§4) |
+| mezcla de familias | según la modalidad (§6); nunca truncar ni descartar geometrías en silencio |
+| geometría ilegible (WKB/WKT de una columna marcada) | Memoria e Instantánea: la carga falla sin publicar nada e indica columna y fila; Conectada: la entidad se muestra sin geometría y se cuenta en el aviso de la capa (§9) |
 | geometría `NULL` | feature con geometría vacía, conforme al contrato de campos |
 
-La columna espacial alternativa no se pierde en DuckDB. Para la capa concreta, por defecto se **excluye de los atributos** el resto de columnas espaciales, con opción explícita de incluirlas convertidas a texto WKT/WKB; el usuario puede crear una segunda capa para otra columna.
+Las columnas espaciales no elegidas para una capa no se pierden en DuckDB y **se excluyen de sus atributos**, con un aviso que las nombra; el usuario puede marcarlas para crear sus propias capas.
 
-## 4. CRS en DuckDB 1.5+
+## 4. CRS en DuckDB 1.5+ (GD-SPA-003)
 DuckDB 1.5+ permite tipos de geometría parametrizados con identificadores CRS, p.ej. `GEOMETRY('OGC:CRS84')`, y funciones `ST_CRS`, `ST_SetCRS`; el módulo `spatial` aporta transformaciones y catálogos CRS. Por ello GeoDuck **sí debe inspeccionar metadatos CRS cuando estén disponibles**. Una columna `GEOMETRY` sin CRS declarado no autoriza deducir EPSG:4326.
 
 Orden de preferencia:
@@ -33,32 +35,57 @@ Orden de preferencia:
 3. Selección explícita del usuario.
 4. Mantener CRS desconocido con advertencia clara si el usuario decide continuar.
 
+En G4 la única fuente del punto 1 es el tipo de la columna, que llega como PROJJSON en GeoArrow (§5); no hay una segunda declaración con la que pueda entrar en conflicto. Columnas `BLOB`/`VARCHAR` marcadas como geometría no traen CRS: puntos 3 y 4.
+
 `ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y una decisión explícita del usuario. Nunca realizar una transformación oculta.
 
 **Orden de ejes.** GeoDuck entrega a QGIS las coordenadas del WKB tal como las produce DuckDB, sin reordenarlas; QGIS interpreta x como este/longitud también en CRS geográficos como EPSG:4326. GeoDuck no fija el ajuste `geometry_always_xy` de la extensión `spatial` (en DuckDB 2.0 no tiene valor por defecto y `ST_Transform` exige declararlo; en 2.1 pasará a `true`). Cuando `spatial` está cargada, GeoDuck muestra su valor efectivo en el diagnóstico y en los resultados espaciales cuando corresponda. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia llamada. Geometrías producidas en el orden de la autoridad (por ejemplo, latitud-longitud) se entregan tal cual y son responsabilidad del SQL del usuario. GeoDuck no intenta adivinar ejes invertidos a partir de los rangos de coordenadas.
 
 **CRS ausente o desconocido.** Si DuckDB no declara CRS, o declara uno que QGIS no reconoce, GeoDuck no lo sustituye por otro (ni EPSG:4326 ni el CRS del proyecto), no publica la capa sin una decisión del usuario (puntos 3 y 4 anteriores), conserva el texto declarado en el mensaje y el registro, y nunca modifica las coordenadas. Elegir un CRS lo etiqueta; no transforma.
 
+**Reproyección (decisión del propietario, 2026-11-02).** La reproyección es de QGIS/PROJ:
+- **Memoria e Instantánea:** opción «Reproyectar a…» en el diálogo de carga, desactivada por defecto y solo disponible cuando la capa tiene CRS (declarado o elegido). GeoDuck transforma cada geometría con `QgsCoordinateTransform` (contexto de transformación del proyecto) al copiarla; la capa resultante lleva el CRS de destino y el mensaje de carga indica «reproyectada de A a B». Si una geometría no se puede transformar, la carga falla sin publicar nada e indica la fila. No usa `ST_Transform` ni necesita `spatial`.
+- **Conectada:** no transforma; QGIS reproyecta al vuelo en el mapa, como con cualquier proveedor.
+- El SQL del usuario puede usar `ST_Transform` (con `spatial` cargada por él): su resultado se entrega tal cual (AX-1c, AX-3).
+
 ## 5. Transporte WKB
 Seleccionada una columna, leer la relación de lectura con `to_arrow_reader()`: DuckDB exporta cada columna `GEOMETRY` como `geoarrow.wkb`, con el CRS en PROJJSON en los metadatos del campo (ADR-0008). Esos metadatos son la fuente del tipo y del CRS (§4); no se impone `ST_AsWKB` (descarta el CRS) ni se añaden extensiones o paquetes adicionales. `ST_AsWKB` queda solo como alternativa explícita para tipos que DuckDB no exporte como GeoArrow. Convertir a `QgsGeometry.fromWkb` en main thread. Evitar serializar geometrías completas en WKT como camino principal por coste y precisión.
 
+Columnas marcadas como geometría (§2.2): la consulta de lectura las convierte en DuckDB con funciones del núcleo, sin `spatial` (spike G4-A, DuckDB 1.5.0–2.0.0): `TRY(ST_GeomFromWKB(col))` para `BLOB` y `TRY(col::GEOMETRY)` para `VARCHAR`. A partir de ahí siguen el mismo camino que una columna `GEOMETRY` en las tres modalidades. Un valor no nulo cuya conversión da `NULL` es **ilegible** (§3, §9) y se detecta en la propia consulta.
+
 La generación de la proyección SQL debe citar campos correctamente y preservar semántica de la consulta original; no modificar SQL de usuario en el editor. Se necesita test de tipos especializados y funciones concretas en DuckDB 2.0.
 
-## 6. Geometrías mixtas
-Política V1: detectar incompatibilidades de familias geométricas antes de registrar capas. Si una columna contiene Point y Polygon mezclados, mostrar opciones **separar familias en capas** (solo cuando se implemente con garantías) o **cancelar con explicación**. No asignar tipo Polygon ignorando Points. El soporte opcional de `GeometryCollection` debe probarse en las ramas QGIS objetivo.
+## 6. Geometrías mixtas y dimensiones (GD-SPA-004)
+Una **familia** es punto, línea o polígono; `X` y `MultiX` son la misma familia. `GEOMETRYCOLLECTION` es una familia propia.
 
-## 7. Múltiples geometrías
+| Modalidad | Una sola familia | Varias familias |
+|---|---|---|
+| Memoria | capa `X` o `MultiX` (si alguna es múltiple) | opción del diálogo «Tipos mixtos: una capa por tipo», activada por defecto: una capa por familia, más una «sin geometría» si hay `NULL`/vacías. Desactivada: la carga falla sin publicar nada y nombra los tipos encontrados |
+| Instantánea | igual que Memoria | igual que Memoria (GDAL ya separa por tipo, G3) |
+| Conectada | capa del tipo deducido | por defecto una capa `Unknown` con todas las filas (simbología por tipo no disponible, avisado). Opción «Separar por tipo»: una capa Conectada por familia, cada una con el filtro de su familia empujado a DuckDB |
+
+- **Detección sin recorrido completo (Conectada):** el tipo se deduce de una muestra acotada al abrir; las filas que no encajan en el tipo declarado no se descartan: la capa pasa a `Unknown` y se avisa. Una separación por tipo nunca pierde filas: las de familias no previstas aparecen en una capa adicional o se avisan con su número.
+- **Filtro de familia sin `spatial`:** se lee el código de tipo ISO de la cabecera de `ST_AsWKB` (núcleo de DuckDB 1.5+, siempre little-endian; spike G4-A: 100–180 ms por millón de filas).
+- **Dimensiones Z/M:** se conservan. El tipo de la capa incluye toda dimensión presente en sus geometrías; las geometrías sin ella la reciben con valor `NaN`, con aviso. El proveedor `memory` acepta en silencio una geometría Z en una capa 2D y la perdería al exportar (spike G4-A, QGIS 3.34 y 4.2): por eso GeoDuck decide el tipo explícitamente y nunca deja una capa con dimensiones distintas de las de sus geometrías.
+- **Edición:** en una capa de tipo fijo QGIS no admite geometrías de otra familia; en la capa `Unknown` cualquier familia es válida. No hay movimiento de entidades entre capas al editar.
+
+## 7. Múltiples geometrías (GD-SPA-002)
 Consulta ejemplo:
 ```sql
 SELECT id, ST_Centroid(geom) AS centro, geom AS poligono
 FROM zonas;
 ```
-El panel detecta `centro` y `poligono` y ofrece «Puntos», «Polígonos», «Ambos». Si el usuario elige ambos, GeoDuck crea dos capas independientes, verificadas, y las publica juntas al terminar. Las dos capas no mantienen conexión a DuckDB.
+El panel detecta `centro` y `poligono` y permite marcar una o ambas. Por cada columna marcada GeoDuck crea una capa independiente, con su propio CRS y tipo y los mismos atributos no geométricos, en la modalidad elegida (Memoria, Instantánea o Conectada; decisión del propietario, 2026-11-02, que sustituye «las dos capas no mantienen conexión a DuckDB»).
+
+- **Nombres:** `<nombre> · <columna>` cuando se marca más de una; únicos en el proyecto.
+- **Entrega atómica:** las capas se publican juntas al terminar; un error o una cancelación no publica ninguna.
+- **Conectada:** cada capa es un proveedor `geoduck` con su `geom=<columna>`; la extensión, el filtro espacial y la edición usan solo su columna.
 
 ## 8. Pruebas geoespaciales obligatorias
-- Point, Line, Polygon, Multi*, nulos/vacías, Z, geometría inválida.
-- Dos columnas geométricas con familias diferentes y selección de ambas.
-- CRS tipado DuckDB 1.5+/2.x y CRS desconocido; CRS de distinto eje y reproyección explícita.
+- Point, Line, Polygon, Multi*, nulos/vacías, Z, M, ZM, `GEOMETRYCOLLECTION`, geometría inválida.
+- Dos columnas geométricas con familias y CRS diferentes y selección de una y de ambas, en las tres modalidades.
+- Columnas `BLOB` (WKB) y `VARCHAR` (WKT) marcadas como geometría, con valores ilegibles; sin marcar no son geometría.
+- CRS tipado DuckDB 1.5+/2.x y CRS desconocido; CRS de distinto eje y reproyección explícita en Memoria e Instantánea.
 - Filas con tipos mixtos en una columna: no se descartan silenciosamente.
 - WKB con datos corruptos, `GEOMETRYCOLLECTION` y BLOB no geométrico.
 - Consultas que generan geometría (`ST_Centroid`, `ST_Buffer`) sin columna espacial original.
@@ -74,3 +101,16 @@ El panel detecta `centro` y `poligono` y ofrece «Puntos», «Polígonos», «Am
 | AX-4a | sin CRS declarado | no válido; no se asigna ninguno | x = −68,15, y = −16,5 | no se publica sin decisión del usuario; advertencia visible |
 | AX-4b | CRS desconocido para QGIS (`FOO:123`) | no válido; no se sustituye | x = −68,15, y = −16,5 | el mensaje muestra `FOO:123` |
 | AX-4c | CRS desconocido y el usuario elige `EPSG:4326` | válido, `EPSG:4326` | x = −68,15, y = −16,5 | elegir etiqueta; no transforma |
+| AX-5 | «Reproyectar a EPSG:32719» desde `OGC:CRS84`, Memoria e Instantánea | válido, `EPSG:32719` | `590716.04, 8175564.99` | el origen en DuckDB no cambia; el mensaje indica la reproyección |
+
+## 9. Validez y reparación (GD-SPA-004; decisión del propietario, 2026-11-02)
+**Estados distintos**, que se cuentan por separado: `NULL`, vacía, **ilegible** (WKB/WKT que no se puede leer, solo posible en columnas marcadas §2.2: DuckDB no admite `GEOMETRY` corrupta), **inválida** (legible pero topológicamente inválida según GEOS) y válida.
+
+- **Diagnóstico bajo demanda:** menú contextual de una capa cargada por GeoDuck → «Diagnosticar geometrías…». Recorre la capa con QGIS/GEOS (`QgsGeometry.isGeosValid`, sin `spatial`) en una tarea cancelable, sin modificar la capa ni el origen. Informa total examinado, válidas, inválidas (con el motivo de GEOS de las primeras), vacías, `NULL` e ilegibles, y **selecciona en la capa** las entidades inválidas e ilegibles.
+- **Reparación explícita:** desde el resultado del diagnóstico, «Reparar en una copia…» con confirmación. Crea una capa nueva en memoria `<capa> (reparada)` con `QgsGeometry.makeValid()`; la capa original y el origen en DuckDB no cambian. El mensaje informa cuántas geometrías cambiaron de tipo, de dimensión o de número de partes, y cuántas no se pudieron reparar (quedan sin geometría en la copia y se nombran). No se promete preservación geométrica exacta.
+- **Cancelación o error:** no publica la copia ni deja recursos abiertos.
+
+## 10. Extensión `spatial` (ADR-0011, security.md §2)
+Ninguna función de G4 requiere `spatial`: CRS (GeoArrow/PROJJSON), filtro espacial (`ST_Intersects_Extent`), cabecera WKB (`ST_AsWKB`), reproyección (QGIS/PROJ), validez y reparación (QGIS/GEOS) y lectura WKB/WKT (QGIS) funcionan sin ella. Con `spatial` ya cargada, la extensión de una capa Conectada se calcula con `ST_Extent_Agg` (G3).
+
+GeoDuck nunca ejecuta `INSTALL` ni `LOAD` por su cuenta. La sesión ofrece una acción explícita «Activar spatial…»: explica qué hace, pide confirmación para `LOAD spatial` y, si la extensión no está instalada, una **confirmación separada** para `INSTALL spatial` (descarga del repositorio oficial firmado). El consentimiento vale solo para esa sesión. Si se rechaza o falla, se informa el motivo y todo lo anterior sigue funcionando. `LOAD`/`INSTALL` escritos por el usuario en el editor son su SQL y se ejecutan como tal.
