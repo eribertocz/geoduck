@@ -152,14 +152,13 @@ def test_user_column_named_fid_is_kept(session):
 def test_vsimem_is_freed_only_after_the_last_layer_is_removed(session):
     ev = session.load("SELECT 1 AS id, 'POINT(0 0)'::GEOMETRY AS g")
     project = QgsProject.instance()
-    layer = project.mapLayer(ev.report.layer_id)
-    path = layer.source().split("|")[0]
-    twin = layer.clone()
-    project.addMapLayer(twin)
-    project.removeMapLayer(layer.id())
+    first_id = ev.report.layer_id
+    path = project.mapLayer(first_id).source().split("|")[0]
+    twin_id = project.addMapLayer(project.mapLayer(first_id).clone()).id()  # QGIS es dueño de la copia
+    project.removeMapLayer(first_id)
     assert gdal.VSIStatL(path) is not None  # la duplicada sigue usándolo
-    assert twin.featureCount() == 1 and sum(1 for _ in twin.getFeatures()) == 1
-    project.removeMapLayer(twin.id())
+    assert sum(1 for _ in project.mapLayer(twin_id).getFeatures()) == 1
+    project.removeMapLayer(twin_id)
     assert gdal.VSIStatL(path) is None
 
 
