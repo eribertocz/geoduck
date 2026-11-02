@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import duckdb
 
-from geoduck.domain.errors import ErrorCode, InvalidArgumentError
+from geoduck.domain.errors import ErrorCode, InvalidArgumentError, SessionStateError
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.sql import (
     PREVIEW_LIMITS,
@@ -83,6 +83,7 @@ def run_script(
     base: int = 0,
     preview_limit: int,
     on_statement: StatementListener | None = None,
+    guard: Callable[[SqlStatement], str | None] | None = None,
 ) -> ScriptRun:
     """Ejecuta `text` según `scope`. Para `CURRENT`, `text` es el editor completo y `cursor` la posición;
     para `SELECTION`, `text` es la selección y `base` su posición en el editor."""
@@ -102,6 +103,11 @@ def run_script(
     if scope is RunScope.CURRENT:
         chosen = statement_at(statements, cursor)
         statements = (chosen,) if chosen is not None else ()
+    if guard is not None:  # antes de ejecutar nada: o el script entero, o nada
+        for st in statements:
+            reason = guard(st)
+            if reason:
+                raise SessionStateError(reason)
     results: list[StatementResult] = []
     stopped = False
     for st in statements:

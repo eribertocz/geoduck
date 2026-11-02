@@ -11,7 +11,7 @@ from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot,
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
-from geoduck.domain.sql import RunScope, ScriptRun, StatementResult
+from geoduck.domain.sql import RunScope, ScriptRun, SqlStatement, StatementResult
 from geoduck.domain.transaction import TransactionState
 
 
@@ -75,8 +75,10 @@ class SessionEngine(Protocol):
         base: int = 0,
         preview_limit: int = 200,
         on_statement: Callable[[StatementResult], None] | None = None,
+        guard: Callable[[SqlStatement], str | None] | None = None,
     ) -> ScriptHandle:
-        """Ejecuta SQL del usuario en una operación serial; `on_statement` llega en el hilo del motor."""
+        """Ejecuta SQL del usuario en una operación serial; `on_statement` llega en el hilo del motor.
+        `guard` (hilo del motor) puede vetar el script entero antes de ejecutar nada: devuelve el motivo."""
         ...
 
     def load_query(
@@ -127,6 +129,10 @@ class LayerLoader(Protocol):
     def unsaved_layers(self, database: str | None = None) -> list[str]:
         """Capas Conectadas con cambios sin guardar (de `database`, o de cualquier base si es None).
         Bloquean el DETACH de su base y el cierre de la sesión (qgis-bridge-spec §5.5)."""
+        ...
+
+    def unsaved_by_database(self) -> dict[str, list[str]]:
+        """Base (en minúsculas) → capas Conectadas con cambios sin guardar; "" si la base no se conoce."""
         ...
 
     def session_changed(self, engine: SessionEngine | None) -> None:

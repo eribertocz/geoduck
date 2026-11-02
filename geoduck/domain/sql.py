@@ -274,3 +274,26 @@ def _humanize(qualified: str, *, lower: bool = False) -> str:
 def _short(text: str) -> str:
     text = " ".join(text.split())
     return text if len(text) <= _TITLE_MAX else text[: _TITLE_MAX - 1].rstrip() + "…"
+
+
+_COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.DOTALL)
+_DETACH_TARGET = re.compile(
+    r'^\s*DETACH\s+(?:DATABASE\s+)?(?:IF\s+EXISTS\s+)?(?:"(?P<quoted>(?:[^"]|"")+)"|(?P<bare>[^\s;"]+))',
+    re.IGNORECASE,
+)
+
+
+def detach_target(statement: SqlStatement) -> str | None:
+    """Base que desadjunta una sentencia `DETACH` real (tipo del parser de DuckDB), o None si no lo es.
+
+    Se decide por el tipo de sentencia, nunca por el texto: un `DETACH` dentro de una cadena o de un
+    comentario no cuenta (qgis-bridge-spec §5.5). Si el nombre no se puede leer, devuelve "" (desconocido).
+    """
+    if statement.type != "DETACH":
+        return None
+    match = _DETACH_TARGET.match(_COMMENTS.sub(" ", statement.text))
+    if match is None:
+        return ""
+    if match["quoted"] is not None:
+        return match["quoted"].replace('""', '"')
+    return str(match["bare"])

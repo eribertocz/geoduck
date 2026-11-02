@@ -10,7 +10,6 @@ Vive en el hilo principal. Toda finalización del motor se reenvía al hilo prin
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -47,10 +46,17 @@ from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedErr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, StatementResult, StatementStatus
+from geoduck.domain.sql import (
+    DEFAULT_PREVIEW_LIMIT,
+    RunScope,
+    ScriptRun,
+    SqlStatement,
+    StatementResult,
+    StatementStatus,
+    detach_target,
+)
 from geoduck.domain.transaction import CloseChoice, TransactionState
 
-_DETACH = re.compile(r"\bDETACH\b", re.IGNORECASE)
 _log = logging.getLogger("geoduck.app")
 
 Listener = Callable[[AppEvent], None]
@@ -180,6 +186,31 @@ class SessionCoordinator:
                 "Guárdelos o descártelos primero."
             )
 
+    def _detach_guard(self) -> Callable[[SqlStatement], str | None] | None:
+        """Veto de un `DETACH` real (tipo del parser de DuckDB) de una base con capas Conectadas sin
+        guardar (§5.5). Las bases y capas se leen aquí, en el hilo principal; el veto corre en el motor."""
+        blocked = self._loader.unsaved_by_database() if self._loader is not None else {}
+        if not blocked:
+            return None
+
+        def guard(statement: SqlStatement) -> str | None:
+            target = detach_target(statement)
+            if target is None:
+                return None
+            if not target:  # nombre ilegible: se protege todo
+                layers = [n for v in blocked.values() for n in v]
+            else:
+                layers = blocked.get(target.lower(), []) + blocked.get("", [])
+            if not layers:
+                return None
+            names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
+            return (
+                f"No se ejecutó nada: DETACH {target or '(base desconocida)'} con {names} sin guardar. "
+                "Guarde o descarte esos cambios primero."
+            )
+
+        return guard
+
     def detach_database(self, alias: str) -> None:
         """DetachDatabase: `DETACH` real. La sesión pasa por `DETACHING`.
 
@@ -217,8 +248,6 @@ class SessionCoordinator:
         engine = self._require_ready("ejecutar SQL")
         if not text.strip():
             raise SessionStateError("No hay SQL que ejecutar")
-        if _DETACH.search(text):  # conservador: un DETACH escrito en SQL también se protege (§5.5)
-            self._guard_unsaved("ejecutar DETACH")
         self._run_ids += 1
         run_id = self._run_ids
         self._sm.transition(SessionState.BUSY)
@@ -227,6 +256,7 @@ class SessionCoordinator:
             self._dispatcher.post(lambda: self._on_statement(engine, run_id, result))
 
         handle = engine.run_script(
+            guard=self._detach_guard(),
             run_id=run_id,
             text=text,
             scope=scope,

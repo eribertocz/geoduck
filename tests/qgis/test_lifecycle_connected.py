@@ -189,3 +189,37 @@ def test_g3_gate_walkthrough(session, database):
     attach(session, database)
     assert count(connected) == 300
     assert next(connected.getFeatures(QgsFeatureRequest(5)))["nombre"] == "editada"
+
+
+def test_sql_detach_with_unsaved_edits_is_rejected_but_harmless_sql_runs(session, database):
+    """§5.5: solo un DETACH real de la base con cambios sin guardar se rechaza; nada del script corre."""
+    from geoduck.app.events import ScriptFinished, ScriptRejected
+    from geoduck.domain.sql import RunScope
+
+    attach(session, database)
+    layer = load_t(session)
+    assert layer.startEditing()
+    layer.changeAttributeValue(1, layer.fields().indexOf("nombre"), "sin guardar")
+
+    def run(text):
+        before = len(session.events)
+        session.coordinator.execute_sql(text, RunScope.ALL)
+        assert wait_for(
+            lambda: (
+                session.coordinator.state is SessionState.READY
+                and any(isinstance(e, (ScriptFinished, ScriptRejected)) for e in session.events[before:])
+            ),
+            TIMEOUT,
+        )
+        return next(e for e in session.events[before:] if isinstance(e, (ScriptFinished, ScriptRejected)))
+
+    rejected = run("CREATE TABLE d.nueva (x INTEGER); DETACH d")
+    assert isinstance(rejected, ScriptRejected) and "«t»" in rejected.message
+    assert any(db.name == "d" for db in session.coordinator.catalog.databases)
+    tables = session.engine.query("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'nueva'").future
+    assert tables.result(TIMEOUT).rows == ((0,),)  # nada del script se ejecutó
+    harmless = run("SELECT 'DETACH d' AS texto; -- DETACH d\n/* DETACH d */ SELECT 1")
+    assert isinstance(harmless, ScriptFinished) and not harmless.run.failed
+    assert layer.isEditable() and layer.isModified()  # los cambios siguen pendientes
+    layer.rollBack()
+    assert isinstance(run("DETACH d"), ScriptFinished)

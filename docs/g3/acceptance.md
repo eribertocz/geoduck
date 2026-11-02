@@ -10,10 +10,10 @@ Cada fila es una ejecución completa de `tests/qgis` (QGIS headless, `QT_QPA_PLA
 
 | QGIS | DuckDB 1.5.0 | DuckDB 1.5.6 | DuckDB 2.0.0 |
 |---|---|---|---|
-| 3.44.14 (Qt 5) | 93 pasan | 93 pasan | 93 pasan |
-| 4.2.3 (Qt 6) | 93 pasan | 93 pasan | 93 pasan |
+| 3.44.14 (Qt 5) | 96 pasan | 96 pasan | 96 pasan |
+| 4.2.3 (Qt 6) | 96 pasan | 96 pasan | 96 pasan |
 
-Motor y unitarias (`-m "not qgis"`): 609 pasan con DuckDB 1.5.0, 1.5.6 y 2.0.0. ruff, mypy y el test de
+Motor y unitarias (`-m "not qgis"`): 616 pasan con DuckDB 1.5.0, 1.5.6 y 2.0.0. ruff, mypy y el test de
 fronteras de arquitectura (ADR-0010), limpios. La CI de GitHub repite la matriz en cada PR a `main`.
 
 Linux headless **no** certifica Windows (#10 sigue abierta y no bloquea).
@@ -48,17 +48,21 @@ Instantánea siguen intactas; la Conectada queda vacía y no disponible y vuelve
 | Filtro compilado (`c = 3 AND id < 100000`) | 0,05 s | — |
 | Guardado de 10 000 cambios + 1 000 borrados | 0,23 s | — |
 
-## 4. Pendiente de decisión del propietario
+## 4. Decisiones del propietario (2026-11-02), aplicadas
 
-1. **Páginas sin clave primaria** (§5.2 dice `LIMIT n OFFSET m`): se implementó un FID estable con
-   `rowid` o `row_number()` y páginas por FID, porque con filtros de extensión el FID por posición
-   apuntaría a otra fila. Si se aprueba, se actualiza §5.2 con `tools/spec_sync.py --write`.
-2. **DETACH escrito en SQL:** con capas Conectadas sin guardar, cualquier script que contenga la palabra
-   `DETACH` se rechaza (comprobación conservadora en el coordinador; puede bloquear de más, nunca de
-   menos).
-3. **Aviso de transacción abierta del usuario sobre capas Conectadas** (§5.5, última fila): el mapa ya
-   muestra esos cambios y el guardado de la capa se rechaza con aviso mientras la transacción siga
-   abierta. Falta un aviso permanente junto a la capa; el panel ya muestra el estado de la transacción.
+1. **Identificadores sin clave primaria:** se sustituye `OFFSET` porque la identidad queda garantizada tras
+   filtros y relecturas: el FID es la huella del contenido de la fila (§5.1). `rowid` (cambia tras
+   borrar y compactar) y `row_number()` (orden no garantizado) se descartaron. Esas capas siguen siendo
+   de solo lectura. Evidencia: `test_load_connected::test_keyless_fids_survive_filters_rereads_reordering_and_checkpoints`,
+   `::test_identical_rows_are_never_lost_or_repeated_across_pages`.
+2. **DETACH en SQL:** se reconoce por el tipo de sentencia del parser de DuckDB y su base, no por el
+   texto. Si se rechaza, el script entero no se ejecuta. Evidencia:
+   `test_lifecycle_connected::test_sql_detach_with_unsaved_edits_is_rejected_but_harmless_sql_runs`,
+   `test_coordinator_load::test_sql_detach_is_vetoed_only_for_real_detach_statements`,
+   `test_coordinator_load::test_detach_target`,
+   `test_sql_execution::test_guard_vetoes_the_whole_script_before_running_anything`.
+3. **Transacción abierta del usuario:** basta el aviso al guardar; los cambios pendientes se conservan y
+   no hay indicador permanente. Evidencia: `test_edit_connected::test_open_user_transaction_rejects_the_save`.
 
 ## 5. Limitaciones conocidas
 
@@ -67,5 +71,8 @@ Instantánea siguen intactas; la Conectada queda vacía y no disponible y vuelve
   Instantánea.
 - Sin la extensión `spatial` cargada, la extensión de la capa sale de las estadísticas de DuckDB: en
   tablas es una cota superior; en consultas complejas puede faltar («Zoom a la capa» no disponible).
+- Capas sin clave primaria (`fid=content`): filas idénticas comparten FID (QGIS no las distingue, pero
+  se leen todas); cambiar una fila cambia su FID; el FID puede cambiar con otra versión de DuckDB. Dibujar
+  1 M de filas sin clave: 9,4 s (con clave, 5,3 s).
 - Las capas Conectadas de `:memory:`, `TEMP` o de un resultado del editor no sobreviven a la sesión:
   quedan no disponibles y nunca muestran datos homónimos de otra sesión.

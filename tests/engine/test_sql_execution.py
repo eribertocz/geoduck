@@ -289,3 +289,19 @@ def test_result_titles_match_in_every_duckdb_version(worker):
         "Total productos",
         "Respuesta",
     ]
+
+
+def test_guard_vetoes_the_whole_script_before_running_anything(worker):
+    """qgis-bridge-spec §5.5: un DETACH real vetado no deja nada a medias (tampoco lo anterior)."""
+    from geoduck.domain.errors import SessionStateError
+    from geoduck.domain.sql import detach_target
+
+    def guard(st):
+        return "vetado" if detach_target(st) == "d" else None
+
+    run(worker, "ATTACH ':memory:' AS d")
+    with pytest.raises(SessionStateError, match="vetado"):
+        run(worker, "CREATE TABLE antes (x INTEGER); DETACH d", guard=guard)
+    assert query(worker, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'antes'") == ((0,),)
+    ok = run(worker, "SELECT 'DETACH d' AS t; -- DETACH d\nCREATE TABLE despues (x INTEGER)", guard=guard)
+    assert [r.status for r in ok.results] == [StatementStatus.OK, StatementStatus.OK]

@@ -74,6 +74,14 @@ class BridgeLoader:
                 out.append(layer.name())
         return out
 
+    def unsaved_by_database(self) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
+        for edit in self.edits.values():
+            layer = edit.layer
+            if layer.isEditable() and layer.isModified():
+                out.setdefault((edit.provider.database or "").lower(), []).append(layer.name())
+        return out
+
     def session_changed(self, engine: Any | None) -> None:
         """Sesión nueva o cerrada (§5.5): las capas de bases adjuntas usan la activa; las demás solo la
         suya, que deja de existir al cerrarse."""

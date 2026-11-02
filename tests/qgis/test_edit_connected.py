@@ -184,6 +184,7 @@ def test_open_user_transaction_rejects_the_save(session):
     session.sql("BEGIN")
     assert not layer.commitChanges()
     assert any("transacción abierta" in e for e in layer.commitErrors())
+    assert layer.isEditable() and layer.editBuffer().isModified()  # los cambios pendientes se conservan
     session.sql("ROLLBACK")
     assert layer.commitChanges(), layer.commitErrors()
 
