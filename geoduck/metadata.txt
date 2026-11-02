@@ -18,6 +18,7 @@ changelog=0.4.0a2
     - Capa conectada: Capa → Filtrar… funciona, con SQL de DuckDB sobre los campos de la capa.
     - Capa conectada: «Zoom a la capa» también con geometrías vacías en la tabla.
     - Explorador: doble clic sobre una tabla o vista para «Cargar en QGIS…».
+    - Mensajes de carga más claros: origen (tabla, vista o consulta SQL), acceso y avisos breves.
     0.4.0a1 (G3 · QGIS Bridge)
     - «Cargar en QGIS» con tres modalidades: copia en memoria, copia rápida (GeoPackage en /vsimem) y conectada a DuckDB.
     - Capa conectada: lectura bajo demanda por páginas, filtros en DuckDB y edición atómica con detección de conflictos.

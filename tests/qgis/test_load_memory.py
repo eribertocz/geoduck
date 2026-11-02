@@ -192,7 +192,7 @@ def test_unknown_crs_warns_or_uses_the_user_choice(session):
     ev = session.load("SELECT 'POINT(1 2)'::GEOMETRY AS g")
     assert isinstance(ev, LoadFinished)
     assert not QgsProject.instance().mapLayer(ev.report.layer_id).crs().isValid()
-    assert "Capa sin CRS" in ev.report.warnings
+    assert "Sin SRC asignado" in ev.report.warnings
     ev = session.load("SELECT 'POINT(1 2)'::GEOMETRY AS g", crs_override="EPSG:32719")
     assert QgsProject.instance().mapLayer(ev.report.layer_id).crs().authid() == "EPSG:32719"
 

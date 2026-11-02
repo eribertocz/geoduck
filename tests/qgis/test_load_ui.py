@@ -71,7 +71,11 @@ def test_load_button_loads_the_result(plugin, mode):
     assert QgsSettings().value(SETTING) == mode.value
     dialog = AutoDialog.seen[-1]
     assert all(button.isEnabled() for button in dialog.mode_buttons.values())
-    assert "cargada: 500 filas" in plugin.dock.message_label.text()
+    assert (
+        "cargada · " in plugin.dock.message_label.text()
+        and "· 500 entidades" in plugin.dock.message_label.text()
+    )
+    assert "Origen: consulta SQL" in plugin.dock.message_label.text()
 
 
 def test_write_results_cannot_be_loaded(plugin):
@@ -131,7 +135,7 @@ def test_double_click_on_a_table_loads_it_like_the_menu(plugin):
     explorer.itemDoubleClicked.emit(database, 0)
     assert requests == []
     explorer.itemDoubleClicked.emit(table_item(), 0)
-    assert requests == [('SELECT * FROM "memory"."main"."dc"', "dc", ("memory", "main", "dc"))]
+    assert requests == [('SELECT * FROM "memory"."main"."dc"', "dc", ("memory", "main", "dc", "table"))]
     assert wait_for(
         lambda: any(lyr.name() == "dc" for lyr in QgsProject.instance().mapLayers().values()), TIMEOUT
     )

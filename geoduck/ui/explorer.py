@@ -20,7 +20,8 @@ _SOURCE_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 
 
 class CatalogExplorer(QTreeWidget):
-    #: (consulta de lectura, nombre propuesto, `(base, esquema, nombre)`) al elegir «Cargar en QGIS…».
+    #: (consulta de lectura, nombre propuesto, `(base, esquema, nombre, "table"|"view")`) al elegir
+    #: «Cargar en QGIS…».
     load_requested = pyqtSignal(str, str, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -71,7 +72,8 @@ class CatalogExplorer(QTreeWidget):
         item = QTreeWidgetItem([f"{obj.name} ({kind})"])
         item.setData(0, _DATABASE_ROLE, database)
         item.setData(0, _OBJECT_ROLE, object_sql(obj))
-        item.setData(0, _SOURCE_ROLE, (obj.database, obj.schema, obj.name))
+        kind = "table" if obj.kind is ObjectKind.TABLE else "view"
+        item.setData(0, _SOURCE_ROLE, (obj.database, obj.schema, obj.name, kind))
         return item
 
     def _context_menu(self, pos: object) -> None:

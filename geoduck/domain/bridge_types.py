@@ -110,7 +110,7 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
     if upper == "UINTEGER":
         return cast(FieldKind.INT64, "BIGINT", True, "")
     if upper in {"UBIGINT", "HUGEINT", "UHUGEINT", "BIGNUM", "VARINT"}:
-        return cast(FieldKind.TEXT, "VARCHAR", False, f"{t} → texto: no cabe en un entero de 64 bits")
+        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
     if upper in {"FLOAT", "DOUBLE", "REAL"}:
         return same(FieldKind.DOUBLE)
     decimal = _DECIMAL.match(upper)
@@ -118,7 +118,7 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
         precision = int(decimal.group(1))
         if precision <= DOUBLE_SAFE_DIGITS:
             return cast(FieldKind.DOUBLE, "DOUBLE", True, "")
-        return cast(FieldKind.TEXT, "VARCHAR", False, f"{t} → texto: más de {DOUBLE_SAFE_DIGITS} dígitos")
+        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
     if upper == "VARCHAR":
         return same(FieldKind.TEXT)
     if upper == "UUID":
@@ -138,16 +138,16 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
             FieldKind.DATETIME,
             "TIMESTAMP",
             False,
-            f"{t} → microsegundos: se pierde la fracción por debajo de 1 µs",
+            "reducida a microsegundos (solo lectura)",
         )
     if upper == "TIMESTAMP WITH TIME ZONE":
         return same(FieldKind.DATETIME_TZ)
     if upper in {"TIME", "TIME WITH TIME ZONE", "INTERVAL"} or upper.startswith("TIME"):
-        return cast(FieldKind.TEXT, "VARCHAR", False, f"{t} → texto ISO")
+        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto ISO (solo lectura)")
     if upper == "BLOB":
         return same(FieldKind.BINARY)
     if upper == "BIT":
-        return cast(FieldKind.TEXT, "VARCHAR", False, "BIT → texto")
+        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
     if upper.endswith("]") or upper.startswith(_NESTED):
         return FieldPlan(
             name,
@@ -155,9 +155,9 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
             FieldKind.TEXT,
             f"CAST(to_json({col}) AS VARCHAR)",
             False,
-            f"{t} → texto JSON: QGIS no conserva la estructura",
+            "convertida a JSON (solo lectura)",
         )
-    return cast(FieldKind.TEXT, "VARCHAR", False, f"{t} → texto: tipo sin equivalente en QGIS")
+    return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
 
 
 def build_load_plan(
@@ -195,12 +195,12 @@ def build_load_plan(
         seen.add(name)
         if is_geometry_type(source_type):
             if name != primary:
-                warnings.append(f"«{name}»: geometría no primaria omitida")
+                warnings.append(f"Columna «{name}» omitida (geometría secundaria)")
             continue
         plan = plan_field(name, source_type)
         fields.append(plan)
         if plan.note:
-            warnings.append(f"«{name}»: {plan.note}")
+            warnings.append(f"Columna «{name}» ({source_type}) {plan.note}")
 
     select = [f"{f.expression} AS {quote_identifier(f.name)}" for f in fields]
     geom = None

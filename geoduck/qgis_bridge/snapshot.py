@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import FieldKind, LoadPlan
 from geoduck.domain.errors import ErrorCode, GeoDuckError
-from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
 from geoduck.qgis_bridge.memory import LoadCancelledError
 from geoduck.qgis_bridge.vsimem import PREFIX, VsimemRegistry, unlink
@@ -360,8 +360,18 @@ class SnapshotLoad:
         layer = layers[0]
         warnings = plan.warnings
         if len(layers) > 1:
-            warnings = (*warnings, f"Geometrías de varios tipos: {len(layers)} capas, una por tipo")
+            warnings = (*warnings, f"Tipos de geometría mixtos: {len(layers)} capas, una por tipo")
         if plan.geometry is not None and not layer.crs().isValid():
-            warnings = (*warnings, "Capa sin CRS")
+            warnings = (*warnings, "Sin SRC asignado")
         self._on_progress(written)
-        self._on_done(LoadReport(layer.id(), layer.name(), LoadMode.SNAPSHOT, written, warnings))
+        self._on_done(
+            LoadReport(
+                layer.id(),
+                layer.name(),
+                LoadMode.SNAPSHOT,
+                written,
+                warnings,
+                origin=describe_origin(self._request),
+                access=COPY_ACCESS,
+            )
+        )

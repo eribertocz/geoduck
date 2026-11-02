@@ -28,6 +28,8 @@ class LoadRequest:
     #: Tabla o vista del explorador `(base, esquema, nombre)`; None para un resultado del editor. La
     #: modalidad Conectada la usa para la clave y la editabilidad (qgis-bridge-spec §5.1).
     source: tuple[str, str, str] | None = None
+    #: Tipo del origen del explorador: "table" o "view" (para indicarlo en los mensajes).
+    source_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,3 +41,19 @@ class LoadReport:
     mode: LoadMode
     rows: int
     warnings: tuple[str, ...] = field(default=())
+    #: De dónde viene la capa, p. ej. «tabla db.main.consumidores» o «consulta SQL».
+    origin: str = ""
+    #: Acceso de la capa: «lectura y escritura», «solo lectura (…)» o «copia independiente de DuckDB».
+    access: str = ""
+
+
+_KINDS = {"table": "tabla", "view": "vista"}
+COPY_ACCESS = "copia independiente de DuckDB"
+
+
+def describe_origin(request: LoadRequest, kind: str | None = None) -> str:
+    """Origen de una carga en los mensajes: «tabla db.main.t», «vista db.main.v» o «consulta SQL»."""
+    if request.source is None:
+        return "consulta SQL"
+    label = _KINDS.get(kind or request.source_kind or "", "")
+    return f"{label} {'.'.join(request.source)}".strip()

@@ -21,7 +21,7 @@ from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_terminator
 from geoduck.domain.errors import GeoDuckError
-from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import crs_from_field
@@ -78,7 +78,7 @@ def _edit_info(
     db, schema, name = (quote_string_literal(p) for p in source)
     readonly = _rows(handle, f"SELECT readonly FROM duckdb_databases() WHERE database_name = {db}", 1)
     if readonly and readonly[0][0]:
-        return "base de datos de solo lectura", None, []
+        return "solo lectura (base en modo lectura)", None, []
     rows = _rows(
         handle,
         f"SELECT column_name, column_default FROM duckdb_columns() WHERE database_name = {db} "
@@ -136,17 +136,14 @@ def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
         code = int.from_bytes(raw, "little" if h[:2] == "01" else "big")
         types.add(Qgis.WkbType(code))
     if not types:
-        return "Unknown", "Ninguna geometría no nula: tipo de geometría desconocido"
+        return "Unknown", "Sin geometrías: tipo de geometría desconocido"
     if len(types) == 1:
         return Qgis.WkbType(next(iter(types))).name, None
     flat = {QgsWkbTypes.flatType(QgsWkbTypes.multiType(t)) for t in types}
     dims = {(QgsWkbTypes.hasZ(t), QgsWkbTypes.hasM(t)) for t in types}
     if len(flat) == 1 and len(dims) == 1:  # p. ej. Point y MultiPoint: la capa es Multi
         return Qgis.WkbType(QgsWkbTypes.multiType(next(iter(types)))).name, None
-    return (
-        "Unknown",
-        "Geometrías de tipos distintos: la capa se dibuja, pero QGIS no puede simbolizarla por tipo",
-    )
+    return "Unknown", "Tipos de geometría mixtos: simbología por tipo no disponible"
 
 
 def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912
@@ -178,10 +175,10 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         fid, key = "content", None
     readonly: str | None = None
     if request.source is not None and not is_table:
-        readonly = "es una vista y DuckDB no escribe en vistas"
+        readonly = "solo lectura"
     elif not is_table:
         readonly = (
-            "es el resultado de una consulta. Para editar, cargue la tabla desde el explorador "
+            "solo lectura. Para editar, cargue la tabla desde el explorador "
             "(clic derecho o doble clic → Cargar en QGIS…)"
         )
     key_default: str | None = None
@@ -196,6 +193,7 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         "fid": fid,
         "key": key,
         "readonly": readonly,
+        "kind": "table" if is_table else ("view" if request.source is not None else None),
         "default": key_default,
         "defaults": defaults,
         "keys": keys,
@@ -337,13 +335,11 @@ class ConnectedLoad:
             if crs.isValid():
                 params["crs"] = crs.authid() or crs.toWkt()
             else:
-                warnings.append("Capa sin CRS")
+                warnings.append("Sin SRC asignado")
             if meta["extent"] is not None:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
-                warnings.append("Extensión desconocida: «Zoom a la capa» no está disponible")
-        if meta["readonly"] is not None:
-            warnings.append(f"Solo lectura: {meta['readonly']}")
+                warnings.append("Extensión no disponible")
         layer = QgsVectorLayer(encode_uri(params), self._request.layer_name, KEY)
         if not layer.isValid():
             raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
@@ -354,7 +350,15 @@ class ConnectedLoad:
         if self._on_layer is not None:
             self._on_layer(layer)
         self._on_progress(meta["count"])
-        return LoadReport(layer.id(), layer.name(), LoadMode.CONNECTED, meta["count"], tuple(warnings))
+        return LoadReport(
+            layer.id(),
+            layer.name(),
+            LoadMode.CONNECTED,
+            meta["count"],
+            tuple(warnings),
+            origin=describe_origin(self._request, meta["kind"]),
+            access=meta["readonly"] or "lectura y escritura",
+        )
 
     def _end(self, result: LoadReport | BaseException) -> None:
         self._timer.stop()

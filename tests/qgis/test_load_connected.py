@@ -401,13 +401,29 @@ def test_extent_with_empty_geometries_is_computed(session):
         'SELECT * FROM "memory"."main"."vacias"', name="vacias", source=("memory", "main", "vacias")
     )
     assert layer.extent() == QgsRectangle(1, 2, 99, 198)
-    assert not any("Extensión desconocida" in w for w in report.warnings)
+    assert not any("Extensión no disponible" in w for w in report.warnings)
     assert layer.dataProvider().editable  # tabla cargada desde el explorador: editable
 
 
 def test_query_result_explains_how_to_edit(session):
     report, layer = session.load("SELECT * FROM puntos", name="consulta")
     assert not layer.dataProvider().editable
-    assert any(
-        "Solo lectura: es el resultado de una consulta" in w and "doble clic" in w for w in report.warnings
+    assert report.origin == "consulta SQL"
+    assert report.access.startswith("solo lectura") and "doble clic" in report.access
+    assert not any("lectura" in w for w in report.warnings)
+
+
+def test_messages_name_the_origin_and_access(session):
+    """Mensajes de carga (decisión del propietario, 2026-11-02): origen y acceso explícitos."""
+    from geoduck.ui.load_flow import finished_message
+
+    report, _ = load_table(session)
+    assert (report.origin, report.access) == ("tabla memory.main.puntos", "lectura y escritura")
+    session.sql("CREATE VIEW vp AS SELECT * FROM puntos")
+    view, _ = session.load(
+        'SELECT * FROM "memory"."main"."vp"', name="vp", source=("memory", "main", "vp"), source_kind="view"
     )
+    assert (view.origin, view.access) == ("vista memory.main.vp", "solo lectura")
+    text = finished_message(report)
+    assert text.splitlines()[0] == f"Capa «capa» cargada · Conectada · {N:,} entidades".replace(",", " ")
+    assert text.splitlines()[1] == "Origen: tabla memory.main.puntos · Acceso: lectura y escritura"
