@@ -51,6 +51,7 @@ from geoduck.ui.close_dialog import CloseTransactionDialog
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
 from geoduck.ui.explorer import CatalogExplorer
 from geoduck.ui.i18n import tr
+from geoduck.ui.load_flow import LoadFlow
 from geoduck.ui.sql_panel import SqlPanel
 from geoduck.ui.widgets import secondary
 
@@ -93,7 +94,8 @@ class GeoDuckDock(QDockWidget):
         layout.addWidget(self._build_session_card())
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_databases_card(), tr("Bases de datos"))
-        self.sql_panel = SqlPanel(coordinator, on_message=self._show_plain_message)
+        self.load_flow = LoadFlow(coordinator, self._show_plain_message, self)
+        self.sql_panel = SqlPanel(coordinator, on_message=self._show_plain_message, load_flow=self.load_flow)
         self.tabs.addTab(self.sql_panel, tr("SQL"))
         layout.addWidget(self.tabs, 1)
         layout.addWidget(self._build_message())
@@ -110,6 +112,7 @@ class GeoDuckDock(QDockWidget):
         self.create_button.clicked.connect(lambda: self._attach(OpenAction.CREATE_NEW))
         self.detach_button.clicked.connect(self._detach)
         self.explorer.itemSelectionChanged.connect(lambda: self._render(self._coordinator.state))
+        self.explorer.load_requested.connect(self.load_flow.start)
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
         self.refresh_environment()
@@ -283,6 +286,7 @@ class GeoDuckDock(QDockWidget):
     def detach(self) -> None:
         self._unsubscribe()
         self.sql_panel.detach()
+        self.load_flow.detach()
 
     # -- render ------------------------------------------------------------------------------------
 
@@ -343,6 +347,7 @@ class GeoDuckDock(QDockWidget):
         env_ok = self._report is None or self._report.ok
         can_start = env_ok and self._coordinator.can_start
         ready = state is SessionState.READY
+        self.explorer.loading_enabled = ready
         self.state_label.setText(tr(STATE_TEXT[state]))
         self.start_button.setEnabled(can_start)
         aborted = (

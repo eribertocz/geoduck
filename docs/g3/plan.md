@@ -60,7 +60,7 @@ el código del complemento se escribe de nuevo con las fronteras de ADR-0010 y s
 | E1 Lectura normalizada | Hecha | #58 |
 | E2 Memoria | Hecha | #59 |
 | E3 Instantánea | Hecha | #60 |
-| E4 Interfaz «Cargar en QGIS» | Pendiente | — |
+| E4 Interfaz «Cargar en QGIS» | Hecha | #61 |
 | E5 Conectada (lectura) | Pendiente: base en `tools/bench/pyprovider_probe.py`; falta compilador de expresiones, páginas por clave y prioridad en la cola del worker | — |
 | E6 Conectada (edición) | Pendiente: base en `tools/bench/pyprovider_txn_probe.py` (guardado previo, huellas, lotes Arrow con `ConnectionHandle.registered`) | — |
 | E7 Ciclo de vida y aceptación | Pendiente | — |

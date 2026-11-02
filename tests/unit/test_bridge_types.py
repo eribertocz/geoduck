@@ -124,3 +124,10 @@ def test_duplicate_column_names_are_rejected():
 def test_empty_query_is_rejected(sql):
     with pytest.raises(GeoDuckError):
         strip_terminator(sql)
+
+
+def test_prepare_can_propose_the_first_of_several_geometries():
+    plan = build_load_plan("SELECT 1", [("a", "GEOMETRY"), ("b", "GEOMETRY('OGC:CRS84')")], pick_first=True)
+    assert plan.geometry.name == "a"
+    assert [g.name for g in plan.geometries] == ["a", "b"]
+    assert plan.geometries[1].declared_crs == "OGC:CRS84"

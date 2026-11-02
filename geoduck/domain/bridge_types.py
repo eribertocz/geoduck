@@ -62,6 +62,8 @@ class LoadPlan:
     fields: tuple[FieldPlan, ...]
     geometry: GeometryColumn | None
     warnings: tuple[str, ...] = field(default=())
+    #: Todas las columnas geométricas de la consulta, para que el usuario elija la primaria.
+    geometries: tuple[GeometryColumn, ...] = field(default=())
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -163,16 +165,18 @@ def build_load_plan(
     columns: list[tuple[str, str]],
     *,
     geometry: str | None = None,
+    pick_first: bool = False,
 ) -> LoadPlan:
     """`SELECT` normalizado sobre `inner_sql`.
 
     `geometry`: columna geométrica primaria. Si es None y hay una sola columna geométrica, se usa esa; con
-    varias, se exige elegirla. Las geometrías no primarias se omiten con aviso.
+    varias, se exige elegirla (o, con `pick_first`, se propone la primera: para preguntar al usuario). Las
+    geometrías no primarias se omiten con aviso.
     """
     if not columns:
         raise GeoDuckError("La consulta no devuelve columnas", code=ErrorCode.INVALID_ARGUMENT)
     geoms = [(n, t) for n, t in columns if is_geometry_type(t)]
-    if geometry is None and len(geoms) > 1:
+    if geometry is None and len(geoms) > 1 and not pick_first:
         raise GeoDuckError(
             "La consulta tiene varias columnas de geometría; elija cuál cargar: "
             + ", ".join(n for n, _ in geoms),
@@ -205,7 +209,7 @@ def build_load_plan(
         select.append(quote_identifier(primary))
     body = strip_terminator(inner_sql)
     sql = f"SELECT {', '.join(select) or '*'} FROM (\n{body}\n) AS __geoduck_q"  # \n: un `--` final no cierra
-    return LoadPlan(sql, tuple(fields), geom, tuple(warnings))
+    return LoadPlan(sql, tuple(fields), geom, tuple(warnings), tuple(_geometry(n, t) for n, t in geoms))
 
 
 def strip_terminator(sql: str) -> str:
