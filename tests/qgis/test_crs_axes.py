@@ -303,7 +303,7 @@ def test_dialog_offers_reprojection_only_for_copies_with_crs(session):
 
 
 def _dock(session, answers):
-    from geoduck.ui.dock import GeoDuckDock
+    from geoduck.ui.workspace import WorkspaceContent
 
     asked = []
 
@@ -311,7 +311,7 @@ def _dock(session, answers):
         asked.append(title)
         return answers.pop(0)
 
-    dock = GeoDuckDock(session.coordinator, _report, ask_yes_no=ask)
+    dock = WorkspaceContent(session.coordinator, _report, ask_yes_no=ask)
     return dock, asked
 
 

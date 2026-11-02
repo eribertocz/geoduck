@@ -287,7 +287,7 @@ def c_plugin(_args: argparse.Namespace) -> Result:
 
     plugin = geoduck.classFactory(FakeIface())
     plugin.initGui()
-    plugin.dock.start_button.click()
+    plugin.content.start_button.click()
     deadline = time.monotonic() + 30
     while plugin.coordinator.state is not SessionState.READY and time.monotonic() < deadline:
         QCoreApplication.processEvents()

@@ -1,6 +1,6 @@
 # G5 · `v0.6.0a1` Workspace UX — plan
 
-**Estado:** En curso (SPEC aprobada por el propietario con ajustes, 2026-11-02). **ADR-0013.** **Issue:** #49.
+**Estado:** En curso (SPEC aprobada por el propietario con ajustes, 2026-11-02; E0 fusionado). **ADR-0013.** **Issue:** #49.
 **Requisitos:** GD-UX-001..008. **Contrato:** `spec/specs/ui-ux-spec.md` §8; session-spec §2 (`CloseSession`);
 qgis-bridge-spec §1 (interfaz); maqueta aprobada en issue #49, copiada en `docs/g5/maqueta/`.
 
@@ -35,4 +35,5 @@ maqueta; regresiones G0–G4 completas. Tag y release `v0.6.0a1` solo con autori
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, roadmap, ADR y plan | En revisión | — |
+| E0 SPEC, roadmap, ADR y plan | Fusionado (maqueta en `docs/g5/maqueta/`, #76) | #75 |
+| E1 Workspace y dos shells | En revisión: `WorkspaceContent` (antes `GeoDuckDock`), `WindowShell` por defecto (hija de QGIS, la X oculta) y `DockShell` (mismo `objectName`), `WorkspaceController` con traslado del mismo contenido, modo guardado en `geoduck/workspace/` (esquema 1); AT-UX-002, 003, 011 en `tests/qgis/test_workspace.py` | — |

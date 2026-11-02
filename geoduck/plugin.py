@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
@@ -22,8 +21,9 @@ from geoduck.app.ports import SessionEngine
 from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
 from geoduck.infra.diagnostics import collect
 from geoduck.ui.dispatcher import QtDispatcher
-from geoduck.ui.dock import GeoDuckDock
 from geoduck.ui.i18n import tr
+from geoduck.ui.workspace import WorkspaceContent
+from geoduck.ui.workspace_controller import WorkspaceController
 
 _log = logging.getLogger("geoduck")
 
@@ -160,7 +160,8 @@ class GeoDuckPlugin:
         self.iface = iface
         self.action: QAction | None = None
         self.about_action: QAction | None = None
-        self.dock: GeoDuckDock | None = None
+        self.content: WorkspaceContent | None = None
+        self.workspace: WorkspaceController | None = None
         self.dispatcher: QtDispatcher | None = None
         self.coordinator: SessionCoordinator | None = None
         self.loader: Any = None
@@ -174,16 +175,17 @@ class GeoDuckPlugin:
         self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, self.loader)
         self.loader.on_data_changed = self.coordinator.mark_data_changed
         self.coordinator.subscribe(self._on_app_event)
-        self.dock = GeoDuckDock(self.coordinator, run_diagnostics, self.iface.mainWindow())
-        self.dock.hide()
-        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
+        # Un solo workspace (contenido + controlador) con dos presentaciones (ADR-0013, ui-ux-spec §8)
+        self.content = WorkspaceContent(self.coordinator, run_diagnostics)
+        self.workspace = WorkspaceController(self.iface, self.content)
 
         self.action = QAction(QIcon(ICON), tr("GeoDuck"), self.iface.mainWindow())
-        self.action.setObjectName("geoduckToggleDock")
+        self.action.setObjectName("geoduckToggleDock")  # nombre de G0–G4: conserva atajos del usuario
         self.action.setCheckable(True)
-        self.action.setToolTip(tr("Mostrar u ocultar el panel de GeoDuck"))
-        self.action.toggled.connect(self.dock.setVisible)
-        self.dock.visibilityChanged.connect(self.action.setChecked)
+        self.action.setToolTip(tr("Mostrar u ocultar GeoDuck"))
+        # `triggered` (clic del usuario), no `toggled`: sincronizar la marca no muestra ni oculta nada
+        self.action.triggered.connect(self.workspace.set_visible)
+        self.workspace.shown_changed.connect(self.action.setChecked)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.action)
         self.iface.addDatabaseToolBarIcon(self.action)
         # Convención de QGIS: «Acerca de…» en el menú del complemento (Base de datos › GeoDuck).
@@ -193,9 +195,9 @@ class GeoDuckPlugin:
             self.iface.mainWindow(),
         )
         self.about_action.setObjectName("geoduckAbout")
-        self.about_action.triggered.connect(self.dock.show_about)
+        self.about_action.triggered.connect(self.content.show_about)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.about_action)
-        self.validity = GeometryValidity(self.iface, self.dock.show_text)
+        self.validity = GeometryValidity(self.iface, self.content.show_text)
 
     def _on_app_event(self, event: object) -> None:
         if isinstance(event, LoadFinished) and self.validity is not None:
@@ -222,11 +224,12 @@ class GeoDuckPlugin:
             self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), self.action)
             self.iface.removeDatabaseToolBarIcon(self.action)
             self.action.deleteLater()
-        if self.dock is not None:
-            self.dock.detach()
-            self.iface.removeDockWidget(self.dock)
-            self.dock.deleteLater()
+        if self.content is not None:
+            self.content.detach()
+        if self.workspace is not None:
+            self.workspace.unload()  # borra los shells y, con ellos, el contenido
         if self.dispatcher is not None:
             self.dispatcher.deleteLater()
         self.action = self.about_action = None
-        self.dock = self.dispatcher = self.coordinator = None
+        self.content = self.workspace = None
+        self.dispatcher = self.coordinator = None

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Panel acoplable de GeoDuck: estado de sesión, inicio/cierre, bases de datos y diagnóstico.
+"""Contenido único del workspace de GeoDuck (ui-ux-spec §8, ADR-0013): sesión, bases, SQL y diagnóstico.
 
-G1 añade el explorador del catálogo y los controles «Abrir existente», «Crear nueva» y «Desadjuntar»
-(GD-SES-002..004, GD-CAT-001). El editor SQL llega en G2 (spec/docs/roadmap.md).
+Es el mismo widget en la ventana propia y en el panel acoplado (`ui.shells`); cambiar de presentación lo
+traslada de contenedor sin recrearlo. Nada aquí depende del contenedor que lo muestra.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from collections.abc import Callable
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont
 from qgis.PyQt.QtWidgets import (
-    QDockWidget,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -73,7 +72,9 @@ STATE_TEXT = {
 _CAN_CLOSE = {SessionState.CONNECTING, SessionState.READY, SessionState.BUSY, SessionState.ERROR_RECOVERABLE}
 
 
-class GeoDuckDock(QDockWidget):
+class WorkspaceContent(QWidget):
+    """Explorador, editor SQL, resultados, mensajes y estado. Una sola instancia por GeoDuck (ADR-0013)."""
+
     def __init__(
         self,
         coordinator: SessionCoordinator,
@@ -84,8 +85,8 @@ class GeoDuckDock(QDockWidget):
         ask_attach_request: Callable[[OpenAction, QWidget], AttachRequest | None] | None = None,
         ask_yes_no: Callable[[QWidget, str, str], bool] | None = None,
     ) -> None:
-        super().__init__(tr("GeoDuck"), parent)
-        self.setObjectName("GeoDuckDock")
+        super().__init__(parent)
+        self.setObjectName("GeoDuckWorkspaceContent")
         self._coordinator = coordinator
         self._run_diagnostics = run_diagnostics
         self._report: DiagnosticReport | None = None
@@ -93,8 +94,7 @@ class GeoDuckDock(QDockWidget):
         self._ask_attach_request = ask_attach_request or AttachDialog.ask
         self._ask_yes_no = ask_yes_no or _ask_yes_no
 
-        body = QWidget(self)
-        layout = QVBoxLayout(body)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 6)
         layout.setSpacing(8)
         layout.addLayout(self._build_header())
@@ -108,7 +108,6 @@ class GeoDuckDock(QDockWidget):
         layout.addWidget(self._build_message())
         layout.addWidget(self._build_env_banner())
         layout.addLayout(self._build_footer())
-        self.setWidget(body)
 
         self.start_button.clicked.connect(self._start)
         self.rollback_button.clicked.connect(self._coordinator.rollback_transaction)

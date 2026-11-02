@@ -184,7 +184,7 @@ def test_layer_menu_action_diagnoses_and_selects(iface, session):
         plugin.validity.action.trigger()
         assert wait_for(lambda: bool(shown), TIMEOUT)
         assert sorted(f["id"] for f in layer.selectedFeatures()) == [2, 3]
-        assert "2 inválidas" in plugin.dock.message_label.text()
+        assert "2 inválidas" in plugin.content.message_label.text()
     finally:
         plugin.unload()
     assert not iface.layer_actions

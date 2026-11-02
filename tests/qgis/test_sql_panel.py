@@ -20,9 +20,9 @@ def session(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
     coordinator = plugin.coordinator
-    plugin.dock.start_button.click()
+    plugin.content.start_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY and coordinator.catalog is not None)
-    yield plugin, plugin.dock.sql_panel, coordinator
+    yield plugin, plugin.content.sql_panel, coordinator
     plugin.unload()
 
 
@@ -82,7 +82,7 @@ def test_error_marks_the_line_and_stops(session):
     assert [s for _n, _t, s in log(panel)] == ["OK", "Error", "No ejecutada"]
     assert panel.editor.getCursorPosition()[0] == 1  # el cursor va a la línea del error
     assert panel.log.item(1, 3).font().bold()  # el error destaca en el registro
-    assert "nada" in plugin.dock.message_label.text()
+    assert "nada" in plugin.content.message_label.text()
 
 
 def test_current_statement_only(session):
@@ -115,7 +115,7 @@ def test_aborted_transaction_shows_rollback_and_recovers(session):
     run(panel, coordinator, "BEGIN; INSERT INTO u VALUES (1);")
     assert coordinator.state is SessionState.ERROR_RECOVERABLE
     assert coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
-    dock = plugin.dock
+    dock = plugin.content
     assert not dock.rollback_button.isHidden() and not panel.run_all_button.isEnabled()
     dock.rollback_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY)
@@ -133,9 +133,9 @@ def test_editor_results_and_log_are_in_a_resizable_splitter(session):
     assert splitter.isAncestorOf(panel.editor)
     assert splitter.isAncestorOf(panel.results_stack) and splitter.isAncestorOf(panel.log)
     assert not splitter.isCollapsible(0) and not splitter.isCollapsible(1)  # el registro sí se puede plegar
-    plugin.dock.resize(460, 900)
-    plugin.dock.show()
-    plugin.dock.tabs.setCurrentWidget(panel)
+    plugin.content.resize(460, 900)
+    plugin.content.show()
+    plugin.content.tabs.setCurrentWidget(panel)
     splitter.setSizes([500, 200, 100])
     first = splitter.sizes()[0]
     splitter.setSizes([150, 550, 100])
@@ -177,7 +177,7 @@ def test_about_dialog_shows_version_license_links_and_components(session):
     from geoduck.ui.about_dialog import AboutDialog
 
     plugin, _panel, coordinator = session
-    dialog = AboutDialog(plugin.dock._report, coordinator.engine_info, plugin.dock)
+    dialog = AboutDialog(plugin.content._report, coordinator.engine_info, plugin.content)
     texts = " ".join(w.text() for w in dialog.findChildren(QLabel))
     assert __version__ in texts and "GPL-2.0-or-later" in dialog.links.text()
     assert "github.com/eribertocz/geoduck" in dialog.links.text() and dialog.links.openExternalLinks()
@@ -191,5 +191,5 @@ def test_displayed_version_is_the_real_package_version(session):
     from geoduck.ui.about_dialog import version_text
 
     plugin, _panel, _coordinator = session
-    assert plugin.dock.version_label.text() == f"v{__version__} · Alpha"
+    assert plugin.content.version_label.text() == f"v{__version__} · Alpha"
     assert version_text() == f"Versión {__version__} · Alpha"
