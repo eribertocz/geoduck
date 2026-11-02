@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 89787,
-      "sha256": "5e715b459f9517e9da539a320b12ec84dd2480f75988db260564bdc9ebbc3c3f"
+      "bytes": 89987,
+      "sha256": "9a8c03ead6d13001cc042bc41def4c9a7b54ef55a47787602f68eea7f6152a7a"
     },
     {
       "path": "README.md",
@@ -50,6 +50,11 @@
       "sha256": "ea2399898a75a2f052313aabd22c53174aae4fc78622e5b55b8c4dae0b945a6c"
     },
     {
+      "path": "docs/adr/0008-geoarrow-geometry-transport.md",
+      "bytes": 2026,
+      "sha256": "1865d7edcddcf6c6970e62185a49fa96554ff70fb25e3dab6dafaa7e7f11b1a5"
+    },
+    {
       "path": "docs/adr/0009-pyarrow-selection-by-matrix.md",
       "bytes": 4626,
       "sha256": "6ba386e972400c86756673fea5e1932bde9e67f217208742b68f6569d689e624"
@@ -66,8 +71,8 @@
     },
     {
       "path": "docs/adr/README.md",
-      "bytes": 1641,
-      "sha256": "43a9c9dac5751778106fdb5eeb65aaa185856c377a6dc502c3e6c6fcc108a415"
+      "bytes": 1852,
+      "sha256": "022aff82275c4ccc4ae9fde11b4e01e6afb5294b3a316af9d6f906bf28445e91"
     },
     {
       "path": "docs/architecture.md",
@@ -136,8 +141,8 @@
     },
     {
       "path": "specs/spatial-spec.md",
-      "bytes": 7691,
-      "sha256": "18464d16f61c8c5ba0a191b155106bf60ee2955a185db0b9ab85010ea9f80630"
+      "bytes": 7891,
+      "sha256": "9153560545fde95d842e9fc89f61b253c786d1c9db4f08b7821216fee9234b13"
     },
     {
       "path": "specs/sql-editor-spec.md",

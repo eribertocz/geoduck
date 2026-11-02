@@ -1,6 +1,6 @@
-# G2 · `v0.3.0a1` SQL Execution — Documento de aceptación (propuesta de cierre)
+# G2 · `v0.3.0a1` SQL Execution — Documento de aceptación
 
-**Estado:** Propuesta para aprobación (2026-11-01). G2 se cierra al aprobarse y fusionarse este documento.
+**Estado:** **Aprobado para cierre** (2026-11-01). G2 queda cerrado al fusionar este documento.
 Sin tag ni release. **Commit verificado:** `cb81e8a` en `main` (merge de #54).
 
 ## 1. Requisitos y gate
