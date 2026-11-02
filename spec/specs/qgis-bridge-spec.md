@@ -132,21 +132,30 @@ Entre páginas el worker queda libre.
 
 ### 5.4 Edición
 
-**Qué es editable:** solo una tabla base, de una base no `READ_ONLY`, cuya clave primaria es una sola
-columna entera y coincide con `key`. También las tablas `TEMP`. Lo demás es de solo lectura, con el
-motivo visible.
+**Qué es editable** (decisión del propietario, 2026-11-02, como QGIS con PostGIS): toda tabla base de
+una base que no es `READ_ONLY`, incluidas las `TEMP`, con o sin clave (§5.1). Las vistas y las consultas
+son de solo lectura, porque DuckDB no escribe en ellas; el motivo se muestra. Las columnas que identifican
+la entidad (la clave) y las que §7 convierte con pérdida no se pueden cambiar.
 
 **Guardado atómico:** GeoDuck escucha `QgsVectorLayer.beforeCommitChanges`, lee el búfer de edición y, en
 una sola operación del worker, ejecuta:
 
-1. `BEGIN`. Si la sesión ya tiene una transacción abierta, se rechaza el guardado con aviso.
-2. **Conflictos:** compara `hash(fila completa)` de cada fila cambiada o borrada con la huella registrada
-   cuando QGIS la leyó. Si alguna difiere o falta, ROLLBACK y se informa la lista de entidades en
-   conflicto.
-3. **Validación previa:** tipo de geometría compatible con la capa y prohibición de cambiar la clave.
-4. **Escrituras por lotes** con tablas Arrow registradas en la operación: `UPDATE … FROM`,
-   `INSERT … SELECT` y `DELETE … WHERE key IN (SELECT …)`. Los ids de las altas se piden antes con
-   `nextval` de la secuencia de la clave; si no hay secuencia, el usuario indica el id.
+1. `BEGIN`. Si la sesión ya tiene una transacción abierta, se rechaza el guardado con aviso y QGIS
+   conserva todos los cambios pendientes para guardarlos después (decisión del propietario, 2026-11-02).
+2. **Localizar y comprobar:** cada fila cambiada o borrada se busca por su identificador (clave, valores
+   de la clave en `fid=map`, o `rowid`) y se toma su `rowid` y su `hash(fila completa)`. Si falta, o su
+   huella difiere de la registrada cuando QGIS la leyó, ROLLBACK y se informa la lista de entidades en
+   conflicto. Así, si DuckDB compactó la tabla y un `rowid` pasó a otra fila, se detecta: **nunca se
+   escribe en otra fila**.
+3. **Validación previa** (antes de tocar DuckDB): tipo de geometría compatible con la capa, columnas de
+   la clave sin cambios, columnas convertidas por §7 sin cambios, y valor para la clave de cada alta si
+   DuckDB no lo pone.
+4. **Escrituras por lotes por `rowid`** (estable dentro de la transacción) con tablas Arrow registradas en
+   la operación: `UPDATE … FROM`, `DELETE … WHERE rowid IN (SELECT …)` e `INSERT … SELECT`. Altas: con
+   clave entera, los ids se piden antes con `nextval` (o los indica el usuario); con otra clave, se
+   escriben los valores dados, y una columna sin valor en ninguna alta toma su valor por defecto en
+   DuckDB. Si hay altas sin clave entera o borrados, la capa se relee tras el `COMMIT` (los
+   identificadores nuevos o movidos se leen de DuckDB).
 5. `COMMIT`. Cualquier error o cancelación provoca ROLLBACK.
 
 Después, los métodos del proveedor solo informan el veredicto. **QGIS informa éxito solo si DuckDB
@@ -163,7 +172,7 @@ que sobrescribe a sabiendas, o descartar sus cambios.
 | DETACH de la base, o cierre de la sesión | Rechazado si una capa conectada de esa base tiene cambios sin guardar. Si no, las capas quedan **no disponibles**: vacías, con aviso y sin errores |
 | ATTACH de nuevo con el mismo alias | Las capas vuelven a estar disponibles y se repintan |
 | Reabrir el proyecto | Disponible si la sesión tiene adjunta esa base; si no, no disponible hasta adjuntarla. Las capas sobre `:memory:` o `TEMP` no sobreviven |
-| Cambios sin confirmar del usuario | Visibles en el mapa, porque es la misma conexión; se avisa mientras haya una transacción abierta |
+| Cambios sin confirmar del usuario | Visibles en el mapa, porque es la misma conexión. El aviso llega al guardar la capa (paso 1 de §5.4); no hay indicador permanente junto a la capa (decisión del propietario, 2026-11-02) |
 
 ## 6. Hilos y estabilidad
 

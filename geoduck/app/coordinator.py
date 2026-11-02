@@ -260,6 +260,10 @@ class SessionCoordinator:
         if changed and self.state is SessionState.READY:
             self.refresh_catalog()  # GD-SES-003 (SQL): ATTACH/DETACH/CREATE/DROP se reflejan en el panel
 
+    def mark_data_changed(self) -> None:
+        """Un guardado de una capa Conectada cambió datos de la sesión (qgis-bridge-spec §5.4)."""
+        self._bump_epoch()
+
     def _bump_epoch(self) -> None:
         self._data_epoch += 1
         self._emit(PreviewsInvalidated(self._data_epoch))

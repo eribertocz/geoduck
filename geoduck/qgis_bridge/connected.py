@@ -70,6 +70,26 @@ def _source_info(handle: Any, source: tuple[str, str, str]) -> tuple[bool, list[
     return True, unique[0]
 
 
+def _edit_info(
+    handle: Any, source: tuple[str, str, str], key: str | None
+) -> tuple[str | None, str | None, list[str]]:
+    """(motivo por el que no es editable o None, `nextval(...)` de la clave entera, columnas con valor
+    por defecto: en una alta sin valor, DuckDB lo pone)."""
+    db, schema, name = (quote_string_literal(p) for p in source)
+    readonly = _rows(handle, f"SELECT readonly FROM duckdb_databases() WHERE database_name = {db}", 1)
+    if readonly and readonly[0][0]:
+        return "base de datos de solo lectura", None, []
+    rows = _rows(
+        handle,
+        f"SELECT column_name, column_default FROM duckdb_columns() WHERE database_name = {db} "
+        f"AND schema_name = {schema} AND table_name = {name} AND column_default IS NOT NULL",
+        10_000,
+    )
+    defaults = {str(c): str(d) for c, d in rows}
+    expr = defaults.get(key) if key else None
+    return None, expr if expr and expr.lower().startswith("nextval(") else None, sorted(defaults)
+
+
 def _extent_from_stats(value: Any) -> tuple[float, float, float, float] | None:
     """Extensión desde `stats(geom)`: dict en DuckDB 2.x, texto en 1.5."""
     try:
@@ -125,6 +145,11 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         fid, key = "rowid", None  # como `ctid` en PostgreSQL
     else:
         fid, key = "content", None
+    readonly: str | None = None if is_table else "DuckDB no escribe en vistas ni en consultas"
+    key_default: str | None = None
+    defaults: list[str] = []
+    if is_table and request.source is not None:
+        readonly, key_default, defaults = _edit_info(handle, request.source, key)
     count = int(_rows(handle, f"SELECT count(*) FROM (\n{inner}\n) AS __geoduck_q", 1)[0][0])
     token.raise_if_cancelled()
     out: dict[str, Any] = {
@@ -132,6 +157,9 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         "columns": columns,
         "fid": fid,
         "key": key,
+        "readonly": readonly,
+        "default": key_default,
+        "defaults": defaults,
         "keys": keys,
         "table": is_table,
         "source": source_sql,
@@ -249,6 +277,9 @@ class ConnectedLoad:
             "geom": plan.geometry.name if plan.geometry is not None else None,
             "fid": meta["fid"],
             "key": meta["key"],
+            "edit": "1" if meta["readonly"] is None else None,
+            "default": meta["default"],
+            "defaults": json.dumps(meta["defaults"]) if meta["defaults"] else None,
             "keys": json.dumps(meta["keys"]) if meta["fid"] == "map" else None,
             "count": meta["count"],
             "columns": meta["columns"],
@@ -267,8 +298,8 @@ class ConnectedLoad:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
                 warnings.append("Extensión desconocida: «Zoom a la capa» no está disponible")
-        if not meta["table"]:
-            warnings.append("Solo lectura: DuckDB no escribe en vistas ni en consultas")
+        if meta["readonly"] is not None:
+            warnings.append(f"Solo lectura: {meta['readonly']}")
         layer = QgsVectorLayer(encode_uri(params), self._request.layer_name, KEY)
         if not layer.isValid():
             raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
