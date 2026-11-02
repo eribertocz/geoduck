@@ -16,7 +16,7 @@ from typing import Any
 from qgis.core import QgsApplication
 from qgis.gui import QgsCodeEditorSQL
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont, QKeySequence
+from qgis.PyQt.QtGui import QFont, QKeySequence, QResizeEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -168,20 +168,29 @@ class ResultView(QWidget):
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setAlternatingRowColors(True)
         table.verticalHeader().setDefaultSectionSize(table.fontMetrics().height() + 8)
-        table.setHorizontalHeaderLabels(list(preview.columns))
+        # Tipo por columna (ui-ux-spec §8, AT-UX-007): «#» numérica, «Aa» texto; el tipo exacto, en la ayuda
+        table.setHorizontalHeaderLabels(
+            [column_header(name, kind) for name, kind in zip(preview.columns, preview.types, strict=True)]
+        )
         for c, kind in enumerate(preview.types):
             header = table.horizontalHeaderItem(c)
             if header is not None:
                 header.setToolTip(kind)
+                header.setData(Qt.ItemDataRole.AccessibleTextRole, f"{preview.columns[c]}, {kind}")
         null_font = QFont(table.font())
         null_font.setItalic(True)
         numeric = {i for i, kind in enumerate(preview.types) if _is_numeric(kind)}
         for r, row in enumerate(preview.rows):
             for c, value in enumerate(row):
                 item = QTableWidgetItem("NULL" if value is None else str(value))
-                if value is None:
+                if value is None:  # NULL ≠ "" y ≠ el texto 'NULL': cursiva atenuada y su propia ayuda
                     item.setFont(null_font)
                     item.setForeground(secondary_color(self))
+                    item.setToolTip(tr("NULL: sin valor"))
+                    item.setData(Qt.ItemDataRole.AccessibleTextRole, tr("NULL, sin valor"))
+                elif value == "":
+                    item.setToolTip(tr("Cadena vacía"))
+                    item.setData(Qt.ItemDataRole.AccessibleTextRole, tr("cadena vacía"))
                 if c in numeric:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 table.setItem(r, c, item)
@@ -196,6 +205,18 @@ class ResultView(QWidget):
 
     def mark_stale(self) -> None:
         self.stale_label.show()
+
+
+def column_header(name: str, kind: str) -> str:
+    if _is_numeric(kind):
+        return f"# {name}"
+    if _is_text(kind):
+        return f"Aa {name}"
+    return name
+
+
+def _is_text(kind: str) -> bool:
+    return kind.split("(", maxsplit=1)[0].upper() in {"VARCHAR", "TEXT", "STRING", "CHAR", "BPCHAR"}
 
 
 def _is_numeric(kind: str) -> bool:
@@ -226,7 +247,15 @@ class SqlPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(4)
-        layout.addLayout(self._build_actions())
+        # La fila de acciones no impone su ancho con texto: si no cabe, se compacta (resizeEvent)
+        self.actions_bar = QWidget()
+        self.actions_bar.setLayout(self._build_actions())
+        self.actions_bar.layout().setContentsMargins(0, 0, 0, 0)
+        self._wide_width = self.actions_bar.sizeHint().width()  # con texto
+        self.set_compact(True)
+        self.actions_bar.setMinimumWidth(self.actions_bar.sizeHint().width())  # el mínimo: solo iconos
+        self.set_compact(False)
+        layout.addWidget(self.actions_bar)
         self.editor = QgsCodeEditorSQL()
         self.editor.setAccessibleName(tr("Editor SQL"))
         self.editor.setMinimumHeight(60)
@@ -249,12 +278,32 @@ class SqlPanel(QWidget):
         self.run_all_button.clicked.connect(lambda: self.execute(RunScope.ALL))
         self.cancel_button.clicked.connect(self._coordinator.cancel_current_operation)
         self.log.cellDoubleClicked.connect(self._select_logged_statement)
-        QShortcut(QKeySequence("Ctrl+Return"), self.editor, lambda: self.execute(RunScope.CURRENT))
-        QShortcut(QKeySequence("Ctrl+Shift+Return"), self.editor, lambda: self.execute(RunScope.ALL))
+        # Atajos solo con el foco dentro del panel SQL, nunca en el resto de QGIS (§8, AT-UX-013)
+        self.shortcuts = []
+        for keys, scope in (("Ctrl+Return", RunScope.CURRENT), ("Ctrl+Shift+Return", RunScope.ALL)):
+            shortcut = QShortcut(QKeySequence(keys), self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda s=scope: self.execute(s))
+            self.shortcuts.append(shortcut)
         self._unsubscribe = coordinator.subscribe(self._on_event)
         self._render(coordinator.state)
 
     # -- construcción ------------------------------------------------------------------------------
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - API de Qt
+        super().resizeEvent(event)
+        self.set_compact(event.size().width() < self._wide_width)
+
+    def set_compact(self, compact: bool) -> None:
+        """Panel estrecho: los botones quedan solo con icono (con su ayuda y nombre accesible); nunca se
+        quita una acción (ui-ux-spec §8)."""
+        style = (
+            Qt.ToolButtonStyle.ToolButtonIconOnly if compact else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        for button in self.action_buttons:
+            button.setToolButtonStyle(style)
+        self.limit_label.setVisible(not compact)
+        self.compact = compact
 
     def _build_actions(self) -> QHBoxLayout:
         self.run_current_button = _tool_button(
@@ -274,6 +323,15 @@ class SqlPanel(QWidget):
             self.limit_combo.addItem(str(limit), limit)
         self.limit_combo.setCurrentIndex(PREVIEW_LIMITS.index(DEFAULT_PREVIEW_LIMIT))
         self.limit_combo.setToolTip(tr("Filas de cada vista previa"))
+        self.action_buttons = (
+            self.run_current_button,
+            self.run_selection_button,
+            self.run_all_button,
+            self.cancel_button,
+        )
+        for button in self.action_buttons:
+            button.setAccessibleName(button.text())
+        self.compact = False
         actions = QHBoxLayout()
         actions.setSpacing(2)
         for widget in (self.run_current_button, self.run_selection_button, self.run_all_button):
@@ -284,7 +342,8 @@ class SqlPanel(QWidget):
         actions.addWidget(separator)
         actions.addWidget(self.cancel_button)
         actions.addStretch(1)
-        actions.addWidget(secondary(QLabel(tr("Filas"))))
+        self.limit_label = secondary(QLabel(tr("Filas")))
+        actions.addWidget(self.limit_label)
         actions.addWidget(self.limit_combo)
         return actions
 

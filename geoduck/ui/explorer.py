@@ -2,7 +2,9 @@
 """Explorador del catálogo de la sesión: bases, esquemas, tablas y vistas (GD-CAT-001, AT-CAT-001).
 
 Solo muestra la instantánea que publica la capa de aplicación, leída de DuckDB después de cada operación
-con éxito; nunca la modifica por su cuenta ni la anticipa.
+con éxito; nunca la modifica por su cuenta ni la anticipa. G5 (ui-ux-spec §8, AT-UX-006): objetos agrupados
+en «Tablas (n)» y «Vistas (n)» por esquema, temporales en «Tablas temporales (n)» / «Vistas temporales (n)»
+bajo la base raíz, acceso de cada base y búsqueda sobre esa instantánea (nunca lee filas ni consulta DuckDB).
 """
 
 from __future__ import annotations
@@ -10,13 +12,14 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QMenu, QTreeWidget, QTreeWidgetItem, QWidget
 
-from geoduck.domain.catalog import AccessMode, CatalogObject, CatalogSnapshot, ObjectKind
+from geoduck.domain.catalog import AccessMode, AttachedDatabase, CatalogObject, CatalogSnapshot, ObjectKind
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui.i18n import tr
 
 _DATABASE_ROLE = int(Qt.ItemDataRole.UserRole)
 _OBJECT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 _SOURCE_ROLE = int(Qt.ItemDataRole.UserRole) + 2
+_NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 
 
 class CatalogExplorer(QTreeWidget):
@@ -34,47 +37,97 @@ class CatalogExplorer(QTreeWidget):
         self.setAccessibleName(tr("Explorador de bases de datos"))
         self.setMinimumHeight(140)
         self._catalog: CatalogSnapshot | None = None
+        self._filter = ""
 
     def show_catalog(self, catalog: CatalogSnapshot | None) -> None:
         self._catalog = catalog
         self.clear()
         if catalog is None:
             return
+        temporaries = catalog.temporaries
+        temp_placed = False
         for db in catalog.databases:
-            notes = []
-            if catalog.is_root(db.name):
-                notes.append(tr("raíz"))
-            if catalog.default_database.key == db.key:
-                notes.append(tr("en uso"))
-            if db.access is AccessMode.READ_ONLY:
-                notes.append(tr("solo lectura"))
-            label = db.name + (f" · {', '.join(notes)}" if notes else "")
-            item = QTreeWidgetItem([label])
+            item = QTreeWidgetItem([database_label(catalog, db)])
             item.setData(0, _DATABASE_ROLE, db.name)
+            item.setData(0, _NAME_ROLE, db.name)
             item.setToolTip(0, db.path or tr("En memoria"))
             for schema in catalog.schemas_of(db.name):
                 schema_item = QTreeWidgetItem([schema])
                 schema_item.setData(0, _DATABASE_ROLE, db.name)
-                for obj in catalog.objects_in(db.name, schema):
-                    schema_item.addChild(self._object_item(obj, db.name))
+                schema_item.setData(0, _NAME_ROLE, schema)
+                objects = catalog.objects_in(db.name, schema)
+                self._add_group(
+                    schema_item, tr("Tablas"), [o for o in objects if o.kind is ObjectKind.TABLE], db.name
+                )
+                self._add_group(
+                    schema_item, tr("Vistas"), [o for o in objects if o.kind is ObjectKind.VIEW], db.name
+                )
+                if catalog.is_root(db.name) and schema == "main" and temporaries:
+                    self._add_temporaries(schema_item, temporaries)
+                    temp_placed = True
                 item.addChild(schema_item)
             self.addTopLevelItem(item)
-            item.setExpanded(True)
-        if catalog.temporaries:
-            temp = QTreeWidgetItem([tr("Temporales de la sesión")])
-            for obj in catalog.temporaries:
-                temp.addChild(self._object_item(obj, None))
-            self.addTopLevelItem(temp)
+        if temporaries and not temp_placed:  # sin esquema «main» en la raíz: grupos en la raíz del árbol
+            holder = QTreeWidgetItem([tr("Temporales de la sesión")])
+            self._add_temporaries(holder, temporaries)
+            self.addTopLevelItem(holder)
+        self.expandToDepth(2)  # bases, esquemas y grupos desplegados: los objetos a la vista
+        self.set_filter(self._filter)
+
+    def _add_temporaries(self, parent: QTreeWidgetItem, temporaries: tuple[CatalogObject, ...]) -> None:
+        tables = [o for o in temporaries if o.kind is ObjectKind.TABLE]
+        views = [o for o in temporaries if o.kind is ObjectKind.VIEW]
+        self._add_group(parent, tr("Tablas temporales"), tables, None)
+        self._add_group(parent, tr("Vistas temporales"), views, None)
+
+    def _add_group(
+        self, parent: QTreeWidgetItem, title: str, objects: list[CatalogObject], database: str | None
+    ) -> None:
+        if not objects:
+            return
+        group = QTreeWidgetItem([f"{title} ({len(objects)})"])
+        group.setData(0, _DATABASE_ROLE, database)
+        for obj in objects:
+            group.addChild(self._object_item(obj, database))
+        parent.addChild(group)
 
     @staticmethod
     def _object_item(obj: CatalogObject, database: str | None) -> QTreeWidgetItem:
         kind = tr("tabla") if obj.kind is ObjectKind.TABLE else tr("vista")
-        item = QTreeWidgetItem([f"{obj.name} ({kind})"])
+        item = QTreeWidgetItem([obj.name])
+        item.setToolTip(0, f"{kind} {obj.database}.{obj.schema}.{obj.name}")
         item.setData(0, _DATABASE_ROLE, database)
+        item.setData(0, _NAME_ROLE, obj.name)
         item.setData(0, _OBJECT_ROLE, object_sql(obj))
         kind = "table" if obj.kind is ObjectKind.TABLE else "view"
         item.setData(0, _SOURCE_ROLE, (obj.database, obj.schema, obj.name, kind))
         return item
+
+    # -- búsqueda (AT-UX-006): solo sobre la instantánea mostrada --------------------------------------
+
+    def set_filter(self, text: str) -> None:
+        """Muestra las bases, esquemas y objetos cuyo nombre contiene `text` (sin distinguir mayúsculas),
+        con su camino; si coincide una base o un esquema, todo su contenido."""
+        self._filter = text
+        needle = text.strip().casefold()
+        for i in range(self.topLevelItemCount()):
+            top = self.topLevelItem(i)
+            if top is not None:
+                self._apply_filter(top, needle, False)
+
+    def _apply_filter(self, item: QTreeWidgetItem, needle: str, parent_matches: bool) -> bool:
+        name = item.data(0, _NAME_ROLE)
+        own = bool(needle) and name is not None and needle in str(name).casefold()
+        show_all = not needle or parent_matches or own
+        any_child = False
+        for i in range(item.childCount()):
+            if self._apply_filter(item.child(i), needle, show_all):
+                any_child = True
+        visible = show_all or any_child
+        item.setHidden(not visible)
+        if needle and any_child:
+            item.setExpanded(True)
+        return visible
 
     def _context_menu(self, pos: object) -> None:
         item = self.itemAt(pos)  # type: ignore[arg-type]
@@ -84,7 +137,7 @@ class CatalogExplorer(QTreeWidget):
         menu = QMenu(self)
         action = menu.addAction(tr("Cargar en QGIS…"))
         action.setEnabled(self.loading_enabled)
-        name = item.text(0).rsplit(" (", 1)[0]
+        name = str(item.data(0, _NAME_ROLE))
         source = item.data(0, _SOURCE_ROLE)
         action.triggered.connect(lambda: self.load_requested.emit(sql, name, source))
         menu.exec(self.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
@@ -95,7 +148,7 @@ class CatalogExplorer(QTreeWidget):
         sql = item.data(0, _OBJECT_ROLE) if item is not None else None
         if not sql or not self.loading_enabled:
             return
-        name = item.text(0).rsplit(" (", 1)[0]
+        name = str(item.data(0, _NAME_ROLE))
         self.load_requested.emit(sql, name, item.data(0, _SOURCE_ROLE))
 
     def selected_database(self) -> str | None:
@@ -112,6 +165,21 @@ class CatalogExplorer(QTreeWidget):
             if item is not None and item.data(0, _DATABASE_ROLE) == name:
                 self.setCurrentItem(item)
                 return
+
+
+def database_label(catalog: CatalogSnapshot, db: AttachedDatabase) -> str:
+    """«nombre · raíz, en uso, lectura y escritura». Las bases en memoria no muestran acceso (siempre
+    escribibles y temporales), como en la maqueta."""
+    notes = []
+    if catalog.is_root(db.name):
+        notes.append(tr("raíz"))
+    if catalog.default_database.key == db.key:
+        notes.append(tr("en uso"))
+    if db.access is AccessMode.READ_ONLY:
+        notes.append(tr("solo lectura"))
+    elif not db.in_memory:
+        notes.append(tr("lectura y escritura"))
+    return db.name + (f" · {', '.join(notes)}" if notes else "")
 
 
 def object_sql(obj: CatalogObject) -> str:

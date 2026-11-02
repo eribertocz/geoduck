@@ -120,7 +120,7 @@ def test_double_click_on_a_table_loads_it_like_the_menu(plugin):
     plugin.coordinator.refresh_catalog()
 
     def find(item):
-        if item.text(0).startswith("dc ("):
+        if item.text(0) == "dc":  # G5: el objeto se nombra solo; el tipo lo da su grupo «Tablas (n)»
             return item
         return next((f for i in range(item.childCount()) if (f := find(item.child(i)))), None)
 
