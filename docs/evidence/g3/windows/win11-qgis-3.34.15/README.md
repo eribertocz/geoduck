@@ -33,7 +33,7 @@ La carpeta de instalación se llama «QGIS 3.22.9», pero la versión es 3.34.15
 | Adjuntar una base `.duckdb` en lectura y escritura; tabla real de 1 141 829 filas | — | Carga correcta; sin extensión hasta corregir F-83 |
 | Capa → Filtrar… en la capa conectada | **No disponible** (F-84) | Correcto |
 | Doble clic en el explorador y mensajes de carga | — | Correcto (aprobados por el propietario) |
-| Edición de la capa conectada | — | **No confirmada de forma explícita** en esta sesión |
+| Edición de la capa conectada (tabla cargada desde el explorador): cambio de atributo y de geometría, guardar y comprobar en SQL | — | Correcto (confirmado por el propietario, 2026-11-02) |
 
 ## Hallazgos
 
@@ -49,4 +49,5 @@ La carpeta de instalación se llama «QGIS 3.22.9», pero la versión es 3.34.15
 
 - Ejecutar el procedimiento de `docs/certification/windows.md` en esta celda (3.34) y en 3.44 y 4.2.
 - DuckDB 1.5.0 y 1.5.6 en Windows (aquí solo 2.0.0).
-- Confirmar en Windows la edición de la capa conectada: cambios, altas, bajas y conflicto.
+- En Windows se confirmó editar y guardar. Altas, bajas y el aviso de conflicto quedan cubiertos solo por
+  las pruebas automáticas en Linux.
