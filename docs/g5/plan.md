@@ -2,7 +2,7 @@
 
 **Estado:** En curso (SPEC aprobada por el propietario con ajustes, 2026-11-02). **ADR-0013.** **Issue:** #49.
 **Requisitos:** GD-UX-001..008. **Contrato:** `spec/specs/ui-ux-spec.md` §8; session-spec §2 (`CloseSession`);
-qgis-bridge-spec §1 (interfaz); maqueta aprobada en issue #49.
+qgis-bridge-spec §1 (interfaz); maqueta aprobada en issue #49, copiada en `docs/g5/maqueta/`.
 
 **Gate:** ambos modos funcionales con un único estado; AT-UX-001..015 en la matriz de CI (QGIS 3.34, 3.40,
 3.44, 4.2 × DuckDB 1.5.0, 2.0.0); las tres cargas de G3/G4 en ambos modos; revisión visual conforme a la
