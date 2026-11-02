@@ -10,6 +10,7 @@ No se cargan extensiones ni se cambia la configuración de la sesión (ADR-0011)
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Callable
@@ -37,26 +38,36 @@ def _rows(handle: Any, sql: str, max_rows: int = 100) -> list[tuple[Any, ...]]:
     return list(handle.execute(sql, max_rows=max_rows).rows)
 
 
-def _source_info(handle: Any, source: tuple[str, str, str]) -> tuple[bool, str | None]:
-    """(es tabla base, clave primaria entera de una columna o None)."""
+def _source_info(handle: Any, source: tuple[str, str, str]) -> tuple[bool, list[str] | None]:
+    """(es tabla base, columnas de su clave o None) — como QGIS con PostGIS: la clave primaria y, si no
+    hay, la restricción `UNIQUE` con todas sus columnas `NOT NULL` (la de menos columnas, entera antes)."""
     db, schema, name = (quote_string_literal(p) for p in source)
-    tables = _rows(
-        handle,
-        f"SELECT 1 FROM duckdb_tables() WHERE database_name = {db} AND schema_name = {schema} "
-        f"AND table_name = {name}",
-        1,
-    )
-    if not tables:
+    where = f"database_name = {db} AND schema_name = {schema} AND table_name = {name}"
+    if not _rows(handle, f"SELECT 1 FROM duckdb_tables() WHERE {where}", 1):
         return False, None
-    pks = _rows(
+    constraints = _rows(
         handle,
-        "SELECT constraint_column_names FROM duckdb_constraints() WHERE constraint_type = 'PRIMARY KEY' "
-        f"AND database_name = {db} AND schema_name = {schema} AND table_name = {name}",
-        2,
+        "SELECT constraint_type, constraint_column_names FROM duckdb_constraints() "
+        f"WHERE {where} AND constraint_type IN ('PRIMARY KEY', 'UNIQUE')",
+        1000,
     )
-    if len(pks) == 1 and len(pks[0][0]) == 1:
-        return True, str(pks[0][0][0])
-    return True, None
+    columns = _rows(
+        handle, f"SELECT column_name, is_nullable, data_type FROM duckdb_columns() WHERE {where}", 10_000
+    )
+    not_null = {str(c) for c, nullable, _ in columns if not nullable}
+    types = {str(c): str(t) for c, _, t in columns}
+    primary = [list(map(str, cols)) for kind, cols in constraints if kind == "PRIMARY KEY"]
+    if primary:
+        return True, primary[0]
+    unique = [
+        list(map(str, cols))
+        for kind, cols in constraints
+        if kind == "UNIQUE" and set(map(str, cols)) <= not_null
+    ]
+    if not unique:
+        return True, None
+    unique.sort(key=lambda cols: (len(cols), not (len(cols) == 1 and types.get(cols[0]) in _INTEGER_KEYS)))
+    return True, unique[0]
 
 
 def _extent_from_stats(value: Any) -> tuple[float, float, float, float] | None:
@@ -104,13 +115,16 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     columns = [(str(r[0]), str(r[1])) for r in described]
     plan = build_load_plan(inner, columns, geometry=request.geometry)
     token.raise_if_cancelled()
-    fid, key, source_sql = "content", None, None
-    if request.source is not None:
-        _is_table, pk = _source_info(handle, request.source)
-        source_sql = ".".join(quote_identifier(p) for p in request.source)
-        kinds = {f.name: f for f in plan.fields}
-        if pk is not None and pk in kinds and dict(columns)[pk] in _INTEGER_KEYS:
-            fid, key = "key", pk
+    source_sql = ".".join(quote_identifier(p) for p in request.source) if request.source else None
+    is_table, keys = _source_info(handle, request.source) if request.source else (False, None)
+    if keys and len(keys) == 1 and dict(columns).get(keys[0]) in _INTEGER_KEYS:
+        fid, key = "key", keys[0]  # el valor es el FID
+    elif keys:
+        fid, key = "map", None  # cualquier otra clave: FID asignado en memoria (PktFidMap de QGIS)
+    elif is_table:
+        fid, key = "rowid", None  # como `ctid` en PostgreSQL
+    else:
+        fid, key = "content", None
     count = int(_rows(handle, f"SELECT count(*) FROM (\n{inner}\n) AS __geoduck_q", 1)[0][0])
     token.raise_if_cancelled()
     out: dict[str, Any] = {
@@ -118,6 +132,8 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         "columns": columns,
         "fid": fid,
         "key": key,
+        "keys": keys,
+        "table": is_table,
         "source": source_sql,
         "count": count,
         "headers": [],
@@ -233,6 +249,7 @@ class ConnectedLoad:
             "geom": plan.geometry.name if plan.geometry is not None else None,
             "fid": meta["fid"],
             "key": meta["key"],
+            "keys": json.dumps(meta["keys"]) if meta["fid"] == "map" else None,
             "count": meta["count"],
             "columns": meta["columns"],
         }
@@ -250,8 +267,8 @@ class ConnectedLoad:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
                 warnings.append("Extensión desconocida: «Zoom a la capa» no está disponible")
-        if meta["fid"] != "key":
-            warnings.append("Solo lectura: sin clave primaria entera de una columna")
+        if not meta["table"]:
+            warnings.append("Solo lectura: DuckDB no escribe en vistas ni en consultas")
         layer = QgsVectorLayer(encode_uri(params), self._request.layer_name, KEY)
         if not layer.isValid():
             raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
