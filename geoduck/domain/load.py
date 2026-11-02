@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 
@@ -30,6 +30,35 @@ class LoadRequest:
     source: tuple[str, str, str] | None = None
     #: Tipo del origen del explorador: "table" o "view" (para indicarlo en los mensajes).
     source_kind: str | None = None
+    #: Varias geometrías: una capa por columna (spatial-spec §7). Vacío o una sola = solo `geometry`.
+    geometries: tuple[str, ...] = ()
+    #: Columnas `BLOB`/`VARCHAR` marcadas como geometría: ((nombre, "wkb" | "wkt"), …) (spatial-spec §2.2).
+    formats: tuple[tuple[str, str], ...] = ()
+    #: CRS elegido por columna cuando el de sus datos es desconocido: ((columna, authid o WKT o ""), …).
+    crs_overrides: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def format_map(self) -> dict[str, str]:
+        return dict(self.formats)
+
+    def split(self) -> list[LoadRequest]:
+        """Una petición por capa. Con varias geometrías, `<nombre> · <columna>` cada una."""
+        columns = self.geometries or ((self.geometry,) if self.geometry is not None else ())
+        overrides = dict(self.crs_overrides)
+        if len(columns) <= 1:
+            column = columns[0] if columns else None
+            crs = overrides.get(column, self.crs_override) if column is not None else self.crs_override
+            return [replace(self, geometry=column, geometries=(), crs_override=crs)]
+        return [
+            replace(
+                self,
+                geometry=column,
+                geometries=(),
+                layer_name=f"{self.layer_name} · {column}",
+                crs_override=overrides.get(column, self.crs_override),
+            )
+            for column in columns
+        ]
 
 
 @dataclass(frozen=True)
@@ -45,6 +74,8 @@ class LoadReport:
     origin: str = ""
     #: Acceso de la capa: «lectura y escritura», «solo lectura (…)» o «copia independiente de DuckDB».
     access: str = ""
+    #: Todas las capas publicadas juntas por esta carga, (id, nombre); vacío = solo `layer_id`.
+    layers: tuple[tuple[str, str], ...] = ()
 
 
 _KINDS = {"table": "tabla", "view": "vista"}

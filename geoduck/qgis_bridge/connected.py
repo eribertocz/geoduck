@@ -19,7 +19,14 @@ from typing import Any
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
-from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_terminator
+from geoduck.domain.bridge_types import (
+    GeometryFormat,
+    LoadPlan,
+    build_load_plan,
+    geometry_read_sql,
+    strip_terminator,
+    unreadable_warning,
+)
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
@@ -146,12 +153,13 @@ def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
     return "Unknown", "Tipos de geometría mixtos: simbología por tipo no disponible"
 
 
-def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912
+def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912, PLR0915
     """Operación del worker: todo lo que la URI necesita, sin leer los datos en Python."""
     inner = strip_terminator(request.sql)
     described = _rows(handle, f"DESCRIBE SELECT * FROM (\n{inner}\n) AS __geoduck_q", 10_000)
     columns = [(str(r[0]), str(r[1])) for r in described]
-    plan = build_load_plan(inner, columns, geometry=request.geometry)
+    formats = {k: GeometryFormat(v) for k, v in request.formats}
+    plan = build_load_plan(inner, columns, geometry=request.geometry, formats=formats or None)
     token.raise_if_cancelled()
     source_sql = ".".join(quote_identifier(p) for p in request.source) if request.source else None
     is_table, keys = _source_info(handle, request.source) if request.source else (False, None)
@@ -207,7 +215,19 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
     }
     if plan.geometry is None:
         return out
-    g = quote_identifier(plan.geometry.name)
+    # Columna GEOMETRY, o BLOB/VARCHAR marcada convertida en DuckDB (spatial-spec §5)
+    g = geometry_read_sql(plan.geometry.name, plan.geometry.format)
+    if plan.geometry.format is not GeometryFormat.GEOMETRY:
+        raw = quote_identifier(plan.geometry.name)
+        bad = int(
+            _rows(
+                handle,
+                f"SELECT count(*) FROM (\n{inner}\n) AS __geoduck_q WHERE {raw} IS NOT NULL AND {g} IS NULL",
+                1,
+            )[0][0]
+        )
+        out["unreadable"] = bad
+        token.raise_if_cancelled()
     out["headers"] = [
         str(r[0])
         for r in _rows(
@@ -235,7 +255,8 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         out["extent"] = _scan_extent(handle, token, f"SELECT {g} FROM (\n{inner}\n) AS __geoduck_q")
     batches: list[Any] = []  # el campo GeoArrow (con su CRS) de una fila
     handle.read_arrow(
-        f"SELECT {g} FROM ({plan.sql}) AS __geoduck_c WHERE {g} IS NOT NULL LIMIT 1",
+        f"SELECT {quote_identifier(plan.geometry.name)} FROM ({plan.sql}) AS __geoduck_c "
+        f"WHERE {quote_identifier(plan.geometry.name)} IS NOT NULL LIMIT 1",
         batch_size=1,
         on_batch=batches.append,
         token=token,
@@ -317,6 +338,11 @@ class ConnectedLoad:
             "database": self._request.source[0] if self._request.source else None,
             "sql": strip_terminator(self._request.sql),
             "geom": plan.geometry.name if plan.geometry is not None else None,
+            "geomformat": (
+                plan.geometry.format.value
+                if plan.geometry is not None and plan.geometry.format is not GeometryFormat.GEOMETRY
+                else None
+            ),
             "fid": meta["fid"],
             "key": meta["key"],
             "edit": "1" if meta["readonly"] is None else None,
@@ -331,6 +357,8 @@ class ConnectedLoad:
             params["type"] = type_name
             if note:
                 warnings.append(note)
+            if meta.get("unreadable"):
+                warnings.append(unreadable_warning(plan.geometry, meta["unreadable"]))
             crs = self._crs(meta, plan)
             if crs.isValid():
                 params["crs"] = crs.authid() or crs.toWkt()

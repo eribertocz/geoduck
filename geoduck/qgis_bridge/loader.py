@@ -19,6 +19,7 @@ from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.connected import ConnectedLoad
 from geoduck.qgis_bridge.editing import EditSession, is_editable_layer
 from geoduck.qgis_bridge.memory import MemoryLoad
+from geoduck.qgis_bridge.multi import MultiLoad
 from geoduck.qgis_bridge.provider import KEY, register_provider
 from geoduck.qgis_bridge.snapshot import SnapshotLoad, unavailable_reason
 from geoduck.qgis_bridge.vsimem import VsimemRegistry
@@ -128,27 +129,43 @@ class BridgeLoader:
         reason = self.availability().get(request.mode)
         if reason is not None:
             raise GeoDuckError(reason, code=ErrorCode.INVALID_ARGUMENT)
-        task: MemoryLoad | SnapshotLoad | ConnectedLoad
-        if request.mode is LoadMode.MEMORY:
-            task = MemoryLoad(
-                engine, request, on_progress=on_progress, on_done=on_done, project=self._project
+        requests = request.split()
+
+        def factory(req: LoadRequest, project: Any, progress: Callable[[int], None], done: Any) -> Any:
+            return self._task(engine, req, project, progress, done)
+
+        task: Any
+        if len(requests) == 1:
+            task = factory(requests[0], self._project, on_progress, on_done)
+        else:  # una capa por columna geométrica, publicadas juntas (spatial-spec §7)
+            task = MultiLoad(
+                requests,
+                factory,
+                on_progress=on_progress,
+                on_done=on_done,
+                project=self._project,
+                registry=self.vsimem,
             )
-        elif request.mode is LoadMode.SNAPSHOT:
-            task = SnapshotLoad(
+        task.start()
+        return task
+
+    def _task(
+        self,
+        engine: Any,
+        request: LoadRequest,
+        project: Any,
+        on_progress: Callable[[int], None],
+        on_done: Callable[[LoadReport | BaseException], None],
+    ) -> Any:
+        if request.mode is LoadMode.MEMORY:
+            return MemoryLoad(engine, request, on_progress=on_progress, on_done=on_done, project=project)
+        if request.mode is LoadMode.SNAPSHOT:
+            return SnapshotLoad(
                 engine,
                 request,
                 on_progress=on_progress,
                 on_done=on_done,
                 registry=self.vsimem,
-                project=self._project,
+                project=project,
             )
-        else:
-            task = ConnectedLoad(
-                engine,
-                request,
-                on_progress=on_progress,
-                on_done=on_done,
-                project=self._project,
-            )
-        task.start()
-        return task
+        return ConnectedLoad(engine, request, on_progress=on_progress, on_done=on_done, project=project)

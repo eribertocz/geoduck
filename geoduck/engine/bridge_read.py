@@ -10,7 +10,7 @@ llama (sql-editor-spec §5).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -39,9 +39,16 @@ def describe_query(handle: ConnectionHandle, sql: str) -> list[tuple[str, str]]:
 
 
 def prepare_load(
-    handle: ConnectionHandle, sql: str, geometry: str | None = None, *, pick_first: bool = False
+    handle: ConnectionHandle,
+    sql: str,
+    geometry: str | None = None,
+    *,
+    pick_first: bool = False,
+    formats: Mapping[str, Any] | None = None,
 ) -> LoadPlan:
-    return build_load_plan(sql, describe_query(handle, sql), geometry=geometry, pick_first=pick_first)
+    return build_load_plan(
+        sql, describe_query(handle, sql), geometry=geometry, pick_first=pick_first, formats=formats
+    )
 
 
 def load_query(
@@ -50,12 +57,13 @@ def load_query(
     sql: str,
     *,
     geometry: str | None,
+    formats: Mapping[str, Any] | None = None,
     batch_size: int,
     on_plan: Callable[[LoadPlan], None],
     on_batch: Callable[[Any], None],
 ) -> LoadOutcome:
     """Describe, normaliza y lee por lotes. `on_plan` llega antes del primer lote, en este hilo."""
-    plan = prepare_load(handle, sql, geometry)
+    plan = prepare_load(handle, sql, geometry, formats=formats)
     token.raise_if_cancelled()
     on_plan(plan)
     summary = handle.read_arrow(plan.sql, batch_size=batch_size, on_batch=on_batch, token=token)

@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pyarrow as pa
+import pyarrow.compute as pc
 from qgis.core import (
     Qgis,
     QgsCoordinateReferenceSystem,
@@ -22,7 +23,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QByteArray, QDate, QDateTime, QMetaType, Qt
 
-from geoduck.domain.bridge_types import FieldKind, LoadPlan
+from geoduck.domain.bridge_types import FieldKind, LoadPlan, unreadable_error
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 
 _JULIAN_EPOCH = 2440588  # día juliano del 1970-01-01
@@ -169,4 +170,23 @@ def fit_geometry(g: QgsGeometry, layer_type: Qgis.WkbType) -> QgsGeometry:
         f"Geometría {QgsWkbTypes.displayString(t)} en una capa {QgsWkbTypes.displayString(layer_type)}: "
         "use «Copia rápida» o filtre por tipo",
         code=ErrorCode.INVALID_ARGUMENT,
+    )
+
+
+def strip_unreadable(batch: pa.RecordBatch, plan: LoadPlan, offset: int) -> pa.RecordBatch:
+    """Quita la columna auxiliar de geometría ilegible; si alguna fila la tiene, error con su número
+    (1 = primera fila del resultado). Las copias no publican nada (spatial-spec §3)."""
+    flag = plan.unreadable_flag
+    if flag is None or plan.geometry is None:
+        return batch
+    index = batch.schema.get_field_index(flag)
+    if index < 0:
+        return batch
+    column = batch.column(index)
+    if pc.any(column).as_py():
+        first = column.to_pylist().index(True)
+        raise unreadable_error(plan.geometry, offset + first + 1)
+    keep = [i for i in range(batch.num_columns) if i != index]
+    return pa.RecordBatch.from_arrays(
+        [batch.column(i) for i in keep], schema=pa.schema([batch.schema.field(i) for i in keep])
     )

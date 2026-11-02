@@ -39,6 +39,12 @@ class VsimemRegistry:
     def track(self, path: str) -> None:
         self._paths.add(path)
 
+    def release(self, path: str) -> None:
+        """Libera un archivo cuyas capas nunca se publicaron (carga múltiple descartada)."""
+        if path in self._paths and path not in self._in_use():
+            unlink(path)
+            self._paths.discard(path)
+
     @property
     def tracked(self) -> frozenset[str]:
         return frozenset(self._paths)

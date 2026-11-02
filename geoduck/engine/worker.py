@@ -23,7 +23,7 @@ import itertools
 import logging
 import queue
 import threading
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import Future
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -328,15 +328,20 @@ class SessionWorker:
         root = self._root
         return self._submit_future(lambda h, _t: attach_database(h, request, root))
 
-    def prepare_load(self, sql: str, geometry: str | None = None) -> Future[Any]:
+    def prepare_load(
+        self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
+    ) -> Future[Any]:
         """Plan de carga (columnas normalizadas, geometrías, avisos) sin leer los datos."""
-        return self._submit_future(lambda h, _t: prepare_load(h, sql, geometry, pick_first=True))
+        return self._submit_future(
+            lambda h, _t: prepare_load(h, sql, geometry, pick_first=True, formats=formats)
+        )
 
     def load_query(
         self,
         sql: str,
         *,
         geometry: str | None = None,
+        formats: Mapping[str, Any] | None = None,
         batch_size: int = DEFAULT_BATCH,
         on_plan: Callable[[Any], None],
         on_batch: Callable[[Any], None],
@@ -347,7 +352,14 @@ class SessionWorker:
         """
         return self.submit(
             lambda h, t: load_query(
-                h, t, sql, geometry=geometry, batch_size=batch_size, on_plan=on_plan, on_batch=on_batch
+                h,
+                t,
+                sql,
+                geometry=geometry,
+                formats=formats,
+                batch_size=batch_size,
+                on_plan=on_plan,
+                on_batch=on_batch,
             )
         )
 

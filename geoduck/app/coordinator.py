@@ -10,9 +10,10 @@ Vive en el hilo principal. Toda finalización del motor se reenvía al hilo prin
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
+from typing import Any
 
 from geoduck.app.events import (
     AppEvent,
@@ -483,12 +484,14 @@ class SessionCoordinator:
             return dict.fromkeys(LoadMode, "La carga en QGIS no está disponible")
         return self._loader.availability()
 
-    def prepare_load(self, sql: str, geometry: str | None = None) -> int:
+    def prepare_load(
+        self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
+    ) -> int:
         """Pide el plan de carga (sin leer datos). Responde con `LoadPrepared` o `LoadPrepareFailed`."""
         engine = self._require_ready("preparar la carga")
         self._prepare_tokens += 1
         token = self._prepare_tokens
-        fut = engine.prepare_load(sql, geometry)
+        fut = engine.prepare_load(sql, geometry, formats) if formats else engine.prepare_load(sql, geometry)
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_prepared(engine, token, f)))
         return token
 

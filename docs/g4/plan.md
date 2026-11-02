@@ -44,4 +44,7 @@ El cierre de G4 no autoriza `v0.5.0a1`: tag y release los decide el propietario.
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, plan y spike | En revisión | — |
+| E0 SPEC, plan y spike | En revisión | #70 |
+| E1 Multi-geometría y WKB/WKT | En revisión: una capa por columna en las tres modalidades (preparación privada y publicación conjunta), «Usar como geometría» con `TRY(…)` en DuckDB, ilegibles (copias: error con fila; Conectada: aviso), escritura de vuelta en WKB/WKT | — |
+
+Hallazgo de E1: cada columna se lee con su propia consulta (una lectura por capa). Para tablas el resultado es el mismo; una consulta no determinista (p. ej. `random()`) puede dar valores distintos en cada capa.

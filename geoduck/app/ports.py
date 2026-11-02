@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from typing import Any, Protocol
 
@@ -86,6 +86,7 @@ class SessionEngine(Protocol):
         sql: str,
         *,
         geometry: str | None = None,
+        formats: Mapping[str, Any] | None = None,
         batch_size: int = ...,
         on_plan: Callable[[Any], None],
         on_batch: Callable[[Any], None],
@@ -98,7 +99,9 @@ class SessionEngine(Protocol):
 
     def cancel(self, op_id: int) -> bool: ...
 
-    def prepare_load(self, sql: str, geometry: str | None = None) -> Future[Any]:
+    def prepare_load(
+        self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
+    ) -> Future[Any]:
         """`LoadPlan` de la consulta sin leer datos (qgis-bridge-spec §2)."""
         ...
 
