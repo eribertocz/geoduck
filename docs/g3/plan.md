@@ -71,13 +71,12 @@ siempre explícito); GDAL mezclado en un GeoPackage → una capa por familia y o
 
 Hallazgos de E5 (Conectada, lectura):
 
-- **FID estable** en los tres casos: clave primaria entera; `rowid` de una tabla sin clave adecuada;
-  `row_number() OVER ()` para vistas y consultas. Con filtros de extensión el FID no puede ser la
-  posición dentro del resultado filtrado (identificar o abrir la tabla de atributos devolvería otra
-  fila), así que **todas** las páginas avanzan por FID (`FID > último ORDER BY FID LIMIT n`), también
-  sin clave. Esto se aparta del `LIMIT n OFFSET m` que §5.2 prevé sin clave: **pendiente de decisión
-  del propietario** (la SPEC no se ha cambiado). Coste: en vistas y consultas cada página vuelve a
-  numerar la consulta entera.
+- **FID estable sin clave** (aprobado por el propietario, 2026-11-02, con la condición de garantizar
+  identidad estable tras filtros y relecturas): `rowid` cambia tras borrar y compactar (`CHECKPOINT`), y
+  `row_number() OVER ()` depende de un orden que DuckDB no garantiza; se descartaron. El FID sin clave es
+  la huella del contenido de la fila (qgis-bridge-spec §5.1, con sus límites). Las páginas avanzan por
+  FID y saltan los empates ya entregados; no se usa `OFFSET`. Esas capas son de solo lectura. Coste:
+  dibujar 1 M de filas sin clave 9,4 s (con clave 5,3 s).
 - **Metadatos sin `spatial`:** el núcleo de DuckDB no tiene agregado de extensión ni tipo de geometría.
   El tipo sale de la cabecera WKB (`hex(st_aswkb(g))[1:10]`); la extensión, de `ST_Extent_Agg` si
   `spatial` ya está cargada y, si no, de `stats(geom)` (texto en 1.5, estructura en 2.x). No se carga

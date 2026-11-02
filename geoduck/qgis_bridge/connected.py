@@ -2,7 +2,7 @@
 """Modalidad Conectada: crear la capa `geoduck` (qgis-bridge-spec §5.1, ADR-0012).
 
 Una sola operación del worker reúne los metadatos sin leer los datos en Python: columnas (`DESCRIBE`),
-identificador (clave primaria entera, `rowid` o número de fila), conteo, tipos de geometría (cabecera
+identificador (clave primaria entera o huella del contenido de la fila), conteo, tipos de geometría (cabecera
 WKB), extensión (`ST_Extent_Agg` si `spatial` ya está cargada; si no, estadísticas de la columna) y el
 campo GeoArrow para el CRS (C4). Después, en el hilo principal, se crea la capa con la URI y se publica.
 No se cargan extensiones ni se cambia la configuración de la sesión (ADR-0011).
@@ -104,15 +104,13 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     columns = [(str(r[0]), str(r[1])) for r in described]
     plan = build_load_plan(inner, columns, geometry=request.geometry)
     token.raise_if_cancelled()
-    fid, key, source_sql = "row", None, None
+    fid, key, source_sql = "content", None, None
     if request.source is not None:
-        is_table, pk = _source_info(handle, request.source)
+        _is_table, pk = _source_info(handle, request.source)
         source_sql = ".".join(quote_identifier(p) for p in request.source)
         kinds = {f.name: f for f in plan.fields}
         if pk is not None and pk in kinds and dict(columns)[pk] in _INTEGER_KEYS:
             fid, key = "key", pk
-        elif is_table:
-            fid = "rowid"
     count = int(_rows(handle, f"SELECT count(*) FROM (\n{inner}\n) AS __geoduck_q", 1)[0][0])
     token.raise_if_cancelled()
     out: dict[str, Any] = {

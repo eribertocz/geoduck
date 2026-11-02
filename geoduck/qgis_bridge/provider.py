@@ -11,11 +11,14 @@ La URI lleva todo lo necesario para construir el proveedor sin hablar con la ses
 identificador, CRS, extensión, conteo). Si la sesión no existe o la lectura falla (p. ej. tras un
 DETACH), la capa sigue siendo válida pero queda «no disponible»: vacía y sin errores (§5.5).
 
-Identificador de entidad (FID), estable entre peticiones aunque haya filtros:
+Identificador de entidad (FID), estable entre peticiones aunque haya filtros (§5.2):
 - `fid=key`: la clave primaria entera de la tabla (editable en E6);
-- `fid=rowid`: el `rowid` de una tabla sin clave adecuada (solo lectura);
-- `fid=row`: el número de fila de una vista o de una consulta (`row_number() OVER ()`, solo lectura).
-Las páginas siempre avanzan por FID (`FID > último ORDER BY FID LIMIT n`).
+- `fid=content`: sin esa clave (tablas, vistas, consultas; solo lectura), la huella del contenido de la
+  fila: `hash(todas las columnas) >> 1`. No depende del orden de lectura, de los filtros, de un
+  `CHECKPOINT` ni de cambios en otras filas (`rowid` y `row_number()` sí: se descartaron). Filas idénticas
+  comparten FID; cambiar una fila cambia su FID.
+Las páginas avanzan por FID (`FID >= último ORDER BY FID, desempate LIMIT n + repetidos`), saltando las
+filas del último FID ya entregadas: así ningún empate (filas idénticas) se pierde ni se repite.
 """
 
 from __future__ import annotations
@@ -60,6 +63,8 @@ DESCRIPTION = "GeoDuck (DuckDB conectada)"
 PAGE = 50_000
 #: Columna interna con el FID en la consulta base.
 FID = "__geoduck_fid"
+#: Desempate determinista entre filas distintas con el mismo FID de contenido (segunda huella).
+ORD = "__geoduck_ord"
 #: Espera máxima de una página desde el hilo principal: la interfaz no se congela más que esto si la
 #: sesión está ocupada (p. ej. con una carga Memoria que, a su vez, espera al hilo principal).
 MAIN_WAIT = 5.0
@@ -108,17 +113,26 @@ def decode_uri(uri: str) -> dict[str, Any]:
     return params
 
 
-def base_sql(plan: LoadPlan, inner: str, fid: str, key: str | None, source: str | None) -> str:
-    """Consulta base de la capa: FID, columnas normalizadas (§7) y geometría primaria."""
+def content_fid_sql(columns: list[str]) -> tuple[str, str]:
+    """(FID, desempate) de una fila sin clave: dos huellas de su contenido, en BIGINT no negativo."""
+    cols = ", ".join(quote_identifier(c) for c in columns)
+    return f"(hash({cols}) >> 1)::BIGINT", f"hash({cols}, 1)"
+
+
+def base_sql(plan: LoadPlan, inner: str, fid: str, key: str | None, columns: list[str]) -> str:
+    """Consulta base de la capa: FID, columnas normalizadas (§7) y geometría primaria. `columns`: todas las
+    columnas de `inner` (para el FID de contenido)."""
     body = strip_terminator(inner)
     fid_col = quote_identifier(FID)
     if fid == "key" and key:
-        numbered = f"SELECT {quote_identifier(key)} AS {fid_col}, * FROM (\n{body}\n) AS __geoduck_s"
-    elif fid == "rowid" and source:
-        numbered = f"SELECT rowid AS {fid_col}, * FROM {source}"
+        ident = f"{quote_identifier(key)} AS {fid_col}"
     else:
-        numbered = f"SELECT row_number() OVER () - 1 AS {fid_col}, * FROM (\n{body}\n) AS __geoduck_s"
+        content, order = content_fid_sql(columns)
+        ident = f"{content} AS {fid_col}, {order} AS {quote_identifier(ORD)}"
+    numbered = f"SELECT {ident}, * FROM (\n{body}\n) AS __geoduck_s"
     cols = [fid_col] + [f"{f.expression} AS {quote_identifier(f.name)}" for f in plan.fields]
+    if fid != "key" or not key:
+        cols.append(quote_identifier(ORD))
     if plan.geometry is not None:
         cols.append(quote_identifier(plan.geometry.name))
     return f"SELECT {', '.join(cols)} FROM ({numbered}) AS __geoduck_q"
@@ -166,6 +180,11 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         self.n = 0
         self.pos = 0
         self.after: int | None = None
+        #: Filas ya consumidas con FID == `after` (empates de filas idénticas).
+        self.ties = 0
+        #: Filas con FID == `page_after` que la página actual repite al principio y se saltan.
+        self.skip = 0
+        self.page_after: int | None = None
         self.exhausted = False
         self.returned = 0
 
@@ -220,11 +239,16 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
     def page_sql(self, size: int) -> str:
         where = list(self.where)
         if self.after is not None:
-            where.append(f"{quote_identifier(FID)} > {self.after}")
+            where.append(f"{quote_identifier(FID)} >= {self.after}")
         clause = (" WHERE " + " AND ".join(where)) if where else ""
+        order = (
+            quote_identifier(FID)
+            if self.p.fid_mode == "key"
+            else f"{quote_identifier(FID)}, {quote_identifier(ORD)}"
+        )
         return (
             f"SELECT {self.select} FROM ({self.p.base}) AS __geoduck_c{clause} "
-            f"ORDER BY {quote_identifier(FID)} LIMIT {size}"
+            f"ORDER BY {order} LIMIT {size + self.ties}"
         )
 
     # -- páginas -------------------------------------------------------------------------------
@@ -255,6 +279,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         if engine is None:
             self.p.note_error("Sesión no disponible")
             return False
+        requested = size + self.ties
         try:
             handle = engine.read_table(self.page_sql(size), priority=True)
             batches = self._wait(engine, handle)
@@ -265,10 +290,11 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             return False
         self.p.note_ok()
         rows = int(sum(b.num_rows for b in batches))
-        if rows < size:
+        if rows < requested:
             self.exhausted = True
         self.batches, self.batch_index = batches, 0
-        return rows > 0
+        self.skip, self.page_after = self.ties, self.after
+        return rows > self.ties
 
     def _load_batch(self) -> bool:
         while self.batch_index < len(self.batches):
@@ -289,7 +315,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         self.n, self.pos = 0, 0
         return False
 
-    def fetchFeature(self, f: QgsFeature) -> bool:
+    def fetchFeature(self, f: QgsFeature) -> bool:  # noqa: PLR0912 - un bucle por fila, con sus filtros
         if self.closed:
             return False
         while True:
@@ -306,7 +332,14 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             i = self.pos
             self.pos += 1
             fid = int(self.fids[i])
-            self.after = fid
+            if self.skip and fid == self.page_after:  # ya entregada en la página anterior
+                self.skip -= 1
+                continue
+            self.skip = 0
+            if fid == self.after:
+                self.ties += 1
+            else:
+                self.after, self.ties = fid, 1
             g: QgsGeometry | None = geometry_from_wkb(self.wkbs[i]) if self.wkbs is not None else None
             if self.exact and (g is None or g.isNull() or not g.intersects(self.rect)):
                 continue
@@ -374,11 +407,15 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self.source: str | None = params.get("source") or None
             self.inner: str = params["sql"]
             self.key: str | None = params.get("key") or None
-            self.fid_mode: str = params.get("fid", "row")
+            self.fid_mode: str = params.get("fid", "content")
             self.plan: LoadPlan = build_load_plan(
                 self.inner, list(params["columns"]), geometry=params.get("geom") or None
             )
-            self.base = base_sql(self.plan, self.inner, self.fid_mode, self.key, self.source)
+            if self.fid_mode != "key" or not self.key:
+                self.fid_mode = "content"
+            self.base = base_sql(
+                self.plan, self.inner, self.fid_mode, self.key, [c[0] for c in params["columns"]]
+            )
             ext = [float(v) for v in params.get("extent", "").split(",") if v]
             count = int(params.get("count", "-1"))
             wkb = params.get("type") or ""

@@ -658,11 +658,23 @@ sequenceDiagram
 
 ### 5.1 Fuente y URI
 
-URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|key=<pk>|type=<WkbType>`.
-`source` y `sql` son excluyentes.
+URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|fid=<key|content>|key=<pk>|type=<WkbType>`,
+más los metadatos que permiten abrir la capa sin consultar la sesión (columnas y tipos, CRS, extensión,
+conteo). Los valores van codificados como en una URL.
 
 - **Tabla o vista** del explorador: `source`.
 - **Resultado del editor:** `sql`, solo lectura.
+- **Identificador de entidad (FID)** (decisión del propietario, 2026-11-02): estable tras filtros y
+  relecturas.
+  - `fid=key`: la clave primaria entera de una columna. Única condición para editar (§5.4).
+  - `fid=content` (sin esa clave: tablas, vistas y consultas; **solo lectura**): la huella del contenido
+    de la fila, `(hash(todas las columnas) >> 1)::BIGINT`. No depende del orden de lectura, de los
+    filtros, de `CHECKPOINT` ni de cambios en otras filas. `rowid` y `row_number()` se descartaron: el
+    primero cambia tras borrar y compactar, el segundo depende de un orden que DuckDB no garantiza.
+  - Límites de `fid=content`, documentados: filas idénticas comparten FID (QGIS no las puede distinguir,
+    pero se leen todas); cambiar una fila cambia su FID; el FID puede cambiar con otra versión de DuckDB
+    (función `hash`); dos filas distintas con la misma huella de 63 bits son posibles pero improbables
+    (≈ 10⁻⁶ con 5 M de filas), y entonces se ordenan con una segunda huella y se leen ambas.
 - **Tipo de geometría** (`type`): se declara o se deduce de los datos, porque DuckDB no guarda el
   subtipo (F-71).
 
@@ -671,14 +683,15 @@ URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<column
 | Petición | SQL |
 |---|---|
 | Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5); con `spatial` cargada, `ST_Intersects(geom, ST_MakeEnvelope(…))`, que usa el RTree si existe |
-| FID | `key = ?` / `key IN (…)` |
+| FID | `FID = ?` / `FID IN (…)` sobre la clave o la huella (§5.1) |
 | Atributos pedidos / sin geometría | solo esas columnas; sin la columna de geometría |
 | Expresión | Compilada a SQL de DuckDB cuando es posible (comparaciones, `AND`/`OR`/`NOT`, `IN`, `IS NULL`, `LIKE`/`ILIKE`, aritmética); si no, se evalúa en Python sobre lo filtrado en SQL |
 | `LIMIT`, orden | `LIMIT`; `ORDER BY` cuando la petición lo pide |
 
-Las peticiones van en **páginas** de como mucho 50 000 filas. Con clave primaria, cada página empieza
-después de la última clave leída (`key > ? ORDER BY key LIMIT n`); sin ella, se usa
-`LIMIT n OFFSET m`. Entre páginas el worker queda libre.
+Las peticiones van en **páginas** de como mucho 50 000 filas, siempre por FID: cada página empieza en el
+último FID leído (`FID >= ? ORDER BY FID[, segunda huella] LIMIT n + k`) y salta las `k` filas de ese FID
+que ya se entregaron. Así ningún empate (filas idénticas) se pierde ni se repite. No se usa `OFFSET`.
+Entre páginas el worker queda libre.
 
 ### 5.3 Contención con el SQL del usuario
 
