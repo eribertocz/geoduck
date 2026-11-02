@@ -154,3 +154,33 @@ def test_broken_environment_disables_start(iface, monkeypatch):
     assert not plugin.dock.env_banner.isHidden()
     assert "DuckDB" in plugin.dock.env_label.text()
     plugin.unload()
+
+
+def test_unload_rolls_back_a_pending_transaction_and_never_commits(iface, tmp_path):
+    """Decisión del 2026-11-01: al descargar GeoDuck o salir de QGIS, revertir lo pendiente; nunca COMMIT."""
+    import duckdb
+
+    from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
+
+    path = str(tmp_path / "datos.duckdb")
+    con = duckdb.connect(path)
+    con.execute("CREATE TABLE t AS SELECT 1 AS x")
+    con.close()
+    plugin = geoduck.classFactory(iface)
+    plugin.initGui()
+    coordinator = plugin.coordinator
+    coordinator.start_file_session(AttachRequest(path, AccessMode.READ_WRITE, OpenAction.OPEN_EXISTING, "d"))
+    assert wait_for(lambda: coordinator.state is SessionState.READY and coordinator.catalog is not None)
+    engine = coordinator._engine
+    engine.submit(lambda h, t: h.execute("BEGIN")).future.result(30)
+    engine.submit(lambda h, t: h.execute("INSERT INTO d.t VALUES (2)")).future.result(30)
+    worker_thread = engine.thread
+
+    plugin.unload()  # sin diálogo: QGIS no permite que un complemento cancele su descarga
+    worker_thread.join(10)
+    assert not worker_thread.is_alive()
+    check = duckdb.connect(path, read_only=True)
+    try:
+        assert check.execute("SELECT x FROM t ORDER BY x").fetchall() == [(1,)]  # revertida, no confirmada
+    finally:
+        check.close()

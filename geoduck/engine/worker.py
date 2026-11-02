@@ -13,6 +13,8 @@ Invariantes que este módulo garantiza en DuckDB 1.5.x y 2.x por igual:
 6. Invalidación (C13 §4 bis): si la conexión deja de ser utilizable, primero se rechaza todo trabajo
    nuevo, se falla lo pendiente y se cierra la conexión; después `invalidation()` se resuelve una sola
    vez con la causa. Un cierre pedido nunca se notifica como invalidación.
+7. Al cerrar, también al descargar el complemento o salir de QGIS, una transacción pendiente se revierte
+   si es posible y nunca se confirma (decisión del 2026-11-01).
 """
 
 from __future__ import annotations
@@ -404,6 +406,8 @@ class SessionWorker:
                 detail=type(exc).__name__,
             )
         finally:
+            if cause is None:
+                self._rollback_pending(handle)  # nunca hay COMMIT automático (decisión del 2026-11-01)
             with self._lock:
                 if self._close_requested:
                     cause = None  # un cierre pedido nunca se notifica como invalidación (INV-5)
@@ -503,6 +507,18 @@ class SessionWorker:
     def _forget(self, job: _Job[Any]) -> None:
         with self._lock:
             self._pending.pop(job.op_id, None)
+
+    @staticmethod
+    def _rollback_pending(handle: ConnectionHandle) -> None:
+        """Al cerrar (incluida la descarga del complemento o la salida de QGIS), revierte una transacción
+        pendiente cuando es posible. Nunca la confirma. Solo se intenta si la conexión no se invalidó; si no
+        se puede, cerrar la conexión la descarta igualmente."""
+        try:
+            if probe_transaction(handle).is_open:
+                handle.execute("ROLLBACK")
+                _log.warning("Se revirtió una transacción pendiente al cerrar la sesión")
+        except Exception:
+            _log.warning("No se pudo revertir la transacción al cerrar; DuckDB la descarta", exc_info=True)
 
     @staticmethod
     def _check_connection(handle: ConnectionHandle) -> TransactionState | None:
