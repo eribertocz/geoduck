@@ -183,7 +183,14 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-SPA-002 | P0 | Preguntar columnas cuando existan varias; opción capas separadas | AT-SPA-002 |
 | GD-SPA-003 | P0 | Preservar/solicitar CRS; prohibido asignar CRS inventado | AT-SPA-003 |
 | GD-SPA-004 | P0 | Gestionar nulos, incompatibilidad geométrica y errores WKB | AT-SPA-004 |
-| GD-UX-001 | P0 | UI minimalista QGIS 3/4 con accesibilidad | AT-UX-001 |
+| GD-UX-001 | P0 | UI minimalista QGIS 3/4 con accesibilidad | AT-UX-001, AT-UX-013 |
+| GD-UX-002 | P0 | Un solo workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado a QGIS (ADR-0013) | AT-UX-002, AT-UX-003 |
+| GD-UX-003 | P0 | Alternar ventana ↔ panel sin perder estado, sin repetir SQL ni cargas y sin señales duplicadas | AT-UX-004, AT-UX-005, AT-UX-012, AT-UX-014 |
+| GD-UX-004 | P1 | Preferencias de presentación versionadas (modo, geometría, divisores, pestañas, filtros); nunca datos ni estado de DuckDB | AT-UX-010 |
+| GD-UX-005 | P0 | Explorador con búsqueda local, grupos Tablas/Vistas/Tablas temporales y acceso por base | AT-UX-006 |
+| GD-UX-006 | P0 | Resultados con tipo por columna, `NULL` distinguible y «hay más»; registro filtrable Todo/OK/Error | AT-UX-007, AT-UX-009 |
+| GD-UX-007 | P0 | «Cargar en QGIS ▾», barra de estado y «Ver en el mapa» en ambos modos, sin cambiar G3/G4 | AT-UX-008 |
+| GD-UX-008 | P0 | Cerrar u ocultar la superficie no cierra la sesión ni invalida capas | AT-UX-011 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
 | GD-CFG-001 | P1 | Persistir preferencias, SQL guardado y conexiones recientes; no capas/datos | AT-CFG-001 |
 | GD-COMP-001 | P0 | Probar pares QGIS/Python/Qt/DUCKDB/PyArrow | AT-COMP-001 |
@@ -450,6 +457,8 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - No convertir `DETACH` en borrado de archivo ni en cierre ficticio.
 
 ### `CloseSession()`
+Solo lo inicia «Cerrar sesión» o la descarga de GeoDuck. Ocultar o cerrar la ventana propia o el panel (ui-ux-spec §8) **no** es `CloseSession`: no hay `DETACH`, `ROLLBACK`, cancelación ni capas invalidadas.
+
 - Solicitar cancelación cooperativa; cerrar los lectores; cerrar la conexión y no retener referencias.
 - **Transacción abierta al cerrar** (decisión del 2026-11-01): se pregunta al usuario con tres opciones, `COMMIT`, `ROLLBACK` o **Cancelar cierre**. Cancelar no modifica la transacción y la sesión sigue abierta. Si `COMMIT` no es válido (por ejemplo, transacción abortada, `TRANSACTION_ABORTED`), la opción `COMMIT` se deshabilita.
 - No borrar archivos de usuario ni capas QGIS.
@@ -604,6 +613,8 @@ control de errores, progreso y cancelación, en una de tres modalidades:
 | Memoria | «Copia en memoria» | `QgsVectorLayer(provider="memory")` | Ninguno |
 | Instantánea | «Copia rápida» | GeoPackage en `/vsimem/geoduck/…` abierto con el proveedor `ogr` | Ninguno; GeoDuck libera `/vsimem` al quitar la capa |
 | Conectada | «Conectada a DuckDB» | Proveedor PyQGIS `geoduck` | Sí, con la sesión y la base adjunta |
+
+**Interfaz (G5, ui-ux-spec §8):** «Cargar en QGIS ▾» muestra las tres modalidades; elegir una abre el diálogo de carga con esa modalidad marcada. La presentación (ventana propia o panel) no cambia nada de este documento: una carga en curso sigue y entrega una sola vez aunque se alterne la presentación.
 
 ## 2. Fuente común de lectura
 
@@ -1011,7 +1022,7 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 - Diseño monocromático por defecto con un acento derivado del tema QGIS; estados semanticamente accesibles (éxito/advertencia/error).
 - Controles con alturas y espacios coherentes; evitar iconos sin texto o tooltip.
 - Autocompletado contextual no intrusivo; errores de SQL resaltados sin cubrir código.
-- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar actual, Ctrl+Shift+Enter ejecutar todo, Esc cancelar donde sea seguro), configurables.
+- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar actual, Ctrl+Shift+Enter ejecutar todo, Esc cancelar donde sea seguro), configurables. **F5 no se usa** (en QGIS refresca el mapa); los atajos actúan solo con el foco dentro de GeoDuck (decisión del propietario, 2026-11-02).
 - UI responsive dentro del dock; no usar tamaños fijos que hagan inutilizable un panel estrecho.
 
 ## 5. Accesibilidad e internacionalización
@@ -1026,6 +1037,29 @@ Para «entrega exitosa», no mostrar «capa lista» hasta que el proyecto QGIS h
 
 ## 7. UX QA
 Prueba de tareas guiadas con persona no programadora: adjuntar base, abrir tabla, cargar punto, desadjuntar y constatar que capa sigue visible. Prueba SQL avanzada: crear temporal, múltiples SELECT, alternar resultados, cargar sólo uno. Probar UI en Qt5 y Qt6 con distintos tamaños DPI.
+
+## 8. Workspace UX (G5 · `v0.6.0a1`; ADR-0013; issue #49; decisiones del propietario, 2026-11-02)
+Un solo workspace (`WorkspaceController` + `WorkspaceContent`: explorador, editor, resultados, registro y estado) con **dos presentaciones**: ventana propia (`QMainWindow`, **por defecto**) y panel acoplado (`QDockWidget`). El diagrama de §2 describe el panel; la maqueta aprobada en issue #49 es la referencia visual de ambas.
+
+**Ventana propia.** Barra de sesión (estado, versión de DuckDB, «Acoplar a QGIS», «Cerrar sesión»); explorador lateral redimensionable; editor y resultados con divisor; registro inferior colapsable con filtros Todo/OK/Error; barra de estado (tarea, última carga con modalidad y origen, «Ver en el mapa», «Diagnóstico del entorno…», «Acerca de…», versión). Es **hija de la ventana principal de QGIS**: queda encima de QGIS, se minimiza con él y no tiene entrada propia en la barra de tareas. La **X la oculta**; el botón de GeoDuck de la barra de herramientas la vuelve a mostrar.
+
+**Panel acoplado.** Encabezado (estado de sesión, «Abrir en ventana»); pestañas Explorador / SQL / Registro (con contador de errores); en SQL, editor y resultados en vertical con divisor; «Cargar en QGIS ▾» visible; mensaje de la última carga compacto con el detalle accesible. En un panel estrecho se compactan etiquetas, nunca se quitan acciones.
+
+**Alternancia.** Es una operación de presentación: el contenido cambia de contenedor en el hilo GUI conservando su identidad y conexiones; nunca se repite SQL ni una carga, no se cancela nada y no hay `COMMIT`, `ROLLBACK` ni `DETACH`. Si el traslado falla, el shell de origen sigue operativo y se informa.
+
+**Ubicación de las acciones existentes.**
+- «+» del explorador: «Abrir existente…» y «Crear nueva…»; botón de actualizar el catálogo.
+- Menú contextual de una base: «Desadjuntar» (con las protecciones de G3).
+- Barra de sesión: «Iniciar sesión» sin sesión activa; «Revertir transacción» solo con la transacción abortada; menú «⋯» con «Activar spatial…».
+- Capas de GeoDuck: «Diagnosticar geometrías…» en el menú de capa de QGIS (sin cambios).
+
+**«Cargar en QGIS ▾».** El menú muestra las tres modalidades con su descripción y las no disponibles desactivadas con el motivo. Elegir una abre **el diálogo de G4 con esa modalidad marcada** (geometrías, SRC, «Reproyectar a…», tipos mixtos); nada cambia en G3/G4.
+
+**«Ver en el mapa».** Trae QGIS al frente y selecciona la capa en el panel de capas. Si la capa tiene extensión válida (no vacía, finita, transformable al SRC del proyecto con su contexto de transformación), hace zoom a ella. Si no la tiene (tabla sin geometría, sin geometrías, extensión desconocida o no transformable), no hace zoom y lo dice: «La capa no tiene extensión válida: se seleccionó sin hacer zoom». Si la capa ya no está en el proyecto, la acción se desactiva.
+
+**Preferencias** (`QgsSettings`, prefijo `geoduck/workspace/`, con versión de esquema): modo, geometría de la ventana (corregida si su pantalla ya no existe), zona del panel, ancho del explorador y divisores por modo, pestaña activa, filtro del registro y límite de vista previa. Nunca filas, SQL guardado de otros procesos ni estado de DuckDB. Ajustes corruptos o antiguos → valores seguros.
+
+**Cerrar.** Ocultar o cerrar la ventana o el panel no es «Cerrar sesión» (session-spec §2); descargar GeoDuck sigue el cierre seguro existente.
 
 
 
@@ -1206,6 +1240,20 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-SPA-003 | GEOMETRY con CRS y sin CRS; AX-1..AX-5 (spatial-spec §8); «Reproyectar a…» en copias | conservar/preguntar, nunca CRS inventado; asignar no mueve coordenadas, reproyectar sí (tolerancias de §8); `geometry_always_xy` visible y nunca modificado |
 | AT-SPA-004 | geometría corrupta (WKB/WKT ilegible) o mixta; colecciones, Z, M, ZM, NULL, vacías; inválidas | error o separación explícita, no pérdidas; Conectada `Unknown` o separada sin duplicados, con el tipo leído de las cabeceras WKB en DuckDB; diagnóstico cuenta NULL/vacía/ilegible/inválida, selecciona y no modifica; reparación solo en copia, con cambios informados |
 | AT-UX-001 | pruebas teclado/tema/dock/Qt | acciones visibles y accesibles |
+| AT-UX-002 | instalación limpia; reiniciar tras elegir un modo | abre en ventana propia; el modo elegido se recuerda |
+| AT-UX-003 | alternar ida y vuelta | misma sesión, mismo worker y mismo contenido (identidad comprobada) |
+| AT-UX-004 | alternar con editor modificado y resultados abiertos | texto, cursor, selección, scroll, resultados y pestañas intactos |
+| AT-UX-005 | alternar durante SQL, carga o cancelación | la tarea sigue y entrega exactamente un resultado |
+| AT-UX-006 | explorador con varias bases, vistas y temporales; búsqueda | filtra y agrupa sin leer filas; acceso por base correcto |
+| AT-UX-007 | resultados con tipos, `NULL`, cadena vacía y límite | tipo por columna, `NULL` ≠ "", «hay más» correcto |
+| AT-UX-008 | Memoria, Copia rápida y Conectada desde ambos modos; «Ver en el mapa» con y sin extensión válida | una capa por carga, sin duplicados; el menú abre el diálogo de G4 con el modo marcado |
+| AT-UX-009 | registro Todo/OK/Error | filtra sin borrar; mensaje completo accesible |
+| AT-UX-010 | restaurar modo, ventana, dock y divisores; pantalla ausente | se restauran; nunca queda fuera de pantalla; ajustes corruptos → valores seguros |
+| AT-UX-011 | cerrar u ocultar la ventana o el panel | sin cierre de sesión, DETACH, ROLLBACK ni capas invalidadas |
+| AT-UX-012 | 20 alternancias seguidas | sin señales dobles, widgets huérfanos ni sesiones extra |
+| AT-UX-013 | teclado, panel estrecho, DPI y tema | todas las acciones alcanzables; atajos solo dentro de GeoDuck |
+| AT-UX-014 | fallo inyectado durante el traslado | el shell anterior sigue operativo; nada se repite |
+| AT-UX-015 | regresión G0–G4 | todas pasan; otras herramientas de QGIS sin cambios |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
@@ -1325,11 +1373,12 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G2 · `v0.3.0a1` SQL Execution | scripts mixtos, resultados y previews; ATTACH/DETACH desde SQL conciliados con la UI | GD-SQL-001..006, GD-SES-003 (parte SQL) | 2 SELECT y CREATE correctos; no reejecución DML |
 | G3 · `v0.4.0a1` QGIS Bridge | tabla plana y una geometría en tres modalidades: Memoria, Instantánea (GeoPackage `/vsimem`) y Conectada editable (ADR-0012) | GD-BRD-001..012 | primera Alpha útil E2E; las tres modalidades cumplen AT-BRD-001..012; Memoria e Instantánea intactas tras DETACH |
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
-| G5 · `v0.6.0a1` SQL Professional | editor avanzado, historial, autocompletado | GD-SQL-007, GD-UX-001 | UX teclado/Qt5/Qt6 y errores profesionales |
-| G6 · `v0.7.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
-| G7 · `v0.8.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
-| G8 · `v0.9.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
-| G9+ · `v0.10.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
+| G5 · `v0.6.0a1` Workspace UX | un workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado (ADR-0013, issue #49) | GD-UX-001..008 | AT-UX-001..015; las tres cargas de G3/G4 en ambos modos; alternar sin perder estado ni repetir operaciones |
+| G6 · `v0.7.0a1` SQL Professional | editor avanzado, historial, autocompletado; interfaz en inglés (#68) | GD-SQL-007, GD-I18N | UX teclado/Qt5/Qt6 y errores profesionales |
+| G7 · `v0.8.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
+| G8 · `v0.9.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
+| G9 · `v0.10.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
+| G10+ · `v0.11.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
 
 ## 3. Dependencias/gates críticos
 - **Decisión 2026-11-01:** ATTACH/DETACH escritos en SQL pasan de G1 a G2; G1 no incluye un editor SQL provisional.
@@ -1338,7 +1387,8 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 - **Spike G2-A**: multi-statement en DuckDB 1.5.x/2.x y política para `RETURNING`/SELECT reejecutable.
 - **Spike G3-A**: límites reales de memoria y cambio worker→main con RecordBatch.
 - **Spike G4-A** (reducido, decisión 2026-11-02): solo compatibilidades no demostradas — Z/M y colecciones por GeoArrow en QGIS 3.34/4.x, cabecera WKB y `ST_GeomFromWKB` sin `spatial` en DuckDB 1.5/2.0, `makeValid` en QGIS 3.34/4.x, coste de la muestra de tipos. CRS tipado y orden de ejes ya están demostrados (C4, F-10/F-14, AX).
-- **Spike G6-A**: mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
+- **Decisión 2026-11-02:** G5 · Workspace UX (issue #49) entra antes de SQL Professional; las fases siguientes se desplazan un número (SQL Professional G6, Performance G7, Reliability & Distribution G8, Public Alpha G9). La issue #68 (inglés) pasa a `v0.7.0a1` con su mismo alcance. G6 parte del workspace de G5: el editor avanzado se integra en `WorkspaceContent`, sin volver a crear shells.
+- **Spike G7-A** (antes G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
 
 ## 4. Capacidad mínima de Alpha útil
 A partir de **v0.4.0a1**: abrir plugin → sesión DuckDB → ATTACH archivo → SELECT → seleccionar resultado → cargar tabla o geometría en QGIS → DETACH → capa permanece. Una demo de carga sin tests de integridad no aprueba el gate.

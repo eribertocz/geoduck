@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 114252,
-      "sha256": "3ed736d07bfd9bb2bc5797e9e91f15b616b6da740d14271b3533a939963a45b2"
+      "bytes": 121833,
+      "sha256": "45c3e871228bf9cf7e2f0031f13d32e33b3592aaf1d26996e9595f78609a9f74"
     },
     {
       "path": "README.md",
@@ -66,8 +66,8 @@
     },
     {
       "path": "docs/adr/0011-coexistence-with-other-duckdb-plugins.md",
-      "bytes": 4487,
-      "sha256": "87a1c616166347ebc149e522c25c59e762b909a3ef149a2f2e8cd564d8fc865e"
+      "bytes": 4523,
+      "sha256": "28438dee380cf5289311ee02e32dc86fa60ab47bd04c6aa8d5ff9ebf609bfa9a"
     },
     {
       "path": "docs/adr/0012-three-load-modes.md",
@@ -75,9 +75,14 @@
       "sha256": "4c1cc31feda63943840083572188f7c854716c81346feb7bb31d95e531b11cb1"
     },
     {
+      "path": "docs/adr/0013-single-workspace-dual-presentation.md",
+      "bytes": 2442,
+      "sha256": "8d5c68ffcb726df84efacd5b7ed3f7d073aab96b10578c64e88e8f658229757e"
+    },
+    {
       "path": "docs/adr/README.md",
-      "bytes": 2098,
-      "sha256": "e247568a49e7bc4d91c2c0c885ee900ba0f700800994326af884b82c2d79ae4a"
+      "bytes": 2271,
+      "sha256": "c5df288cd14d10420265b8237f70200eb823119e154a6befcd5637a334b29809"
     },
     {
       "path": "docs/architecture.md",
@@ -96,8 +101,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 8284,
-      "sha256": "ae38bea984f4dfa572f59790c4b4fd587cf3b045855e96ccdea28d31685c582e"
+      "bytes": 9266,
+      "sha256": "9b8556bae3611a58d70aee8a016f56851bfa34d1e08dbcf14413dbf6bafc4f34"
     },
     {
       "path": "docs/references.md",
@@ -106,8 +111,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 5129,
-      "sha256": "2bf721cf3fb636e25f6f54e46e34a241c77b117290fa22e710b19bd65ce25d9d"
+      "bytes": 5833,
+      "sha256": "03422e2e8322591327a67c90d7c3c8ea8991f6087ec19ca611991d00f48aa67e"
     },
     {
       "path": "docs/security.md",
@@ -131,18 +136,18 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 8184,
-      "sha256": "c0b9b27cc53484a13df6fd220f0b9981cbf2cecaf643001ff3ccb8e76b31b12b"
+      "bytes": 9909,
+      "sha256": "1c44e5f2692d23f3b261047e20d502c064cfd75233123e29063d501828a82e2b"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
-      "bytes": 16275,
-      "sha256": "2f5a3d698eb06b01c886bf4bb2720d30ffd129dcbc3ca55cb33dd6c1d3dee4ca"
+      "bytes": 16588,
+      "sha256": "5f5104631fa86b3c8310bc11d86d80856d4fefd90df77a0e905242c9807d19b2"
     },
     {
       "path": "specs/session-spec.md",
-      "bytes": 7724,
-      "sha256": "d2fab9a6cd5d1a5f7a69d417e7a87d953b2f36c2e62215a7706d9c90c7e4a017"
+      "bytes": 7938,
+      "sha256": "88ec57f9214c038bce0977bf4e08e962f447f76f824a2c65a123f68b8822a94d"
     },
     {
       "path": "specs/spatial-spec.md",
@@ -156,8 +161,8 @@
     },
     {
       "path": "specs/ui-ux-spec.md",
-      "bytes": 6144,
-      "sha256": "c1b2255f4e6509fe863d388017eadf5640d2eaf626ad1ad0b843e48b7825fae3"
+      "bytes": 9788,
+      "sha256": "4921cc5eb609be594cc54750d403a26d5d3c5edd6b16f8ab13bcb3067c56a051"
     }
   ]
 }

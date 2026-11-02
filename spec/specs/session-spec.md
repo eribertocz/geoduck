@@ -37,6 +37,8 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - No convertir `DETACH` en borrado de archivo ni en cierre ficticio.
 
 ### `CloseSession()`
+Solo lo inicia «Cerrar sesión» o la descarga de GeoDuck. Ocultar o cerrar la ventana propia o el panel (ui-ux-spec §8) **no** es `CloseSession`: no hay `DETACH`, `ROLLBACK`, cancelación ni capas invalidadas.
+
 - Solicitar cancelación cooperativa; cerrar los lectores; cerrar la conexión y no retener referencias.
 - **Transacción abierta al cerrar** (decisión del 2026-11-01): se pregunta al usuario con tres opciones, `COMMIT`, `ROLLBACK` o **Cancelar cierre**. Cancelar no modifica la transacción y la sesión sigue abierta. Si `COMMIT` no es válido (por ejemplo, transacción abortada, `TRANSACTION_ABORTED`), la opción `COMMIT` se deshabilita.
 - No borrar archivos de usuario ni capas QGIS.
