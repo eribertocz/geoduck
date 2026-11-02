@@ -144,7 +144,7 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 - **Base principal visible:** archivo seleccionado al iniciar; internamente se adjunta a la raíz. No confundir con la conexión física principal.
 - **Resultado:** salida rastreable de una sentencia (estado o conjunto tabular).
 - **Vista previa:** conjunto limitado de filas; nunca equivale por definición a la totalidad.
-- **Entrega:** transferencia completa a una o más capas `memory` y registro en proyecto QGIS *después* de validar éxito.
+- **Entrega:** transferencia completa a una o más capas QGIS y registro en el proyecto *después* de validar el éxito. Modalidades (ADR-0012): **Memoria** (capa `memory`), **Instantánea** (GeoPackage en `/vsimem`) y **Conectada** (proveedor `geoduck`, lectura bajo demanda sin copia).
 - **Geometría primaria:** columna espacial usada para generar una capa QGIS determinada.
 - **Estado Alpha:** producto en desarrollo, aunque determinadas versiones ya sean útiles.
 
@@ -167,11 +167,18 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-SQL-005 | P0 | Preview limitado sin `fetchall()` de datasets grandes | AT-SQL-005 |
 | GD-SQL-006 | P0 | No reejecutar DDL/DML al cargar capas; política de SELECT explícita | AT-SQL-006 |
 | GD-SQL-007 | P1 | Autocompletado, historial, pestañas, formato y EXPLAIN | AT-SQL-007 |
-| GD-BRD-001 | P0 | Cargar resultado tabular como capa de memoria QGIS | AT-BRD-001 |
+| GD-BRD-001 | P0 | Cargar resultado tabular como capa de memoria QGIS (modalidad Memoria) | AT-BRD-001 |
 | GD-BRD-002 | P0 | Transporte Arrow por lotes con conversión explícita | AT-BRD-002 |
 | GD-BRD-003 | P0 | Progreso y cancelación sin manipular QGIS desde worker | AT-BRD-003 |
 | GD-BRD-004 | P0 | Sin capas publicadas parcialmente ante error/cancelación | AT-BRD-004 |
-| GD-BRD-005 | P0 | No gestionar ni vincular capas después de entrega | AT-BRD-005 |
+| GD-BRD-005 | P0 | Memoria e Instantánea: no gestionar ni vincular capas después de la entrega (salvo liberar `/vsimem` cuando QGIS quita la capa) | AT-BRD-005 |
+| GD-BRD-006 | P0 | Instantánea: copia por GDAL a GeoPackage en `/vsimem`, editable, con CRS e integridad; desactivada con motivo si GDAL < 3.8 | AT-BRD-006 |
+| GD-BRD-007 | P0 | Normalización de tipos según qgis-bridge-spec §7, común a las tres modalidades; ninguna conversión silenciosa | AT-BRD-007 |
+| GD-BRD-008 | P0 | Conectada: capa de tabla, vista o resultado SQL leída bajo demanda, con pushdown de extensión, atributos, FID y columnas | AT-BRD-008 |
+| GD-BRD-009 | P0 | Conectada: control de contención entre el SQL del usuario y el dibujado (prioridad, páginas acotadas, cancelación) | AT-BRD-009 |
+| GD-BRD-010 | P0 | Conectada: edición atómica con detección de conflictos y escritura por lotes; QGIS nunca informa éxito si DuckDB no confirmó | AT-BRD-010 |
+| GD-BRD-011 | P0 | Conectada: ATTACH/DETACH, cierre y reapertura sin errores ni bloqueos; capas no disponibles y reconectables | AT-BRD-011 |
+| GD-BRD-012 | P0 | Interfaz sencilla para elegir la modalidad, con progreso y cancelación | AT-BRD-012 |
 | GD-SPA-001 | P0 | Detectar ausencia, una o varias columnas espaciales | AT-SPA-001 |
 | GD-SPA-002 | P0 | Preguntar columnas cuando existan varias; opción capas separadas | AT-SPA-002 |
 | GD-SPA-003 | P0 | Preservar/solicitar CRS; prohibido asignar CRS inventado | AT-SPA-003 |
@@ -260,9 +267,11 @@ flowchart TD
 
 **Result Registry:** guarda metadatos de sentencia, preview limitado, SQL reejecutable cuando procede, contexto y estado de disponibilidad; no contiene un resultado completo en memoria ni un lector Arrow indefinido.
 
-**Arrow Bridge:** transfiere `RecordBatch` con control de presión y cierre garantizado del reader. La conversión final Arrow → `QgsFeature`/`QgsGeometry` implica copia y asignación controlada.
+**Arrow Bridge:** transfiere `RecordBatch` con control de presión y cierre garantizado del reader, tras normalizar los tipos en SQL (qgis-bridge-spec §7). Tres destinos (ADR-0012): capa memory (conversión en el hilo principal), GeoPackage en `/vsimem` (GDAL `WriteArrow` dentro de la operación del worker) y proveedor Conectado (páginas bajo demanda).
 
 **QGIS Committer:** crea o alimenta una capa temporal no registrada, exclusivamente en hilo principal. Publica todas las capas del pedido tras validar integridad, o descarta todas en fracaso.
+
+**Conectado (`qgis_bridge.provider`):** proveedor PyQGIS que traduce cada petición de QGIS a SQL y la envía al worker como páginas prioritarias. **Registro de capas conectadas:** sigue esas capas para marcarlas no disponibles o reconectarlas ante DETACH/ATTACH/cierre, y aplica el guardado atómico con control optimista (qgis-bridge-spec §5.4).
 
 ## 3. Máquina de estados de sesión
 Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNECTING → READY ⇄ BUSY`, `READY → DETACHING → READY`, `* → CLOSING → DISCONNECTED`; `ERROR_RECOVERABLE` registra fallos de los que se puede salir reintentando, volviendo a `READY` (solo si la conexión y la transacción siguen utilizables) o cerrando. La tabla de transiciones de `session-spec` §5 es normativa. Los estados de operación y de entrega (`cancelando`, `transfiriendo`, `entrega exitosa`…) pertenecen a la máquina de operación, no a la de sesión.
@@ -276,9 +285,11 @@ Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNEC
 ## 4. Secuencia cargar capa
 1. UI escoge resultado tabular y su geometría/CRS.
 2. Application valida que la consulta puede volver a ejecutarse con seguridad para ese caso; si no, ofrece explicación.
-3. Worker prepara relación `con.sql(read_query)`; abre `rel.to_arrow_reader(batch_size=config)` en `with`.
-4. Worker entrega lotes sin acceso a objetos Qt/QGIS del hilo principal; cola acotada y ACK mantienen memoria predecible.
-5. Main thread valida campos, convierte cada lote y agrega a una capa **privada** de memoria.
+3. Worker prepara relación `con.sql(read_query)` sobre la consulta normalizada (qgis-bridge-spec §7) y abre `rel.to_arrow_reader(batch_size=config)` en `with`.
+4. Worker entrega lotes sin acceso a objetos Qt/QGIS del hilo principal; cola acotada y ACK mantienen memoria predecible. En la Instantánea, GDAL escribe cada lote en `/vsimem` dentro de la misma operación.
+5. Main thread valida campos, convierte cada lote y agrega a una capa **privada** de memoria (Memoria), o abre la capa GeoPackage privada (Instantánea).
+
+La modalidad **Conectada** no copia: crea una capa con el proveedor `geoduck` y la registra; las lecturas posteriores las piden QGIS y el proveedor como páginas prioritarias del worker (qgis-bridge-spec §5).
 6. Si se cancela o falla, limpiar reader y descartar capa privada; ninguna publicación.
 7. Al final, cotejar recuentos, esquema y errores; registrar capa(s) en `QgsProject` y emitir éxito.
 8. Desde ese momento la propiedad es exclusivamente de QGIS y la capa no retiene referencia a DuckDB.
@@ -428,7 +439,8 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - Rechaza o encola la operación cuando hay transferencias/consultas activas; ofrece cancelar primero.
 - Si el catálogo elegido es predeterminado, cambia primero al catálogo raíz identificado en introspección, no asume que se llama `memory`.
 - Ejecuta `DETACH` real; verifica desaparición del catálogo; libera readers/resultados propios relacionados.
-- **No modifica ni elimina capas QGIS previamente entregadas.**
+- **No modifica ni elimina capas QGIS previamente entregadas** (Memoria e Instantánea).
+- Capas **Conectadas** de esa base (qgis-bridge-spec §5.5): si alguna tiene cambios sin guardar, el DETACH se rechaza con la lista de capas; si no, quedan «no disponibles» y vuelven al adjuntar de nuevo la base con el mismo alias.
 - Si fracasa, informa el error y no marca la base como desconectada.
 - Aun con `DETACH` exitoso no garantiza que otro proceso no mantenga bloqueos externos. Probar apertura RW desde proceso independiente.
 
@@ -441,6 +453,7 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - Solicitar cancelación cooperativa; cerrar los lectores; cerrar la conexión y no retener referencias.
 - **Transacción abierta al cerrar** (decisión del 2026-11-01): se pregunta al usuario con tres opciones, `COMMIT`, `ROLLBACK` o **Cancelar cierre**. Cancelar no modifica la transacción y la sesión sigue abierta. Si `COMMIT` no es válido (por ejemplo, transacción abortada, `TRANSACTION_ABORTED`), la opción `COMMIT` se deshabilita.
 - No borrar archivos de usuario ni capas QGIS.
+- Capas **Conectadas** con cambios sin guardar: el cierre se cancela y se pide guardarlos o descartarlos. Tras el cierre, todas las capas conectadas quedan «no disponibles».
 
 ## 3. Read-only y escritura
 - `READ_ONLY` protege esa base según reglas DuckDB. **No** es sandbox del proceso ni impide escribir en memoria u otros archivos permitidos.
@@ -529,6 +542,7 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 
 ## 5. Política de «Cargar resultado en QGIS»
 - Solo se activa para resultados tabulares convertibles, seleccionados por el usuario.
+- Ofrece las tres modalidades de qgis-bridge-spec §1: «Copia en memoria», «Copia rápida» (desactivada con motivo si GDAL < 3.8) y «Conectada a DuckDB». Un resultado SQL conectado es de solo lectura; editar exige cargar la tabla desde el explorador.
 - Para `SELECT` reejecutable, volver a ejecutar **únicamente esa consulta de lectura** para obtener el conjunto completo mediante Arrow; comunicar que se basa en el estado actual y puede diferir de la preview.
 - Si la query depende de tablas temporales eliminadas, base desadjuntada o una transacción ya cerrada, informar fallo en lugar de cargar otro resultado.
 - Para consultas no deterministas o con funciones de efecto lateral, mostrar advertencia/solicitar confirmación explícita; la clasificación «SELECT» no es prueba absoluta de ausencia de efectos secundarios.
@@ -574,103 +588,206 @@ Tras el `DETACH`, la vista previa existente sigue visible como preview limitada,
 
 ## CAPÍTULO 08 — `specs/qgis-bridge-spec.md`
 
-# SPEC GD-BRD — Transporte Arrow y entrega de capas QGIS
+# SPEC GD-BRD — Carga de resultados y tablas DuckDB en QGIS
 
-**Estado:** baseline Alpha · **Requisitos:** GD-BRD-001..005 · **Contrato principal:** GeoDuck produce; QGIS administra.
+**Estado:** Alpha, tres modalidades (ADR-0012, 2026-11-02) · **Requisitos:** GD-BRD-001..012 ·
+**Contrato principal:** GeoDuck produce; QGIS administra. La modalidad Conectada mantiene un vínculo
+explícito con la sesión.
 
 ## 1. Objetivo
-Transferir el resultado **completo** de una consulta DuckDB de lectura a una o varias capas nativas `QgsVectorLayer(provider="memory")`, con control de errores, progreso y cancelación. No se crea una conexión viva DuckDB↔capa y no se crea un proveedor personalizado en esta fase.
 
-## 2. Pipeline normativo
+Llevar a QGIS el resultado **completo** de una consulta de lectura, o una tabla o vista del catálogo, con
+control de errores, progreso y cancelación, en una de tres modalidades:
+
+| Modalidad | Nombre en la interfaz | Resultado en QGIS | Vínculo con DuckDB |
+|---|---|---|---|
+| Memoria | «Copia en memoria» | `QgsVectorLayer(provider="memory")` | Ninguno |
+| Instantánea | «Copia rápida» | GeoPackage en `/vsimem/geoduck/…` abierto con el proveedor `ogr` | Ninguno; GeoDuck libera `/vsimem` al quitar la capa |
+| Conectada | «Conectada a DuckDB» | Proveedor PyQGIS `geoduck` | Sí, con la sesión y la base adjunta |
+
+## 2. Fuente común de lectura
+
+```python
+relation = con.sql(read_sql)  # solo una consulta de lectura repetible, ya normalizada (§7)
+with relation.to_arrow_reader(batch_size=batch_size) as reader:
+    for batch in reader:
+        ...  # entregar con contrapresión; comprobar cancelación entre lotes
+```
+
+- Sin `COUNT(*)` previo: el progreso cuenta filas recibidas; el total solo se muestra si se conoce sin
+  coste extra.
+- `batch_size` inicial: 8 192 filas (F-44: el tamaño de lote apenas cambia el total).
+- La consulta se ejecuta al consumir la relación; DuckDB 1.5/2.x no ofrece streaming eficiente desde
+  `con.execute().to_arrow_reader()`.
+- Para un resultado del editor rige sql-editor-spec §5: solo se repite esa consulta de lectura, nunca
+  DDL, DML, `RETURNING` ni el resto del script.
+
+## 3. Modalidad Memoria
 
 ```mermaid
 sequenceDiagram
-  participant U as Usuario
   participant W as Worker DuckDB
-  participant A as Arrow stream
   participant M as Hilo principal QGIS
   participant Q as QgsProject
-  U->>W: Cargar SELECT seleccionado + geometría/CRS
-  W->>A: relation.to_arrow_reader(batch_size=N)
-  loop Lotes acotados
-    A-->>M: RecordBatch (sin objetos PyQGIS)
-    M->>M: Convertir columnas a QgsFields/QgsFeatures
-    M->>M: Añadir a QgsVectorLayer privada
-    M-->>W: ACK para backpressure
+  W->>M: RecordBatch normalizado (cola de 2 lotes)
+  loop tramos de 1 024 filas
+    M->>M: listas de columnas → QgsFeature/QgsGeometry → addFeatures (capa privada)
+    M->>M: atender eventos
   end
-  W-->>M: EOF / conteos / cierre reader
-  M->>M: Validar integridad y metadatos
-  M->>Q: Registrar capa(s) completas
-  Q-->>U: Éxito y control de la capa
+  W-->>M: fin / cancelación / error
+  M->>M: validar conteos y metadatos
+  M->>Q: registrar la capa completa
 ```
 
-## 3. Precondiciones
-- Sesión activa y resultado SQL tabular apto para consulta de lectura; no repetir DML/DDL.
-- Columnas conocidas; destino/estrategia geométrica seleccionados; CRS identificado o decisión explícita de usuario.
-- Recursos de memoria estimados y advertencia útil cuando el resultado es potencialmente grande. No fingir disponibilidad infinita de RAM.
-- Cualquier reader anterior de la conexión está cerrado antes de comenzar.
+- Conversión en el hilo principal por tramos de 1 024 filas, atendiendo eventos entre tramos (F-44). El
+  worker no crea objetos de QGIS (F-44: no acelera por el GIL).
+- Fechas desde enteros (`QDateTime.fromMSecsSinceEpoch`), nunca `QDateTime(datetime)` (F-43).
+- Disponible siempre: no depende de GDAL.
 
-## 4. API elegida
-```python
-relation = con.sql(read_query)  # solo para consulta de lectura
-with relation.to_arrow_reader(batch_size=batch_size) as reader:
-    for batch in reader:
-        # entregar mediante cola con backpressure
-        ...
-```
+## 4. Modalidad Instantánea
 
-DuckDB 1.5/2.x: no asumir streaming eficiente desde `con.execute().to_arrow_reader()`; usar relación. La consulta se ejecuta al consumir la relación. `batch_size` es configurable y se perfila; 8 192 / 16 384 filas son valores iniciales de experimento, no optimizaciones probadas.
+- Dentro de la operación del worker, GDAL escribe cada lote con `OGRLayer.WriteArrow` en un GeoPackage
+  nuevo en `/vsimem/geoduck/<id>.gpkg`, en una transacción de GDAL. El CRS sale del PROJJSON de GeoArrow.
+- Al terminar, el hilo principal abre la capa con el proveedor `ogr` (privada) y la publica.
+- Requiere GDAL ≥ 3.8 con el driver GPKG. Si no está, la opción aparece desactivada con el motivo.
+- **Ciclo de vida de `/vsimem`:** GeoDuck registra cada archivo y lo libera (`gdal.Unlink`) cuando QGIS
+  quita la última capa que lo usa. En error o cancelación lo libera de inmediato. Al descargar GeoDuck,
+  los archivos de capas aún presentes se conservan, porque son de QGIS.
 
-## 5. Hilos y estabilidad
-- Worker DuckDB: lector Arrow, conversión a tipos Arrow estándar, acumuladores de conteos; no usar `QgsVectorLayer`/`QgsProject`/widgets/QObject del hilo principal.
-- Main QGIS: `QgsVectorLayer`, `QgsFields`, `QgsFeature`, `QgsGeometry.fromWkb`, `dataProvider().addFeatures`, registro en `QgsProject`.
-- Queues y señales: backpressure explícito (máximo 1–3 lotes en vuelo inicialmente); verificar seguridad y latencia con pruebas reales.
-- La incorporación en QGIS de grandes lotes debe repartir trabajo en eventos del hilo principal; no ejecutar un bucle enorme que bloquee la interfaz durante segundos.
-- Cancelación cooperativa y cleanup `finally`; no llamar APIs de interrupción DuckDB no verificadas desde otro hilo.
+## 5. Modalidad Conectada
 
-## 6. Atomicidad de entrega
-Una transferencia **no se registra como completa** si alguna fila falla al convertir o insertar. Mientras se transfiere, usar capa privada no registrada en `QgsProject`. Al éxito, registro del grupo de capas. Si una selección espacial crea dos capas, o se registran ambas completas o ninguna para esa operación, salvo elección explícita posterior del propietario.
+### 5.1 Fuente y URI
 
-En cancelación/error/OOM: cerrar reader, descartar capas privadas, liberar estructuras temporales del bridge, registrar error sin datos sensibles. Los `ATTACH` previos permanecen a menos que el usuario ordene `DETACH`.
+URI: `session=<id>|source=<catálogo.esquema.objeto>|sql=<consulta>|geom=<columna>|key=<pk>|type=<WkbType>`.
+`source` y `sql` son excluyentes.
 
-La atomicidad es sobre **publicación en el proyecto**, no una transacción en la memoria interna de QGIS.
+- **Tabla o vista** del explorador: `source`.
+- **Resultado del editor:** `sql`, solo lectura.
+- **Tipo de geometría** (`type`): se declara o se deduce de los datos, porque DuckDB no guarda el
+  subtipo (F-71).
 
-## 7. Tabla de conversión DuckDB / Arrow → QGIS
+### 5.2 Peticiones de QGIS → SQL
 
-| Entrada | Política V1 | Advertencia |
+| Petición | SQL |
+|---|---|
+| Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5); con `spatial` cargada, `ST_Intersects(geom, ST_MakeEnvelope(…))`, que usa el RTree si existe |
+| FID | `key = ?` / `key IN (…)` |
+| Atributos pedidos / sin geometría | solo esas columnas; sin la columna de geometría |
+| Expresión | Compilada a SQL de DuckDB cuando es posible (comparaciones, `AND`/`OR`/`NOT`, `IN`, `IS NULL`, `LIKE`/`ILIKE`, aritmética); si no, se evalúa en Python sobre lo filtrado en SQL |
+| `LIMIT`, orden | `LIMIT`; `ORDER BY` cuando la petición lo pide |
+
+Las peticiones van en **páginas** de como mucho 50 000 filas. Con clave primaria, cada página empieza
+después de la última clave leída (`key > ? ORDER BY key LIMIT n`); sin ella, se usa
+`LIMIT n OFFSET m`. Entre páginas el worker queda libre.
+
+### 5.3 Contención con el SQL del usuario
+
+- Las páginas del mapa son operaciones del worker con **prioridad** sobre el trabajo en cola. No
+  interrumpen la operación en curso.
+- Si QGIS cancela el dibujado (`QgsFeedback`) o cierra el iterador, la página pendiente se descarta y la
+  operación en curso se cancela.
+- Mientras corre una consulta larga del usuario, el dibujado espera sin bloquear la interfaz de QGIS. El
+  usuario puede cancelar la consulta desde el panel.
+
+### 5.4 Edición
+
+**Qué es editable:** solo una tabla base, de una base no `READ_ONLY`, cuya clave primaria es una sola
+columna entera y coincide con `key`. También las tablas `TEMP`. Lo demás es de solo lectura, con el
+motivo visible.
+
+**Guardado atómico:** GeoDuck escucha `QgsVectorLayer.beforeCommitChanges`, lee el búfer de edición y, en
+una sola operación del worker, ejecuta:
+
+1. `BEGIN`. Si la sesión ya tiene una transacción abierta, se rechaza el guardado con aviso.
+2. **Conflictos:** compara `hash(fila completa)` de cada fila cambiada o borrada con la huella registrada
+   cuando QGIS la leyó. Si alguna difiere o falta, ROLLBACK y se informa la lista de entidades en
+   conflicto.
+3. **Validación previa:** tipo de geometría compatible con la capa y prohibición de cambiar la clave.
+4. **Escrituras por lotes** con tablas Arrow registradas en la operación: `UPDATE … FROM`,
+   `INSERT … SELECT` y `DELETE … WHERE key IN (SELECT …)`. Los ids de las altas se piden antes con
+   `nextval` de la secuencia de la clave; si no hay secuencia, el usuario indica el id.
+5. `COMMIT`. Cualquier error o cancelación provoca ROLLBACK.
+
+Después, los métodos del proveedor solo informan el veredicto. **QGIS informa éxito solo si DuckDB
+confirmó**, y si no, conserva el búfer entero para corregir o reintentar. Tras un guardado se avanza la
+época de datos: las previsualizaciones quedan marcadas como posiblemente obsoletas.
+
+**Resolución de conflictos:** el usuario puede volver a leer las entidades en conflicto y reintentar, lo
+que sobrescribe a sabiendas, o descartar sus cambios.
+
+### 5.5 Ciclo de vida
+
+| Situación | Comportamiento |
+|---|---|
+| DETACH de la base, o cierre de la sesión | Rechazado si una capa conectada de esa base tiene cambios sin guardar. Si no, las capas quedan **no disponibles**: vacías, con aviso y sin errores |
+| ATTACH de nuevo con el mismo alias | Las capas vuelven a estar disponibles y se repintan |
+| Reabrir el proyecto | Disponible si la sesión tiene adjunta esa base; si no, no disponible hasta adjuntarla. Las capas sobre `:memory:` o `TEMP` no sobreviven |
+| Cambios sin confirmar del usuario | Visibles en el mapa, porque es la misma conexión; se avisa mientras haya una transacción abierta |
+
+## 6. Hilos y estabilidad
+
+- **Worker:** lector Arrow, normalización y escritura de GDAL (Instantánea). Nunca `QgsVectorLayer`,
+  `QgsProject`, widgets ni `QObject` del hilo principal.
+- **Hilo principal:** capas, `QgsFeature` (Memoria), apertura y publicación de capas, interfaz.
+- **Proveedor `geoduck`:** QGIS lo llama desde sus hilos de dibujo. Solo envía operaciones al worker y
+  espera su resultado; nunca toca la conexión ni objetos del proyecto.
+- Contrapresión: como mucho 2 lotes en vuelo. Cancelación cooperativa y limpieza en `finally`.
+- Un consumidor que falla detiene al productor, que nunca queda bloqueado (F-60).
+
+## 7. Tabla de conversión DuckDB → QGIS (normalización común)
+
+GeoDuck envuelve la consulta en `SELECT <expresiones> FROM (<consulta>)` según los tipos de su resultado.
+Las expresiones se aplican en DuckDB, antes de Arrow:
+
+| Entrada | Salida | Nota |
 |---|---|---|
-| `BOOLEAN` | booleano/QVariant compatible | validar por QGIS3/4 |
-| `TINYINT`/`SMALLINT`/`INTEGER` | entero | límites por binding |
-| `BIGINT` | entero de 64 bits si es representable; si no, string | sin pérdida silenciosa |
-| `UBIGINT`/`HUGEINT` | texto canónico por defecto si rango excede QGIS | preservar exactitud |
-| `FLOAT`/`DOUBLE` | `double` | `NaN/Inf` según estrategia explícita |
-| `DECIMAL(p,s)` | doble si exactitud controlada; texto cuando pueda perder precisión | **nunca** convertir silenciosamente |
-| `VARCHAR`/`ENUM`/`UUID` | texto | codificación UTF-8 |
-| `DATE` | QDate o texto ISO validado | nulos |
-| `TIMESTAMP`/`TIMESTAMPTZ` | QDateTime o ISO con zona documentada | conservar semántica de zona |
-| `TIME`/`INTERVAL` | QTime o texto normalizado | no inventar fecha |
-| `BLOB` | hexadecimal o texto base64 explícito | no tratar BLOB como geometría sin metadatos |
-| `LIST`/`STRUCT`/`MAP`/`UNION` | JSON canonizado si representable o texto tipado | avisar pérdida de estructura nativa QGIS |
-| geometría primaria | WKB → `QgsGeometry` | CRS separado; validar tipo y contenido |
-| geometría no primaria | omitir de atributos por defecto, ofrecer WKT/WKB textual opcional | no afecta fuente DuckDB |
-| `NULL` | `NULL` real de QGIS | no convertirlo a cadena `"None"` |
+| `BOOLEAN`, `TINYINT`..`BIGINT`, `UTINYINT`..`UINTEGER` | igual | `UINTEGER` → `BIGINT` |
+| `UBIGINT`, `HUGEINT`, `UHUGEINT` | `VARCHAR` canónico | sin pérdida (F-47) |
+| `FLOAT`, `DOUBLE` | igual | `NaN`/`Inf` se conservan |
+| `DECIMAL(p,s)` con p ≤ 15 | `DOUBLE` | exacto en doble precisión |
+| `DECIMAL(p,s)` con p > 15 | `VARCHAR` | sin pérdida |
+| `VARCHAR`, `UUID`, `ENUM` | `VARCHAR` | el ENUM conserva su etiqueta (F-47) |
+| `DATE` | `DATE` | |
+| `TIMESTAMP`, `TIMESTAMP_S/MS/NS` | `TIMESTAMP` (µs) | `TIMESTAMP_NS` pierde sub-µs: se avisa |
+| `TIMESTAMPTZ` | `TIMESTAMPTZ` en UTC | se documenta la zona |
+| `TIME`, `TIMETZ`, `INTERVAL` | `VARCHAR` ISO | no se inventa fecha (F-47) |
+| `BLOB`, `BIT` | igual / `VARCHAR` | no se trata un BLOB como geometría |
+| `LIST`, `STRUCT`, `MAP`, `UNION`, `ARRAY` | `VARCHAR` JSON | se avisa la pérdida de estructura |
+| Geometría primaria | `geoarrow.wkb` + CRS | ADR-0008 |
+| Geometrías no primarias | se omiten | se avisa; el usuario elige otra primaria |
+| `NULL` | `NULL` real de QGIS | nunca `"None"` |
 
-La tabla debe refinarse mediante contrato testado por tipo y bindings QGIS concretos, no tomar como garantía universal de QVariant. Rechazar datos imposibles de convertir con motivo explícito en lugar de producir datos inconsistentes.
+La Conectada aplica la misma tabla en la lectura. En la escritura convierte de vuelta solo los tipos que
+puede escribir sin pérdida; los campos convertidos a texto son de solo lectura. Toda advertencia de tipo
+se muestra antes de publicar la capa.
 
-## 8. IDs, orden y atributos
-- Si hay una columna de ID único y compatible, ofrecerla como campo de atributo, **no** confiar automáticamente en ella como FID QGIS.
-- Crear FID nativo `QgsFeature` para cada fila y validar conteos; las tablas sin geometría usan capa `None`.
-- SQL sin `ORDER BY` no garantiza orden de salida. No usar el orden para producir identidad persistente entre ejecuciones.
-- El naming del usuario manda; nombres generados son `Tabla — <geom>`/`Resultado N — <geom>` y se normalizan para QGIS.
+## 8. Atomicidad e integridad
 
-## 9. Integridad y comprobación
-- `rows_read == rows_converted == rows_added` para cada capa.
-- Metadatos de campos, CRS, geometría y valores se verifican antes de registrar capa.
-- Para 2 geometrías, comprobar que las 2 capas obtienen el mismo número de filas lógico cuando el contrato así lo establece (salvo nulos con regla documentada).
-- No completar silenciosamente con una capa parcial en casos de error o falta de memoria.
+- Una carga Memoria o Instantánea **no se registra** si alguna fila falla. Mientras se transfiere, la
+  capa es privada: no está en `QgsProject`. Si una selección crea varias capas, se registran todas o
+  ninguna.
+- En cancelación, error u OOM: cerrar el lector, descartar las capas privadas, liberar `/vsimem` y
+  registrar el error sin datos sensibles.
+- Comprobación de conteos:
+  - Memoria e Instantánea: `rows_read == rows_written == layer.featureCount()`;
+  - Conectada: lo que el proveedor devuelve sale de DuckDB, y cada página informa su número de filas.
+- La atomicidad es sobre la **publicación** (Memoria, Instantánea) y sobre el **guardado** (Conectada).
+
+## 9. IDs, orden y atributos
+
+- **Memoria e Instantánea:** FID nativo de la capa; la columna de id del usuario queda como atributo.
+- **Conectada:** FID = clave primaria entera. Sin ella la capa es de solo lectura y su FID es
+  posicional, válido solo durante una petición.
+- Un SQL sin `ORDER BY` no garantiza el orden; no se usa para identidad.
+- El nombre lo decide el usuario. Por defecto es el título del resultado o el nombre del objeto, con el
+  sufijo de la geometría si hay varias.
 
 ## 10. Límite de responsabilidad
-Después del `QgsProject.addMapLayer(...)` exitoso y la notificación de entrega: GeoDuck no mantiene referencias al archivo DuckDB, no refresca la capa, no la borra al `DETACH`, ni decide cómo se guarda o se renderiza. QGIS asume el control. La capa memory se puede perder si el usuario no la guarda según las reglas de QGIS.
+
+- **Memoria e Instantánea:** tras `addMapLayer` y la notificación, GeoDuck no refresca la capa ni la
+  borra al hacer DETACH; QGIS asume el control. La única excepción es liberar el archivo `/vsimem`
+  cuando QGIS quita la capa. Ambas se pierden si el usuario no las guarda según las reglas de QGIS.
+- **Conectada:** GeoDuck mantiene el vínculo descrito en §5.5 mientras la capa exista.
 
 
 
@@ -791,8 +908,9 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 ## 3. Interacciones definidas
 - **Inicio:** tarjeta discreta «En memoria» / «Archivo DuckDB», selector de archivo, toggle «Solo lectura / Lectura y escritura», botón «Iniciar sesión». La UI se desbloquea al confirmar la sesión.
 - **ATTACH:** icono `+` al lado de catálogos; diálogo path, alias, RO/RW; feedback al finalizar.
-- **DETACH:** menú contextual «Desadjuntar» con confirmación si hay operaciones propias activas. No mostrar advertencia falsa de que se perderán capas QGIS ya entregadas.
-- **Tabla/Vista:** doble clic abre preview opcional o añade una consulta en editor; clic derecho «Cargar completa en QGIS» con selector espacial si aplica.
+- **DETACH:** menú contextual «Desadjuntar» con confirmación si hay operaciones propias activas. No mostrar advertencia falsa de que se perderán capas QGIS ya entregadas. Si hay capas conectadas a esa base, avisar de que quedarán no disponibles hasta adjuntarla de nuevo.
+- **Tabla/Vista:** doble clic abre preview opcional o añade una consulta en editor; clic derecho «Cargar en QGIS» con las tres modalidades y selector espacial si aplica. Una tabla con clave primaria entera ofrece «Conectada a DuckDB (editable)».
+- **Modalidad de carga:** un solo diálogo pequeño con tres opciones y una línea de ayuda cada una: «Copia en memoria — compatible, para resultados pequeños», «Copia rápida — rápida y con poca memoria», «Conectada a DuckDB — sin copiar, siempre al día». Recuerda la última elección. Las opciones no disponibles se muestran desactivadas con el motivo. Sin términos técnicos (`/vsimem`, GeoArrow, proveedor).
 - **SQL:** botón principal «Ejecutar» opera sobre sentencia actual si no hay selección, o selección según preferencia explícita; comandos «Todo» y «Selección» inequívocos.
 - **Resultados:** pestañas por sentencia con nombre legible y ID; cambiar pestaña selecciona solo ese resultado. `Cargar en QGIS` siempre etiqueta el resultado objetivo.
 - **Múltiples geometrías:** selector pequeño con radiobutton/checkbox por columna, nombre/tipo/CRS; permitir uno o varios. No modal por cada consulta cuando no hay ambigüedad.
@@ -979,7 +1097,14 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-BRD-002 | lector Arrow multi-lote | conteos/valores coinciden |
 | AT-BRD-003 | cancelar carga prolongada | GUI responde, lector cerrado |
 | AT-BRD-004 | fallo fila 30 001 | ninguna capa parcial publicada |
-| AT-BRD-005 | capa entregada → cerrar GeoDuck | QGIS controla capa y atributos |
+| AT-BRD-005 | capa entregada (Memoria/Instantánea) → DETACH, cerrar GeoDuck | QGIS controla capa y atributos |
+| AT-BRD-006 | Instantánea 1 M filas; quitar la capa | íntegra fila a fila, CRS, editable; `/vsimem` liberado al quitarla |
+| AT-BRD-007 | un tipo de cada fila de §7 en las tres modalidades | valor conservado, o texto/rechazo con aviso; nunca pérdida silenciosa |
+| AT-BRD-008 | Conectada sobre tabla, vista y SQL; extensión, expresión, FID | filas y FID correctos; SQL con filtros empujados |
+| AT-BRD-009 | dibujar mientras corre SQL largo; SQL mientras se dibuja | ni la UI ni la sesión se bloquean más de una página; cancelación libera el worker |
+| AT-BRD-010 | editar 100/1 000/10 000 entidades; conflicto SQL; error; cancelación; transacción abierta | éxito ⇔ COMMIT; fallo ⇒ DuckDB intacto y búfer conservado |
+| AT-BRD-011 | capa conectada → DETACH → ATTACH; cerrar; reabrir proyecto | no disponible sin errores; vuelve con el mismo alias; cambios sin guardar bloquean DETACH/cierre |
+| AT-BRD-012 | cargar con cada modalidad desde la UI | elección clara, progreso, cancelación, nombre de capa |
 | AT-SPA-001 | 0/1/2 campos GEOMETRY | decisión adecuada, no geometría arbitraria |
 | AT-SPA-002 | centroide + polígono → ambas capas | dos capas completas con geometría correcta |
 | AT-SPA-003 | GEOMETRY con CRS y sin CRS | conservar/preguntar, nunca CRS inventado |
@@ -1102,7 +1227,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G0 · `v0.1.0a1` Foundation | plugin abre dock, diagnóstico y sesión memoria | GD-BOOT-*, GD-SES-001 | QGIS 3/4 ancla cargan; duckdb/arrow/spatial validado |
 | G1 · `v0.2.0a1` Connections | archivo RO/RW, catálogo, ATTACH/DETACH por UI | GD-SES-002..005 (de GD-SES-003, solo la UI), GD-CAT-001 | lock release real y temporales coherentes; invalidación de sesión notificada una sola vez (INV-1..INV-5) |
 | G2 · `v0.3.0a1` SQL Execution | scripts mixtos, resultados y previews; ATTACH/DETACH desde SQL conciliados con la UI | GD-SQL-001..006, GD-SES-003 (parte SQL) | 2 SELECT y CREATE correctos; no reejecución DML |
-| G3 · `v0.4.0a1` QGIS Bridge MVP | tabla plana y una geometría → capas memory | GD-BRD-001..005 | primera Alpha útil E2E; capas intactas tras DETACH |
+| G3 · `v0.4.0a1` QGIS Bridge | tabla plana y una geometría en tres modalidades: Memoria, Instantánea (GeoPackage `/vsimem`) y Conectada editable (ADR-0012) | GD-BRD-001..012 | primera Alpha útil E2E; las tres modalidades cumplen AT-BRD-001..012; Memoria e Instantánea intactas tras DETACH |
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
 | G5 · `v0.6.0a1` SQL Professional | editor avanzado, historial, autocompletado | GD-SQL-007, GD-UX-001 | UX teclado/Qt5/Qt6 y errores profesionales |
 | G6 · `v0.7.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |

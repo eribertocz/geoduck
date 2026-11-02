@@ -28,9 +28,11 @@ flowchart TD
 
 **Result Registry:** guarda metadatos de sentencia, preview limitado, SQL reejecutable cuando procede, contexto y estado de disponibilidad; no contiene un resultado completo en memoria ni un lector Arrow indefinido.
 
-**Arrow Bridge:** transfiere `RecordBatch` con control de presión y cierre garantizado del reader. La conversión final Arrow → `QgsFeature`/`QgsGeometry` implica copia y asignación controlada.
+**Arrow Bridge:** transfiere `RecordBatch` con control de presión y cierre garantizado del reader, tras normalizar los tipos en SQL (qgis-bridge-spec §7). Tres destinos (ADR-0012): capa memory (conversión en el hilo principal), GeoPackage en `/vsimem` (GDAL `WriteArrow` dentro de la operación del worker) y proveedor Conectado (páginas bajo demanda).
 
 **QGIS Committer:** crea o alimenta una capa temporal no registrada, exclusivamente en hilo principal. Publica todas las capas del pedido tras validar integridad, o descarta todas en fracaso.
+
+**Conectado (`qgis_bridge.provider`):** proveedor PyQGIS que traduce cada petición de QGIS a SQL y la envía al worker como páginas prioritarias. **Registro de capas conectadas:** sigue esas capas para marcarlas no disponibles o reconectarlas ante DETACH/ATTACH/cierre, y aplica el guardado atómico con control optimista (qgis-bridge-spec §5.4).
 
 ## 3. Máquina de estados de sesión
 Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNECTING → READY ⇄ BUSY`, `READY → DETACHING → READY`, `* → CLOSING → DISCONNECTED`; `ERROR_RECOVERABLE` registra fallos de los que se puede salir reintentando, volviendo a `READY` (solo si la conexión y la transacción siguen utilizables) o cerrando. La tabla de transiciones de `session-spec` §5 es normativa. Los estados de operación y de entrega (`cancelando`, `transfiriendo`, `entrega exitosa`…) pertenecen a la máquina de operación, no a la de sesión.
@@ -44,9 +46,11 @@ Estados de sesión (fuente única: `session-spec` §5): `DISCONNECTED → CONNEC
 ## 4. Secuencia cargar capa
 1. UI escoge resultado tabular y su geometría/CRS.
 2. Application valida que la consulta puede volver a ejecutarse con seguridad para ese caso; si no, ofrece explicación.
-3. Worker prepara relación `con.sql(read_query)`; abre `rel.to_arrow_reader(batch_size=config)` en `with`.
-4. Worker entrega lotes sin acceso a objetos Qt/QGIS del hilo principal; cola acotada y ACK mantienen memoria predecible.
-5. Main thread valida campos, convierte cada lote y agrega a una capa **privada** de memoria.
+3. Worker prepara relación `con.sql(read_query)` sobre la consulta normalizada (qgis-bridge-spec §7) y abre `rel.to_arrow_reader(batch_size=config)` en `with`.
+4. Worker entrega lotes sin acceso a objetos Qt/QGIS del hilo principal; cola acotada y ACK mantienen memoria predecible. En la Instantánea, GDAL escribe cada lote en `/vsimem` dentro de la misma operación.
+5. Main thread valida campos, convierte cada lote y agrega a una capa **privada** de memoria (Memoria), o abre la capa GeoPackage privada (Instantánea).
+
+La modalidad **Conectada** no copia: crea una capa con el proveedor `geoduck` y la registra; las lecturas posteriores las piden QGIS y el proveedor como páginas prioritarias del worker (qgis-bridge-spec §5).
 6. Si se cancela o falla, limpiar reader y descartar capa privada; ninguna publicación.
 7. Al final, cotejar recuentos, esquema y errores; registrar capa(s) en `QgsProject` y emitir éxito.
 8. Desde ese momento la propiedad es exclusivamente de QGIS y la capa no retiene referencia a DuckDB.

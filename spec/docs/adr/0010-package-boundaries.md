@@ -31,7 +31,7 @@ solo se mantienen si algo las comprueba automáticamente en cada PR.
 | `engine` | biblioteca estándar, `domain`, `engine`, `duckdb`, `pyarrow` | `qgis`, `PyQt*`, `app`, `infra`, `ui`, `qgis_bridge` |
 | `infra` | biblioteca estándar, raíz, `domain`, `infra`; importación **dinámica** de dependencias para diagnosticarlas | importación estática de `duckdb`/`pyarrow`/`qgis`; `app`, `engine`, `ui` |
 | `ui` | biblioteca estándar, raíz, `domain`, `app`, `infra`, `ui`, `qgis` (incluido `qgis.PyQt`) | `duckdb`, `pyarrow`, `engine`, `qgis_bridge` |
-| `qgis_bridge` (se crea en G3) | biblioteca estándar, `domain`, `qgis_bridge`, `pyarrow`, `qgis` | `duckdb`, `engine`, `ui` |
+| `qgis_bridge` (se crea en G3) | biblioteca estándar, `domain`, `qgis_bridge`, `pyarrow`, `qgis`, `osgeo` (GDAL de QGIS; ADR-0012) | `duckdb`, `engine`, `app`, `ui` |
 | `plugin.py` | todo (raíz de composición); `engine` solo con importación diferida | — |
 
 3. **Verificación automática.** Un test sin dependencias externas (`tests/architecture`, análisis AST de
@@ -57,6 +57,6 @@ solo se mantienen si algo las comprueba automáticamente en cada PR.
 
 ## Resoluciones del dictamen final (2026-11-01)
 
-1. Se aprueba la fila de `qgis_bridge`.
+1. Se aprueba la fila de `qgis_bridge`. **Actualización (2026-11-02, ADR-0012):** `qgis_bridge` puede importar `osgeo` para la modalidad Instantánea. Habla con la sesión solo mediante el protocolo que recibe de la raíz de composición, nunca importando `engine` ni `app`.
 2. Se acepta que `plugin.py` importe `engine` solo de forma diferida.
 3. Se acepta que `infra` importe `duckdb`, `pyarrow` y `qgis` solo de forma dinámica, para diagnosticarlos.

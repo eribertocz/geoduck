@@ -1,6 +1,6 @@
 # ADR-0003: API Relacional + Arrow por lotes como puente QGIS
 
-**Estado:** Aceptado sujeto a spike técnico G3 · **Fecha:** 2026-11-01
+**Estado:** Aceptado; spike G3 cerrado · **Fecha:** 2026-11-01 · **Enmendado por [ADR-0012](0012-three-load-modes.md)** (2026-11-02): la lectura por lotes es la fuente común de las tres modalidades; la Instantánea convierte con GDAL en lugar de PyQGIS
 
 ## Contexto
 El producto pide explotar DuckDB >=1.5 y aprovechar la ejecución lazy, sin copiar resultados completos a pandas para llevarlos a QGIS.

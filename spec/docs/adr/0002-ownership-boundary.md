@@ -1,6 +1,6 @@
 # ADR-0002: QGIS es propietario de capas entregadas
 
-**Estado:** Aceptado para Alpha · **Fecha:** 2026-11-01
+**Estado:** Aceptado para Alpha · **Fecha:** 2026-11-01 · **Enmendado por [ADR-0012](0012-three-load-modes.md)** (2026-11-02): rige para las modalidades Memoria e Instantánea; la modalidad Conectada mantiene un vínculo con la sesión según ADR-0012
 
 ## Contexto
 El producto debe cargar tablas y consultas DuckDB en QGIS y permitir `DETACH` sin retirar o romper capas previamente cargadas.
