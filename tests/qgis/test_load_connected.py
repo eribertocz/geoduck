@@ -389,3 +389,25 @@ def test_layer_filter_like_any_qgis_layer(session):
     assert copy.subsetString() == "id < 10 AND nombre LIKE 'n ñ %'" and len(ids(copy)) == 10
     assert layer.setSubsetString("")
     assert layer.featureCount() == N and len(ids(layer)) == N
+
+
+def test_extent_with_empty_geometries_is_computed(session):
+    """Con geometrías vacías, las estadísticas de DuckDB dan -inf…inf: se recorre la geometría."""
+    session.sql(
+        "CREATE TABLE vacias AS SELECT range AS id, CASE WHEN range % 10 = 0 THEN 'POINT EMPTY' "
+        "ELSE 'POINT(' || range || ' ' || (range * 2) || ')' END::GEOMETRY AS g FROM range(100)"
+    )
+    report, layer = session.load(
+        'SELECT * FROM "memory"."main"."vacias"', name="vacias", source=("memory", "main", "vacias")
+    )
+    assert layer.extent() == QgsRectangle(1, 2, 99, 198)
+    assert not any("Extensión desconocida" in w for w in report.warnings)
+    assert layer.dataProvider().editable  # tabla cargada desde el explorador: editable
+
+
+def test_query_result_explains_how_to_edit(session):
+    report, layer = session.load("SELECT * FROM puntos", name="consulta")
+    assert not layer.dataProvider().editable
+    assert any(
+        "Solo lectura: es el resultado de una consulta" in w and "doble clic" in w for w in report.warnings
+    )

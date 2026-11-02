@@ -27,6 +27,7 @@ class CatalogExplorer(QTreeWidget):
         super().__init__(parent)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._context_menu)
+        self.itemDoubleClicked.connect(self._double_clicked)
         self.loading_enabled = False
         self.setHeaderHidden(True)
         self.setAccessibleName(tr("Explorador de bases de datos"))
@@ -85,6 +86,15 @@ class CatalogExplorer(QTreeWidget):
         source = item.data(0, _SOURCE_ROLE)
         action.triggered.connect(lambda: self.load_requested.emit(sql, name, source))
         menu.exec(self.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
+
+    def _double_clicked(self, item: QTreeWidgetItem, _column: int = 0) -> None:
+        """Doble clic sobre una tabla o vista: lo mismo que «Cargar en QGIS…» (issue #67). Sobre una base o
+        un esquema no hace nada más que expandir o contraer, como siempre."""
+        sql = item.data(0, _OBJECT_ROLE) if item is not None else None
+        if not sql or not self.loading_enabled:
+            return
+        name = item.text(0).rsplit(" (", 1)[0]
+        self.load_requested.emit(sql, name, item.data(0, _SOURCE_ROLE))
 
     def selected_database(self) -> str | None:
         """Base a la que pertenece el elemento seleccionado; `None` si no hay o es un temporal."""

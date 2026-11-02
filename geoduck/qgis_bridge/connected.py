@@ -16,7 +16,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer, QgsWkbTypes
+from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_terminator
@@ -105,6 +105,27 @@ def _extent_from_stats(value: Any) -> tuple[float, float, float, float] | None:
     return box if finite and box[0] <= box[2] and box[1] <= box[3] else None
 
 
+def _scan_extent(handle: Any, token: Any, sql: str) -> tuple[float, float, float, float] | None:
+    """Extensión exacta recorriendo la geometría una vez, en el worker; ignora nulas y vacías."""
+    xmin = ymin = math.inf
+    xmax = ymax = -math.inf
+    with handle.arrow_batches(sql, batch_size=65_536) as reader:
+        for batch in reader:
+            token.raise_if_cancelled()
+            for wkb in batch.column(0).to_pylist():
+                if wkb is None:
+                    continue
+                g = QgsGeometry()
+                g.fromWkb(wkb)
+                if g.isNull() or g.isEmpty():
+                    continue
+                box = g.boundingBox()
+                xmin, ymin = min(xmin, box.xMinimum()), min(ymin, box.yMinimum())
+                xmax, ymax = max(xmax, box.xMaximum()), max(ymax, box.yMaximum())
+    finite = all(math.isfinite(v) for v in (xmin, ymin, xmax, ymax))
+    return (xmin, ymin, xmax, ymax) if finite else None
+
+
 def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
     """Tipo de capa (`Qgis.WkbType` por nombre) desde cabeceras WKB ISO en hex, y un aviso si hay mezcla."""
     types = set()
@@ -128,7 +149,7 @@ def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
     )
 
 
-def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
+def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912
     """Operación del worker: todo lo que la URI necesita, sin leer los datos en Python."""
     inner = strip_terminator(request.sql)
     described = _rows(handle, f"DESCRIBE SELECT * FROM (\n{inner}\n) AS __geoduck_q", 10_000)
@@ -155,7 +176,14 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         fid, key = "rowid", None  # como `ctid` en PostgreSQL
     else:
         fid, key = "content", None
-    readonly: str | None = None if is_table else "DuckDB no escribe en vistas ni en consultas"
+    readonly: str | None = None
+    if request.source is not None and not is_table:
+        readonly = "es una vista y DuckDB no escribe en vistas"
+    elif not is_table:
+        readonly = (
+            "es el resultado de una consulta. Para editar, cargue la tabla desde el explorador "
+            "(clic derecho o doble clic → Cargar en QGIS…)"
+        )
     key_default: str | None = None
     defaults: list[str] = []
     if is_table and request.source is not None:
@@ -204,6 +232,9 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     else:
         stats = _rows(handle, f"SELECT stats({g}) FROM (\n{inner}\n) AS __geoduck_q LIMIT 1", 1)
         out["extent"] = _extent_from_stats(stats[0][0]) if stats else None
+    if out["extent"] is None and count:
+        # Estadísticas inservibles (p. ej. geometrías vacías dan -inf…inf): un recorrido de la geometría.
+        out["extent"] = _scan_extent(handle, token, f"SELECT {g} FROM (\n{inner}\n) AS __geoduck_q")
     batches: list[Any] = []  # el campo GeoArrow (con su CRS) de una fila
     handle.read_arrow(
         f"SELECT {g} FROM ({plan.sql}) AS __geoduck_c WHERE {g} IS NOT NULL LIMIT 1",

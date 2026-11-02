@@ -16,6 +16,8 @@ changelog=0.4.0a2
     - Corrección: la capa conectada no abría en QGIS 3.34–3.38 (API de QGIS más nueva).
     - Corrección: en QGIS 3.34 la copia rápida recibía un CRS que los datos no tenían.
     - Capa conectada: Capa → Filtrar… funciona, con SQL de DuckDB sobre los campos de la capa.
+    - Capa conectada: «Zoom a la capa» también con geometrías vacías en la tabla.
+    - Explorador: doble clic sobre una tabla o vista para «Cargar en QGIS…».
     0.4.0a1 (G3 · QGIS Bridge)
     - «Cargar en QGIS» con tres modalidades: copia en memoria, copia rápida (GeoPackage en /vsimem) y conectada a DuckDB.
     - Capa conectada: lectura bajo demanda por páginas, filtros en DuckDB y edición atómica con detección de conflictos.

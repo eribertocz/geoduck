@@ -80,7 +80,9 @@ Hallazgos de E5 (Conectada, lectura):
   con clave entera 5,3 s; vista o consulta (huella) 9,4 s.
 - **Metadatos sin `spatial`:** el núcleo de DuckDB no tiene agregado de extensión ni tipo de geometría.
   El tipo sale de la cabecera WKB (`hex(st_aswkb(g))[1:10]`); la extensión, de `ST_Extent_Agg` si
-  `spatial` ya está cargada y, si no, de `stats(geom)` (texto en 1.5, estructura en 2.x). No se carga
+  `spatial` ya está cargada y, si no, de `stats(geom)` (texto en 1.5, estructura en 2.x). Si las estadísticas
+  no sirven (geometrías vacías dan `-inf…inf`, hallado en Windows el 2026-11-02), se recorre la geometría una
+  vez al cargar (1,14 M de puntos: 4,4 s). No se carga
   ninguna extensión (ADR-0011).
 - **Hilos de dibujo de QGIS:** Python creaba y destruía su estado de hilo en cada entidad (~13 µs). Se
   conserva una vez por hilo (`keep_thread_state`). Dibujar 1 M de puntos: 19 s → 5,3 s (GeoPackage:
