@@ -23,10 +23,14 @@ from geoduck.app.events import (
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
+    PreviewsInvalidated,
+    ScriptFinished,
+    ScriptRejected,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    StatementFinished,
     TransactionFailed,
     TransactionStateChanged,
 )
@@ -35,6 +39,7 @@ from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot,
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
+from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, StatementResult, StatementStatus
 from geoduck.domain.transaction import CloseChoice, TransactionState
 
 _log = logging.getLogger("geoduck.app")
@@ -63,6 +68,9 @@ class SessionCoordinator:
         self._close_choice: CloseChoice | None = None
         self._awaiting_close_decision = False
         self._close_generation = 0
+        #: Época de datos: sube con todo lo que pueda cambiar estructura o datos (decisión del 2026-11-01).
+        self._data_epoch = 0
+        self._run_ids = 0
         self._listeners: list[Listener] = []
 
     # -- consulta ----------------------------------------------------------------------------------
@@ -157,6 +165,90 @@ class SessionCoordinator:
         self._sm.transition(SessionState.DETACHING)
         detaching = engine.detach(alias)
         detaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_detached(engine, fut)))
+
+    @property
+    def data_epoch(self) -> int:
+        return self._data_epoch
+
+    def is_stale(self, epoch: int) -> bool:
+        """Una vista previa de `epoch` es posiblemente obsoleta si después pudo cambiar algo en la sesión.
+        No detecta cambios externos: una vista previa nunca es el estado actual garantizado."""
+        return epoch < self._data_epoch
+
+    def execute_sql(
+        self,
+        text: str,
+        scope: RunScope,
+        *,
+        cursor: int = 0,
+        base: int = 0,
+        preview_limit: int = DEFAULT_PREVIEW_LIMIT,
+    ) -> int:
+        """GD-SQL-001/002/004: ejecuta la sentencia actual, la selección o todo. La sesión pasa por `BUSY`;
+        se cancela con `cancel_current_operation`. Devuelve el `run_id`."""
+        engine = self._require_ready("ejecutar SQL")
+        if not text.strip():
+            raise SessionStateError("No hay SQL que ejecutar")
+        self._run_ids += 1
+        run_id = self._run_ids
+        self._sm.transition(SessionState.BUSY)
+
+        def on_statement(result: StatementResult) -> None:  # hilo del motor
+            self._dispatcher.post(lambda: self._on_statement(engine, run_id, result))
+
+        handle = engine.run_script(
+            run_id=run_id,
+            text=text,
+            scope=scope,
+            cursor=cursor,
+            base=base,
+            preview_limit=preview_limit,
+            on_statement=on_statement,
+        )
+        handle.future.add_done_callback(
+            lambda fut: self._dispatcher.post(lambda: self._on_script(engine, fut))
+        )
+        return run_id
+
+    def _on_statement(self, engine: SessionEngine, run_id: int, result: StatementResult) -> None:
+        if engine is not self._engine:
+            return
+        epoch = self._data_epoch
+        self._emit(StatementFinished(run_id, result, epoch))
+        if result.status is not StatementStatus.SKIPPED and (
+            result.statement.may_change_state or result.status is not StatementStatus.OK
+        ):
+            self._bump_epoch()  # invalidación conservadora: también tras un error o una cancelación
+
+    def _on_script(self, engine: SessionEngine, fut: Future[ScriptRun]) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return
+        if exc is not None:
+            code, message = _describe(exc)
+            self._end_failed_operation(exc)
+            self._emit(ScriptRejected(code, message))
+            return
+        run = fut.result()
+        if run.last_transaction is not None:
+            self._set_transaction(run.last_transaction)
+        if self._transaction is TransactionState.ABORTED:
+            # ADR-0007 punto 6: con la transacción abortada no se vuelve a READY hasta un ROLLBACK.
+            self._sm.transition(SessionState.ERROR_RECOVERABLE, ErrorCause.TRANSACTION_ABORTED)
+        else:
+            self._sm.transition(SessionState.READY)
+        self._emit(ScriptFinished(run))
+        changed = any(
+            r.status is not StatementStatus.SKIPPED and r.statement.may_change_state for r in run.results
+        )
+        if changed and self.state is SessionState.READY:
+            self.refresh_catalog()  # GD-SES-003 (SQL): ATTACH/DETACH/CREATE/DROP se reflejan en el panel
+
+    def _bump_epoch(self) -> None:
+        self._data_epoch += 1
+        self._emit(PreviewsInvalidated(self._data_epoch))
 
     def commit_transaction(self) -> None:
         """COMMIT. El motor comprueba antes el estado real y nunca confirma una transacción abortada."""
@@ -359,6 +451,7 @@ class SessionCoordinator:
             self._catalog = result.catalog
             self._emit(CatalogChanged(result.catalog))
             self._emit(DatabaseAttached(result.database))
+            self._bump_epoch()
             return
         code, message = _describe(exc)
         _log.warning("No se adjuntó la base [%s]", code.value)
@@ -396,6 +489,7 @@ class SessionCoordinator:
             self._catalog = result.catalog
             self._emit(CatalogChanged(result.catalog))
             self._emit(DatabaseDetached(result.database))
+            self._bump_epoch()
             return
         code, message = _describe(exc)
         _log.warning("No se desadjuntó la base [%s]", code.value)
@@ -421,6 +515,7 @@ class SessionCoordinator:
             if recovering:
                 self._sm.resolve_transaction()
             self._sm.transition(SessionState.READY)
+            self._bump_epoch()  # COMMIT o ROLLBACK cambian los datos visibles
             if closing is not None:
                 self.close_session()  # COMMIT o ROLLBACK confirmados: se completa el cierre pedido
             return

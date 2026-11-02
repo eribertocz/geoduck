@@ -18,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -41,13 +42,14 @@ from geoduck.app.events import (
 )
 from geoduck.domain.catalog import AttachRequest, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
-from geoduck.domain.session import SessionState
+from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.domain.transaction import CloseChoice
 from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.close_dialog import CloseTransactionDialog
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
 from geoduck.ui.explorer import CatalogExplorer
 from geoduck.ui.i18n import tr
+from geoduck.ui.sql_panel import SqlPanel
 
 STATE_TEXT = {
     SessionState.DISCONNECTED: "Sin sesión",
@@ -100,13 +102,18 @@ class GeoDuckDock(QDockWidget):
         layout.setSpacing(12)
         layout.addLayout(self._build_header())
         layout.addWidget(self._build_session_card())
-        layout.addWidget(self._build_databases_card(), 1)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_databases_card(), tr("Bases de datos"))
+        self.sql_panel = SqlPanel(coordinator, on_message=self._show_plain_message)
+        self.tabs.addTab(self.sql_panel, tr("SQL"))
+        layout.addWidget(self.tabs, 1)
         layout.addWidget(self._build_message())
         layout.addWidget(self._build_env_banner())
         layout.addLayout(self._build_footer())
         self.setWidget(body)
 
         self.start_button.clicked.connect(self._start)
+        self.rollback_button.clicked.connect(self._coordinator.rollback_transaction)
         self.close_button.clicked.connect(self._close)
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
         self.open_button.clicked.connect(lambda: self._attach(OpenAction.OPEN_EXISTING))
@@ -161,9 +168,15 @@ class GeoDuckDock(QDockWidget):
         self.start_button.setDefault(True)
         self.close_button = QPushButton(tr("Cerrar sesión"))
         self.close_button.setAccessibleName(tr("Cerrar la sesión DuckDB"))
+        self.rollback_button = QPushButton(tr("Revertir transacción"))
+        self.rollback_button.setToolTip(
+            tr("La transacción está abortada: ROLLBACK para volver a usar la sesión")
+        )
+        self.rollback_button.hide()
         buttons = QHBoxLayout()
         buttons.addWidget(self.start_button)
         buttons.addWidget(self.close_button)
+        buttons.addWidget(self.rollback_button)
         buttons.addStretch(1)
         card_layout.addLayout(buttons)
         self.engine_label = _secondary(QLabel())
@@ -274,6 +287,7 @@ class GeoDuckDock(QDockWidget):
 
     def detach(self) -> None:
         self._unsubscribe()
+        self.sql_panel.detach()
 
     # -- render ------------------------------------------------------------------------------------
 
@@ -322,6 +336,10 @@ class GeoDuckDock(QDockWidget):
             )
             self.message_label.show()
 
+    def _show_plain_message(self, text: str) -> None:
+        self.message_label.setText(text)
+        self.message_label.show()
+
     def _show_message(self, summary: str, code: str, detail: str) -> None:
         self.message_label.setText(f"{summary} [{code}] {detail}")
         self.message_label.show()
@@ -332,6 +350,11 @@ class GeoDuckDock(QDockWidget):
         ready = state is SessionState.READY
         self.state_label.setText(tr(STATE_TEXT[state]))
         self.start_button.setEnabled(can_start)
+        aborted = (
+            state is SessionState.ERROR_RECOVERABLE
+            and self._coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
+        )
+        self.rollback_button.setVisible(aborted)
         self.open_button.setEnabled(can_start or ready)
         self.create_button.setEnabled(can_start or ready)
         selected = self.explorer.selected_database()

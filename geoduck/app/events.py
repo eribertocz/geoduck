@@ -9,6 +9,7 @@ from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot
 from geoduck.domain.errors import ErrorCode
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
+from geoduck.domain.sql import ScriptRun, StatementResult
 from geoduck.domain.transaction import TransactionState
 
 
@@ -105,6 +106,37 @@ class CloseConfirmationRequired:
     commit_allowed: bool
 
 
+@dataclass(frozen=True)
+class StatementFinished:
+    """Una sentencia terminó (OK, FAILED, CANCELLED o SKIPPED). `epoch` sirve para saber si su vista
+    previa quedó posiblemente obsoleta (`SessionCoordinator.is_stale`)."""
+
+    run_id: int
+    result: StatementResult
+    epoch: int
+
+
+@dataclass(frozen=True)
+class ScriptFinished:
+    run: ScriptRun
+
+
+@dataclass(frozen=True)
+class ScriptRejected:
+    """El script no llegó a ejecutarse (petición inválida)."""
+
+    code: ErrorCode
+    message: str
+
+
+@dataclass(frozen=True)
+class PreviewsInvalidated:
+    """Algo pudo cambiar estructura o datos: toda vista previa con época anterior a `epoch` es
+    posiblemente obsoleta (decisión del 2026-11-01). No detecta cambios hechos fuera de la sesión."""
+
+    epoch: int
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -119,4 +151,8 @@ AppEvent = (
     | TransactionStateChanged
     | TransactionFailed
     | CloseConfirmationRequired
+    | StatementFinished
+    | ScriptFinished
+    | ScriptRejected
+    | PreviewsInvalidated
 )
