@@ -23,12 +23,21 @@ from tests.qgis.test_sql_panel import run
 pytestmark = pytest.mark.qgis
 
 
+def qgis_window(iface):
+    """La ventana principal de QGIS está a la vista, como en QGIS real (si no, un panel acoplado nunca
+    sería visible)."""
+    iface.mainWindow().show()
+    return iface
+
+
 @pytest.fixture
 def plugin(iface):
+    qgis_window(iface)
     p = geoduck.classFactory(iface)
     p.initGui()
     yield p
     p.unload()
+    iface.mainWindow().close()
     QgsProject.instance().removeAllMapLayers()
 
 
@@ -63,14 +72,15 @@ def test_clean_install_opens_in_its_own_window_child_of_qgis(plugin, iface):
 
 
 def test_the_chosen_mode_is_remembered_after_restarting(iface):
-    first = geoduck.classFactory(iface)
+    first = geoduck.classFactory(qgis_window(iface))
     first.initGui()
     first.action.trigger()
     first.workspace.window.toggle_button.click()  # «Acoplar a QGIS»
     assert first.workspace.mode is WorkspaceMode.DOCK
     first.unload()
 
-    second_iface = FakeIface()  # QGIS reiniciado: las preferencias siguen
+    iface.mainWindow().close()
+    second_iface = qgis_window(FakeIface())  # QGIS reiniciado: las preferencias siguen
     second = geoduck.classFactory(second_iface)
     second.initGui()
     try:
@@ -81,6 +91,7 @@ def test_the_chosen_mode_is_remembered_after_restarting(iface):
         assert ws.dock.isVisible() and ws.window.isHidden()
     finally:
         second.unload()
+        second_iface.mainWindow().close()
     assert second_iface.docks == []
 
 
