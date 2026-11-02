@@ -6,15 +6,20 @@ from __future__ import annotations
 import pytest
 
 from geoduck.domain.bridge_types import (
-    FieldKind as K,
-)
-from geoduck.domain.bridge_types import (
+    UNREADABLE,
+    GeometryColumn,
+    GeometryFormat,
     build_load_plan,
+    geometry_write_sql,
     is_geometry_type,
     plan_field,
     strip_terminator,
 )
+from geoduck.domain.bridge_types import (
+    FieldKind as K,
+)
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.load import LoadMode, LoadRequest
 
 # (tipo de DuckDB 1.5/2.x en DESCRIBE, campo resultante, escribible de vuelta, ¿avisa?)
 CASES = [
@@ -131,3 +136,49 @@ def test_prepare_can_propose_the_first_of_several_geometries():
     assert plan.geometry.name == "a"
     assert [g.name for g in plan.geometries] == ["a", "b"]
     assert plan.geometries[1].declared_crs == "OGC:CRS84"
+
+
+# -- G4/E1: columnas BLOB/VARCHAR marcadas como geometría (spatial-spec §2.2) ------------------------
+
+
+def test_marked_columns_become_geometries_without_inference():
+    cols = [("id", "INTEGER"), ("w", "BLOB"), ("t", "VARCHAR"), ("g", "GEOMETRY")]
+    plan = build_load_plan("SELECT 1", cols)
+    assert plan.geometry.name == "g"
+    assert dict(plan.candidates) == {"w": GeometryFormat.WKB, "t": GeometryFormat.WKT}
+    assert [f.name for f in plan.fields] == ["id", "w", "t"]  # sin marcar: atributos
+    marked = build_load_plan("SELECT 1", cols, geometry="w", formats={"w": "wkb", "t": "wkt"})
+    assert marked.geometry == GeometryColumn("w", "BLOB", None, GeometryFormat.WKB)
+    assert [f.name for f in marked.fields] == ["id"]
+    assert 'TRY(ST_GeomFromWKB("w")) AS "w"' in marked.sql
+    assert marked.unreadable_flag == UNREADABLE
+    assert f'("w" IS NOT NULL AND TRY(ST_GeomFromWKB("w")) IS NULL) AS "{UNREADABLE}"' in marked.sql
+    assert "Columna «t» omitida (geometría secundaria)" in marked.warnings
+    text = build_load_plan("SELECT 1", cols, geometry="t", formats={"t": "wkt"})
+    assert 'TRY(CAST("t" AS GEOMETRY)) AS "t"' in text.sql
+
+
+@pytest.mark.parametrize(("column", "fmt"), [("id", "wkb"), ("w", "wkt"), ("t", "wkb"), ("g", "geometry")])
+def test_only_blob_as_wkb_and_varchar_as_wkt(column, fmt):
+    cols = [("id", "INTEGER"), ("w", "BLOB"), ("t", "VARCHAR"), ("g", "GEOMETRY")]
+    with pytest.raises(GeoDuckError):
+        build_load_plan("SELECT 1", cols, geometry=column, formats={column: fmt})
+
+
+def test_geometry_write_back_in_its_format():
+    assert geometry_write_sql("x", GeometryFormat.WKB) == "ST_AsWKB(x)"
+    assert geometry_write_sql("x", GeometryFormat.WKT) == "ST_AsText(x)"
+    assert geometry_write_sql("x", GeometryFormat.GEOMETRY) == "x"
+
+
+def test_request_split_one_layer_per_geometry():
+    request = LoadRequest(
+        "SELECT 1", LoadMode.MEMORY, "z", geometries=("a", "b"), crs_overrides=(("b", "EPSG:32719"),)
+    )
+    parts = request.split()
+    assert [(p.geometry, p.layer_name, p.crs_override, p.geometries) for p in parts] == [
+        ("a", "z · a", None, ()),
+        ("b", "z · b", "EPSG:32719", ()),
+    ]
+    single = LoadRequest("SELECT 1", LoadMode.MEMORY, "z", geometry="a", crs_overrides=(("a", ""),))
+    assert [(p.geometry, p.layer_name, p.crs_override) for p in single.split()] == [("a", "z", "")]

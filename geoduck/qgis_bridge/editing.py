@@ -28,7 +28,7 @@ import pyarrow as pa
 from qgis.core import Qgis, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
-from geoduck.domain.bridge_types import FieldKind
+from geoduck.domain.bridge_types import FieldKind, GeometryFormat, geometry_write_sql
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.qgis_bridge.provider import HASH, KEY, id_columns, row_hash_sql
 
@@ -267,6 +267,7 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
     table = provider.source
     types = dict(provider.plan_types)
     geom = provider.plan.geometry.name if provider.plan.geometry is not None else None
+    fmt = provider.plan.geometry.format if provider.plan.geometry is not None else GeometryFormat.GEOMETRY
     try:
         handle.execute("BEGIN")
     except Exception as exc:
@@ -321,7 +322,8 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
             data = {"__rid": [rid[f] for f in batch.geometries["__fid"]], "__wkb": batch.geometries["__wkb"]}
             with handle.registered(_GEO, _table(data)):
                 handle.execute(
-                    f"UPDATE {table} SET {quote_identifier(geom)} = ST_GeomFromWKB(u.__wkb) FROM {_GEO} u "
+                    f"UPDATE {table} SET {quote_identifier(geom)} = "
+                    f"{geometry_write_sql('ST_GeomFromWKB(u.__wkb)', fmt)} FROM {_GEO} u "
                     f"WHERE {table}.rowid = u.__rid"
                 )
             token.raise_if_cancelled()
@@ -344,7 +346,7 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
                 select.insert(0, "__fid")
             if geom is not None and "__wkb" in data:
                 target.append(quote_identifier(geom))
-                select.append("ST_GeomFromWKB(__wkb)")
+                select.append(geometry_write_sql("ST_GeomFromWKB(__wkb)", fmt))
             if provider.fid_mode == "rowid":
                 before = handle.execute(f"SELECT max(rowid) FROM {table}", max_rows=1).rows[0][0]
             if target:

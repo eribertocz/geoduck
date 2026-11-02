@@ -44,11 +44,19 @@ def _count(n: int) -> str:
 
 def finished_message(report: LoadReport) -> str:
     """Mensaje al terminar una carga: capa, modalidad y entidades; origen y acceso; avisos."""
-    lines = [
-        tr("Capa «{}» cargada · {} · {} entidades").format(
-            report.layer_name, _MODES[report.mode], _count(report.rows)
-        )
-    ]
+    if len(report.layers) > 1:  # una capa por geometría (spatial-spec §7)
+        names = ", ".join(f"«{name}»" for _, name in report.layers)
+        lines = [
+            tr("Capas {} cargadas · {} · {} entidades cada una").format(
+                names, _MODES[report.mode], _count(report.rows)
+            )
+        ]
+    else:
+        lines = [
+            tr("Capa «{}» cargada · {} · {} entidades").format(
+                report.layer_name, _MODES[report.mode], _count(report.rows)
+            )
+        ]
     if report.origin:
         access = (
             report.access[:1].upper() + report.access[1:]

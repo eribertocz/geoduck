@@ -53,7 +53,13 @@ from qgis.core import (
     QgsVectorDataProvider,
 )
 
-from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_terminator
+from geoduck.domain.bridge_types import (
+    GeometryFormat,
+    LoadPlan,
+    build_load_plan,
+    geometry_read_sql,
+    strip_terminator,
+)
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
@@ -187,7 +193,8 @@ def base_sql(  # noqa: PLR0917 - las piezas de la URI que definen la consulta
     ids = [quote_identifier(c) for c in id_columns(fid, keys)]
     cols = ids + [f"{f.expression} AS {quote_identifier(f.name)}" for f in plan.fields]
     if plan.geometry is not None:
-        cols.append(quote_identifier(plan.geometry.name))
+        g = plan.geometry
+        cols.append(f"{geometry_read_sql(g.name, g.format)} AS {quote_identifier(g.name)}")
     if hashed:
         cols.append(quote_identifier(HASH))
     return f"SELECT {', '.join(cols)} FROM ({numbered}) AS __geoduck_q"
@@ -528,8 +535,15 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self.inner: str = params["sql"]
             self.key: str | None = params.get("key") or None
             self.fid_mode: str = params.get("fid", "content")
+            geom = params.get("geom") or None
+            fmt = params.get("geomformat") or GeometryFormat.GEOMETRY.value
             self.plan: LoadPlan = build_load_plan(
-                self.inner, list(params["columns"]), geometry=params.get("geom") or None
+                self.inner,
+                list(params["columns"]),
+                geometry=geom,
+                formats={geom: GeometryFormat(fmt)}
+                if geom and fmt != GeometryFormat.GEOMETRY.value
+                else None,
             )
             self.keys: list[str] = json.loads(params.get("keys") or "[]")
             types = {c[0]: c[1] for c in params["columns"]}

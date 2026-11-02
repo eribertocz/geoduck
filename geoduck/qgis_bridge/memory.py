@@ -29,6 +29,7 @@ from geoduck.qgis_bridge.convert import (
     fit_geometry,
     geometry_from_wkb,
     layer_type_for,
+    strip_unreadable,
 )
 
 #: Filas convertidas por tramo en el hilo principal (F-44: bloqueo ≤ 200 ms).
@@ -84,7 +85,11 @@ class MemoryLoad:
             self._plan = plan
 
         self._handle = self._engine.load_query(
-            self._request.sql, geometry=self._request.geometry, on_plan=on_plan, on_batch=self._channel.put
+            self._request.sql,
+            geometry=self._request.geometry,
+            formats=self._request.format_map or None,
+            on_plan=on_plan,
+            on_batch=self._channel.put,
         )
         self._handle.future.add_done_callback(self._on_read_done)
         self._timer.start()
@@ -135,6 +140,7 @@ class MemoryLoad:
             self._batch = None
         plan = self._plan
         assert plan is not None
+        piece = strip_unreadable(piece, plan, self._rows)
         names = piece.schema.names
         columns = [column_converter(f.kind)(piece.column(names.index(f.name))) for f in plan.fields]
         wkbs = piece.column(names.index(plan.geometry.name)).to_pylist() if plan.geometry else None

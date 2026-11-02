@@ -27,6 +27,7 @@ from geoduck.domain.bridge_types import FieldKind, LoadPlan
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
+from geoduck.qgis_bridge.convert import strip_unreadable
 from geoduck.qgis_bridge.memory import LoadCancelledError
 from geoduck.qgis_bridge.vsimem import PREFIX, VsimemRegistry, unlink
 
@@ -137,6 +138,7 @@ class _Writer:
             raise GeoDuckError(_last_error("GDAL no pudo iniciar la transacción"))
 
     def write(self, batch: pa.RecordBatch) -> None:
+        batch = strip_unreadable(batch, self.plan, self.rows)
         if self.ds is None:
             self.open(batch.schema)
         geom = self.plan.geometry
@@ -255,7 +257,11 @@ class SnapshotLoad:
                 gdal.PopErrorHandler()
 
         self._handle = self._engine.load_query(
-            self._request.sql, geometry=self._request.geometry, on_plan=on_plan, on_batch=on_batch
+            self._request.sql,
+            geometry=self._request.geometry,
+            formats=self._request.format_map or None,
+            on_plan=on_plan,
+            on_batch=on_batch,
         )
         self._handle.future.add_done_callback(self._on_read_done)
         self._timer.start()
