@@ -36,6 +36,8 @@ class StatementOutcome:
     columns: tuple[str, ...] = ()
     rows: tuple[tuple[object, ...], ...] = field(default_factory=tuple)
     truncated: bool = False
+    #: Tipo DuckDB de cada columna, como texto (p. ej. `INTEGER`).
+    types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

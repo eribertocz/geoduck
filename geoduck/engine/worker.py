@@ -44,11 +44,13 @@ from geoduck.domain.errors import (
     WrongThreadError,
 )
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
+from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.attach import attach_database
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
+from geoduck.engine.sql import StatementListener, run_script
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
 _log = logging.getLogger("geoduck.engine")
@@ -102,6 +104,11 @@ class ConnectionHandle:
                 "Hay un lector Arrow abierto en esta sesión; termine o cancele la lectura primero"
             )
 
+    def extract_statements(self, text: str) -> list[Any]:
+        """Divide un script con el parser oficial de DuckDB (sql-editor-spec §2). Pasa por el guardia."""
+        self._guard()
+        return list(self._con.extract_statements(text))
+
     def execute(
         self, sql: str, parameters: Sequence[object] | None = None, *, max_rows: int = 200
     ) -> StatementOutcome:
@@ -123,6 +130,7 @@ class ConnectionHandle:
             columns=tuple(str(d[0]) for d in description),
             rows=tuple(tuple(r) for r in fetched[:max_rows]),
             truncated=truncated,
+            types=tuple(str(d[1]) for d in description),
         )
 
     @contextmanager
@@ -304,6 +312,33 @@ class SessionWorker:
 
     def rollback(self) -> Future[TransactionState]:
         return self._submit_future(lambda h, _t: rollback(h))
+
+    def run_script(
+        self,
+        *,
+        run_id: int,
+        text: str,
+        scope: RunScope,
+        cursor: int = 0,
+        base: int = 0,
+        preview_limit: int = DEFAULT_PREVIEW_LIMIT,
+        on_statement: StatementListener | None = None,
+    ) -> OperationHandle[ScriptRun]:
+        """Ejecuta SQL del usuario en una sola operación serial (`geoduck.engine.sql`). Se cancela con
+        `cancel(handle.op_id)`."""
+        return self.submit(
+            lambda h, token: run_script(
+                h,
+                token,
+                run_id=run_id,
+                text=text,
+                scope=scope,
+                cursor=cursor,
+                base=base,
+                preview_limit=preview_limit,
+                on_statement=on_statement,
+            )
+        )
 
     def _submit_future(self, fn: Operation[T]) -> Future[T]:
         """Como `submit`, pero una sesión que no acepta trabajo se entrega como `Future` fallido."""
