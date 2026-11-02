@@ -206,6 +206,26 @@ def test_connected_separate_types_pushes_the_family_filter(session):
     assert sorted(ids(poly, QgsFeatureRequest(rect))) == [32]  # el 29 es NULL
 
 
+def test_connected_reads_the_type_of_every_row_not_a_sample(session):
+    # F-93 (decisión del propietario, PR #73): un tipo que solo aparece en la última de 20 000 filas no se
+    # pierde: el tipo se lee de todas las cabeceras WKB, no de una muestra.
+    session.sql(
+        "CREATE TABLE tardia AS SELECT range::INTEGER AS id, CASE WHEN range = 19999 "
+        "THEN 'POLYGON((0 0, 1 0, 0 1, 0 0))'::GEOMETRY "
+        "ELSE ('POINT(' || range || ' 0)')::GEOMETRY END AS g FROM range(20000)"
+    )
+    kw = {"crs_override": "", "source": ("memory", "main", "tardia"), "source_kind": "table"}
+    sql = 'SELECT * FROM "memory"."main"."tardia"'
+    ev = session.load(LoadMode.CONNECTED, sql, "tardia", **kw)
+    assert isinstance(ev, LoadFinished), getattr(ev, "message", ev)
+    assert published()["tardia"].wkbType() == QgsWkbTypes.Unknown
+    ev = session.load(LoadMode.CONNECTED, sql, "separada", separate_types=True, **kw)
+    assert isinstance(ev, LoadFinished), getattr(ev, "message", ev)
+    layers = published()
+    assert ids(layers["separada — Polygon"]) == [19999]
+    assert len(ids(layers["separada — Point"])) == 19999
+
+
 def test_editing_a_separated_layer_stays_in_its_family(session):
     load_connected(session, separate_types=True)
     layers = published()
