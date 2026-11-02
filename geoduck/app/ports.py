@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import Future
-from typing import Protocol
+from typing import Any, Protocol
 
 from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
 from geoduck.domain.errors import SessionInvalidatedError
@@ -19,6 +19,16 @@ class ScriptHandle(Protocol):
 
     @property
     def future(self) -> Future[ScriptRun]: ...
+
+
+class OperationHandle(Protocol):
+    """Operación en curso del motor: id para cancelarla y su resultado."""
+
+    @property
+    def op_id(self) -> int: ...
+
+    @property
+    def future(self) -> Future[Any]: ...
 
 
 class SessionEngine(Protocol):
@@ -67,6 +77,23 @@ class SessionEngine(Protocol):
     ) -> ScriptHandle:
         """Ejecuta SQL del usuario en una operación serial; `on_statement` llega en el hilo del motor."""
         ...
+
+    def load_query(
+        self,
+        sql: str,
+        *,
+        geometry: str | None = None,
+        batch_size: int = ...,
+        on_plan: Callable[[Any], None],
+        on_batch: Callable[[Any], None],
+    ) -> OperationHandle:
+        """Lectura normalizada por lotes de una consulta repetible para cargarla en QGIS (ADR-0012).
+
+        `on_plan` y `on_batch` llegan en el hilo del motor; el consumidor aplica la contrapresión.
+        """
+        ...
+
+    def cancel(self, op_id: int) -> bool: ...
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:
         """Se resuelve una sola vez, al terminar el motor: la causa si se invalidó, `None` si no."""

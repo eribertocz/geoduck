@@ -47,6 +47,7 @@ from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, Stat
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.attach import attach_database
+from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query
 from geoduck.engine.catalog import read_catalog
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
@@ -158,6 +159,21 @@ class ConnectionHandle:
                 reader.close()
             finally:
                 self._reader_open = False
+
+    @contextmanager
+    def registered(self, name: str, data: Any) -> Iterator[None]:
+        """Registra un objeto Arrow como vista temporal durante el bloque (escrituras por lotes, ADR-0012)."""
+        self._guard()
+        self._con.register(name, data)
+        try:
+            yield
+        finally:
+            self._con.unregister(name)
+
+    def execute_many(self, sql: str, rows: Sequence[Sequence[object]]) -> None:
+        """Ejecuta una sentencia parametrizada por cada fila (sin resultado)."""
+        self._guard()
+        self._con.executemany(sql, [list(r) for r in rows])
 
     def read_arrow(
         self,
@@ -296,6 +312,25 @@ class SessionWorker:
         """«Abrir existente» o «Crear nueva» (`geoduck.engine.attach`), en una sola operación serial."""
         root = self._root
         return self._submit_future(lambda h, _t: attach_database(h, request, root))
+
+    def load_query(
+        self,
+        sql: str,
+        *,
+        geometry: str | None = None,
+        batch_size: int = DEFAULT_BATCH,
+        on_plan: Callable[[Any], None],
+        on_batch: Callable[[Any], None],
+    ) -> OperationHandle[LoadOutcome]:
+        """Lectura normalizada por lotes de una consulta repetible (qgis-bridge-spec §2).
+
+        `on_plan` y `on_batch` llegan en el hilo del worker; el consumidor aplica la contrapresión.
+        """
+        return self.submit(
+            lambda h, t: load_query(
+                h, t, sql, geometry=geometry, batch_size=batch_size, on_plan=on_plan, on_batch=on_batch
+            )
+        )
 
     def detach(self, alias: str) -> Future[DetachResult]:
         """DetachDatabase (`geoduck.engine.detach`), en una sola operación serial."""
