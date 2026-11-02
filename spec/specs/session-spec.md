@@ -26,7 +26,8 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - Rechaza o encola la operación cuando hay transferencias/consultas activas; ofrece cancelar primero.
 - Si el catálogo elegido es predeterminado, cambia primero al catálogo raíz identificado en introspección, no asume que se llama `memory`.
 - Ejecuta `DETACH` real; verifica desaparición del catálogo; libera readers/resultados propios relacionados.
-- **No modifica ni elimina capas QGIS previamente entregadas.**
+- **No modifica ni elimina capas QGIS previamente entregadas** (Memoria e Instantánea).
+- Capas **Conectadas** de esa base (qgis-bridge-spec §5.5): si alguna tiene cambios sin guardar, el DETACH se rechaza con la lista de capas; si no, quedan «no disponibles» y vuelven al adjuntar de nuevo la base con el mismo alias.
 - Si fracasa, informa el error y no marca la base como desconectada.
 - Aun con `DETACH` exitoso no garantiza que otro proceso no mantenga bloqueos externos. Probar apertura RW desde proceso independiente.
 
@@ -39,6 +40,7 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - Solicitar cancelación cooperativa; cerrar los lectores; cerrar la conexión y no retener referencias.
 - **Transacción abierta al cerrar** (decisión del 2026-11-01): se pregunta al usuario con tres opciones, `COMMIT`, `ROLLBACK` o **Cancelar cierre**. Cancelar no modifica la transacción y la sesión sigue abierta. Si `COMMIT` no es válido (por ejemplo, transacción abortada, `TRANSACTION_ABORTED`), la opción `COMMIT` se deshabilita.
 - No borrar archivos de usuario ni capas QGIS.
+- Capas **Conectadas** con cambios sin guardar: el cierre se cancela y se pide guardarlos o descartarlos. Tras el cierre, todas las capas conectadas quedan «no disponibles».
 
 ## 3. Read-only y escritura
 - `READ_ONLY` protege esa base según reglas DuckDB. **No** es sandbox del proceso ni impide escribir en memoria u otros archivos permitidos.

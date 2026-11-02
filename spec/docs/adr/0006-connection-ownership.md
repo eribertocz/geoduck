@@ -1,6 +1,6 @@
 # ADR-0006: propiedad exclusiva de la conexión, serialización y ciclo de vida de lectores Arrow
 
-**Estado:** Aceptado (dictamen del arquitecto, 2026-11-01) — revisión 2
+**Estado:** Aceptado (dictamen del arquitecto, 2026-11-01) — revisión 2 · **Enmienda de ADR-0012 (2026-11-02):** la cola sigue siendo serial, pero las páginas de lectura del proveedor Conectado tienen prioridad sobre el trabajo en cola, sin interrumpir la operación en curso
 **Recoge:** decisión arquitectónica del 2026-11-01 («ninguna conexión DuckDB puede ser utilizada
 simultáneamente por dos hilos; propiedad exclusiva, serialización y control del ciclo de vida de lectores»)
 **Relacionado:** ADR-0001, ADR-0003, ADR-0007; `spec/docs/architecture.md` §2, §5;

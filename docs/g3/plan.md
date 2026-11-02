@@ -1,30 +1,53 @@
-# G3 · `v0.4.0a1` QGIS Bridge MVP — plan de inicio
+# G3 · `v0.4.0a1` QGIS Bridge — plan integral (tres modalidades)
 
-**Estado:** **Autorizado** (2026-11-01), con las decisiones de §2. Alcance del roadmap: **tabla plana y una geometría → capas memory**.
-**Requisitos P0:** GD-BRD-001..005. **Gate:** primera Alpha útil de extremo a extremo (roadmap §4): abrir
-GeoDuck → sesión → ATTACH → SELECT → cargar tabla o geometría en QGIS → DETACH → la capa permanece.
-**Contrato:** `spec/specs/qgis-bridge-spec.md`; `spatial-spec` §4–§5 (C4 aprobado); ADR-0006, ADR-0010
-(`qgis_bridge`).
+**Estado:** En ejecución (decisión del propietario, 2026-11-02). **ADR-0012.**
+**Requisitos:** GD-BRD-001..012. **Contrato:** `spec/specs/qgis-bridge-spec.md`; `spatial-spec` §4–§5 (C4);
+ADR-0006, ADR-0008, ADR-0010, ADR-0012.
 
-## 1. Pasos (un PR por paso)
+**Gate:** G3 solo está completo cuando las tres modalidades funcionan y cumplen AT-BRD-001..012 en
+QGIS 3.44 y 4.2, con DuckDB 1.5.0, 1.5.6 y 2.0.0. Recorrido completo: abrir GeoDuck → sesión → ATTACH →
+SELECT → cargar con cada modalidad → editar la capa conectada → DETACH. Tras el DETACH, las capas Memoria
+e Instantánea siguen intactas y la Conectada queda no disponible hasta adjuntar de nuevo.
 
-| Paso | Trabajo | Requisito / prueba |
-|---|---|---|
-| 1 | **Spike G3-A** (roadmap §3): memoria y paso worker → hilo principal con `RecordBatch`; tamaño de lote (8 192 / 16 384); 1–3 lotes en vuelo; coste de `addFeatures` en QGIS 3.44 y 4.2; viabilidad de cada tipo de la tabla de conversión (§7) | Evidencia; sin código del complemento |
-| 2 | Motor: repetir **solo** una lectura repetible como relación + `to_arrow_reader`, por lotes, con cola acotada y confirmación (backpressure), progreso cuando sea posible, cancelación y conteos; sin `COUNT(*)` previo; nunca DDL/DML/`RETURNING` | GD-BRD-002, GD-SQL-006; AT-BRD-002, AT-SQL-006 |
-| 3 | `qgis_bridge`: conversión por tipo a `QgsFields`/`QgsFeature` según §7, sin pérdidas silenciosas (BIGINT, HUGEINT, DECIMAL, TIMESTAMPTZ, LIST/STRUCT…) | §7; contrato probado por tipo |
-| 4 | Capa memory **privada** construida en el hilo principal por tramos; publicación atómica en `QgsProject` al terminar; descarte en error o cancelación; `rows_read == rows_converted == rows_added` | GD-BRD-001, 003, 004; AT-BRD-001, 003, 004 |
-| 5 | Una columna de geometría desde `geoarrow.wkb` (ADR-0008): WKB → `QgsGeometry`, tipo de geometría, CRS desde PROJJSON según C4 (sin reordenar ejes; AX-1..AX-4); CRS desconocido → selector nativo de QGIS o continuar sin CRS con advertencia | spatial-spec §4–§5 |
-| 6 | Interfaz: «Cargar en QGIS» en la pestaña de un resultado repetible, con aviso de que se vuelve a ejecutar la consulta sobre el estado actual; progreso y cancelación; nombre de la capa a partir del título del resultado | sql-editor-spec §5 |
-| 7 | Ciclo de vida: la capa sigue intacta tras DETACH y tras cerrar o descargar GeoDuck | GD-BRD-005; AT-BRD-005; caso pendiente de session-spec §6 |
+La investigación está cerrada (spikes G3-A..D, PR #56). Los prototipos de `tools/bench/` son referencia:
+el código del complemento se escribe de nuevo con las fronteras de ADR-0010 y sus pruebas.
 
-## 2. Decisiones del arquitecto (2026-11-01)
+## 1. Entregas (un PR cada una, apiladas)
 
-1. **ADR-0008 aprobado:** geometría desde `geoarrow.wkb` preservando el CRS; no se impone `ST_AsWKB` ni se
-   añade `duck_geoarrow` ni otra extensión. `spatial-spec` §5 enmendada.
-2. **Sin `COUNT(*)` previo** para cargar: transferencia por lotes, progreso cuando sea posible (filas
-   recibidas; total solo si se conoce sin coste extra) y cancelación en todo momento.
-3. **CRS desconocido:** selector nativo de QGIS (`QgsProjectionSelectionDialog`) o continuar sin CRS con
-   advertencia.
-4. **Pruebas obligatorias de G3:** carga completa, cancelación sin capas parciales y supervivencia de las
-   capas tras DETACH y tras cerrar GeoDuck.
+| Entrega | Trabajo | Reutiliza | Requisitos / pruebas |
+|---|---|---|---|
+| **E0** | SPEC (ADR-0012, qgis-bridge-spec, session, editor, UI, arquitectura, roadmap, test-strategy) y este plan | Estudios del PR #56 | — |
+| **E1** | Motor: lectura por lotes de una consulta repetible con contrapresión, cancelación y conteos (`engine/bridge_read.py`); normalización de tipos §7 en SQL (`domain/bridge_types.py`, puro) y su aplicación según `DESCRIBE`; API de lotes en `ConnectionHandle` | `ConnectionHandle.read_arrow`, `CancelToken`, `SessionWorker` | GD-BRD-002, 007; AT-BRD-002, 007 (parte de motor) |
+| **E2** | `qgis_bridge` + Memoria: campos y entidades por tramos en el hilo principal, geometría `geoarrow.wkb`, CRS desde PROJJSON (C4), capa privada, publicación atómica, conteos | E1 | GD-BRD-001, 003, 004, 005; AT-BRD-001..005 |
+| **E3** | Instantánea: `WriteArrow` en GeoPackage `/vsimem` dentro de la operación del worker; registro de archivos `/vsimem` y liberación al quitar la capa; desactivada si GDAL < 3.8 | E1, E2 (publicación) | GD-BRD-006; AT-BRD-006 |
+| **E4** | Interfaz: «Cargar en QGIS» con las tres modalidades (pestaña de resultado y explorador), progreso, cancelación, nombre de capa, CRS desconocido | E2, E3 | GD-BRD-012; AT-BRD-012 |
+| **E5** | Conectada, lectura: proveedor `geoduck`, URI, metadatos, compilador de expresiones, pushdown, páginas por clave, prioridad en el worker, cancelación por `QgsFeedback`, registro de capas conectadas | E1 (normalización), worker | GD-BRD-008, 009; AT-BRD-008, 009 |
+| **E6** | Conectada, edición: editabilidad, huellas, guardado atómico desde `beforeCommitChanges`, escrituras por lotes Arrow, validación previa, transacción del usuario, época de datos | E1 (API de lotes), E5 | GD-BRD-010; AT-BRD-010 |
+| **E7** | Ciclo de vida y cierre de G3: DETACH/ATTACH, cierre, descarga y reapertura del proyecto con capas conectadas; `docs/g3/acceptance.md` con la evidencia de AT-BRD-001..012 | E5, E6 | GD-BRD-011; AT-BRD-011 y gate |
+
+## 2. Criterios de aceptación por modalidad
+
+| Modalidad | Debe cumplir |
+|---|---|
+| Memoria | Íntegra fila a fila (huella de atributos + WKB); CRS según C4; tipos §7 sin pérdida silenciosa; cancelar no deja capas; capa intacta tras DETACH y cierre; bloqueo de la interfaz ≤ 200 ms por tramo |
+| Instantánea | Lo mismo que Memoria; editable; `/vsimem` liberado al quitar la capa y en error o cancelación; opción desactivada con motivo si GDAL < 3.8 |
+| Conectada | Tabla, vista y SQL; pushdown de extensión, FID, columnas y expresiones compilables; páginas ≤ 50 000 filas; el SQL del usuario no espera más de una página; edición atómica con conflictos (100/1 000/10 000 entidades), sin éxito sin COMMIT ni pérdida del búfer; no disponible y reconectable ante DETACH/ATTACH/cierre; DETACH y cierre bloqueados con cambios sin guardar |
+
+## 3. Pruebas
+
+- **Motor** (`tests/engine`, sin QGIS, DuckDB 1.5.0/1.5.6/2.0.0): lectura por lotes, cancelación,
+  normalización por tipo, API de lotes, prioridad de la cola.
+- **Unitarias** (`tests/unit`): reglas de normalización, compilador de expresiones (sin QGIS: árbol
+  propio), reglas de editabilidad.
+- **QGIS** (`tests/qgis`, 3.44 y 4.2): carga en las tres modalidades, integridad, cancelación, edición,
+  conflictos, ciclo de vida.
+- **Arquitectura:** fila de `qgis_bridge` (con `osgeo`) en el test de fronteras.
+- **Regresión:** la suite actual (495 + 35) debe seguir pasando en cada entrega.
+
+## 4. Decisiones previas que siguen vigentes (2026-11-01)
+
+1. ADR-0008: geometría desde `geoarrow.wkb` con su CRS.
+2. Sin `COUNT(*)` previo.
+3. CRS desconocido: selector nativo de QGIS o continuar sin CRS con advertencia.
+4. Pruebas obligatorias: carga completa, cancelación sin capas parciales y supervivencia tras DETACH y
+   cierre (Memoria e Instantánea).
