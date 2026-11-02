@@ -71,12 +71,13 @@ siempre explícito); GDAL mezclado en un GeoPackage → una capa por familia y o
 
 Hallazgos de E5 (Conectada, lectura):
 
-- **FID estable sin clave** (aprobado por el propietario, 2026-11-02, con la condición de garantizar
-  identidad estable tras filtros y relecturas): `rowid` cambia tras borrar y compactar (`CHECKPOINT`), y
-  `row_number() OVER ()` depende de un orden que DuckDB no garantiza; se descartaron. El FID sin clave es
-  la huella del contenido de la fila (qgis-bridge-spec §5.1, con sus límites). Las páginas avanzan por
-  FID y saltan los empates ya entregados; no se usa `OFFSET`. Esas capas son de solo lectura. Coste:
-  dibujar 1 M de filas sin clave 9,4 s (con clave 5,3 s).
+- **Identificador de entidad como QGIS con PostGIS** (decisión del propietario, 2026-11-02): clave
+  primaria o `UNIQUE NOT NULL` de cualquier tipo (entera: su valor; otra: número asignado en memoria,
+  como `PktFidMap`); `rowid` en tablas sin clave (como `ctid`); huella del contenido en vistas y
+  consultas, sin que el usuario elija nada. Comprobado: `rowid` solo cambia si DuckDB compacta tras
+  borrar, y mientras la base está adjunta en escritura ningún otro proceso puede tocarla; el guardado
+  verifica cada fila por su huella (E6). Páginas por identificador, sin `OFFSET`. Dibujar 1 M de filas:
+  con clave entera 5,3 s; vista o consulta (huella) 9,4 s.
 - **Metadatos sin `spatial`:** el núcleo de DuckDB no tiene agregado de extensión ni tipo de geometría.
   El tipo sale de la cabecera WKB (`hex(st_aswkb(g))[1:10]`); la extensión, de `ST_Extent_Agg` si
   `spatial` ya está cargada y, si no, de `stats(geom)` (texto en 1.5, estructura en 2.x). No se carga
