@@ -3,18 +3,25 @@ name=GeoDuck
 qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 supportsQt6=True
-description=Sesión DuckDB dentro de QGIS y entrega de resultados como capas nativas de memoria.
-about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra: las capas entregadas son capas de memoria nativas, independientes de GeoDuck.
+description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
+about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica.
 
-    ESTADO: Alpha (0.1.0a1, Alpha Foundation). Esta versión solo abre el panel, diagnostica el entorno e inicia una sesión en memoria.
+    ESTADO: Alpha (0.4.0a1, QGIS Bridge). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
     DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en el panel para comprobarlos. La extensión DuckDB «spatial» es opcional.
-version=0.1.0a1
+version=0.4.0a1
 author=eribertocz
 email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
-changelog=0.1.0a1 (sin publicar)
+changelog=0.4.0a1 (G3 · QGIS Bridge)
+    - «Cargar en QGIS» con tres modalidades: copia en memoria, copia rápida (GeoPackage en /vsimem) y conectada a DuckDB.
+    - Capa conectada: lectura bajo demanda por páginas, filtros en DuckDB y edición atómica con detección de conflictos.
+    0.3.0a1 (G2 · SQL Execution)
+    - Editor SQL con scripts de varias sentencias, vistas previas acotadas y transacciones.
+    0.2.0a1 (G1 · Connections)
+    - Abrir o crear bases DuckDB, explorador del catálogo, ATTACH/DETACH y transacciones.
+    0.1.0a1 (G0 · Foundation)
     - Panel acoplable para QGIS 3 y 4, diagnóstico del entorno y sesión DuckDB en memoria.
-tags=duckdb,sql,database,arrow,memory layer
+tags=duckdb,sql,database,arrow,memory layer,geopackage,editing
 homepage=https://github.com/eribertocz/geoduck
 tracker=https://github.com/eribertocz/geoduck/issues
 repository=https://github.com/eribertocz/geoduck
