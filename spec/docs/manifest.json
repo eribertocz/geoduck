@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 103235,
-      "sha256": "f6d09bd84084199c0ecec2cb0773a388019bd04adda12bffaa1055c65a5ce330"
+      "bytes": 103794,
+      "sha256": "17ca4ccc9b02df5ad89c9d629db82c75ac40590f0729c55f6fc9ff273aea6807"
     },
     {
       "path": "README.md",
@@ -86,8 +86,8 @@
     },
     {
       "path": "docs/compatibility-distribution.md",
-      "bytes": 3653,
-      "sha256": "ff2fc83a539220cfb1f6963fd1f3b526fccdd797ebc4c0f45f3c4baa04c4c97f"
+      "bytes": 4212,
+      "sha256": "681fd55408341e9c49c30a3b93f73d0d6c8c2406ef6046a51d8002d7427d3bc9"
     },
     {
       "path": "docs/implementation-handoff.md",

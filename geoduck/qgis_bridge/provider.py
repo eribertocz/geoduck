@@ -57,6 +57,13 @@ from geoduck.domain.bridge_types import LoadPlan, build_load_plan, strip_termina
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
+from geoduck.qgis_bridge.qgis_compat import (
+    FilterType,
+    ProviderCapability,
+    RequestFlag,
+    calculate_transform,
+    read_flags,
+)
 from geoduck.qgis_bridge.sql_compile import compile_expression
 
 KEY = "geoduck"
@@ -226,7 +233,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         self.local: QgsExpression | None = None
         self.limit: int | None = int(self.r.limit()) if self.r.limit() >= 0 else None
         self._reset()
-        self.transform = self.r.calculateTransform(provider.crs())
+        self.transform = calculate_transform(self.r, provider.crs())
         try:
             self.rect = self.filterRectToSourceCrs(self.transform)
         except QgsCsException:
@@ -261,13 +268,13 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         geometry = plan.geometry
         flags = r.flags()
         names = [f.name for f in plan.fields]
-        if flags & Qgis.FeatureRequestFlag.SubsetOfAttributes:
+        if flags & RequestFlag.SubsetOfAttributes:
             self.wanted = [names[i] for i in r.subsetOfAttributes() if 0 <= i < len(names)]
         else:
             self.wanted = names
         has_rect = not self.rect.isNull() and geometry is not None
-        self.exact = has_rect and bool(flags & Qgis.FeatureRequestFlag.ExactIntersect)
-        self.return_geom = geometry is not None and not flags & Qgis.FeatureRequestFlag.NoGeometry
+        self.exact = has_rect and bool(flags & RequestFlag.ExactIntersect)
+        self.return_geom = geometry is not None and not flags & RequestFlag.NoGeometry
         self.mapped = p.fid_mode == "map"
         self.ids = id_columns(p.fid_mode, p.keys)
         cols = [quote_identifier(c) for c in self.ids] + [quote_identifier(n) for n in self.wanted]
@@ -284,13 +291,10 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             g = quote_identifier(geometry.name)  # type: ignore[union-attr]
             where.append(f"st_intersects_extent({g}, {_extent_polygon(self.rect)})")
         ft = r.filterType()
-        if ft in (Qgis.FeatureRequestFilterType.Fid, Qgis.FeatureRequestFilterType.Fids):
-            if ft == Qgis.FeatureRequestFilterType.Fid:
-                fids = [int(r.filterFid())]
-            else:
-                fids = sorted(int(x) for x in r.filterFids())
+        if ft in (FilterType.Fid, FilterType.Fids):
+            fids = [int(r.filterFid())] if ft == FilterType.Fid else sorted(int(x) for x in r.filterFids())
             where.append(self._fid_filter(fids))
-        elif ft == Qgis.FeatureRequestFilterType.Expression and r.filterExpression() is not None:
+        elif ft == FilterType.Expression and r.filterExpression() is not None:
             expr = r.filterExpression()
             compiled = compile_expression(expr.rootNode(), p.comparable)
             if compiled:
@@ -490,7 +494,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         super().__init__(
             uri,
             options if options is not None else QgsDataProvider.ProviderOptions(),
-            flags if flags is not None else Qgis.DataProviderReadFlags(),
+            flags if flags is not None else read_flags(),
         )
         self._uri = uri
         self.editable = False
@@ -665,7 +669,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         return self._valid
 
     def capabilities(self) -> Any:
-        cap = Qgis.VectorProviderCapability
+        cap = ProviderCapability
         if not self.editable:
             return cap.SelectAtId
         if self.plan.geometry is None:  # combinadas de izquierda a derecha: así funciona en 3.44 y 4.2

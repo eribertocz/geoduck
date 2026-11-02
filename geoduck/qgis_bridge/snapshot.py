@@ -20,7 +20,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.compute as pc
 from osgeo import gdal, ogr, osr
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import FieldKind, LoadPlan
@@ -81,6 +81,7 @@ class _Writer:
         self.rows = 0
         self.nulls = 0
         self.geom_codes: set[int] = set()
+        self.has_crs = False
 
     def _srs(self, schema: pa.Schema | None) -> Any:
         if self.crs_override is not None:
@@ -119,8 +120,10 @@ class _Writer:
         options = [f"FID={fid}", "SPATIAL_INDEX=YES"]
         if geom is not None:
             options.append(f"GEOMETRY_NAME={geom.name}")
+        srs = self._srs(schema)
+        self.has_crs = srs is not None
         self.layer = self.ds.CreateLayer(
-            "datos", self._srs(schema), ogr.wkbUnknown if geom is not None else ogr.wkbNone, options
+            "datos", srs, ogr.wkbUnknown if geom is not None else ogr.wkbNone, options
         )
         if self.layer is None:
             raise GeoDuckError(_last_error("GDAL no pudo crear la capa"))
@@ -319,6 +322,9 @@ class SnapshotLoad:
             layer = QgsVectorLayer(uri, layer_name, "ogr")
             if not layer.isValid():
                 raise GeoDuckError("QGIS no pudo abrir el GeoPackage creado")
+            if self._writer is not None and not self._writer.has_crs and layer.isSpatial():
+                # Sin CRS en los datos: QGIS 3.34 asigna uno en silencio al abrir el GeoPackage (C4).
+                layer.setCrs(QgsCoordinateReferenceSystem())
             layers.append(layer)
         return layers
 

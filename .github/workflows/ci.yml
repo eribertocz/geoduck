@@ -75,7 +75,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        qgis: ["3.44.14", "4.2.3"]
+        # Mínima soportada (3.34), cada LTR y la última (spec/docs/compatibility-distribution.md §1).
+        qgis: ["3.34.6", "3.40.3", "3.44.14", "4.2.3"]
         duckdb: ["1.5.0", "2.0.0"]
     defaults:
       run:
@@ -85,7 +86,10 @@ jobs:
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: qgis
-          create-args: qgis=${{ matrix.qgis }} pip
+          # QGIS 3.34 en conda-forge: sin fijar draco, el solver elige una que no coincide con libdraco.so.9.
+          create-args: >-
+            qgis=${{ matrix.qgis }} pip
+            ${{ startsWith(matrix.qgis, '3.34') && 'draco=1.5.7' || '' }}
           cache-environment: true
       - run: python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==25.0.1"
       - run: python -c "from qgis.core import Qgis; print(Qgis.version())"

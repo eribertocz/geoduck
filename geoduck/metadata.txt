@@ -6,13 +6,16 @@ supportsQt6=True
 description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
 about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica.
 
-    ESTADO: Alpha (0.4.0a1, QGIS Bridge). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
+    ESTADO: Alpha (0.4.0a2, QGIS Bridge). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
     DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en el panel para comprobarlos. La extensión DuckDB «spatial» es opcional.
-version=0.4.0a1
+version=0.4.0a2
 author=eribertocz
 email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
-changelog=0.4.0a1 (G3 · QGIS Bridge)
+changelog=0.4.0a2
+    - Corrección: la capa conectada no abría en QGIS 3.34–3.38 (API de QGIS más nueva).
+    - Corrección: en QGIS 3.34 la copia rápida recibía un CRS que los datos no tenían.
+    0.4.0a1 (G3 · QGIS Bridge)
     - «Cargar en QGIS» con tres modalidades: copia en memoria, copia rápida (GeoPackage en /vsimem) y conectada a DuckDB.
     - Capa conectada: lectura bajo demanda por páginas, filtros en DuckDB y edición atómica con detección de conflictos.
     0.3.0a1 (G2 · SQL Execution)

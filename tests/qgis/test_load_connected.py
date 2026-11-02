@@ -26,6 +26,7 @@ from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.connected import wkb_type_name
 from geoduck.qgis_bridge.loader import BridgeLoader
 from geoduck.qgis_bridge.provider import decode_uri
+from geoduck.qgis_bridge.qgis_compat import RequestFlag
 from geoduck.qgis_bridge.sql_compile import compile_expression
 from geoduck.ui.dispatcher import QtDispatcher
 from tests.qgis.conftest import wait_for
@@ -120,9 +121,7 @@ def test_extent_fid_and_attribute_pushdown(session):
     request = QgsFeatureRequest().setFilterFids([3, 7, 4999])
     assert ids(layer, request) == [3, 7, 4999]
     request = (
-        QgsFeatureRequest()
-        .setFlags(Qgis.FeatureRequestFlag.NoGeometry)
-        .setSubsetOfAttributes(["id"], layer.fields())
+        QgsFeatureRequest().setFlags(RequestFlag.NoGeometry).setSubsetOfAttributes(["id"], layer.fields())
     )
     request.setLimit(10)
     feats = list(layer.getFeatures(request))
