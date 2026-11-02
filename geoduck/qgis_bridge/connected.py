@@ -120,12 +120,20 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
     columns = [(str(r[0]), str(r[1])) for r in described]
     plan = build_load_plan(inner, columns, geometry=request.geometry)
     token.raise_if_cancelled()
-    fid, key, source_sql = "row", None, None
+    fid, key, source_sql, scope = "row", None, None, "session"
     readonly: str | None = "vista o consulta"
     key_default: str | None = None
     if request.source is not None:
         is_table, pk = _source_info(handle, request.source)
         source_sql = ".".join(quote_identifier(p) for p in request.source)
+        path = _rows(
+            handle,
+            "SELECT path FROM duckdb_databases() WHERE NOT internal AND path IS NOT NULL "
+            f"AND database_name = {quote_string_literal(request.source[0])}",
+            1,
+        )
+        if path:  # base adjunta desde un archivo: la capa sobrevive a la sesión (§5.5)
+            scope = "attached"
         kinds = {f.name: f for f in plan.fields}
         if pk is not None and pk in kinds and dict(columns)[pk] in _INTEGER_KEYS:
             fid, key = "key", pk
@@ -143,6 +151,7 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:
         "readonly": readonly,
         "default": key_default,
         "source": source_sql,
+        "scope": scope,
         "count": count,
         "headers": [],
         "extent": None,
@@ -253,6 +262,8 @@ class ConnectedLoad:
         params: dict[str, Any] = {
             "session": sessions.register(self._engine),
             "source": meta["source"],
+            "scope": meta["scope"],
+            "database": self._request.source[0] if self._request.source else None,
             "sql": strip_terminator(self._request.sql),
             "geom": plan.geometry.name if plan.geometry is not None else None,
             "fid": meta["fid"],

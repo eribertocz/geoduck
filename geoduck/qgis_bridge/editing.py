@@ -30,7 +30,6 @@ from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import FieldKind
 from geoduck.domain.sql_text import quote_identifier
-from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.provider import KEY, row_hash_sql
 
 #: Espera del hilo principal a que el worker empiece el guardado (si está ocupado con otra cosa, se
@@ -353,7 +352,7 @@ class EditSession:
         self._flush_scheduled = False
         fids = sorted(self._pending)
         self._pending.clear()
-        engine = sessions.get(self.provider.session)
+        engine = self.provider.engine()
         if not fids or engine is None:
             return
         p = self.provider
@@ -385,7 +384,7 @@ class EditSession:
 
     def save(self) -> Verdict:  # noqa: PLR0911 - un veredicto por cada salida posible
         p = self.provider
-        engine = sessions.get(p.session)
+        engine = p.engine()
         if engine is None:
             return Verdict(False, "La sesión de DuckDB de esta capa no está disponible")
         if self._pending:

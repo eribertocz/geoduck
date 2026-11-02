@@ -19,7 +19,7 @@ from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.connected import ConnectedLoad
 from geoduck.qgis_bridge.editing import EditSession, is_editable_layer
 from geoduck.qgis_bridge.memory import MemoryLoad
-from geoduck.qgis_bridge.provider import register_provider
+from geoduck.qgis_bridge.provider import KEY, register_provider
 from geoduck.qgis_bridge.snapshot import SnapshotLoad, unavailable_reason
 from geoduck.qgis_bridge.vsimem import VsimemRegistry
 
@@ -62,6 +62,27 @@ class BridgeLoader:
         self.edits.clear()
         sessions.clear()
 
+    def unsaved_layers(self, database: str | None = None) -> list[str]:
+        """Capas Conectadas editables con cambios sin guardar, de `database` o de cualquier base."""
+        out = []
+        for edit in self.edits.values():
+            layer = edit.layer
+            if not (layer.isEditable() and layer.isModified()):
+                continue
+            db = edit.provider.database
+            if database is None or (db is not None and db.lower() == database.lower()):
+                out.append(layer.name())
+        return out
+
+    def session_changed(self, engine: Any | None) -> None:
+        """Sesión nueva o cerrada (§5.5): las capas de bases adjuntas usan la activa; las demás solo la
+        suya, que deja de existir al cerrarse."""
+        previous = sessions.current()
+        if previous is not None and previous is not engine:
+            sessions.forget(previous)
+        sessions.set_current(engine)
+        self.repaint_connected()
+
     def repaint_connected(self) -> None:
         """Algo pudo cambiar los datos de la sesión: las capas Conectadas se vuelven a dibujar."""
         for layer_id in list(self.connected):
@@ -75,6 +96,8 @@ class BridgeLoader:
 
     def _on_layers_added(self, layers: list[Any]) -> None:
         for layer in layers:
+            if getattr(layer, "providerType", lambda: "")() == KEY and layer.id() not in self.connected:
+                self.connected.append(layer.id())  # también las de un proyecto que se vuelve a abrir
             if is_editable_layer(layer) and layer.id() not in self.edits:
                 self.edits[layer.id()] = EditSession(layer, self._saved)
 
@@ -117,7 +140,6 @@ class BridgeLoader:
                 request,
                 on_progress=on_progress,
                 on_done=on_done,
-                on_layer=lambda layer: self.connected.append(layer.id()),
                 project=self._project,
             )
         task.start()

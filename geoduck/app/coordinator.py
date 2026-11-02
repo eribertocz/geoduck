@@ -10,6 +10,7 @@ Vive en el hilo principal. Toda finalización del motor se reenvía al hilo prin
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -49,6 +50,7 @@ from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, StatementResult, StatementStatus
 from geoduck.domain.transaction import CloseChoice, TransactionState
 
+_DETACH = re.compile(r"\bDETACH\b", re.IGNORECASE)
 _log = logging.getLogger("geoduck.app")
 
 Listener = Callable[[AppEvent], None]
@@ -168,13 +170,25 @@ class SessionCoordinator:
         attaching = engine.attach(request)
         attaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_attached(engine, fut)))
 
+    def _guard_unsaved(self, action: str, database: str | None = None) -> None:
+        """qgis-bridge-spec §5.5: no se desadjunta ni se cierra con capas Conectadas sin guardar."""
+        layers = self._loader.unsaved_layers(database) if self._loader is not None else []
+        if layers:
+            names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
+            raise SessionStateError(
+                f"No se puede {action}: {names} tiene(n) cambios sin guardar. "
+                "Guárdelos o descártelos primero."
+            )
+
     def detach_database(self, alias: str) -> None:
         """DetachDatabase: `DETACH` real. La sesión pasa por `DETACHING`.
 
         Al ejecutarse en el worker serial, nunca se adelanta a una lectura en curso (session-spec §6).
+        Rechazado si una capa Conectada de esa base tiene cambios sin guardar.
         """
         if self._sm.state is not SessionState.READY or self._engine is None:
             raise SessionStateError(f"No se puede desadjuntar una base en estado {self._sm.state.value}")
+        self._guard_unsaved(f"desadjuntar «{alias}»", alias)
         engine = self._engine
         self._sm.transition(SessionState.DETACHING)
         detaching = engine.detach(alias)
@@ -203,6 +217,8 @@ class SessionCoordinator:
         engine = self._require_ready("ejecutar SQL")
         if not text.strip():
             raise SessionStateError("No hay SQL que ejecutar")
+        if _DETACH.search(text):  # conservador: un DETACH escrito en SQL también se protege (§5.5)
+            self._guard_unsaved("ejecutar DETACH")
         self._run_ids += 1
         run_id = self._run_ids
         self._sm.transition(SessionState.BUSY)
@@ -314,6 +330,7 @@ class SessionCoordinator:
         """
         if self._close_choice is not None or self._awaiting_close_decision:
             return  # ya hay un cierre en curso o una pregunta abierta
+        self._guard_unsaved("cerrar la sesión")
         state = self._sm.state
         engine = self._engine
         if engine is not None and state is SessionState.READY:
@@ -385,6 +402,8 @@ class SessionCoordinator:
             done.set_result(None)
             return done
         engine, self._engine = self._engine, None
+        if self._loader is not None and engine is not None:
+            self._loader.session_changed(None)  # las capas Conectadas quedan no disponibles
         self._info = None
         self._pending_attach = None
         self._recovering = False
@@ -516,6 +535,8 @@ class SessionCoordinator:
             return
         self._info = fut.result()
         self._sm.transition(SessionState.READY)
+        if self._loader is not None:
+            self._loader.session_changed(self._engine)
         self._emit(SessionStarted(self._info))
         self._set_transaction(TransactionState.NONE)  # una conexión nueva empieza en autocommit
         engine.invalidation().add_done_callback(

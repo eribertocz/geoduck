@@ -42,6 +42,7 @@ from qgis.core import (
     QgsFeatureRequest,
     QgsFields,
     QgsGeometry,
+    QgsMessageLog,
     QgsProviderMetadata,
     QgsProviderRegistry,
     QgsRectangle,
@@ -273,7 +274,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         size = self.page_size()
         if size == 0:
             return False
-        engine = sessions.get(self.p.session)
+        engine = self.p.engine()
         if engine is None:
             self.p.note_error("Sesión no disponible")
             return False
@@ -391,6 +392,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         self.seen: dict[int, int] = {}
         self.capture = False
         self.verdict: Any = None
+        self.session, self.scope, self.database, self.source = "", "session", None, None
         self.unavailable = False
         self.last_error = ""
         self._valid = False
@@ -401,8 +403,10 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         self._wkb = Qgis.WkbType.Unknown
         try:
             params = decode_uri(uri)
-            self.session: str = params.get("session", "")
-            self.source: str | None = params.get("source") or None
+            self.session = params.get("session", "")
+            self.scope = params.get("scope", "session")
+            self.database = params.get("database") or None
+            self.source = params.get("source") or None
             self.inner: str = params["sql"]
             self.key: str | None = params.get("key") or None
             self.fid_mode: str = params.get("fid", "row")
@@ -445,7 +449,20 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
 
     # -- estado de la sesión -------------------------------------------------------------------
 
+    def engine(self) -> Any | None:
+        """El worker de la sesión: la activa para bases adjuntas desde archivo; si no, la de origen."""
+        if self.scope == "attached":
+            return sessions.current()
+        return sessions.get(self.session)
+
     def note_error(self, message: str) -> None:
+        """La capa queda no disponible (vacía). Se avisa una vez en el registro de QGIS, sin errores."""
+        if not self.unavailable:
+            QgsMessageLog.logMessage(
+                f"Capa conectada no disponible ({self.source or 'consulta'}): {message}",
+                "GeoDuck",
+                Qgis.MessageLevel.Warning,
+            )
         self.unavailable = True
         self.last_error = message
 

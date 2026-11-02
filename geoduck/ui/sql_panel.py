@@ -44,6 +44,7 @@ from geoduck.app.events import (
     SessionStateChanged,
     StatementFinished,
 )
+from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import (
     DEFAULT_PREVIEW_LIMIT,
@@ -340,9 +341,13 @@ class SqlPanel(QWidget):
         self._clear_results()
         self._run_text = full_text
         self._running = True
-        self._coordinator.execute_sql(
-            text, scope, cursor=cursor, base=base, preview_limit=int(self.limit_combo.currentData())
-        )
+        try:
+            self._coordinator.execute_sql(
+                text, scope, cursor=cursor, base=base, preview_limit=int(self.limit_combo.currentData())
+            )
+        except GeoDuckError as exc:  # p. ej. DETACH con capas Conectadas sin guardar (§5.5)
+            self._running = False
+            self._on_message(exc.message)
 
     def detach(self) -> None:
         self._unsubscribe()

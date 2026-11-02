@@ -63,7 +63,7 @@ el código del complemento se escribe de nuevo con las fronteras de ADR-0010 y s
 | E4 Interfaz «Cargar en QGIS» | Hecha | #61 |
 | E5 Conectada (lectura) | Hecha: proveedor `geoduck`, metadatos en una operación, páginas por FID con prioridad, pushdown de extensión/FID/columnas/expresiones, «no disponible» sin sesión | en revisión |
 | E6 Conectada (edición) | Hecha: guardado atómico desde `beforeCommitChanges`, huellas, lotes Arrow, validación previa, transacción del usuario, época de datos | en revisión |
-| E7 Ciclo de vida y aceptación | Pendiente | — |
+| E7 Ciclo de vida y aceptación | Hecha: no disponible/reconexión tras DETACH, cierre y reapertura; cambios sin guardar bloquean DETACH y cierre; `docs/g3/acceptance.md` | en revisión |
 
 Hallazgos de implementación: QGIS asigna `EPSG:4326` en silencio a una capa memory sin CRS (se fija
 siempre explícito); GDAL mezclado en un GeoPackage → una capa por familia y otra «sin geometría» con
@@ -103,3 +103,12 @@ Hallazgos de E6 (Conectada, edición):
 - **Capacidades del proveedor en QGIS 3.44:** las banderas se combinan de izquierda a derecha
   (`flag | Capabilities` falla y aborta el proceso).
 - Lotes de 100 / 1 000 / 10 000 cambios (más 10 % de borrados): 0,15 / 0,12 / 0,23 s en el guardado.
+
+Hallazgos de E7 (ciclo de vida):
+
+- **Alcance de la sesión en la URI:** las capas de una base adjunta desde archivo (`scope=attached`) usan
+  la sesión activa, sea cual sea: sobreviven al cierre y a la reapertura del proyecto y vuelven al
+  adjuntar la base con el mismo alias. Las de `:memory:`, `TEMP` o de un resultado del editor
+  (`scope=session`) quedan ligadas a su sesión y nunca leen una tabla homónima de otra sesión.
+- **Aviso de «no disponible»:** una sola línea en el registro de QGIS (pestaña GeoDuck) por cada paso a
+  no disponible; la capa queda vacía y sin errores.

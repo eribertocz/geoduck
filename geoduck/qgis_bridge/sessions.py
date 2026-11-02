@@ -14,6 +14,20 @@ from typing import Any
 
 _lock = threading.Lock()
 _engines: dict[str, Any] = {}
+#: La sesión de GeoDuck activa: la usan las capas de bases adjuntas desde un archivo, que sobreviven a la
+#: sesión (y al proyecto) y vuelven a estar disponibles cuando la base se adjunta de nuevo (§5.5).
+_current: Any = None
+
+
+def set_current(engine: Any) -> None:
+    global _current  # noqa: PLW0603 - un único registro por proceso, como el de proveedores de QGIS
+    with _lock:
+        _current = engine
+
+
+def current() -> Any | None:
+    with _lock:
+        return _current
 
 
 def register(engine: Any) -> str:
@@ -39,5 +53,7 @@ def forget(engine: Any) -> None:
 
 
 def clear() -> None:
+    global _current  # noqa: PLW0603
     with _lock:
         _engines.clear()
+        _current = None

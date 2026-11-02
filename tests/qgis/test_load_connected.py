@@ -261,3 +261,26 @@ def test_rendering_waits_for_user_sql_without_errors(session):
     assert render(layer) > 100
     assert long.future.result(TIMEOUT) is True
     assert queued.future.result(TIMEOUT) == "después"
+
+
+def test_types_follow_section_7(session):
+    """AT-BRD-007 en la modalidad Conectada: los mismos valores que Memoria e Instantánea."""
+    report, layer = session.load(
+        "SELECT 1::HUGEINT * 170141183460469231731687303715884105727 AS hi, 1234567.89::DECIMAL(9,2) AS d9, "
+        "'b'::ENUM('a','b') AS en, DATE '2026-11-01' AS fecha, TIMESTAMPTZ '2026-11-01 12:00:00+02' AS tz, "
+        "[1,2] AS li, '\\xAA'::BLOB AS bl, NULL::INTEGER AS nul"
+    )
+    f = next(layer.getFeatures())
+    assert f["hi"] == "170141183460469231731687303715884105727"
+    assert f["d9"] == pytest.approx(1234567.89)
+    assert f["en"] == "b"
+    assert f["fecha"].toString("yyyy-MM-dd") == "2026-11-01"
+    assert f["tz"].toUTC().toString("yyyy-MM-ddTHH:mm:ss") == "2026-11-01T10:00:00"
+    assert f["li"] == "[1,2]"
+    assert bytes(f["bl"]) == b"\xaa"
+    assert QgsVariantUtils.isNull(f["nul"])
+    assert any("HUGEINT" in w for w in report.warnings)
+    # Filtros sobre columnas convertidas: se evalúan en Python con la semántica de QGIS (no se compilan).
+    assert [
+        g["en"] for g in layer.getFeatures(QgsFeatureRequest().setFilterExpression("hi LIKE '1701%'"))
+    ] == ["b"]

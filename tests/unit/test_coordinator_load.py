@@ -20,6 +20,7 @@ from geoduck.domain.bridge_types import build_load_plan
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionStateError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.session import SessionState as S
+from geoduck.domain.sql import RunScope
 from tests.unit.test_coordinator import INFO, FakeEngine, QueueDispatcher
 
 
@@ -41,6 +42,18 @@ class FakeLoader:
 
     def availability(self):
         return {LoadMode.MEMORY: None, LoadMode.SNAPSHOT: "sin GDAL", LoadMode.CONNECTED: None}
+
+    unsaved: dict  # base → capas con cambios sin guardar
+    sessions: list
+
+    def unsaved_layers(self, database=None):
+        layers = getattr(self, "unsaved", {})
+        if database is None:
+            return [n for names in layers.values() for n in names]
+        return list(layers.get(database, []))
+
+    def session_changed(self, engine):
+        self.__dict__.setdefault("sessions", []).append(engine)
 
     def start(self, engine, request, *, on_progress, on_done):
         if self.fail_start:
@@ -151,3 +164,27 @@ def test_prepare_publishes_the_plan_or_the_error(env):
     dispatcher.drain()
     assert any(isinstance(e, LoadPrepareFailed) and e.token == token2 for e in events)
     assert coordinator.state is S.READY
+
+
+# -- capas Conectadas con cambios sin guardar (qgis-bridge-spec §5.5, G3/E7) ---------------------------
+
+
+def test_loader_follows_the_session(env):
+    coordinator, _, engines, _, loader = env
+    assert loader.sessions == [engines[-1]]
+    coordinator.close_session()
+    assert loader.sessions[-1] is None
+
+
+def test_unsaved_connected_edits_block_detach_close_and_sql_detach(env):
+    coordinator, _, _, _, loader = env
+    loader.unsaved = {"datos": ["parcelas"]}
+    with pytest.raises(SessionStateError, match="«parcelas»"):
+        coordinator.detach_database("datos")
+    with pytest.raises(SessionStateError, match="cerrar la sesión"):
+        coordinator.request_close()
+    with pytest.raises(SessionStateError, match="DETACH"):
+        coordinator.execute_sql("detach datos", RunScope.ALL)
+    assert coordinator.state is S.READY
+    coordinator.detach_database("otra")  # otra base: permitido
+    assert coordinator.state is S.DETACHING

@@ -124,6 +124,15 @@ class LayerLoader(Protocol):
         """Modalidad → motivo por el que no está disponible (None = disponible)."""
         ...
 
+    def unsaved_layers(self, database: str | None = None) -> list[str]:
+        """Capas Conectadas con cambios sin guardar (de `database`, o de cualquier base si es None).
+        Bloquean el DETACH de su base y el cierre de la sesión (qgis-bridge-spec §5.5)."""
+        ...
+
+    def session_changed(self, engine: SessionEngine | None) -> None:
+        """Hay una sesión nueva (o ninguna): las capas Conectadas de bases adjuntas la usan."""
+        ...
+
     def start(
         self,
         engine: SessionEngine,
