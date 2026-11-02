@@ -76,7 +76,7 @@ una sola vez (INV-1..INV-5)».**
 |---|---|---|
 | Certificación Windows (QGIS 3.44 LTR, 4.2.x y regresión en 3.34) | Pendiente; trabajo de calidad que no bloquea | #10 |
 | Comprobaciones Windows de G1: que `ATTACH` no cambie la fecha del archivo (F-20) y «Permission denied» → `DB_READ_ONLY` | Pendiente | #10, `docs/evidence/g1/README.md` |
-| **Modernización visual del panel** | La UI es funcional; la modernización va en su fase (GD-UX-001, roadmap G5). No bloquea G1 | Issue nuevo, hito `v0.6.0a1` |
+| **Modernización visual del panel** | La UI es funcional; la modernización va en su fase (GD-UX-001, roadmap G5). No bloquea G1 | #49, hito `v0.6.0a1` |
 | ATTACH/DETACH desde SQL | Pasa a G2 | `docs/g2/plan.md` |
 | Capas intactas tras DETACH y cierre | G3 | — |
 | Spike G0-B (editor SQL en PyQGIS 3/4) | Necesario antes del editor de G2 | #11 |
