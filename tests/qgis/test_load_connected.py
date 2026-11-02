@@ -173,7 +173,7 @@ def test_pages_cover_everything_once(session, monkeypatch):
 
 def test_query_and_view_use_stable_row_numbers(session):
     _, layer = session.load("SELECT * FROM puntos WHERE id % 2 = 0 ORDER BY id", name="pares")
-    assert decode_uri(layer.source())["fid"] == "row"
+    assert decode_uri(layer.source())["fid"] == "content"
     assert layer.featureCount() == N // 2
     rect = QgsRectangle(10, 10, 10, 10)
     (f,) = list(layer.getFeatures(QgsFeatureRequest().setFilterRect(rect)))
@@ -184,16 +184,16 @@ def test_query_and_view_use_stable_row_numbers(session):
     _, view = session.load(
         'SELECT * FROM "memory"."main"."vista"', name="vista", source=("memory", "main", "vista")
     )
-    assert decode_uri(view.source())["fid"] == "row"
+    assert decode_uri(view.source())["fid"] == "content"
     assert ids(view) == list(range(100))
 
 
-def test_table_without_key_uses_rowid(session):
+def test_table_without_key_uses_the_row_content(session):
     session.sql("CREATE TABLE sin_clave AS SELECT * FROM puntos WHERE id < 50")
     report, layer = session.load(
         'SELECT * FROM "memory"."main"."sin_clave"', source=("memory", "main", "sin_clave")
     )
-    assert decode_uri(layer.source())["fid"] == "rowid"
+    assert decode_uri(layer.source())["fid"] == "content"
     assert any("Solo lectura" in w for w in report.warnings)
     assert ids(layer) == list(range(50))
 
@@ -261,3 +261,54 @@ def test_rendering_waits_for_user_sql_without_errors(session):
     assert render(layer) > 100
     assert long.future.result(TIMEOUT) is True
     assert queued.future.result(TIMEOUT) == "después"
+
+
+def _fid_by_id(layer, request=None):
+    return {f["id"]: f.id() for f in layer.getFeatures(request or QgsFeatureRequest())}
+
+
+def test_keyless_fids_survive_filters_rereads_reordering_and_checkpoints(session):
+    """Sin clave primaria, el FID de una fila es estable (decisión del propietario, 2026-11-02)."""
+    session.sql("CREATE TABLE sin_clave AS SELECT * FROM puntos")
+    _, table = session.load(
+        'SELECT * FROM "memory"."main"."sin_clave"', name="sc", source=("memory", "main", "sin_clave")
+    )
+    _, grouped = session.load(  # orden de salida no determinista (agregación en paralelo)
+        "SELECT id % 1000 AS id, count(*) AS n, any_value(geom) AS geom FROM puntos GROUP BY ALL", name="g"
+    )
+    base = _fid_by_id(table)
+    assert len(base) == N and len(set(base.values())) == N and min(base.values()) >= 0
+    rect = QgsRectangle(10, 10, 20, 12)
+    filtered = _fid_by_id(table, QgsFeatureRequest().setFilterRect(rect))
+    assert filtered and all(base[i] == fid for i, fid in filtered.items())
+    by_expr = _fid_by_id(table, QgsFeatureRequest().setFilterExpression("length(nombre) = 7"))
+    assert by_expr and all(base[i] == fid for i, fid in by_expr.items())
+    assert table.getFeature(base[4321])["id"] == 4321
+    assert {f["id"] for f in table.getFeatures(QgsFeatureRequest().setFilterFids([base[7], base[8]]))} == {
+        7,
+        8,
+    }
+
+    grouped_before = _fid_by_id(grouped)
+    session.sql("DELETE FROM sin_clave WHERE id < 2000; CHECKPOINT")  # rowid cambiaría aquí
+    after = _fid_by_id(table)
+    assert after == {i: fid for i, fid in base.items() if i >= 2000}
+    session.sql("SET threads = 1")
+    assert _fid_by_id(grouped) == grouped_before
+    session.sql("RESET threads")
+
+
+def test_identical_rows_are_never_lost_or_repeated_across_pages(session, monkeypatch):
+    monkeypatch.setattr(provider_module, "PAGE", 4)
+    session.sql(
+        "CREATE TABLE dup AS SELECT (range % 3)::INTEGER AS id, "
+        "('POINT(0 ' || (range % 3) || ')')::GEOMETRY AS g FROM range(15)"  # cada fila aparece 5 veces
+    )
+    _, layer = session.load(
+        'SELECT * FROM "memory"."main"."dup"', name="dup", source=("memory", "main", "dup")
+    )
+    feats = list(layer.getFeatures())
+    assert sorted(f["id"] for f in feats) == sorted([0, 1, 2] * 5)
+    assert len({f.id() for f in feats}) == 3  # filas idénticas: el mismo FID
+    request = QgsFeatureRequest().setFilterExpression("id >= 1")
+    assert sorted(f["id"] for f in layer.getFeatures(request)) == sorted([1, 2] * 5)
