@@ -12,18 +12,21 @@ from __future__ import annotations
 import re
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 
 
 def _reject_nul(value: str, what: str) -> None:
     if "\x00" in value:
-        raise GeoDuckError(f"{what} no puede contener el carácter NUL", code=ErrorCode.INVALID_ARGUMENT)
+        raise GeoDuckError(
+            tr("{0} cannot contain the NUL character").format(what), code=ErrorCode.INVALID_ARGUMENT
+        )
 
 
 def quote_identifier(name: str) -> str:
     """Devuelve `name` como identificador SQL entre comillas dobles, escapando `"`."""
     if not name:
-        raise GeoDuckError("El identificador no puede estar vacío", code=ErrorCode.INVALID_ARGUMENT)
-    _reject_nul(name, "El identificador")
+        raise GeoDuckError(tr("The identifier cannot be empty"), code=ErrorCode.INVALID_ARGUMENT)
+    _reject_nul(name, tr("The identifier"))
     return '"' + name.replace('"', '""') + '"'
 
 
@@ -40,7 +43,7 @@ def sql_name(name: str, reserved: frozenset[str] | None) -> str:
 
 def quote_string_literal(value: str) -> str:
     """Devuelve `value` como literal SQL entre comillas simples, escapando `'`."""
-    _reject_nul(value, "El literal")
+    _reject_nul(value, tr("The literal"))
     return "'" + value.replace("'", "''") + "'"
 
 

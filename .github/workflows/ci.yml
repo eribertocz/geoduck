@@ -33,6 +33,8 @@ jobs:
       - run: python -m pytest tests/unit tests/architecture -q
       - name: Integridad de spec/ (maestra y manifiesto)
         run: python tools/spec_sync.py --check
+      - name: Catálogo de traducción (GD-I18N-001)
+        run: python tools/i18n.py --check
 
   engine:
     name: motor · DuckDB ${{ matrix.duckdb }} · Py ${{ matrix.python }} · PyArrow ${{ matrix.pyarrow }}

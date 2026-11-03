@@ -71,15 +71,15 @@ from geoduck.domain.sql import (
 )
 from geoduck.ui import theme
 from geoduck.ui.completer import SqlCompleter
-from geoduck.ui.i18n import tr
+from geoduck.ui.i18n import N_, tr
 from geoduck.ui.load_dialog import OPTIONS
 from geoduck.ui.widgets import line_index_from, offset_from
 
 _STATUS_TEXT = {
-    StatementStatus.OK: "OK",
-    StatementStatus.FAILED: "Error",
-    StatementStatus.CANCELLED: "Cancelada",
-    StatementStatus.SKIPPED: "No ejecutada",
+    StatementStatus.OK: N_("OK"),
+    StatementStatus.FAILED: N_("Error"),
+    StatementStatus.CANCELLED: N_("Cancelled"),
+    StatementStatus.SKIPPED: N_("Not run"),
 }
 _MAX_COLUMN_WIDTH = 260
 _STATUS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
@@ -275,20 +275,20 @@ class ResultView(QWidget):
         self.loadable = self.statement.replayable
         self.table = self._build_table(preview)
 
-        parts = [tr("Vista previa")]
+        parts = [tr("Preview")]
         if result.output is OutputKind.MUTATION_ROWS:
-            parts.append(tr("resultado de escritura: no se repite al cargar"))
+            parts.append(tr("write result: not repeated when loading"))
         elif result.output is OutputKind.PLAN:
-            parts.append(tr("plan de ejecución"))
+            parts.append(tr("execution plan"))
         self.caption = muted(QLabel(" · ".join(parts)))
-        self.stale_label = muted(QLabel(tr("Posiblemente obsoleta")))
+        self.stale_label = muted(QLabel(tr("Possibly outdated")))
         italic = QFont(self.stale_label.font())
         italic.setItalic(True)
         self.stale_label.setFont(italic)
         self.stale_label.setToolTip(
             tr(
-                "Después de esta vista previa se ejecutó algo que pudo cambiar estructura o datos. "
-                "GeoDuck no detecta cambios hechos fuera de la sesión."
+                "After this preview something ran that may have changed structure or data. GeoDuck "
+                "does not detect changes made outside the session."
             )
         )
         self.stale_label.hide()
@@ -311,8 +311,8 @@ class ResultView(QWidget):
         n = len(self.preview.rows)
         if short:
             return f"{self.title} {n}{'+' if self.preview.truncated else ''}"
-        more = " · " + tr("hay más") if self.preview.truncated else ""
-        rows = tr("fila") if n == 1 else tr("filas")
+        more = " · " + tr("there is more") if self.preview.truncated else ""
+        rows = tr("row") if n == 1 else tr("rows")
         return f"{self.title} ({n} {rows}{more})"
 
     def _build_table(self, preview: Preview) -> QTableWidget:
@@ -347,11 +347,11 @@ class ResultView(QWidget):
                 if value is None:  # NULL ≠ "" y ≠ el texto 'NULL': cursiva atenuada y su propia ayuda
                     item.setFont(null_font)
                     item.setForeground(theme.color(palette.muted))
-                    item.setToolTip(tr("NULL: sin valor"))
-                    item.setData(Qt.ItemDataRole.AccessibleTextRole, tr("NULL, sin valor"))
+                    item.setToolTip(tr("NULL: no value"))
+                    item.setData(Qt.ItemDataRole.AccessibleTextRole, tr("NULL, no value"))
                 elif value == "":
-                    item.setToolTip(tr("Cadena vacía"))
-                    item.setData(Qt.ItemDataRole.AccessibleTextRole, tr("cadena vacía"))
+                    item.setToolTip(tr("Empty string"))
+                    item.setData(Qt.ItemDataRole.AccessibleTextRole, tr("empty string"))
                 if c in numeric:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 table.setItem(r, c, item)
@@ -388,9 +388,9 @@ class ErrorView(QWidget):
         self.message.setProperty("geoduck", "error-text")
         self.message.setWordWrap(True)
         self.message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.message.setAccessibleName(tr("Mensaje de error"))
-        self.go_button = HintButton(tr("Ir a la sentencia"))
-        self.go_button.setToolTip(tr("Selecciona en el editor la sentencia que falló"))
+        self.message.setAccessibleName(tr("Error message"))
+        self.go_button = HintButton(tr("Go to the statement"))
+        self.go_button.setToolTip(tr("Selects in the editor the statement that failed"))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
@@ -404,7 +404,7 @@ class ErrorView(QWidget):
 
     def tab_text(self, short: bool) -> str:
         number = self.statement.index + 1
-        return f"{tr('Error')} · {number}" if short else f"{tr('Error')} · {tr('sentencia')} {number}"
+        return f"{tr('Error')} · {number}" if short else f"{tr('Error')} · {tr('statement')} {number}"
 
 
 class ModeItem(QFrame):
@@ -560,8 +560,8 @@ class SqlPanel(QWidget):
         self.new_tab_button = QToolButton()
         self.new_tab_button.setText("+")
         self.new_tab_button.setAutoRaise(True)
-        self.new_tab_button.setToolTip(tr("Nueva pestaña de SQL (Ctrl+T)"))
-        self.new_tab_button.setAccessibleName(tr("Nueva pestaña de SQL"))
+        self.new_tab_button.setToolTip(tr("New SQL tab (Ctrl+T)"))
+        self.new_tab_button.setAccessibleName(tr("New SQL tab"))
         self.new_tab_button.clicked.connect(self._new_empty_tab)
         self.editor_tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
         self.new_editor_tab()
@@ -584,13 +584,13 @@ class SqlPanel(QWidget):
     def new_editor_tab(self, text: str = "") -> Any:
         """Pestaña nueva, activa y con el foco; `text`, su SQL inicial (p. ej. del registro)."""
         editor = QgsCodeEditorSQL()
-        editor.setAccessibleName(tr("Editor SQL"))
+        editor.setAccessibleName(tr("SQL editor"))
         editor.setMinimumHeight(60)
         _free_keys(editor, ("Ctrl+T", "Ctrl+W"))  # para «nueva pestaña» y «cerrar pestaña»
         self._completers[id(editor)] = SqlCompleter(editor, self._coordinator)  # G6 · E2
         self._color_editor(editor)
         self._editor_numbers += 1
-        name = tr("Consulta {0}").format(self._editor_numbers)
+        name = tr("Query {0}").format(self._editor_numbers)
         index = self.editor_tabs.addTab(editor, name)
         self.editor_tabs.setTabToolTip(index, name)
         bar = self.editor_tabs.tabBar()
@@ -598,8 +598,8 @@ class SqlPanel(QWidget):
             close = bar.tabButton(index, side)
             if close is not None:  # la «✕», también con el teclado (además de Ctrl+W)
                 close.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-                close.setToolTip(tr("Cerrar pestaña (Ctrl+W)"))
-                close.setAccessibleName(tr("Cerrar {0}").format(name))
+                close.setToolTip(tr("Close tab (Ctrl+W)"))
+                close.setAccessibleName(tr("Close {0}").format(name))
         if text:
             editor.setText(text)
         self.editor_tabs.setCurrentIndex(index)
@@ -617,7 +617,7 @@ class SqlPanel(QWidget):
             return False
         name = self.editor_tabs.tabText(index)
         if self._running and editor is self._run_editor:
-            self._on_message(tr("«{0}» se está ejecutando: espere a que termine o cancélela.").format(name))
+            self._on_message(tr("«{0}» is running: wait for it to finish or cancel it.").format(name))
             return False
         if editor.text().strip() and not self.confirm_close(name):
             return False
@@ -632,8 +632,8 @@ class SqlPanel(QWidget):
     def _ask_close(self, name: str) -> bool:
         answer = QMessageBox.question(
             self,
-            tr("Cerrar pestaña"),
-            tr("«{0}» tiene SQL que se perderá al cerrarla. ¿Cerrarla?").format(name),
+            tr("Close tab"),
+            tr("«{0}» has SQL that will be lost when closing it. Close it?").format(name),
         )
         return answer == QMessageBox.StandardButton.Yes
 
@@ -693,25 +693,28 @@ class SqlPanel(QWidget):
         self.compact = compact
 
     def _build_actions(self) -> QHBoxLayout:
-        self.run_all_button = HintButton(tr("Ejecutar"), tr("Ctrl+Mayús+Intro"), "primary", "▶")
-        self.run_all_button.setToolTip(tr("Ejecuta todo el script, en orden (Ctrl+Mayús+Intro)"))
-        self.run_current_button = HintButton(tr("Sentencia"), tr("Ctrl+Intro"))
-        self.run_current_button.setToolTip(tr("Ejecuta la sentencia bajo el cursor (Ctrl+Intro)"))
-        self.run_selection_button = HintButton(tr("Selección"))
-        self.run_selection_button.setToolTip(tr("Ejecuta solo el texto seleccionado"))
-        self.explain_button = HintButton(tr("Explicar"))
+        self.run_all_button = HintButton(tr("Run"), tr("Ctrl+Shift+Enter"), "primary", "▶")
+        self.run_all_button.setToolTip(tr("Runs the whole script, in order (Ctrl+Shift+Enter)"))
+        self.run_current_button = HintButton(tr("Statement"), tr("Ctrl+Enter"))
+        self.run_current_button.setToolTip(tr("Runs the statement under the cursor (Ctrl+Enter)"))
+        self.run_selection_button = HintButton(tr("Selection"))
+        self.run_selection_button.setToolTip(tr("Runs only the selected text"))
+        self.explain_button = HintButton(tr("Explain"))
         self.explain_button.setToolTip(
-            tr("Explicar: muestra el plan de la sentencia bajo el cursor (o de la selección) sin ejecutarla")
+            tr(
+                "Explain: shows the plan of the statement under the cursor (or of the selection) without "
+                "running it"
+            )
         )
         self.explain_button.set_compact_icon(QgsApplication.getThemeIcon("mActionIdentify.svg"))
-        self.cancel_button = HintButton(tr("Cancelar"))
-        self.cancel_button.setToolTip(tr("Cancela la ejecución en curso"))
+        self.cancel_button = HintButton(tr("Cancel"))
+        self.cancel_button.setToolTip(tr("Cancels the running execution"))
         self.limit_combo = QComboBox()
         for limit in PREVIEW_LIMITS:
             self.limit_combo.addItem(str(limit), limit)
         self.limit_combo.setCurrentIndex(PREVIEW_LIMITS.index(DEFAULT_PREVIEW_LIMIT))
-        self.limit_combo.setToolTip(tr("Filas de cada vista previa"))
-        self.limit_combo.setAccessibleName(tr("Filas de cada vista previa"))
+        self.limit_combo.setToolTip(tr("Rows of each preview"))
+        self.limit_combo.setAccessibleName(tr("Rows of each preview"))
         self.action_buttons = (
             self.run_all_button,
             self.run_current_button,
@@ -725,7 +728,7 @@ class SqlPanel(QWidget):
         for button in self.action_buttons:
             actions.addWidget(button)
         actions.addStretch(1)
-        self.limit_label = muted(QLabel(tr("Filas")))
+        self.limit_label = muted(QLabel(tr("Rows")))
         actions.addWidget(self.limit_label)
         actions.addWidget(self.limit_combo)
         return actions
@@ -736,7 +739,7 @@ class SqlPanel(QWidget):
         self.results.setDocumentMode(True)
         self.results.setUsesScrollButtons(True)
         self.results.setElideMode(Qt.TextElideMode.ElideRight)
-        self.empty_results = muted(QLabel(tr("Sin resultados todavía. Ejecute una consulta (Ctrl+Intro).")))
+        self.empty_results = muted(QLabel(tr("No results yet. Run a query (Ctrl+Enter).")))
         self.empty_results.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.results_stack = QStackedWidget()
         self.results_stack.addWidget(self.empty_results)
@@ -752,9 +755,9 @@ class SqlPanel(QWidget):
         self.load_button.setObjectName("geoduckLoadButton")
         self.load_button.setProperty("geoduck", "load")
         self.load_button.setIcon(QgsApplication.getThemeIcon("mActionAddLayer.svg"))
-        self.load_button.setText(tr("Cargar en QGIS"))
-        self.load_button.setToolTip(tr("Carga el resultado completo como capa de QGIS"))
-        self.load_button.setAccessibleName(tr("Cargar en QGIS"))
+        self.load_button.setText(tr("Load into QGIS"))
+        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
+        self.load_button.setAccessibleName(tr("Load into QGIS"))
         self.load_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.load_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.load_menu = QMenu(self.load_button)
@@ -782,7 +785,7 @@ class SqlPanel(QWidget):
         box.setSpacing(6)
         header = QHBoxLayout()
         header.setSpacing(8)
-        self.log_title = bold(QLabel(tr("Registro")))
+        self.log_title = bold(QLabel(tr("Log")))
         header.addWidget(self.log_title)
         header.addWidget(self._build_log_filters())
         header.addStretch(1)
@@ -800,7 +803,7 @@ class SqlPanel(QWidget):
             self.splitter.setCollapsible(2, True)
             self.log_title.show()
         elif tabs is not None:
-            tabs.insertTab(2, self.log_section, tr("Registro"))
+            tabs.insertTab(2, self.log_section, tr("Log"))
             self.log_title.hide()  # el título ya está en la pestaña
         self.short_titles = not wide
         self._place_load_button(wide=wide)
@@ -870,7 +873,7 @@ class SqlPanel(QWidget):
     def _update_log_counts(self) -> None:
         total, ok, errors = self.log_counts()
         for key, text, number in (
-            ("all", tr("Todo"), total),
+            ("all", tr("All"), total),
             ("ok", tr("OK"), ok),
             ("error", tr("Error"), errors),
         ):
@@ -893,11 +896,11 @@ class SqlPanel(QWidget):
         for col in range(LOG_MESSAGE):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self.log.setToolTip(
-            tr("Doble clic: seleccionar la sentencia en el editor")
+            tr("Double-click: select the statement in the editor")
             + "\n"
-            + tr("Clic derecho: abrir su SQL en una pestaña nueva")
+            + tr("Right-click: open its SQL in a new tab")
         )
-        self.log.setAccessibleName(tr("Registro de ejecuciones"))
+        self.log.setAccessibleName(tr("Execution log"))
         self.log.setMinimumHeight(48)
 
     # -- acciones ----------------------------------------------------------------------------------
@@ -994,7 +997,7 @@ class SqlPanel(QWidget):
     def _on_script(self, event: ScriptFinished) -> None:
         run = event.run
         if run.parse_error:
-            self._on_message(tr("Error de sintaxis: no se ejecutó nada.") + f" {run.parse_error}")
+            self._on_message(tr("Syntax error: nothing was run.") + f" {run.parse_error}")
             if run.parse_error_offset is not None:
                 self._point_error(run.parse_error_offset, run.parse_error)
         elif run.failed:
@@ -1024,7 +1027,7 @@ class SqlPanel(QWidget):
             item = QTableWidgetItem(value)
             if col == LOG_TIME:
                 item.setForeground(theme.color(palette.muted))
-                item.setToolTip(tr("Ejecución {} · sentencia {}").format(event.run_id, r.statement.index + 1))
+                item.setToolTip(tr("Run {} · statement {}").format(event.run_id, r.statement.index + 1))
             elif col == LOG_STATUS:
                 if r.status is StatementStatus.OK:
                     item.setForeground(theme.color(palette.primary))
@@ -1097,8 +1100,8 @@ class SqlPanel(QWidget):
         if item is None or self.logged_sql(item.row()) is None:
             return
         menu = QMenu(self)
-        action = menu.addAction(tr("Abrir en el editor"))
-        action.setToolTip(tr("Copia este SQL a una pestaña nueva, sin ejecutarlo"))
+        action = menu.addAction(tr("Open in the editor"))
+        action.setToolTip(tr("Copies this SQL to a new tab, without running it"))
         row = item.row()
         action.triggered.connect(lambda: self.open_logged_sql(row))
         menu.exec(self.log.viewport().mapToGlobal(pos))
@@ -1159,8 +1162,6 @@ class SqlPanel(QWidget):
             view is not None and view.loadable and ready and self._load_flow is not None
         )
         if view is not None and not view.loadable:
-            self.load_button.setToolTip(
-                tr("Solo se pueden cargar consultas de lectura: esta sentencia no se repite")
-            )
+            self.load_button.setToolTip(tr("Only read queries can be loaded: this statement is not repeated"))
         else:
-            self.load_button.setToolTip(tr("Carga el resultado completo como capa de QGIS"))
+            self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))

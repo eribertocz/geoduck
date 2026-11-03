@@ -14,6 +14,7 @@ from enum import Enum
 
 from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import InvalidArgumentError
+from geoduck.domain.i18n import tr
 
 #: DuckDB compara los nombres de catálogo plegando **solo** las letras ASCII: «Año» y «año» chocan,
 #: «Año» y «AÑO» no (verificado con DuckDB 1.5.0 y 2.0.0). Se reproduce exactamente esa regla.
@@ -119,24 +120,30 @@ class CatalogSnapshot:
         index: dict[str, AttachedDatabase] = {}
         for db in self.databases:
             if db.key in index:
-                raise ValueError(f"Nombre de catálogo repetido: {db.name!r} y {index[db.key].name!r}")
+                raise ValueError(
+                    tr("Repeated catalog name: {0!r} and {1!r}").format(db.name, index[db.key].name)
+                )
             index[db.key] = db
         for role in ("root", "default"):
             listed = index.get(catalog_key(getattr(self, role)))
             if listed is None:
-                raise ValueError(f"El catálogo {role} {getattr(self, role)!r} no figura entre las bases")
+                raise ValueError(
+                    tr("The {0} catalog {1!r} is not among the databases").format(role, getattr(self, role))
+                )
             object.__setattr__(self, role, listed.name)
         known_schemas = set()
         for database, schema in self.schemas:
             if catalog_key(database) not in index:
-                raise ValueError(f"El esquema {schema!r} pertenece a una base no listada: {database!r}")
+                raise ValueError(
+                    tr("Schema {0!r} belongs to an unlisted database: {1!r}").format(schema, database)
+                )
             known_schemas.add((catalog_key(database), schema))
         for obj in self.objects:
             if obj.temporary:
                 if catalog_key(obj.database) != TEMP_CATALOG:
-                    raise ValueError(f"Objeto temporal fuera del catálogo temp: {obj.name!r}")
+                    raise ValueError(tr("Temporary object outside the temp catalog: {0!r}").format(obj.name))
             elif (catalog_key(obj.database), obj.schema) not in known_schemas:
-                raise ValueError(f"El objeto {obj.name!r} pertenece a un esquema no listado")
+                raise ValueError(tr("Object {0!r} belongs to an unlisted schema").format(obj.name))
 
     def get(self, name: str) -> AttachedDatabase | None:
         key = catalog_key(name)
@@ -191,12 +198,12 @@ class AttachRequest:
 
     def __post_init__(self) -> None:
         if not self.path.strip() or "\x00" in self.path:
-            raise InvalidArgumentError("Indique la ruta del archivo")
+            raise InvalidArgumentError(tr("Enter the file path"))
         if self.action is OpenAction.CREATE_NEW and self.access is not AccessMode.READ_WRITE:
-            raise InvalidArgumentError("«Crear nueva» solo admite lectura y escritura")
+            raise InvalidArgumentError(tr("«Create new» only allows read-write"))
         alias = self.effective_alias
         if not alias.strip() or "\x00" in alias:
-            raise InvalidArgumentError("Indique un alias para la base")
+            raise InvalidArgumentError(tr("Enter an alias for the database"))
 
     @property
     def effective_alias(self) -> str:

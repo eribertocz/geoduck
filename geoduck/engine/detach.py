@@ -29,6 +29,7 @@ import duckdb
 
 from geoduck.domain.catalog import DetachResult
 from geoduck.domain.errors import DetachError, ErrorCode
+from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.catalog import read_catalog
@@ -44,18 +45,18 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
     transaction = probe_transaction(handle)
     if transaction.is_open:
         raise DetachError(
-            "Hay una transacción abierta: confirme (COMMIT) o revierta (ROLLBACK) antes de desadjuntar."
+            tr("There is an open transaction: commit (COMMIT) or roll back (ROLLBACK) before detaching.")
             if transaction is TransactionState.ACTIVE
-            else "La transacción está abortada: reviértala (ROLLBACK) antes de desadjuntar.",
+            else tr("The transaction is aborted: roll it back (ROLLBACK) before detaching."),
             detail=f"open_transaction: {transaction.value}",
         )
     catalog = read_catalog(handle, root)
     target = catalog.get(alias)
     if target is None:
-        raise DetachError(f"No hay ninguna base «{alias}» adjunta.", detail="not_attached")
+        raise DetachError(tr("There is no attached database «{0}».").format(alias), detail="not_attached")
     if catalog.is_root(target.name):
         raise DetachError(
-            "La base raíz de la sesión no se puede desadjuntar.",
+            tr("The root database of the session cannot be detached."),
             code=ErrorCode.DEFAULT_CATALOG,
             detail="root_catalog",
         )
@@ -73,7 +74,9 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
         raise _classify(exc) from exc
     after = read_catalog(handle, root)
     if after.get(target.name) is not None:
-        raise DetachError("DuckDB informó éxito pero la base sigue adjunta.", detail="still_attached")
+        raise DetachError(
+            tr("DuckDB reported success but the database is still attached."), detail="still_attached"
+        )
     return DetachResult(target, after)
 
 
@@ -81,20 +84,25 @@ def _classify(exc: duckdb.Error) -> DetachError:
     text = str(exc).lower()
     if is_aborted_error(exc):
         return DetachError(
-            "La transacción está abortada; solo se puede revertir (ROLLBACK).",
+            tr("The transaction is aborted; it can only be rolled back (ROLLBACK)."),
             code=ErrorCode.TRANSACTION_ABORTED,
             detail=type(exc).__name__,
         )
     if "outstanding work" in text:
         return DetachError(
-            "Hay una transacción abierta con cambios en esa base; confirme o revierta antes de desadjuntar.",
+            tr(
+                "There is an open transaction with changes in that database; commit "
+                "or roll back before detaching."
+            ),
             detail=f"{type(exc).__name__}: outstanding work",
         )
     if "open result" in text:
         return DetachError(
-            "Hay un resultado abierto en la sesión.", code=ErrorCode.ACTIVE_RESULT, detail=type(exc).__name__
+            tr("There is an open result in the session."),
+            code=ErrorCode.ACTIVE_RESULT,
+            detail=type(exc).__name__,
         )
-    return DetachError("DuckDB no pudo desadjuntar la base.", detail=type(exc).__name__)
+    return DetachError(tr("DuckDB could not detach the database."), detail=type(exc).__name__)
 
 
 def _restore_default(handle: ConnectionHandle, name: str) -> None:

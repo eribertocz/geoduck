@@ -25,6 +25,7 @@ import duckdb
 
 from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import ErrorCode, InvalidArgumentError, SessionStateError
+from geoduck.domain.i18n import tr
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.sql import (
     EXPLAINABLE_TYPES,
@@ -95,7 +96,7 @@ def run_script(
     `explain` («Explicar», G6 · E3): una sola sentencia de `EXPLAINABLE_TYPES`, que se ejecuta como
     `EXPLAIN <sentencia>` (nunca `ANALYZE`); si no, se rechaza sin ejecutar nada."""
     if preview_limit not in PREVIEW_LIMITS:
-        raise InvalidArgumentError(f"Límite de vista previa no admitido: {preview_limit}")
+        raise InvalidArgumentError(tr("Preview limit not allowed: {0}").format(preview_limit))
     try:
         statements = split_script(handle, text, base)
     except duckdb.ParserException as exc:
@@ -133,12 +134,13 @@ def run_script(
 
 def _as_explain(statements: tuple[SqlStatement, ...]) -> SqlStatement:
     if len(statements) != 1:
-        raise InvalidArgumentError("«Explicar» necesita una sola sentencia: coloque el cursor en ella")
+        raise InvalidArgumentError(tr("«Explain» needs a single statement: place the cursor in it"))
     st = statements[0]
     if st.type not in EXPLAINABLE_TYPES:
         raise InvalidArgumentError(
-            "«Explicar» solo admite consultas (SELECT) e INSERT, UPDATE o DELETE; "
-            f"esta sentencia es {st.type}"
+            tr(
+                "«Explain» only accepts queries (SELECT) and INSERT, UPDATE or DELETE; this statement is {0}"
+            ).format(st.type)
         )
     return replace(st, type="EXPLAIN", text="EXPLAIN " + st.text.strip())
 
@@ -156,7 +158,7 @@ def _execute_one(handle: ConnectionHandle, st: SqlStatement, limit: int) -> Stat
             st,
             StatementStatus.CANCELLED if cancelled else StatementStatus.FAILED,
             duration_ms=_ms(started),
-            message="Ejecución cancelada" if cancelled else _first_line(exc),
+            message=tr("Execution cancelled") if cancelled else _first_line(exc),
             error_code=ErrorCode.CANCELLED
             if cancelled
             else ErrorCode.TRANSACTION_ABORTED
@@ -171,7 +173,11 @@ def _execute_one(handle: ConnectionHandle, st: SqlStatement, limit: int) -> Stat
     if preview is not None and any(is_geometry_type(t) for t in preview.types):
         axis = axis_order_setting(handle)  # AX-2: se muestra, nunca se modifica
         if axis is not None:
-            message = f"{message} · geometry_always_xy: {axis}" if message else f"geometry_always_xy: {axis}"
+            message = (
+                tr("{0} · geometry_always_xy: {1}").format(message, axis)
+                if message
+                else f"geometry_always_xy: {axis}"
+            )
     return StatementResult(
         st, StatementStatus.OK, output, duration, message, preview, transaction=transaction
     )
@@ -184,7 +190,7 @@ def _describe(st: SqlStatement, out: StatementOutcome, limit: int) -> tuple[Outp
     if not st.is_read and columns == ("Count",) and types == ("BIGINT",):
         # DDL/DML sin filas propias: DuckDB devuelve el número de filas afectadas.
         count = rows[0][0] if rows else None
-        return OutputKind.STATUS, ("OK" if count is None else f"{count} filas afectadas"), None
+        return OutputKind.STATUS, ("OK" if count is None else tr("{0} rows affected").format(count)), None
     if not st.is_read and columns == ("Success",) and types == ("BOOLEAN",):
         # SET, ATTACH, DETACH, BEGIN, COMMIT, PRAGMA de configuración: columna «Success» sin filas.
         return OutputKind.STATUS, "OK", None
@@ -192,7 +198,7 @@ def _describe(st: SqlStatement, out: StatementOutcome, limit: int) -> tuple[Outp
     if st.is_plan:
         return OutputKind.PLAN, "", preview
     if st.type in _DML:
-        return OutputKind.MUTATION_ROWS, "Resultado de escritura: no se repite al cargar", preview
+        return OutputKind.MUTATION_ROWS, tr("Write result: not repeated when loading"), preview
     return OutputKind.TABULAR, "", preview
 
 
@@ -209,7 +215,7 @@ def axis_order_setting(handle: ConnectionHandle) -> str | None:
     if not rows:
         return None
     value = rows[0][0]
-    return "sin fijar" if value is None or str(value) == "" else str(value).lower()
+    return tr("not set") if value is None or str(value) == "" else str(value).lower()
 
 
 def _type_name(value: Any) -> str:

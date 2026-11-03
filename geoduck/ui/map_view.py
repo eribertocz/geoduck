@@ -13,9 +13,9 @@ from typing import Any
 
 from qgis.core import QgsCoordinateTransform, QgsCsException, QgsProject, QgsRectangle
 
-from geoduck.ui.i18n import tr
+from geoduck.ui.i18n import N_, tr
 
-NO_EXTENT = "La capa no tiene extensión válida: se seleccionó sin hacer zoom"
+NO_EXTENT = N_("The layer has no valid extent: it was selected without zooming")
 
 
 def _finite(rect: QgsRectangle) -> bool:
@@ -61,7 +61,7 @@ class MapView:
         project = QgsProject.instance()
         layers = [layer for layer in (project.mapLayer(i) for i in layer_ids) if layer is not None]
         if not layers:
-            return tr("La capa ya no está en el proyecto")
+            return tr("The layer is no longer in the project")
         main = self.iface.mainWindow()
         main.raise_()
         main.activateWindow()

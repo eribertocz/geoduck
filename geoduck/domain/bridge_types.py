@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier
 
 
@@ -164,7 +165,7 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
     if upper == "UINTEGER":
         return cast(FieldKind.INT64, "BIGINT", True, "")
     if upper in {"UBIGINT", "HUGEINT", "UHUGEINT", "BIGNUM", "VARINT"}:
-        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
+        return cast(FieldKind.TEXT, "VARCHAR", False, tr("converted to text (read only)"))
     if upper in {"FLOAT", "DOUBLE", "REAL"}:
         return same(FieldKind.DOUBLE)
     decimal = _DECIMAL.match(upper)
@@ -172,7 +173,7 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
         precision = int(decimal.group(1))
         if precision <= DOUBLE_SAFE_DIGITS:
             return cast(FieldKind.DOUBLE, "DOUBLE", True, "")
-        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
+        return cast(FieldKind.TEXT, "VARCHAR", False, tr("converted to text (read only)"))
     if upper == "VARCHAR":
         return same(FieldKind.TEXT)
     if upper == "UUID":
@@ -192,16 +193,16 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
             FieldKind.DATETIME,
             "TIMESTAMP",
             False,
-            "reducida a microsegundos (solo lectura)",
+            tr("reduced to microseconds (read only)"),
         )
     if upper == "TIMESTAMP WITH TIME ZONE":
         return same(FieldKind.DATETIME_TZ)
     if upper in {"TIME", "TIME WITH TIME ZONE", "INTERVAL"} or upper.startswith("TIME"):
-        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto ISO (solo lectura)")
+        return cast(FieldKind.TEXT, "VARCHAR", False, tr("converted to ISO text (read only)"))
     if upper == "BLOB":
         return same(FieldKind.BINARY)
     if upper == "BIT":
-        return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
+        return cast(FieldKind.TEXT, "VARCHAR", False, tr("converted to text (read only)"))
     if upper.endswith("]") or upper.startswith(_NESTED):
         return FieldPlan(
             name,
@@ -209,23 +210,27 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
             FieldKind.TEXT,
             f"CAST(to_json({col}) AS VARCHAR)",
             False,
-            "convertida a JSON (solo lectura)",
+            tr("converted to JSON (read only)"),
         )
-    return cast(FieldKind.TEXT, "VARCHAR", False, "convertida a texto (solo lectura)")
+    return cast(FieldKind.TEXT, "VARCHAR", False, tr("converted to text (read only)"))
 
 
 def _marked_columns(types: dict[str, str], formats: Mapping[str, Any]) -> dict[str, GeometryFormat]:
     """Valida las columnas marcadas como geometría: solo BLOB → WKB y VARCHAR → WKT."""
     if UNREADABLE in types:
-        raise GeoDuckError(f"Nombre de columna reservado: «{UNREADABLE}»", code=ErrorCode.INVALID_ARGUMENT)
+        raise GeoDuckError(
+            tr("Reserved column name: «{0}»").format(UNREADABLE), code=ErrorCode.INVALID_ARGUMENT
+        )
     marked: dict[str, GeometryFormat] = {}
     for name, value in formats.items():
         fmt = GeometryFormat(value)
         if name not in types:
-            raise GeoDuckError(f"«{name}» no es una columna de la consulta", code=ErrorCode.INVALID_ARGUMENT)
+            raise GeoDuckError(
+                tr("«{0}» is not a column of the query").format(name), code=ErrorCode.INVALID_ARGUMENT
+            )
         if fmt is GeometryFormat.GEOMETRY or candidate_format(types[name]) is not fmt:
             raise GeoDuckError(
-                f"«{name}» ({types[name]}) no se puede leer como {fmt.value.upper()}",
+                tr("«{0}» ({1}) cannot be read as {2}").format(name, types[name], fmt.value.upper()),
                 code=ErrorCode.INVALID_ARGUMENT,
             )
         marked[name] = fmt
@@ -250,7 +255,7 @@ def build_load_plan(
     Cuentan como columnas geométricas; nada se marca solo.
     """
     if not columns:
-        raise GeoDuckError("La consulta no devuelve columnas", code=ErrorCode.INVALID_ARGUMENT)
+        raise GeoDuckError(tr("The query returns no columns"), code=ErrorCode.INVALID_ARGUMENT)
     types = dict(columns)
     marked = _marked_columns(types, formats or {})
 
@@ -260,12 +265,14 @@ def build_load_plan(
     geoms = [(n, t) for n, t in columns if is_geom(n, t)]
     if geometry is None and len(geoms) > 1 and not pick_first:
         raise GeoDuckError(
-            "La consulta tiene varias columnas de geometría; elija cuál cargar: "
+            tr("The query has several geometry columns; choose which one to load: ")
             + ", ".join(n for n, _ in geoms),
             code=ErrorCode.INVALID_ARGUMENT,
         )
     if geometry is not None and geometry not in {n for n, _ in geoms}:
-        raise GeoDuckError(f"«{geometry}» no es una columna de geometría", code=ErrorCode.INVALID_ARGUMENT)
+        raise GeoDuckError(
+            tr("«{0}» is not a geometry column").format(geometry), code=ErrorCode.INVALID_ARGUMENT
+        )
     primary = geometry if geometry is not None else (geoms[0][0] if geoms else None)
 
     fields: list[FieldPlan] = []
@@ -273,16 +280,18 @@ def build_load_plan(
     seen: set[str] = set()
     for name, source_type in columns:
         if name in seen:
-            raise GeoDuckError(f"Nombre de columna repetido: «{name}»", code=ErrorCode.INVALID_ARGUMENT)
+            raise GeoDuckError(
+                tr("Repeated column name: «{0}»").format(name), code=ErrorCode.INVALID_ARGUMENT
+            )
         seen.add(name)
         if is_geom(name, source_type):
             if name != primary:
-                warnings.append(f"Columna «{name}» omitida (geometría secundaria)")
+                warnings.append(tr("Column «{0}» skipped (secondary geometry)").format(name))
             continue
         plan = plan_field(name, source_type)
         fields.append(plan)
         if plan.note:
-            warnings.append(f"Columna «{name}» ({source_type}) {plan.note}")
+            warnings.append(tr("Column «{0}» ({1}) {2}").format(name, source_type, plan.note))
 
     select = [f"{f.expression} AS {quote_identifier(f.name)}" for f in fields]
     geom = None
@@ -315,23 +324,23 @@ def strip_terminator(sql: str) -> str:
     while text.endswith(";"):
         text = text[:-1].rstrip()
     if not text:
-        raise GeoDuckError("La consulta está vacía", code=ErrorCode.INVALID_ARGUMENT)
+        raise GeoDuckError(tr("The query is empty"), code=ErrorCode.INVALID_ARGUMENT)
     return text
 
 
 def unreadable_warning(geometry: GeometryColumn, count: int) -> str:
     """Aviso de geometrías ilegibles en una columna marcada (spatial-spec §3, §9)."""
-    return (
-        f"{count} geometrías ilegibles en «{geometry.name}» ({geometry.format.value.upper()}): "
-        "se muestran sin geometría"
+    return tr("{0} unreadable geometries in «{1}» ({2}): shown without geometry").format(
+        count, geometry.name, geometry.format.value.upper()
     )
 
 
 def unreadable_error(geometry: GeometryColumn, row: int) -> GeoDuckError:
     """Error de una copia con una geometría ilegible: no se publica nada (spatial-spec §3)."""
     return GeoDuckError(
-        f"Geometría ilegible en la columna «{geometry.name}» ({geometry.format.value.upper()}), "
-        f"fila {row}: no se cargó nada",
+        tr("Unreadable geometry in column «{0}» ({1}), row {2}: nothing was loaded").format(
+            geometry.name, geometry.format.value.upper(), row
+        ),
         code=ErrorCode.INVALID_ARGUMENT,
     )
 
@@ -340,8 +349,8 @@ def missing_crs_warning(geometry: GeometryColumn | None, override: str | None) -
     """Aviso de capa sin CRS (spatial-spec §4): conserva el texto declarado si QGIS no lo reconoce."""
     declared = geometry.declared_crs if geometry is not None else None
     if override is None and declared:
-        return f"SRC «{declared}» no reconocido por QGIS: sin SRC asignado"
-    return "Sin SRC asignado"
+        return tr("CRS «{0}» not recognized by QGIS: no CRS assigned").format(declared)
+    return tr("No CRS assigned")
 
 
 #: Códigos de tipo ISO (`código % 1000`) de cada familia de geometría (spatial-spec §6; F-92).
@@ -370,5 +379,7 @@ def family_filter_sql(geometry: str, family: str) -> str:
     """Condición SQL: la geometría es de la familia (filtro empujado a DuckDB, sin `spatial`)."""
     codes = FAMILY_CODES.get(family)
     if codes is None:
-        raise GeoDuckError(f"Familia de geometría desconocida: «{family}»", code=ErrorCode.INVALID_ARGUMENT)
+        raise GeoDuckError(
+            tr("Unknown geometry family: «{0}»").format(family), code=ErrorCode.INVALID_ARGUMENT
+        )
     return f"{family_code_sql(geometry)} IN ({', '.join(str(c) for c in codes)})"

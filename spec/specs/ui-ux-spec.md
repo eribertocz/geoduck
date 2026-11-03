@@ -45,7 +45,7 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 
 ## 5. Accesibilidad e internacionalización
 - Teclado completo, foco visible, etiquetado accesible, contraste, tooltips y lectores de pantalla cuando Qt lo permita.
-- Español inicial; internacionalización por catálogos de traducción con idioma inglés listo para incorporar. **Desde G6 (GD-I18N-001, issue #68):** los textos del código están en inglés y el español llega por la traducción (`i18n/geoduck_es.ts` → `.qm`), según el idioma de QGIS, sin opción propia de GeoDuck ni cambio del idioma de QGIS. Sin traducción, se ve el texto en inglés, nunca un texto vacío. No se traducen el SQL, los nombres de objetos, los datos ni los mensajes de DuckDB. Se mantienen los términos de QGIS en cada idioma (SRC/CRS, entidades/features).
+- Español inicial; internacionalización por catálogos de traducción con idioma inglés listo para incorporar. **Desde G6 (GD-I18N-001, issue #68):** los textos del código están en inglés y el español llega por el catálogo `i18n/geoduck_es.ts` (formato de Qt Linguist), según el idioma de QGIS. GeoDuck lo lee y traduce con un diccionario, sin `QTranslator` ni `.qm`: el hilo del motor también traduce mensajes y llamar a Qt desde él no es seguro, sin opción propia de GeoDuck ni cambio del idioma de QGIS. Sin traducción, se ve el texto en inglés, nunca un texto vacío. No se traducen el SQL, los nombres de objetos, los datos ni los mensajes de DuckDB. Se mantienen los términos de QGIS en cada idioma (SRC/CRS, entidades/features).
 - Formatos numéricos locales en UI sin alterar sintaxis SQL ni precisión interna.
 
 ## 6. Estados obligatorios

@@ -58,6 +58,7 @@ from geoduck.domain.catalog import (
 )
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
+from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
@@ -170,7 +171,9 @@ class SessionCoordinator:
     def start_memory_session(self) -> None:
         """StartSession(mode=memory): raíz `:memory:` (ADR-0001)."""
         if not self.can_start:
-            raise SessionStateError(f"No se puede iniciar una sesión en estado {self._sm.state.value}")
+            raise SessionStateError(
+                tr("A session cannot be started in state {0}").format(self._sm.state.value)
+            )
         self._sm.transition(SessionState.CONNECTING)
         try:
             engine = self._factory()
@@ -188,14 +191,18 @@ class SessionCoordinator:
         Si el `ATTACH` falla, la sesión queda en memoria, `READY`, y se informa con `AttachFailed`.
         """
         if not self.can_start:
-            raise SessionStateError(f"No se puede iniciar una sesión en estado {self._sm.state.value}")
+            raise SessionStateError(
+                tr("A session cannot be started in state {0}").format(self._sm.state.value)
+            )
         self._pending_attach = request
         self.start_memory_session()  # si el arranque falla, _fail descarta el ATTACH pendiente
 
     def attach_database(self, request: AttachRequest) -> None:
         """AttachDatabase: «Abrir existente» o «Crear nueva». La sesión pasa por `BUSY`."""
         if self._sm.state is not SessionState.READY or self._engine is None:
-            raise SessionStateError(f"No se puede adjuntar una base en estado {self._sm.state.value}")
+            raise SessionStateError(
+                tr("A database cannot be attached in state {0}").format(self._sm.state.value)
+            )
         engine = self._engine
         self._sm.transition(SessionState.BUSY)
         attaching = engine.attach(request)
@@ -207,8 +214,7 @@ class SessionCoordinator:
         if layers:
             names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
             raise SessionStateError(
-                f"No se puede {action}: {names} tiene(n) cambios sin guardar. "
-                "Guárdelos o descártelos primero."
+                tr("Cannot {0}: {1} has unsaved changes. Save or discard them first.").format(action, names)
             )
 
     def _detach_guard(self) -> Callable[[SqlStatement], str | None] | None:
@@ -229,10 +235,9 @@ class SessionCoordinator:
             if not layers:
                 return None
             names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
-            return (
-                f"No se ejecutó nada: DETACH {target or '(base desconocida)'} con {names} sin guardar. "
-                "Guarde o descarte esos cambios primero."
-            )
+            return tr(
+                "Nothing was run: DETACH {0} with unsaved {1}. Save or discard those changes first."
+            ).format(target or tr("(unknown database)"), names)
 
         return guard
 
@@ -243,8 +248,10 @@ class SessionCoordinator:
         Rechazado si una capa Conectada de esa base tiene cambios sin guardar.
         """
         if self._sm.state is not SessionState.READY or self._engine is None:
-            raise SessionStateError(f"No se puede desadjuntar una base en estado {self._sm.state.value}")
-        self._guard_unsaved(f"desadjuntar «{alias}»", alias)
+            raise SessionStateError(
+                tr("A database cannot be detached in state {0}").format(self._sm.state.value)
+            )
+        self._guard_unsaved(tr("detach «{0}»").format(alias), alias)
         engine = self._engine
         self._sm.transition(SessionState.DETACHING)
         detaching = engine.detach(alias)
@@ -272,9 +279,9 @@ class SessionCoordinator:
         """GD-SQL-001/002/004: ejecuta la sentencia actual, la selección o todo. La sesión pasa por `BUSY`;
         se cancela con `cancel_current_operation`. Devuelve el `run_id`. `explain` («Explicar», G6 · E3):
         el plan de una sola sentencia, sin ejecutarla."""
-        engine = self._require_ready("ejecutar SQL")
+        engine = self._require_ready(tr("run SQL"))
         if not text.strip():
-            raise SessionStateError("No hay SQL que ejecutar")
+            raise SessionStateError(tr("There is no SQL to run"))
         self._run_ids += 1
         run_id = self._run_ids
         self._sm.transition(SessionState.BUSY)
@@ -344,7 +351,7 @@ class SessionCoordinator:
 
     def commit_transaction(self) -> None:
         """COMMIT. El motor comprueba antes el estado real y nunca confirma una transacción abortada."""
-        engine = self._require_ready("confirmar la transacción")
+        engine = self._require_ready(tr("commit the transaction"))
         self._sm.transition(SessionState.BUSY)
         engine.commit().add_done_callback(
             lambda fut: self._dispatcher.post(lambda: self._on_transaction_end(engine, fut, recovering=False))
@@ -361,12 +368,12 @@ class SessionCoordinator:
         )
         if recovering:
             if self._recovering:
-                raise SessionStateError("Ya hay una recuperación en curso")
+                raise SessionStateError(tr("A recovery is already in progress"))
             engine = self._engine
             assert engine is not None
             self._recovering = True
         else:
-            engine = self._require_ready("revertir la transacción")
+            engine = self._require_ready(tr("roll back the transaction"))
             self._sm.transition(SessionState.BUSY)
         engine.rollback().add_done_callback(
             lambda fut: self._dispatcher.post(
@@ -376,7 +383,7 @@ class SessionCoordinator:
 
     def _require_ready(self, action: str) -> SessionEngine:
         if self._sm.state is not SessionState.READY or self._engine is None:
-            raise SessionStateError(f"No se puede {action} en estado {self._sm.state.value}")
+            raise SessionStateError(tr("Cannot {0} in state {1}").format(action, self._sm.state.value))
         return self._engine
 
     def request_close(self) -> None:
@@ -388,7 +395,7 @@ class SessionCoordinator:
         """
         if self._close_choice is not None or self._awaiting_close_decision:
             return  # ya hay un cierre en curso o una pregunta abierta
-        self._guard_unsaved("cerrar la sesión")
+        self._guard_unsaved(tr("close the session"))
         state = self._sm.state
         engine = self._engine
         if engine is not None and state is SessionState.READY:
@@ -408,11 +415,11 @@ class SessionCoordinator:
     def resolve_close(self, choice: CloseChoice) -> None:
         """Respuesta del usuario a `CloseConfirmationRequired`."""
         if not self._awaiting_close_decision:
-            raise SessionStateError("No hay ninguna decisión de cierre pendiente")
+            raise SessionStateError(tr("There is no pending closing decision"))
         state = self._sm.state
         commit_valid = state is SessionState.READY and self._transaction is TransactionState.ACTIVE
         if choice is CloseChoice.COMMIT and self._engine is not None and not commit_valid:
-            raise SessionStateError("COMMIT no es válido en este momento")  # la pregunta sigue abierta
+            raise SessionStateError(tr("COMMIT is not valid right now"))  # la pregunta sigue abierta
         self._awaiting_close_decision = False
         if choice is CloseChoice.CANCEL:
             return  # la sesión sigue abierta y la transacción no se toca
@@ -488,7 +495,9 @@ class SessionCoordinator:
         de la misma sesión.
         """
         if self._sm.state is not SessionState.READY or self._engine is None:
-            raise SessionStateError(f"No se puede leer el catálogo en estado {self._sm.state.value}")
+            raise SessionStateError(
+                tr("The catalog cannot be read in state {0}").format(self._sm.state.value)
+            )
         engine = self._engine
         self._catalog_generation += 1
         generation = self._catalog_generation
@@ -506,7 +515,7 @@ class SessionCoordinator:
         """
         engine = self._engine
         if engine is None or self._sm.state not in (SessionState.READY, SessionState.BUSY):
-            raise SessionStateError(f"No se pueden leer columnas en estado {self._sm.state.value}")
+            raise SessionStateError(tr("Columns cannot be read in state {0}").format(self._sm.state.value))
         catalog = self._catalog
         self.vocabulary()  # para citar los nombres hacen falta las palabras clave
         fut = engine.list_columns(*source)
@@ -588,14 +597,14 @@ class SessionCoordinator:
     def load_modes(self) -> dict[LoadMode, str | None]:
         """Modalidad → motivo por el que no está disponible (None = disponible)."""
         if self._loader is None:
-            return dict.fromkeys(LoadMode, "La carga en QGIS no está disponible")
+            return dict.fromkeys(LoadMode, tr("Loading into QGIS is not available"))
         return self._loader.availability()
 
     def prepare_load(
         self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
     ) -> int:
         """Pide el plan de carga (sin leer datos). Responde con `LoadPrepared` o `LoadPrepareFailed`."""
-        engine = self._require_ready("preparar la carga")
+        engine = self._require_ready(tr("prepare the load"))
         sql = load_sql(sql)  # sin el `;` ni los comentarios finales de la sentencia del editor
         self._prepare_tokens += 1
         token = self._prepare_tokens
@@ -617,14 +626,14 @@ class SessionCoordinator:
 
     def check_spatial(self) -> None:
         """Estado de `spatial` en la sesión: responde con `SpatialChecked` (no instala ni carga nada)."""
-        engine = self._require_ready("consultar la extensión spatial")
+        engine = self._require_ready(tr("query the spatial extension"))
         fut = engine.spatial_state()
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, None)))
 
     def activate_spatial(self, *, install: bool) -> None:
         """Solo tras el consentimiento del usuario: `INSTALL` (si `install`) y `LOAD spatial`, para esta
         sesión. Responde con `SpatialActivated` o `SpatialActivationFailed`."""
-        engine = self._require_ready("activar la extensión spatial")
+        engine = self._require_ready(tr("activate the spatial extension"))
         fut = engine.activate_spatial(install=install)
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, True)))
 
@@ -645,10 +654,10 @@ class SessionCoordinator:
     def load(self, request: LoadRequest) -> int:
         """Carga en QGIS. Memoria e Instantánea ocupan la sesión (BUSY) hasta publicar o descartar;
         se cancelan con `cancel_current_operation`. Devuelve el id de la carga."""
-        engine = self._require_ready("cargar en QGIS")
+        engine = self._require_ready(tr("load into QGIS"))
         request = replace(request, sql=load_sql(request.sql))  # ver `load_sql`
         if self._loader is None:
-            raise SessionStateError("La carga en QGIS no está disponible")
+            raise SessionStateError(tr("Loading into QGIS is not available"))
         reason = self.load_modes().get(request.mode)
         if reason is not None:
             raise SessionStateError(reason)

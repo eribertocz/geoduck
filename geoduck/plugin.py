@@ -75,7 +75,7 @@ class GeometryValidity:
         self._on_message = on_message
         self.dialog_factory: Any = ValidityDialog
         self.tasks: list[Any] = []  # referencias vivas mientras corren
-        self.action = QAction(tr("Diagnosticar geometrías…"), iface.mainWindow())
+        self.action = QAction(tr("Diagnose geometries…"), iface.mainWindow())
         self.action.setObjectName("geoduckDiagnoseGeometries")
         self.action.triggered.connect(self.diagnose_active_layer)
         self._project = QgsProject.instance()
@@ -106,7 +106,7 @@ class GeometryValidity:
 
         layer_id = layer.id()
         task = DiagnoseTask(layer, lambda result: self._diagnosed(layer_id, task, result))
-        return self._start(task, tr("Diagnosticando geometrías de «{}»…").format(layer.name()))
+        return self._start(task, tr("Diagnosing geometries of «{}»…").format(layer.name()))
 
     def _start(self, task: Any, message: str) -> Any:
         self.tasks.append(task)
@@ -119,11 +119,11 @@ class GeometryValidity:
             self.tasks.remove(task)
         layer = self._project.mapLayer(layer_id)
         if isinstance(result, BaseException) or layer is None:
-            self._on_message(tr("Diagnóstico no completado: ") + str(getattr(result, "message", result)))
+            self._on_message(tr("Diagnosis not completed: ") + str(getattr(result, "message", result)))
             return
         layer.selectByIds(list(result.selected))
         self._on_message(
-            tr("Diagnóstico de «{}»: {} inválidas, {} ilegibles, {} sin geometría, {} vacías").format(
+            tr("Diagnosis of «{}»: {} invalid, {} unreadable, {} without geometry, {} empty").format(
                 result.layer_name, result.invalid, result.unreadable, result.null, result.empty
             )
         )
@@ -136,13 +136,13 @@ class GeometryValidity:
         from geoduck.qgis_bridge.validity import RepairTask  # noqa: PLC0415
 
         task = RepairTask(layer, invalid_fids, lambda result: self._repaired(task, result))
-        return self._start(task, tr("Reparando geometrías de «{}» en una copia…").format(layer.name()))
+        return self._start(task, tr("Repairing geometries of «{}» in a copy…").format(layer.name()))
 
     def _repaired(self, task: Any, result: Any) -> None:
         if task in self.tasks:
             self.tasks.remove(task)
         if isinstance(result, BaseException):
-            self._on_message(tr("Reparación no completada: ") + str(getattr(result, "message", result)))
+            self._on_message(tr("Repair not completed: ") + str(getattr(result, "message", result)))
             return
         self._on_message(result.message())
 
@@ -185,7 +185,7 @@ class GeoDuckPlugin:
         self.action = QAction(QIcon(ICON), tr("GeoDuck"), self.iface.mainWindow())
         self.action.setObjectName("geoduckToggleDock")  # nombre de G0–G4: conserva atajos del usuario
         self.action.setCheckable(True)
-        self.action.setToolTip(tr("Mostrar u ocultar GeoDuck"))
+        self.action.setToolTip(tr("Show or hide GeoDuck"))
         # `triggered` (clic del usuario), no `toggled`: sincronizar la marca no muestra ni oculta nada
         self.action.triggered.connect(self.workspace.set_visible)
         self.workspace.shown_changed.connect(self.action.setChecked)
@@ -194,7 +194,7 @@ class GeoDuckPlugin:
         # Convención de QGIS: «Acerca de…» en el menú del complemento (Base de datos › GeoDuck).
         self.about_action = QAction(
             QgsApplication.getThemeIcon("mActionHelpAbout.svg"),
-            tr("Acerca de GeoDuck…"),
+            tr("About GeoDuck…"),
             self.iface.mainWindow(),
         )
         self.about_action.setObjectName("geoduckAbout")
@@ -243,6 +243,9 @@ class GeoDuckPlugin:
             self.workspace.unload()  # borra los shells y, con ellos, el contenido
         if self.dispatcher is not None:
             self.dispatcher.deleteLater()
+        from geoduck.ui.i18n import uninstall  # noqa: PLC0415
+
+        uninstall()
         self.action = self.about_action = None
         self.content = self.workspace = None
         self.dispatcher = self.coordinator = None

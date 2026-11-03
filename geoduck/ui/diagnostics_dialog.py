@@ -21,25 +21,25 @@ from geoduck.ui.i18n import tr
 class DiagnosticsDialog(QDialog):
     def __init__(self, report: DiagnosticReport, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("GeoDuck — Diagnóstico del entorno"))
+        self.setWindowTitle(tr("GeoDuck — Environment diagnostics"))
         self.setMinimumSize(560, 380)
         self._report = report
 
         summary = QLabel(
-            tr("El entorno permite usar GeoDuck.")
+            tr("The environment can run GeoDuck.")
             if report.ok
-            else tr("El entorno no permite usar GeoDuck. Revise las acciones indicadas.")
+            else tr("The environment cannot run GeoDuck. Check the suggested actions.")
         )
         summary.setWordWrap(True)
 
         self.text = QPlainTextEdit(report.to_text())
         self.text.setReadOnly(True)
         self.text.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
-        self.text.setAccessibleName(tr("Informe de diagnóstico"))
+        self.text.setAccessibleName(tr("Diagnostics report"))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        self.copy_button = QPushButton(tr("Copiar"))
-        self.copy_button.setToolTip(tr("Copia el informe para adjuntarlo a un reporte"))
+        self.copy_button = QPushButton(tr("Copy"))
+        self.copy_button.setToolTip(tr("Copies the report to attach it to an issue"))
         buttons.addButton(self.copy_button, QDialogButtonBox.ButtonRole.ActionRole)
         self.copy_button.clicked.connect(self.copy_to_clipboard)
         buttons.rejected.connect(self.reject)

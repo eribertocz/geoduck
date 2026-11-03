@@ -21,10 +21,11 @@ from qgis.core import (
 )
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 
 
 def _label(crs: QgsCoordinateReferenceSystem) -> str:
-    return crs.authid() or crs.description() or "SRC personalizado"
+    return crs.authid() or crs.description() or tr("Custom CRS")
 
 
 class Reprojector:
@@ -38,19 +39,21 @@ class Reprojector:
     ) -> None:
         if not source.isValid():
             raise GeoDuckError(
-                "Para reproyectar, la capa necesita un SRC de origen: elija uno o desactive «Reproyectar a…»",
+                tr("To reproject, the layer needs a source CRS: choose one or turn off «Reproject to…»"),
                 code=ErrorCode.INVALID_ARGUMENT,
             )
         self.target = QgsCoordinateReferenceSystem(target)
         if not self.target.isValid():
-            raise GeoDuckError(f"SRC de destino no reconocido: {target}", code=ErrorCode.INVALID_ARGUMENT)
+            raise GeoDuckError(
+                tr("Target CRS not recognized: {0}").format(target), code=ErrorCode.INVALID_ARGUMENT
+            )
         self.source = source
         ctx = context if context is not None else QgsProject.instance().transformContext()
         self._transform = QgsCoordinateTransform(source, self.target, ctx)
 
     @property
     def note(self) -> str:
-        return f"Reproyectada de {_label(self.source)} a {_label(self.target)}"
+        return tr("Reprojected from {0} to {1}").format(_label(self.source), _label(self.target))
 
     def geometry(self, g: QgsGeometry, row: int) -> QgsGeometry:
         """La misma geometría en el SRC de destino. `row`: número de fila para el error (1 = primera)."""
@@ -89,7 +92,8 @@ class Reprojector:
 
     def _error(self, row: int, detail: str) -> GeoDuckError:
         return GeoDuckError(
-            f"No se pudo reproyectar la geometría de la fila {row} de {_label(self.source)} a "
-            f"{_label(self.target)}: no se cargó nada ({detail})",
+            tr(
+                "The geometry of row {0} could not be reprojected from {1} to {2}: nothing was loaded ({3})"
+            ).format(row, _label(self.source), _label(self.target), detail),
             code=ErrorCode.INVALID_ARGUMENT,
         )

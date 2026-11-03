@@ -6,6 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from enum import Enum
 
+from geoduck.domain.i18n import tr
+
 
 class LoadMode(str, Enum):
     """Las tres modalidades de ADR-0012. El valor es estable (se recuerda la última elegida)."""
@@ -88,13 +90,13 @@ class LoadReport:
     rows_each: bool = False
 
 
-_KINDS = {"table": "tabla", "view": "vista"}
-COPY_ACCESS = "copia independiente de DuckDB"
+_KINDS = {"table": tr("table"), "view": tr("view")}
+COPY_ACCESS = tr("independent copy of DuckDB")
 
 
 def describe_origin(request: LoadRequest, kind: str | None = None) -> str:
     """Origen de una carga en los mensajes: «tabla db.main.t», «vista db.main.v» o «consulta SQL»."""
     if request.source is None:
-        return "consulta SQL"
+        return tr("SQL query")
     label = _KINDS.get(kind or request.source_kind or "", "")
     return f"{label} {'.'.join(request.source)}".strip()

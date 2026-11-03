@@ -21,10 +21,17 @@ def qgis_app():
     if _APP is None:
         _APP = qgis_core.QgsApplication([], True)
         _APP.initQgis()
+        # QGIS en español (G6 · E4): GeoDuck carga su catálogo .qm, como un usuario con QGIS en español
+        settings = qgis_core.QgsSettings()
+        settings.setValue("locale/overrideFlag", True)
+        settings.setValue("locale/userLocale", "es_ES")
     yield _APP
     # Como QGIS al cerrarse: sin exitQgis(), las conexiones GDAL del pool (p. ej. GeoPackage en /vsimem
     # de la Instantánea) se destruyen tras finalizar GDAL y QGIS 4.2 termina con un fallo de segmentación.
     qgis_core.QgsProject.instance().removeAllMapLayers()
+    settings = qgis_core.QgsSettings()
+    settings.remove("locale/overrideFlag")
+    settings.remove("locale/userLocale")
     _APP.exitQgis()
 
 

@@ -32,6 +32,7 @@ from geoduck.domain.bridge_types import (
     wkb_family,
 )
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
@@ -90,7 +91,7 @@ def _edit_info(
     db, schema, name = (quote_string_literal(p) for p in source)
     readonly = _rows(handle, f"SELECT readonly FROM duckdb_databases() WHERE database_name = {db}", 1)
     if readonly and readonly[0][0]:
-        return "solo lectura (base en modo lectura)", None, []
+        return tr("read only (database in read-only mode)"), None, []
     rows = _rows(
         handle,
         f"SELECT column_name, column_default FROM duckdb_columns() WHERE database_name = {db} "
@@ -156,12 +157,12 @@ def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
     spatial-spec §6). Varias familias: `Unknown`."""
     types = {Qgis.WkbType(c) for c in header_codes(headers)}
     if not types:
-        return "Unknown", "Sin geometrías: tipo de geometría desconocido"
+        return "Unknown", tr("No geometries: unknown geometry type")
     if len({family(t) for t in types}) > 1:
-        return "Unknown", "Tipos de geometría mixtos: simbología por tipo no disponible"
+        return "Unknown", tr("Mixed geometry types: per-type symbology not available")
     note = None
     if len({(QgsWkbTypes.hasZ(t), QgsWkbTypes.hasM(t)) for t in types}) > 1:
-        note = "Dimensiones Z/M mixtas: las geometrías sin ellas se muestran con NaN"
+        note = tr("Mixed Z/M dimensions: geometries without them are shown with NaN")
     return Qgis.WkbType(target_type(types)).name, note
 
 
@@ -195,11 +196,11 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         fid, key = "content", None
     readonly: str | None = None
     if request.source is not None and not is_table:
-        readonly = "solo lectura"
+        readonly = tr("read only")
     elif not is_table:
-        readonly = (
-            "solo lectura. Para editar, cargue la tabla desde el explorador "
-            "(clic derecho o doble clic → Cargar en QGIS…)"
+        readonly = tr(
+            "read only. To edit, load the table from the explorer (right-click "
+            "or double-click → Load into QGIS…)"
         )
     key_default: str | None = None
     defaults: list[str] = []
@@ -328,7 +329,7 @@ class ConnectedLoad:
             return
         if self._handle is not None and not self._handle.future.done():
             self._engine.cancel(self._handle.op_id)
-        self._end(LoadCancelledError("Carga cancelada"))
+        self._end(LoadCancelledError(tr("Loading cancelled")))
 
     def _poll(self) -> None:
         if self._finished or not self._handle.future.done():
@@ -392,13 +393,17 @@ class ConnectedLoad:
             if meta["extent"] is not None:
                 params["extent"] = ",".join(repr(v) for v in meta["extent"])
             elif meta["count"]:
-                warnings.append("Extensión no disponible")
+                warnings.append(tr("Extent not available"))
         specs = self._specs(meta, params, warnings)
         layers = []
         for name, layer_params in specs:
             layer = QgsVectorLayer(encode_uri(layer_params), name, KEY)
             if not layer.isValid():
-                raise GeoDuckError(f"QGIS no pudo crear la capa conectada: {layer.dataProvider().last_error}")
+                raise GeoDuckError(
+                    tr("QGIS could not create the connected layer: {0}").format(
+                        layer.dataProvider().last_error
+                    )
+                )
             if plan.geometry is not None and not layer.crs().isValid():
                 layer.setCrs(QgsCoordinateReferenceSystem())  # sin CRS asignado en silencio (C4)
             layers.append(layer)
@@ -416,7 +421,7 @@ class ConnectedLoad:
             meta["count"],
             tuple(warnings),
             origin=describe_origin(self._request, meta["kind"]),
-            access=meta["readonly"] or "lectura y escritura",
+            access=meta["readonly"] or tr("read-write"),
             layers=tuple((lyr.id(), lyr.name()) for lyr in layers) if len(layers) > 1 else (),
         )
 
@@ -434,7 +439,7 @@ class ConnectedLoad:
             codes = header_codes([h])
             if codes:
                 by_family.setdefault(wkb_family(next(iter(codes))), []).append(h)
-        warnings[:] = [w for w in warnings if not w.startswith("Tipos de geometría mixtos")]
+        warnings[:] = [w for w in warnings if not w.startswith(tr("Mixed geometry types"))]
         specs = []
         for fam in FAMILY_CODES:
             if fam not in counts:
@@ -445,9 +450,11 @@ class ConnectedLoad:
             specs.append(
                 (f"{name} — {fam}", {**params, "family": fam, "type": type_name, "count": counts[fam]})
             )
-        warnings.append(f"Tipos de geometría mixtos: {len(specs)} capas Conectadas, una por tipo")
+        warnings.append(tr("Mixed geometry types: {0} Connected layers, one per type").format(len(specs)))
         if meta.get("nulls"):
-            warnings.append(f"{meta['nulls']} filas sin geometría no aparecen en las capas por tipo")
+            warnings.append(
+                tr("{0} rows without geometry do not appear in the per-type layers").format(meta["nulls"])
+            )
         return specs
 
     def _end(self, result: LoadReport | BaseException) -> None:

@@ -15,6 +15,7 @@ from collections.abc import Callable
 from enum import Enum
 
 from geoduck.domain.errors import SessionStateError
+from geoduck.domain.i18n import tr
 
 
 class SessionState(str, Enum):
@@ -62,7 +63,7 @@ class SessionStateMachine:
 
     def __init__(self, initial: SessionState = SessionState.DISCONNECTED) -> None:
         if initial is SessionState.ERROR_RECOVERABLE:
-            raise SessionStateError("ERROR_RECOVERABLE requiere una causa; use transition()")
+            raise SessionStateError(tr("ERROR_RECOVERABLE requires a cause; use transition()"))
         self._state: SessionState = initial
         self._cause: ErrorCause | None = None
         self._listeners: list[Listener] = []
@@ -83,7 +84,7 @@ class SessionStateMachine:
         reason = self._reject_reason(target, cause)
         if reason is not None:
             raise SessionStateError(
-                f"Transición no permitida: {self._state.value} → {target.value} ({reason})"
+                tr("Transition not allowed: {0} → {1} ({2})").format(self._state.value, target.value, reason)
             )
         previous, self._state = self._state, target
         self._cause = cause if target is SessionState.ERROR_RECOVERABLE else None
@@ -97,7 +98,7 @@ class SessionStateMachine:
             self._state is not SessionState.ERROR_RECOVERABLE
             or self._cause is not ErrorCause.TRANSACTION_ABORTED
         ):
-            raise SessionStateError("No hay una transacción abortada que resolver")
+            raise SessionStateError(tr("There is no aborted transaction to resolve"))
         self._cause = ErrorCause.OPERATION_FAILED
 
     def mark_invalidated(self) -> None:
@@ -105,29 +106,29 @@ class SessionStateMachine:
         transacción abortada). La tabla de session-spec §5 no tiene `ERROR_RECOVERABLE → ERROR_RECOVERABLE`:
         el estado no cambia, solo la causa, y `READY` queda prohibido."""
         if self._state is not SessionState.ERROR_RECOVERABLE:
-            raise SessionStateError("Solo se marca la invalidación estando en ERROR_RECOVERABLE")
+            raise SessionStateError(tr("Invalidation is only marked in ERROR_RECOVERABLE"))
         self._cause = ErrorCause.SESSION_INVALIDATED
 
     def _reject_reason(self, target: SessionState, cause: ErrorCause | None) -> str | None:
         if target not in TRANSITIONS[self._state]:
-            return "no figura en la tabla de session-spec §5"
+            return tr("not in the session-spec §5 table")
         if target is SessionState.ERROR_RECOVERABLE:
             return self._entry_rejection(cause)
         if cause is not None:
-            return "la causa solo acompaña a ERROR_RECOVERABLE"
+            return tr("the cause only goes with ERROR_RECOVERABLE")
         if (
             self._state is SessionState.ERROR_RECOVERABLE
             and target is SessionState.READY
             and self._cause is not ErrorCause.OPERATION_FAILED
         ):
-            return "la conexión no es utilizable; se requiere una sesión nueva"
+            return tr("the connection is not usable; a new session is required")
         return None
 
     def _entry_rejection(self, cause: ErrorCause | None) -> str | None:
         if cause is None:
-            return "falta la causa del fallo"
+            return tr("the cause of the failure is missing")
         if self._state is SessionState.READY and cause is not ErrorCause.SESSION_INVALIDATED:
-            return "desde READY solo por invalidación"
+            return tr("from READY only through invalidation")
         return None
 
     def subscribe(self, listener: Listener) -> Callable[[], None]:

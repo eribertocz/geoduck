@@ -32,7 +32,7 @@ _ICON = Path(__file__).resolve().parent.parent / "resources" / "icon.svg"
 def version_text() -> str:
     """Versión real del paquete (`geoduck.__version__`, igual a `metadata.txt`) y su etapa."""
     stage = release_stage(__version__)
-    return tr("Versión") + f" {__version__}" + (f" · {stage}" if stage else "")
+    return tr("Version") + f" {__version__}" + (f" · {stage}" if stage else "")
 
 
 def components(report: DiagnosticReport | None, engine: EngineInfo | None) -> list[tuple[str, str]]:
@@ -59,7 +59,7 @@ class AboutDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Acerca de GeoDuck"))
+        self.setWindowTitle(tr("About GeoDuck"))
         self.setMinimumWidth(460)
         palette = theme.palette_for(self)
         self.setStyleSheet(theme.stylesheet(palette))
@@ -82,8 +82,8 @@ class AboutDialog(QDialog):
 
         link = f"color: {palette.action};"
         self.links = QLabel(
-            f'<a style="{link}" href="{REPOSITORY}">{tr("Repositorio")}</a> &nbsp;·&nbsp; '
-            f'<a style="{link}" href="{REPOSITORY}/issues">{tr("Informar de un problema")}</a> &nbsp;·&nbsp; '
+            f'<a style="{link}" href="{REPOSITORY}">{tr("Repository")}</a> &nbsp;·&nbsp; '
+            f'<a style="{link}" href="{REPOSITORY}/issues">{tr("Report a problem")}</a> &nbsp;·&nbsp; '
             f'<a style="{link}" href="{REPOSITORY}/blob/main/LICENSE">GPL-2.0-or-later</a>'
         )
         self.links.setTextFormat(Qt.TextFormat.RichText)
@@ -91,14 +91,14 @@ class AboutDialog(QDialog):
 
         note = QLabel(
             tr(
-                "Versión Alpha: puede cambiar sin aviso. La compatibilidad certificada en Windows está "
-                "pendiente; consulte «Diagnóstico del entorno» para su instalación."
+                "Alpha version: it may change without notice. Certified compatibility on Windows is "
+                "pending; see «Environment diagnostics» for your installation."
             )
         )
         note.setProperty("geoduck", "muted")
         note.setWordWrap(True)
 
-        close = QPushButton(tr("Cerrar"))
+        close = QPushButton(tr("Close"))
         close.setProperty("geoduck", "secondary")
         close.setDefault(True)
         close.clicked.connect(self.reject)
@@ -134,7 +134,7 @@ class AboutDialog(QDialog):
         name_row.addWidget(self.version, 0, Qt.AlignmentFlag.AlignVCenter)
         name_row.addStretch(1)
         summary = QLabel(
-            tr("Sesión DuckDB dentro de QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra.")
+            tr("DuckDB session inside QGIS. DuckDB processes, GeoDuck transfers and QGIS manages.")
         )
         summary.setProperty("geoduck", "muted")
         summary.setWordWrap(True)

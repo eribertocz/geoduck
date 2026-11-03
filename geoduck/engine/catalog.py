@@ -23,6 +23,7 @@ from geoduck.domain.catalog import (
 )
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import EngineError
+from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_string_literal
 
 if TYPE_CHECKING:
@@ -53,7 +54,9 @@ _VIEWS_SQL = (
 def read_catalog(handle: ConnectionHandle, root: str) -> CatalogSnapshot:
     listed = handle.execute(_DATABASES_SQL, max_rows=CATALOG_LIMIT)
     if listed.truncated:
-        raise EngineError(f"El catálogo tiene más de {CATALOG_LIMIT} bases; no se muestra incompleto")
+        raise EngineError(
+            tr("The catalog has more than {0} databases; it is not shown incomplete").format(CATALOG_LIMIT)
+        )
     current = handle.execute(_CURRENT_SQL).rows
     databases = tuple(
         AttachedDatabase(
@@ -81,13 +84,15 @@ def read_catalog(handle: ConnectionHandle, root: str) -> CatalogSnapshot:
             databases, root=root, default=str(current[0][0]), schemas=schemas, objects=objects
         )
     except (ValueError, IndexError) as exc:
-        raise EngineError(f"Catálogo incoherente: {exc}") from exc
+        raise EngineError(tr("Inconsistent catalog: {0}").format(exc)) from exc
 
 
 def _bounded(handle: ConnectionHandle, sql: str) -> tuple[tuple[object, ...], ...]:
     out = handle.execute(sql, max_rows=OBJECT_LIMIT)
     if out.truncated:
-        raise EngineError(f"El catálogo tiene más de {OBJECT_LIMIT} objetos; no se muestra incompleto")
+        raise EngineError(
+            tr("The catalog has more than {0} objects; it is not shown incomplete").format(OBJECT_LIMIT)
+        )
     return out.rows
 
 
@@ -107,9 +112,11 @@ def read_columns(handle: ConnectionHandle, database: str, schema: str, name: str
         max_rows=COLUMN_LIMIT,
     )
     if out.truncated:
-        raise EngineError(f"{name} tiene más de {COLUMN_LIMIT} columnas; no se muestran incompletas")
+        raise EngineError(
+            tr("{0} has more than {1} columns; they are not shown incomplete").format(name, COLUMN_LIMIT)
+        )
     if not out.rows:  # una tabla o vista siempre tiene columnas: el objeto ya no existe
-        raise EngineError(f"{database}.{schema}.{name} ya no existe")
+        raise EngineError(tr("{0}.{1}.{2} no longer exists").format(database, schema, name))
     return tuple(
         ColumnInfo(str(col), str(data_type), None if nullable is None else bool(nullable))
         for col, data_type, nullable in out.rows

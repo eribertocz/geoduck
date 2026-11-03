@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from geoduck.domain.errors import ErrorCode
+from geoduck.domain.i18n import tr
 from geoduck.domain.transaction import TransactionState
 
 #: Tamaños de vista previa permitidos (sql-editor-spec §4). 200 por defecto.
@@ -213,23 +214,25 @@ def automatic_title(statement: SqlStatement) -> str:
     sql = _COMMENTS.sub(" ", _STRINGS.sub("''", statement.text)).strip()
     if statement.type in {"INSERT", "UPDATE", "DELETE"}:
         target = _DML_TARGET.search(sql)
-        verb = {"INSERT": "Insertados en", "UPDATE": "Actualizados en", "DELETE": "Eliminados de"}[
+        verb = {"INSERT": tr("Inserted into"), "UPDATE": tr("Updated in"), "DELETE": tr("Deleted from")}[
             statement.type
         ]
         return _short(f"{verb} {_humanize(target.group(2), lower=True)}" if target else verb)
     if statement.is_plan:
         source = _FROM.search(sql)
-        return _short(f"Plan {_humanize(source.group(1), lower=True)}" if source else "Plan")
+        plan = tr("Plan")
+        return _short(f"{plan} {_humanize(source.group(1), lower=True)}" if source else plan)
     if not statement.is_read:
         return _short(_command_title(statement.type, sql))  # un CREATE … AS SELECT … FROM x crea, no lee x
     source = _FROM.search(sql)
     if source:
         name = _humanize(source.group(1))
-        return _short(f"Total {name[:1].lower() + name[1:]}" if _ONLY_COUNT.match(sql) else name)
+        total = tr("Total")
+        return _short(f"{total} {name[:1].lower() + name[1:]}" if _ONLY_COUNT.match(sql) else name)
     alias = _SINGLE_ALIAS.match(sql)
     if alias:
         return _short(_humanize(alias.group(1)))
-    return "Resultado"
+    return tr("Result")
 
 
 _DDL_OBJECT = re.compile(
@@ -245,16 +248,18 @@ _FIRST_WORDS = re.compile(r"^\s*(\w+(?:\s+\w+)?)")
 
 def _command_title(kind: str, sql: str) -> str:
     """Sentencias sin resultado de datos: verbo y objeto («Crear productos», «Adjuntar comercial»)."""
-    verbs = {"CREATE": "Crear", "DROP": "Eliminar", "ALTER": "Modificar"}
+    verbs = {"CREATE": tr("Create"), "DROP": tr("Drop"), "ALTER": tr("Alter")}
     ddl = _DDL_OBJECT.match(sql)
     if ddl and kind in {"CREATE", "DROP", "ALTER"}:
         return f"{verbs[ddl.group(1).upper()]} {_humanize(ddl.group(2), lower=True)}"
     if kind == "ATTACH":
         alias = _ATTACH_ALIAS.search(sql)
-        return f"Adjuntar {_humanize(alias.group(1), lower=True)}" if alias else "Adjuntar"
+        attach = tr("Attach")
+        return f"{attach} {_humanize(alias.group(1), lower=True)}" if alias else attach
     if kind == "DETACH":
         name = _DETACH_NAME.match(sql)
-        return f"Desadjuntar {_humanize(name.group(1), lower=True)}" if name else "Desadjuntar"
+        detach = tr("Detach")
+        return f"{detach} {_humanize(name.group(1), lower=True)}" if name else detach
     if kind in {"TRANSACTION", "SET", "PRAGMA", "VARIABLE_SET"}:
         words = _FIRST_WORDS.match(sql)
         return words.group(1).upper() if words else kind

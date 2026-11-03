@@ -6,6 +6,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from geoduck.domain.i18n import tr
+
 _VERSION_RE = re.compile(r"^\s*v?(\d+)\.(\d+)(?:\.(\d+))?(.*)$")
 
 
@@ -21,7 +23,7 @@ class Version:
     def parse(cls, text: str) -> Version:
         match = _VERSION_RE.match(text)
         if match is None:
-            raise ValueError(f"Versión no reconocida: {text!r}")
+            raise ValueError(tr("Unrecognized version: {0!r}").format(text))
         major, minor, patch, rest = match.groups()
         return cls(int(major), int(minor), int(patch or 0), bool(rest.strip()))
 

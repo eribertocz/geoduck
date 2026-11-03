@@ -31,11 +31,14 @@ from qgis.PyQt.QtWidgets import (
 
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
 from geoduck.domain.errors import InvalidArgumentError
-from geoduck.ui.i18n import tr
+from geoduck.ui.i18n import N_, tr
 
-_FILTER = "DuckDB (*.duckdb *.ddb *.db);;Todos los archivos (*)"
-READ_ONLY_HELP = "Varios programas pueden abrirla a la vez; ninguno puede modificarla."
-READ_WRITE_HELP = "Solo GeoDuck podrá abrir el archivo mientras esté adjunto."
+READ_ONLY_HELP = N_("Several programs can open it at the same time; none can modify it.")
+READ_WRITE_HELP = N_("Only GeoDuck can open the file while it is attached.")
+
+
+def _file_filter() -> str:
+    return "DuckDB (*.duckdb *.ddb *.db);;" + tr("All files") + " (*)"
 
 
 def default_alias(path: str) -> str:
@@ -51,7 +54,7 @@ class AttachDialog(QDialog):
         self._action = action
         self.request: AttachRequest | None = None
         self.creating = action is OpenAction.CREATE_NEW
-        self.setWindowTitle(tr("Crear base DuckDB") if self.creating else tr("Abrir base DuckDB"))
+        self.setWindowTitle(tr("Create DuckDB database") if self.creating else tr("Open DuckDB database"))
         self.setMinimumWidth(480)
 
         form = self._build_fields()
@@ -66,9 +69,7 @@ class AttachDialog(QDialog):
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(12)
         if self.creating:
-            note = QLabel(
-                tr("Se crea un archivo nuevo, en lectura y escritura. Nunca se sobrescribe uno existente.")
-            )
+            note = QLabel(tr("A new file is created, read-write. An existing file is never overwritten."))
             note.setProperty("geoduck", "muted")
             note.setWordWrap(True)
             layout.addWidget(note)
@@ -82,11 +83,11 @@ class AttachDialog(QDialog):
 
     def _build_fields(self) -> QFormLayout:
         self.path_edit = QLineEdit()
-        self.path_edit.setAccessibleName(tr("Ruta del archivo"))
+        self.path_edit.setAccessibleName(tr("File path"))
         self.path_edit.setPlaceholderText(
-            tr("Dónde crear el archivo .duckdb") if self.creating else tr("Archivo .duckdb")
+            tr("Where to create the .duckdb file") if self.creating else tr(".duckdb file")
         )
-        browse = QPushButton(tr("Examinar…"))
+        browse = QPushButton(tr("Browse…"))
         browse.setProperty("geoduck", "secondary")
         browse.clicked.connect(self._browse)
         path_row = QHBoxLayout()
@@ -97,19 +98,19 @@ class AttachDialog(QDialog):
         self.path_hint.setWordWrap(True)
         self.path_hint.hide()
 
-        self.readonly_check = QCheckBox(tr("Solo lectura"))
+        self.readonly_check = QCheckBox(tr("Read only"))
         self.readonly_check.setChecked(True)
         self.access_help = QLabel()
         self.access_help.setProperty("geoduck", "muted")
         self.access_help.setWordWrap(True)
 
         self.alias_edit = QLineEdit()
-        self.alias_edit.setAccessibleName(tr("Alias de la base"))
-        self.alias_edit.setToolTip(tr("Nombre de la base en SQL; si lo deja vacío, el del archivo"))
+        self.alias_edit.setAccessibleName(tr("Database alias"))
+        self.alias_edit.setToolTip(tr("Name of the database in SQL; if left empty, the file name"))
 
         form = QFormLayout()
         form.setVerticalSpacing(10)
-        form.addRow(tr("Archivo"), path_row)
+        form.addRow(tr("File"), path_row)
         form.addRow("", self.path_hint)
         if not self.creating:
             form.addRow("", self.readonly_check)
@@ -118,10 +119,10 @@ class AttachDialog(QDialog):
         return form
 
     def _build_buttons(self) -> QHBoxLayout:
-        self.ok_button = QPushButton(tr("Crear") if self.creating else tr("Abrir"))
+        self.ok_button = QPushButton(tr("Create") if self.creating else tr("Open"))
         self.ok_button.setProperty("geoduck", "primary")
         self.ok_button.setDefault(True)
-        cancel = QPushButton(tr("Cancelar"))
+        cancel = QPushButton(tr("Cancel"))
         cancel.setProperty("geoduck", "secondary")
         self.ok_button.clicked.connect(self._accept)
         cancel.clicked.connect(self.reject)
@@ -140,15 +141,15 @@ class AttachDialog(QDialog):
     def _refresh(self) -> None:
         path = self.path_edit.text().strip()
         alias = default_alias(path) if path else ""
-        self.alias_edit.setPlaceholderText(alias or tr("El nombre del archivo, si lo deja vacío"))
+        self.alias_edit.setPlaceholderText(alias or tr("The file name, if left empty"))
         self.access_help.setText(
             tr(READ_ONLY_HELP) if self.access is AccessMode.READ_ONLY else tr(READ_WRITE_HELP)
         )
         problem = ""  # aviso previo; el motor vuelve a comprobarlo en su operación serial
         if path and self.creating and os.path.exists(path):
-            problem = tr("Ya existe un archivo con ese nombre: GeoDuck no lo sobrescribe.")
+            problem = tr("A file with that name already exists: GeoDuck does not overwrite it.")
         elif path and not self.creating and not os.path.isfile(path):
-            problem = tr("No se encuentra el archivo.")
+            problem = tr("The file cannot be found.")
         self.path_hint.setText(problem)
         self.path_hint.setVisible(bool(problem))
         self.ok_button.setEnabled(bool(path) and not problem)
@@ -156,10 +157,14 @@ class AttachDialog(QDialog):
     def _browse(self) -> None:
         if self.creating:
             path, _ = QFileDialog.getSaveFileName(
-                self, tr("Crear base DuckDB"), "", _FILTER, options=QFileDialog.Option.DontConfirmOverwrite
+                self,
+                tr("Create DuckDB database"),
+                "",
+                _file_filter(),
+                options=QFileDialog.Option.DontConfirmOverwrite,
             )
         else:
-            path, _ = QFileDialog.getOpenFileName(self, tr("Abrir base DuckDB"), "", _FILTER)
+            path, _ = QFileDialog.getOpenFileName(self, tr("Open DuckDB database"), "", _file_filter())
         if path:
             self.path_edit.setText(path)
 

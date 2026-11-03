@@ -24,6 +24,7 @@ from types import ModuleType
 
 from geoduck import __version__ as geoduck_version
 from geoduck.domain.diagnostics import Check, CheckStatus, DiagnosticReport, SpatialProbe
+from geoduck.domain.i18n import tr
 from geoduck.domain.versions import Version
 
 #: Mismos valores que geoduck/engine/compat.py; aquí no se importa `engine` (requiere duckdb).
@@ -67,13 +68,15 @@ def collect(
         import_module,
         "duckdb",
         "DuckDB",
-        action=f"Instale duckdb>={'.'.join(map(str, DUCKDB_MINIMUM))} en el Python de QGIS ({_DOCS}).",
+        action=tr("Install duckdb>={0} in the QGIS Python ({1}).").format(
+            ".".join(map(str, DUCKDB_MINIMUM)), _DOCS
+        ),
     )
     if duckdb_mod is not None:
         duckdb_check = _check_duckdb_version(str(getattr(duckdb_mod, "__version__", "0.0.0")))
     checks.append(duckdb_check)
     if duckdb_mod is not None:
-        facts["DuckDB desde"] = str(getattr(duckdb_mod, "__file__", "?"))
+        facts[tr("DuckDB from")] = str(getattr(duckdb_mod, "__file__", "?"))
         checks.append(_check_duckdb_origin(duckdb_mod))
 
     numpy_mod, _ = _import_check(import_module, "numpy", "NumPy", action="")
@@ -85,20 +88,23 @@ def collect(
         import_module,
         "pyarrow",
         "PyArrow",
-        action=f"Instale una versión de pyarrow compatible con esta celda de la matriz ({_DOCS}).",
+        action=tr("Install a pyarrow version compatible with this cell of the matrix ({0}).").format(_DOCS),
     )
     if pyarrow_mod is not None:
         pyarrow_check = _check_pyarrow(str(getattr(pyarrow_mod, "__version__", "0")), numpy_version)
-        facts["PyArrow desde"] = str(getattr(pyarrow_mod, "__file__", "?"))
+        facts[tr("PyArrow from")] = str(getattr(pyarrow_mod, "__file__", "?"))
     elif "DLL load failed" in pyarrow_check.detail:
         pyarrow_check = Check(
             "pyarrow",
             "PyArrow",
             CheckStatus.FAIL,
             pyarrow_check.detail,
-            "Hay una PyArrow distinta de la que incluye QGIS y sus DLL chocan con las ya cargadas (F-13). "
-            "Desinstale la PyArrow añadida (p. ej. «pip uninstall pyarrow» si está en el site de usuario) "
-            "y use la de QGIS.",
+            tr(
+                "There is a PyArrow different from the one included in QGIS and its "
+                "DLLs clash with the ones already loaded (F-13). Uninstall the added "
+                "PyArrow (e.g. «pip uninstall pyarrow» if it is in the user site) "
+                "and use the QGIS one."
+            ),
         )
     elif "NumPy 2" in pyarrow_check.detail or "numpy" in pyarrow_check.detail.lower():
         pyarrow_check = Check(
@@ -106,8 +112,10 @@ def collect(
             "PyArrow",
             CheckStatus.FAIL,
             pyarrow_check.detail,
-            f"Esta PyArrow exige NumPy 2, pero QGIS trae NumPy {numpy_version or '1.x'}. Instale "
-            f"pyarrow<26 (ADR-0009, {_DOCS}). No actualice la NumPy de QGIS.",
+            tr(
+                "This PyArrow requires NumPy 2, but QGIS comes with NumPy {0}. "
+                "Install pyarrow<26 (ADR-0009, {1}). Do not upgrade the QGIS NumPy."
+            ).format(numpy_version or "1.x", _DOCS),
         )
     checks.append(pyarrow_check)
 
@@ -124,20 +132,20 @@ def _check_python(py: tuple[int, int, int]) -> Check:
     if py[:2] < PYTHON_MINIMUM:
         return Check(
             "python",
-            "Python de QGIS",
+            tr("QGIS Python"),
             CheckStatus.FAIL,
-            f"Python {text}: no existen wheels de DuckDB ≥ 1.5 para esta versión.",
-            "Use una versión de QGIS cuyo Python sea 3.10 o superior (QGIS 3.40+ en Windows).",
+            tr("Python {0}: there are no DuckDB ≥ 1.5 wheels for this version.").format(text),
+            tr("Use a QGIS version whose Python is 3.10 or later (QGIS 3.40+ on Windows)."),
         )
     if struct.calcsize("P") * 8 != 64:
         return Check(
             "python",
-            "Python de QGIS",
+            tr("QGIS Python"),
             CheckStatus.FAIL,
-            "Intérprete de 32 bits.",
-            "Instale QGIS de 64 bits.",
+            tr("32-bit interpreter."),
+            tr("Install 64-bit QGIS."),
         )
-    return Check("python", "Python de QGIS", CheckStatus.OK, f"Python {text}, 64 bits")
+    return Check("python", tr("QGIS Python"), CheckStatus.OK, tr("Python {0}, 64 bits").format(text))
 
 
 def _check_qgis(import_module: Importer, facts: dict[str, str]) -> Check:
@@ -145,12 +153,14 @@ def _check_qgis(import_module: Importer, facts: dict[str, str]) -> Check:
         core = import_module("qgis.core")
         qtcore = import_module("qgis.PyQt.QtCore")
     except ImportError:
-        return Check("qgis", "QGIS", CheckStatus.INFO, "Ejecución fuera de QGIS (sin PyQGIS).")
+        return Check("qgis", "QGIS", CheckStatus.INFO, tr("Running outside QGIS (without PyQGIS)."))
     qgis_version = str(core.Qgis.version())
     qt = str(getattr(qtcore, "QT_VERSION_STR", "?"))
     pyqt = str(getattr(qtcore, "PYQT_VERSION_STR", "?"))
     facts.update({"QGIS": qgis_version, "Qt": qt, "PyQt": pyqt})
-    return Check("qgis", "QGIS", CheckStatus.OK, f"QGIS {qgis_version}, Qt {qt}, PyQt {pyqt}")
+    return Check(
+        "qgis", "QGIS", CheckStatus.OK, tr("QGIS {0}, Qt {1}, PyQt {2}").format(qgis_version, qt, pyqt)
+    )
 
 
 def _import_check(
@@ -159,7 +169,9 @@ def _import_check(
     try:
         module = import_module(name)
     except Exception as exc:  # ImportError y errores de carga nativa (DLL, ABI, NumPy)
-        detail = f"No se pudo importar {name}: {type(exc).__name__}: {str(exc).strip().splitlines()[0]}"
+        detail = tr("{0} could not be imported: {1}: {2}").format(
+            name, type(exc).__name__, str(exc).strip().splitlines()[0]
+        )
         status = CheckStatus.FAIL if action else CheckStatus.INFO
         return None, Check(name, title, status, detail, action)
     return module, Check(name, title, CheckStatus.OK, f"{name} importado")
@@ -169,13 +181,21 @@ def _check_duckdb_version(text: str) -> Check:
     try:
         v = Version.parse(text)
     except ValueError:
-        return Check("duckdb", "DuckDB", CheckStatus.FAIL, f"Versión no reconocida: {text}", _duckdb_action())
+        return Check(
+            "duckdb",
+            "DuckDB",
+            CheckStatus.FAIL,
+            tr("Unrecognized version: {0}").format(text),
+            _duckdb_action(),
+        )
     if not v.at_least(*DUCKDB_MINIMUM):
         return Check(
             "duckdb",
             "DuckDB",
             CheckStatus.FAIL,
-            f"DuckDB {text} es anterior al mínimo soportado {'.'.join(map(str, DUCKDB_MINIMUM))}.",
+            tr("DuckDB {0} is older than the minimum supported {1}.").format(
+                text, ".".join(map(str, DUCKDB_MINIMUM))
+            ),
             _duckdb_action(),
         )
     if not v.at_least(*DUCKDB_RECOMMENDED):
@@ -183,19 +203,23 @@ def _check_duckdb_version(text: str) -> Check:
             "duckdb",
             "DuckDB",
             CheckStatus.WARN,
-            f"DuckDB {text}: soportado"
+            tr("DuckDB {0}: supported").format(text)
             + (
-                ", con defectos conocidos en geometría (F-04/F-05)."
+                tr(", with known geometry defects (F-04/F-05).")
                 if not v.at_least(*DUCKDB_GEOMETRY_FIXES)
                 else "."
             ),
-            f"Versión recomendada: duckdb {'.'.join(map(str, DUCKDB_RECOMMENDED))} (rama 1.5) o 2.x (D5).",
+            tr("Recommended version: duckdb {0} (1.5 branch) or 2.x (D5).").format(
+                ".".join(map(str, DUCKDB_RECOMMENDED))
+            ),
         )
     return Check("duckdb", "DuckDB", CheckStatus.OK, f"DuckDB {text}")
 
 
 def _duckdb_action() -> str:
-    return f"Instale duckdb>={'.'.join(map(str, DUCKDB_MINIMUM))} en el Python de QGIS ({_DOCS})."
+    return tr("Install duckdb>={0} in the QGIS Python ({1}).").format(
+        ".".join(map(str, DUCKDB_MINIMUM)), _DOCS
+    )
 
 
 def _check_pyarrow(pyarrow_version: str, numpy_version: str) -> Check:
@@ -203,16 +227,21 @@ def _check_pyarrow(pyarrow_version: str, numpy_version: str) -> Check:
     try:
         pa = Version.parse(pyarrow_version)
     except ValueError:
-        return Check("pyarrow", "PyArrow", CheckStatus.WARN, f"Versión no reconocida: {pyarrow_version}")
+        return Check(
+            "pyarrow", "PyArrow", CheckStatus.WARN, tr("Unrecognized version: {0}").format(pyarrow_version)
+        )
     if pa.release() < PYARROW_MINIMUM or (pa.is_prerelease and pa.release() == PYARROW_MINIMUM):
         minimum = ".".join(map(str, PYARROW_MINIMUM))
         return Check(
             "pyarrow",
             "PyArrow",
             CheckStatus.FAIL,
-            f"PyArrow {pyarrow_version} es anterior al mínimo admitido ({minimum}).",
-            f"GeoDuck requiere PyArrow ≥ {minimum} (ADR-0009). Si es la PyArrow incluida en QGIS, use una "
-            f"versión de QGIS de la matriz de compatibilidad; no la sustituya dentro de QGIS ({_DOCS}).",
+            tr("PyArrow {0} is older than the minimum accepted ({1}).").format(pyarrow_version, minimum),
+            tr(
+                "GeoDuck requires PyArrow ≥ {0} (ADR-0009). If it is the PyArrow "
+                "included in QGIS, use a QGIS version from the compatibility matrix; "
+                "do not replace it inside QGIS ({1})."
+            ).format(minimum, _DOCS),
         )
     if numpy_version:
         try:
@@ -224,16 +253,18 @@ def _check_pyarrow(pyarrow_version: str, numpy_version: str) -> Check:
                 "pyarrow",
                 "PyArrow",
                 CheckStatus.FAIL,
-                f"PyArrow {pyarrow_version} requiere NumPy ≥ 2 y este QGIS trae NumPy {numpy_version}.",
-                f"Instale pyarrow<26 (ADR-0009, {_DOCS}). No actualice la NumPy de QGIS.",
+                tr("PyArrow {0} requires NumPy ≥ 2 and this QGIS comes with NumPy {1}.").format(
+                    pyarrow_version, numpy_version
+                ),
+                tr("Install pyarrow<26 (ADR-0009, {0}). Do not upgrade the QGIS NumPy.").format(_DOCS),
             )
     return Check("pyarrow", "PyArrow", CheckStatus.OK, f"PyArrow {pyarrow_version}")
 
 
 def _check_spatial(prober: SpatialProber | None) -> Check:
-    title = "Extensión spatial"
+    title = tr("spatial extension")
     if prober is None:
-        return Check("spatial", title, CheckStatus.INFO, "No evaluada: DuckDB no está disponible.")
+        return Check("spatial", title, CheckStatus.INFO, tr("Not evaluated: DuckDB is not available."))
     try:
         probe = prober()
     except Exception as exc:
@@ -241,35 +272,46 @@ def _check_spatial(prober: SpatialProber | None) -> Check:
             "spatial",
             title,
             CheckStatus.WARN,
-            f"No se pudo consultar: {type(exc).__name__}",
-            "Ver docs/certification/spatial.md.",
+            tr("Could not be queried: {0}").format(type(exc).__name__),
+            tr("See docs/certification/spatial.md."),
         )
     if probe.allow_unsigned_extensions:
         return Check(
             "spatial",
             title,
             CheckStatus.WARN,
-            "DuckDB permite extensiones sin firma en este entorno.",
-            "Desactive allow_unsigned_extensions (spec/docs/security.md §2).",
+            tr("DuckDB allows unsigned extensions in this environment."),
+            tr("Turn off allow_unsigned_extensions (spec/docs/security.md §2)."),
         )
     if probe.loaded:
-        axis = f" · geometry_always_xy: {probe.always_xy}" if probe.always_xy else ""
-        return Check("spatial", title, CheckStatus.OK, f"Cargable ({probe.version or 'versión ?'}){axis}")
+        axis = tr(" · geometry_always_xy: {0}").format(probe.always_xy) if probe.always_xy else ""
+        return Check(
+            "spatial",
+            title,
+            CheckStatus.OK,
+            tr("Loadable ({0}){1}").format(probe.version or tr("version ?"), axis),
+        )
     if probe.installed:
         return Check(
             "spatial",
             title,
             CheckStatus.WARN,
-            f"Instalada pero no se pudo cargar: {probe.load_error}",
-            "Reinstálela según docs/certification/spatial.md.",
+            tr("Installed but it could not be loaded: {0}").format(probe.load_error),
+            tr("Reinstall it as described in docs/certification/spatial.md."),
         )
     return Check(
         "spatial",
         title,
         CheckStatus.WARN,
-        f"No instalada (directorio de extensiones: {probe.extension_directory or 'predeterminado'}). "
-        "GeoDuck funciona sin ella; las funciones ST_* avanzadas y los CRS EPSG no estarán disponibles.",
-        "Instálela de forma explícita según docs/certification/spatial.md. GeoDuck no la instala solo.",
+        tr(
+            "Not installed (extension directory: {0}). GeoDuck works without it; "
+            "advanced ST_* functions and EPSG CRSs will not be available."
+        ).format(probe.extension_directory or "predeterminado"),
+        tr(
+            "Install it explicitly as described in "
+            "docs/certification/spatial.md. GeoDuck does not install it by "
+            "itself."
+        ),
     )
 
 
@@ -283,7 +325,7 @@ _PLUGIN_DIR = re.compile(r"/python/plugins/([^/]+)/", re.IGNORECASE)
 
 def _check_duckdb_origin(module: ModuleType) -> Check:
     """R11: avisa si `duckdb` lo aporta otro complemento que lo incrusta en su carpeta."""
-    title = "Origen de DuckDB"
+    title = tr("DuckDB origin")
     path = str(getattr(module, "__file__", "") or "").replace("\\", "/")
     match = _PLUGIN_DIR.search(path)
     if match and match.group(1).lower() != "geoduck":
@@ -292,19 +334,23 @@ def _check_duckdb_origin(module: ModuleType) -> Check:
             "duckdb_origin",
             title,
             CheckStatus.WARN,
-            f"DuckDB {getattr(module, '__version__', '?')} lo aporta el complemento «{plugin}», que lo "
-            "incluye en su carpeta. En QGIS solo puede haber un DuckDB cargado: GeoDuck y ese complemento "
-            "comparten esta versión (riesgo R11).",
-            f"Si la versión no es la que GeoDuck necesita, desactive «{plugin}», reinicie QGIS y vuelva a "
-            "ejecutar este diagnóstico.",
+            tr(
+                "DuckDB {0} is provided by the plugin «{1}», which includes it in "
+                "its folder. QGIS can only have one DuckDB loaded: GeoDuck and that "
+                "plugin share this version (risk R11)."
+            ).format(getattr(module, "__version__", "?"), plugin),
+            tr(
+                "If the version is not the one GeoDuck needs, disable «{0}», restart "
+                "QGIS and run this diagnosis again."
+            ).format(plugin),
         )
     return Check("duckdb_origin", title, CheckStatus.OK, path or "desconocido")
 
 
 def _check_user_site(user_site: str, modules: list[ModuleType]) -> Check:
-    title = "Paquetes del usuario"
+    title = tr("User packages")
     if not user_site:
-        return Check("user_site", title, CheckStatus.OK, "El site de usuario está desactivado.")
+        return Check("user_site", title, CheckStatus.OK, tr("The user site is disabled."))
     norm = os.path.normcase(os.path.abspath(user_site))
     in_user_site = [
         m.__name__
@@ -318,18 +364,24 @@ def _check_user_site(user_site: str, modules: list[ModuleType]) -> Check:
             "user_site",
             title,
             CheckStatus.WARN,
-            f"{', '.join(risky)} se cargan desde {user_site} en lugar de la versión de QGIS "
-            "(conflictos conocidos: QGIS issue #63733, F-13, F-15).",
-            f"Desinstálelos del site de usuario («pip uninstall {' '.join(risky)}») para usar los de QGIS.",
+            tr(
+                "{0} are loaded from {1} instead of the QGIS version (known "
+                "conflicts: QGIS issue #63733, F-13, F-15)."
+            ).format(", ".join(risky), user_site),
+            tr("Uninstall them from the user site («pip uninstall {0}») to use the QGIS ones.").format(
+                " ".join(risky)
+            ),
         )
     if in_user_site:
         return Check(
             "user_site",
             title,
             CheckStatus.OK,
-            f"{', '.join(in_user_site)} instalado en el site de usuario; NumPy y PyArrow son los de QGIS.",
+            tr("{0} installed in the user site; NumPy and PyArrow are the QGIS ones.").format(
+                ", ".join(in_user_site)
+            ),
         )
-    return Check("user_site", title, CheckStatus.OK, "Ninguna dependencia proviene del site de usuario.")
+    return Check("user_site", title, CheckStatus.OK, tr("No dependency comes from the user site."))
 
 
 def _user_site() -> str:

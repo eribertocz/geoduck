@@ -45,7 +45,7 @@ class ValidityDialog(QDialog):
         confirm: Callable[[QWidget, str, str], bool] | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Diagnóstico de geometrías — «{}»").format(diagnosis.layer_name))
+        self.setWindowTitle(tr("Geometry diagnosis — «{}»").format(diagnosis.layer_name))
         self._on_repair = on_repair
         self._confirm = confirm or _confirm
         self._diagnosis = diagnosis
@@ -55,13 +55,15 @@ class ValidityDialog(QDialog):
         layout.addWidget(self.summary_label)
         selected = len(diagnosis.selected)
         note = (
-            tr("Se seleccionaron en la capa {} entidades inválidas o ilegibles.").format(selected)
+            tr("{} invalid or unreadable features were selected in the layer.").format(selected)
             if selected
-            else tr("No hay geometrías inválidas ni ilegibles.")
+            else tr("There are no invalid or unreadable geometries.")
         )
-        layout.addWidget(secondary(QLabel(note + " " + tr("El diagnóstico no cambia la capa ni el origen."))))
+        layout.addWidget(
+            secondary(QLabel(note + " " + tr("The diagnosis does not change the layer or its source.")))
+        )
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        self.repair_button = QPushButton(tr("Reparar en una copia…"))
+        self.repair_button = QPushButton(tr("Repair in a copy…"))
         self.repair_button.setEnabled(diagnosis.invalid > 0 and on_repair is not None)
         buttons.addButton(self.repair_button, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.rejected.connect(self.reject)
@@ -73,12 +75,12 @@ class ValidityDialog(QDialog):
             return
         if not self._confirm(
             self,
-            tr("Reparar en una copia"),
+            tr("Repair in a copy"),
             tr(
-                "Se creará una capa nueva en memoria con las {} geometrías inválidas reparadas "
-                "(QGIS «makeValid»). La capa original y el origen no cambian.\n\n"
-                "La reparación puede cambiar el tipo, la dimensión o el número de partes de una geometría; "
-                "se informará cada cambio."
+                "A new in-memory layer will be created with the {} invalid geometries repaired (QGIS "
+                "«makeValid»). The original layer and its source do not change.\n\nThe repair may "
+                "change the type, the dimension or the number of parts of a geometry; every change "
+                "will be reported."
             ).format(self._diagnosis.invalid),
         ):
             return
