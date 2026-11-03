@@ -55,6 +55,12 @@ def _tool(text: str, tip: str, name: str = "") -> QToolButton:
     return button
 
 
+def _show(widget: QWidget, visible: bool) -> None:
+    """`setVisible` solo si cambia (con muchas celdas, cada llamada cuesta)."""
+    if widget.isHidden() == visible:
+        widget.setVisible(visible)
+
+
 class _DragHandle(QLabel):
     """Asa «⠿»: arrastrar la celda a otra posición (ui-ux-spec §10)."""
 
@@ -97,6 +103,8 @@ class CellWidget(QFrame):
         self.sheet = False
         #: «Cargar en QGIS ▾» de la celda y su menú (los pone el panel, `SqlPanel._setup_cell`).
         self.load_button: Any = None
+        #: «Exportar ▾» de la celda (CSV o Parquet, la consulta completa; G7 · E3).
+        self.export_button: Any = None
         self.load_menu: Any = None
         outer = QHBoxLayout(self)
         outer.setContentsMargins(2, 4, 2, 4)
@@ -386,6 +394,7 @@ class NotebookView(QScrollArea):
         self.add_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.add_button.clicked.connect(lambda _c=False: self.add_cell(len(self.notebook.cells)))
         self._widgets: dict[int, CellWidget] = {}
+        self._inserts: dict[int, QToolButton] = {}
         self.active: CellWidget | None = None
         self.sheet: CellWidget | None = None
         #: Pregunta antes de borrar una celda con SQL; las pruebas la sustituyen.
@@ -424,24 +433,33 @@ class NotebookView(QScrollArea):
     def widget_for(self, cell: Cell) -> CellWidget | None:
         return self._widgets.get(cell.id)
 
+    def _insert_button(self, cell_id: int) -> QToolButton:
+        """«＋» encima de la celda: inserta una celda en su sitio (uno por celda, se reutiliza)."""
+        button = self._inserts.get(cell_id)
+        if button is None:
+            button = _tool("＋", tr("Insert a cell here"))
+            button.setObjectName("geoduckInsertCell")
+            button.clicked.connect(lambda _c=False, c=cell_id: self.add_cell(self.notebook.index_of(c)))
+            self._inserts[cell_id] = button
+        return button
+
     def _relayout(self) -> None:
+        """Pone las celdas en el orden del modelo. Solo reordena el layout: ningún widget cambia de padre
+        (sacarlos y volverlos a meter costaba ~0,2 s por celda añadida con 60 celdas)."""
         column = self._cells.column
         while column.count():
-            item = column.takeAt(0)
-            if item.widget() is not None:
-                item.widget().setParent(None)
-        for i, cell in enumerate(self.notebook.cells):
-            insert = _tool("＋", tr("Insert a cell here"))
-            insert.clicked.connect(lambda _c=False, at=i: self.add_cell(at))
-            insert.setObjectName("geoduckInsertCell")
-            column.addWidget(insert, 0, Qt.AlignmentFlag.AlignLeft)
+            column.takeAt(0)  # sin `setParent(None)`: el widget sigue siendo hijo de `_cells`
+        for cell in self.notebook.cells:
+            insert = self._insert_button(cell.id)
             widget = self._widgets[cell.id]
-            widget.setParent(self._cells)
-            widget.setVisible(self.sheet is None or widget is self.sheet)
-            insert.setVisible(self.sheet is None)
+            column.addWidget(insert, 0, Qt.AlignmentFlag.AlignLeft)
             column.addWidget(widget, 1 if widget is self.sheet else 0)
+            if widget.parent() is not self._cells:
+                widget.setParent(self._cells)
+            _show(widget, self.sheet is None or widget is self.sheet)
+            _show(insert, self.sheet is None)
         column.addWidget(self.add_button)
-        self.add_button.setVisible(self.sheet is None)
+        _show(self.add_button, self.sheet is None)
         if self.sheet is None:
             column.addStretch(1)
 
@@ -489,6 +507,9 @@ class NotebookView(QScrollArea):
         index = self.notebook.index_of(widget.cell.id)
         self.notebook.remove(widget.cell.id)
         self._widgets.pop(widget.cell.id, None)
+        insert = self._inserts.pop(widget.cell.id, None)
+        if insert is not None:
+            insert.deleteLater()
         widget.deleteLater()
         for cell in self.notebook.cells:  # si era la última, el modelo creó una vacía
             if cell.id not in self._widgets:

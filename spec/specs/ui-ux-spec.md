@@ -120,7 +120,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   - Teclado (además del ratón): Ctrl+↑/↓ sube o baja la celda activa.
 - **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): celdas con ▶, base,
   editor y resultado; el resumen, como ayuda (ⓘ) del rótulo del resultado; «Cargar en QGIS ▾» y «Exportar ▾» al pie.
-- **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
+- **Columna derecha (ventana, plegable con «ⓘ» en la barra superior):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
 - **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo» (sin atajo), «Cancelar» y filas de la
@@ -129,5 +129,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 - **Atajos** (solo con el foco en GeoDuck, como la DuckDB UI): Ctrl+Intro ejecuta la celda activa; Ctrl+Mayús+Intro,
   solo su selección; Mayús+Intro ejecuta la celda y pasa a la siguiente (la crea si es la última); Alt+↑/↓ cambia de
   celda; Ctrl+↑/↓ la mueve; Ctrl+E vista de hoja.
-- Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
-  celdas, solo las visibles mantienen su tabla.
+- Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio). Medido en
+  E3 (QGIS 3.34 · Qt 5 y 4.2 · Qt 6): 100 celdas se crean en menos de 1 s (12 ms la siguiente), se ejecutan en
+  4–5 s con 200 filas cada una y ocupan ~0,5 MB por resultado; el desplazamiento y el cambio de cuaderno son
+  fluidos. Por eso todas las celdas conservan su tabla (no se liberan las que no se ven).

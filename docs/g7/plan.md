@@ -45,9 +45,9 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 
 - Mayús+Intro, Ctrl+E y Ctrl+↑/↓ frente a los comandos de QScintilla (como Ctrl+T en G6) (E2).
 - Arrastrar celdas con su editor QScintilla dentro, en Qt 5 y Qt 6 (E2).
-- Parquet con geometría sin SRC: al releerlo, DuckDB le asigna `OGC:CRS84`; decidir aviso o metadatos sin inventar SRC (E3).
-- Exportación cancelada o fallida: borrar el archivo parcial sin tocar uno previo (escribir a un temporal y renombrar) (E3).
-- Coste de muchos `QgsCodeEditorSQL` en una sola vista en Qt 5 y Qt 6 (E3).
+- ~~Parquet con geometría sin SRC~~ Decidido en E3 (propietario, 2026-11-03): sin SRC, GeoParquet 1.0 y aviso (`OGC:CRS84`); con SRC, `GEOPARQUET_VERSION 'V2'` (la opción por defecto falla). Verificado en DuckDB 1.5.0 y 2.0.0.
+- ~~Exportación cancelada o fallida~~ Hecho en E3: temporal oculto en la misma carpeta y renombrado al terminar; si se cancela o falla, se borra y el archivo previo no cambia.
+- ~~Coste de muchos `QgsCodeEditorSQL`~~ Medido en E3: 100 celdas en <1 s (antes ~15 s: añadir una celda rehacía todas); ejecutar las 100, 4–5 s; ~0,5 MB por resultado.
 - ~~«Explicar» de una celda con base propia~~ Verificado en E1: `USE` + `EXPLAIN` en la misma operación (G7 retira «Explicar»; `EXPLAIN` escrito en la celda sigue igual).
 
 ## 4 bis. Para después (fuera de G7, decisión del propietario 2026-11-03)
@@ -63,3 +63,4 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 | E2 Vista de celdas | Fusionado: `ui/notebook_view.py` (celda con ⠿, tres pliegues, ▶ con menú, selector de base, resultado propio con «Cargar en QGIS ▾» y «Copiar», ⛶ y ⋯; «＋» entre celdas y al final; arrastrar, Alt+Mayús+↑/↓, Alt+↑/↓, Ctrl+E); cada pestaña de G6 es un cuaderno; atajos como la DuckDB UI (decisión del propietario: Ctrl+Intro la celda, Ctrl+Mayús+Intro la selección, Mayús+Intro la celda y avanzar); barra superior con solo «Ejecutar todo», «Cancelar» y filas; sin «Sentencia» ni «Explicar» (el plan, escribiendo `EXPLAIN`); menú ⋯ como la DuckDB UI (subir y bajar con Ctrl+↑/↓, duplicar, eliminar); «Cargar ▾» corto. Los eventos de cada ejecución van a la celda que la pidió (`run_id`). AT-NB-001, 005, 008 (`tests/qgis/test_notebook_ui.py`) | #93 |
 | E2b Quitar «Explicar» del motor | Fusionado: sin parámetro `explain` en motor, worker, puertos y coordinador; el plan se pide con `EXPLAIN` escrito en la celda (AT-SQL-010) | #94 |
 | E2c Cargar con la base de la celda | En revisión: cada resultado recuerda la base donde se ejecutó (`StatementResult.database`); «Cargar en QGIS» (Memoria, Copia rápida y Conectada, también sus lecturas posteriores) repite la consulta en ella y deja la base en uso como estaba (`SessionWorker.submit(database=…)`). Antes fallaba si otra celda había cambiado la base en uso | — |
+| E3 Exportar, cuadernos y resumen | En revisión: «Exportar ▾» CSV/Parquet con `COPY` de la consulta completa (en la base del resultado, cancelable, temporal y renombrado, aviso de SRC); lista «Cuadernos» (ventana: nuevo, renombrar, cerrar) y selector en el panel; resumen del resultado (columna derecha plegable; en el panel, ayuda ⓘ); rendimiento: añadir una celda ya no rehace las demás. AT-NB-006, 007, 009, 011 | — |
