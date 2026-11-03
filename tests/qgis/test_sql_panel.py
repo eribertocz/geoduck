@@ -9,7 +9,6 @@ from qgis.PyQt.QtWidgets import QLabel, QSplitter
 
 import geoduck
 from geoduck.domain.session import ErrorCause, SessionState
-from geoduck.domain.sql import RunScope
 from geoduck.ui import theme
 from geoduck.ui.sql_panel import LOG_MESSAGE, LOG_NAME, LOG_STATUS
 from tests.qgis.conftest import wait_for
@@ -28,9 +27,9 @@ def session(iface):
     plugin.unload()
 
 
-def run(panel, coordinator, text, scope=RunScope.ALL):
+def run(panel, coordinator, text):
     panel.editor.setText(text)
-    {RunScope.ALL: panel.run_all_button, RunScope.CURRENT: panel.run_current_button}[scope].click()
+    panel.run_all_button.click()
     assert wait_for(lambda: coordinator.state is not SessionState.BUSY and not panel._running)
 
 
@@ -95,11 +94,11 @@ def test_error_marks_the_line_and_stops(session):
     assert "nada" in plugin.content.message_label.text()
 
 
-def test_current_statement_only(session):
+def test_selection_only(session):
     _plugin, panel, coordinator = session
     panel.editor.setText("CREATE TABLE a(x INT);\nINSERT INTO a VALUES (1);")
-    panel.editor.setCursorPosition(0, 3)
-    panel.run_current_button.click()
+    panel.editor.setSelection(0, 0, 0, 22)
+    panel.run_selection(panel.cell)
     assert wait_for(lambda: coordinator.state is SessionState.READY and not panel._running)
     assert log(panel) == [("Crear a", "OK")]
 

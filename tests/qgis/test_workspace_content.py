@@ -176,16 +176,15 @@ def test_a_narrow_panel_compacts_labels_but_keeps_every_action(plugin):  # noqa:
     content.tabs.setCurrentWidget(panel)
     ws.dock.setFloating(True)
     ws.dock.resize(320, 700)
-    assert wait_for(lambda: panel.compact)  # al ancho mínimo del panel no caben los atajos
+    wait_for(lambda: False, 0.3)  # G7: la fila (Ejecutar todo, Cancelar, filas) cabe sin compactarse
     for button in panel.action_buttons:
-        assert button.isVisibleTo(content) and not button._hint.isVisibleTo(button)  # atajo oculto
+        assert button.isVisibleTo(content)
         assert button.text() and button.toolTip() and button.accessibleName()  # texto y acción, siempre
         right = button.mapTo(panel, button.rect().topRight()).x()
         assert 0 <= right <= panel.width()  # dentro del panel: alcanzable
     assert panel.limit_combo.isVisibleTo(content)
-    ws.dock.resize(1000, 700)  # con espacio, los atajos vuelven
-    assert wait_for(lambda: not panel.compact)
-    assert panel.run_all_button._hint.isVisibleTo(panel.run_all_button)
+    ws.dock.resize(1000, 700)
+    assert wait_for(lambda: not panel.compact)  # con espacio, nunca compacta
 
 
 def test_every_action_is_reachable_with_the_keyboard(plugin):  # noqa: F811

@@ -3,7 +3,7 @@
 **Estado:** baseline Alpha · **IDs:** GD-SQL-001..007
 
 ## 1. Modelo UX
-Un editor integrado en dock con pestañas de texto SQL, acciones **Ejecutar sentencia**, **Ejecutar selección**, **Ejecutar todo**, **Cancelar**, **Explicar**, resultados y historial. Nunca ejecuta SQL por presionar «Cargar en QGIS» sin que el usuario sepa cuál consulta se ejecutará.
+Un editor integrado en dock con pestañas de texto SQL, acciones **Ejecutar sentencia**, **Ejecutar selección**, **Ejecutar todo**, **Cancelar**, **Explicar**, resultados y historial (desde G7, en celdas: **Ejecutar celda**, **Ejecutar selección**, **Ejecutar celda y avanzar** y **Ejecutar todo**; ver «G7 · Notebook»). Nunca ejecuta SQL por presionar «Cargar en QGIS» sin que el usuario sepa cuál consulta se ejecutará.
 
 El editor acepta el SQL disponible en DuckDB >=1.5 (DDL, DML, vistas, macros, transacciones, configuración, extensión Spatial, `ATTACH`, `DETACH`, consultas, `EXPLAIN`, `COPY`, `INSTALL`, `LOAD`) sujeto a permisos y funciones reales. No forzar el DSL «solo SELECT».
 
@@ -55,7 +55,7 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 - **Autocompletado.** Sugiere bases, esquemas, tablas, vistas, columnas y funciones a partir del catálogo que da el worker (funciones con `duckdb_functions()`, verificado en E2 con DuckDB 1.5.0 y 2.0.0). Se abre al escribir tras un prefijo o un `.`, y con Ctrl+Espacio; no se abre dentro de comentarios ni de cadenas. Escape cierra; Intro o Tab aceptan solo con la lista abierta. Aceptar **solo inserta texto**: nunca ejecuta SQL. Los nombres que lo necesitan van entre comillas dobles, con las comillas internas duplicadas. Sin catálogo, el editor sigue funcionando sin sugerencias.
 - **Pestañas de editor.** Varias pestañas en la misma sesión; cada una conserva su texto, cursor, selección y scroll, también al alternar ventana ↔ panel (AT-UX-004). Las ejecuciones actúan sobre la pestaña activa. Cerrar una pestaña con texto pide confirmación; con una ejecución en curso, no se cierra hasta que termine o se cancele. Las pestañas no se guardan entre reinicios de QGIS (GD-SQL-008).
 - **Historial de la sesión.** Cada fila del registro (G5) conserva en memoria el SQL que ejecutó; «Abrir en el editor» lo copia a una pestaña nueva, **sin ejecutarlo**. No se escribe en disco (security.md §4); se pierde al cerrar la sesión.
-- **«Explicar».** Ejecuta `EXPLAIN` de la sentencia actual (o de la selección, si es una sola sentencia) y muestra el plan en una pestaña de resultados. Nunca `EXPLAIN ANALYZE`. Con varias sentencias, se rechaza con un mensaje y no se ejecuta nada. Que `EXPLAIN` de una sentencia DML o DDL no la ejecuta se verifica en E3 con DuckDB 1.5.0 y 2.0.0; si no se confirma, «Explicar» se limita a consultas de lectura.
+- **«Explicar»** (retirado de la interfaz en G7, decisión del propietario 2026-11-03: el plan se pide escribiendo `EXPLAIN …` en la celda). Ejecuta `EXPLAIN` de la sentencia actual (o de la selección, si es una sola sentencia) y muestra el plan en una pestaña de resultados. Nunca `EXPLAIN ANALYZE`. Con varias sentencias, se rechaza con un mensaje y no se ejecuta nada. Que `EXPLAIN` de una sentencia DML o DDL no la ejecuta se verifica en E3 con DuckDB 1.5.0 y 2.0.0; si no se confirma, «Explicar» se limita a consultas de lectura.
 
 **P1 sin fase (GD-SQL-008):** formato SQL, historial guardado en disco, búsqueda y reemplazo, snippets, guardado explícito de SQL y `EXPLAIN ANALYZE`.
 
@@ -63,7 +63,7 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 
 **G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..006):** las pestañas de editor de
 G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa la sesión y el worker únicos.
-- **Celda** = editor SQL (con el autocompletado y «Explicar» de G6) + base de la celda + su resultado. Puede tener
+- **Celda** = editor SQL (con el autocompletado de G6; el plan, escribiendo `EXPLAIN`) + base de la celda + su resultado. Puede tener
   varias sentencias: se ejecutan en orden, como un script (§2); el resultado que se muestra es el de la última que
   devuelve filas, y todas quedan en el registro.
 - **Base de la celda.** Al ejecutar una celda, GeoDuck ejecuta `USE <base de la celda>` y después el SQL de la celda

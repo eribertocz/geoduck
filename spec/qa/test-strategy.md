@@ -32,13 +32,13 @@
 | AT-SQL-001 | CREATE/INSERT/COPY/EXPLAIN/SELECT | ejecución según DuckDB |
 | AT-SQL-002 | script 2 SELECT + CREATE | estados ordenados, 2 resultados |
 | AT-SQL-003 | pestañas de distintos resultados | cada preview corresponde al SQL correcto |
-| AT-SQL-004 | ejecutar selección/actual/todo | solo lo elegido se ejecuta |
+| AT-SQL-004 | ejecutar selección/actual/todo (G7: celda, selección o todo el cuaderno) | solo lo elegido se ejecuta |
 | AT-SQL-005 | SELECT un millón | preview acotada, no fetchall |
 | AT-SQL-006 | DML RETURNING → cargar | no repetir DML; carga completa no disponible por replay |
 | AT-SQL-007 | autocompletado en catálogos adjuntos, tras DDL y ATTACH/DETACH, dentro de comentarios y cadenas | contexto correcto; nombres citados; aceptar nunca ejecuta SQL; sin sugerencias obsoletas; Escape/Intro/Tab como en sql-editor-spec §7 |
 | AT-SQL-008 | varias pestañas de editor, ejecutar en cada una, alternar ventana ↔ panel, cerrar con texto y con ejecución en curso | cada pestaña conserva su estado; se ejecuta solo la activa; confirmación al cerrar; sin sesiones nuevas |
 | AT-SQL-009 | «Abrir en el editor» desde el registro, con SQL de varias sentencias | el SQL vuelve exacto a una pestaña nueva sin ejecutarse; nada escrito en disco |
-| AT-SQL-010 | «Explicar» sobre SELECT, DML y varias sentencias | plan en una pestaña de resultados; la tabla no cambia; varias sentencias rechazadas sin ejecutar nada; nunca ANALYZE |
+| AT-SQL-010 | «Explicar» sobre SELECT, DML y varias sentencias (G7: `EXPLAIN` escrito en la celda; el rechazo de varias sentencias sigue en el motor) | plan en una pestaña de resultados; la tabla no cambia; varias sentencias rechazadas sin ejecutar nada; nunca ANALYZE |
 | AT-BRD-001 | SELECT sin geometría → QGIS | tabla memory íntegra |
 | AT-BRD-002 | lector Arrow multi-lote | conteos/valores coinciden |
 | AT-BRD-003 | cancelar carga prolongada | GUI responde, lector cerrado |
@@ -78,7 +78,7 @@
 | AT-NB-005 | resultado y «Cargar en QGIS ▾» en cada celda (tres modalidades, geometría) | la capa sale del SQL de esa celda; nada se repite (GD-SQL-006) |
 | AT-NB-006 | resumen del resultado seleccionado | filas, columnas y tipos correctos; ninguna consulta nueva |
 | AT-NB-007 | lista de cuadernos; reinicio de QGIS | cambiar de cuaderno conserva su estado; nada en disco |
-| AT-NB-008 | autocompletado, «Explicar» e historial dentro de una celda | como en G6, en la celda activa |
+| AT-NB-008 | autocompletado, atajos (Ctrl+Intro celda, Ctrl+Mayús+Intro selección, Mayús+Intro celda y avanzar) e historial dentro de una celda | como en G6, en la celda activa |
 | AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |

@@ -131,7 +131,7 @@ def bold(label: QLabel) -> QLabel:
 
 
 class HintButton(QPushButton):
-    """Botón con su texto y, a la derecha, el atajo en gris («Sentencia  Ctrl+Intro»). El atajo se oculta en
+    """Botón con su texto y, a la derecha, el atajo en gris, si tiene. El atajo se oculta en
     un panel estrecho; el texto y la acción no."""
 
     def __init__(self, text: str, hint: str = "", role: str = "secondary", icon: str = "") -> None:
@@ -144,7 +144,6 @@ class HintButton(QPushButton):
         row.setContentsMargins(12, 4, 12, 4)
         row.setSpacing(8)
         self._mark: QLabel | None = None
-        self._compact_icon: QLabel | None = None
         if icon:
             self._mark = QLabel(icon)
             self._mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -194,18 +193,7 @@ class HintButton(QPushButton):
 
     def set_hint_visible(self, visible: bool) -> None:
         self._hint.setVisible(visible and bool(self._hint.text()))
-        if self._compact_icon is not None:  # estrecho: solo el icono (texto en la ayuda y el nombre)
-            self._label.setVisible(visible)
-            self._compact_icon.setVisible(not visible)
         self.updateGeometry()
-
-    def set_compact_icon(self, icon: Any) -> None:
-        """Icono que sustituye al texto cuando el botón se compacta (G6 · E3: «Explicar»)."""
-        self._compact_icon = QLabel()
-        self._compact_icon.setPixmap(icon.pixmap(16, 16))
-        self._compact_icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._compact_icon.hide()
-        self.layout().insertWidget(0, self._compact_icon)
 
 
 class TypedHeader(QHeaderView):
@@ -534,10 +522,7 @@ class SqlPanel(QWidget):
         self._render(coordinator.state)
 
     def _connect_actions(self) -> None:
-        self.run_current_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
-        self.run_selection_button.clicked.connect(lambda: self.execute(RunScope.SELECTION))
         self.run_all_button.clicked.connect(self.run_notebook)
-        self.explain_button.clicked.connect(self.explain)
         self.cancel_button.clicked.connect(self._coordinator.cancel_current_operation)
         self.log.cellDoubleClicked.connect(self._select_logged_statement)
         self.log.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -545,8 +530,8 @@ class SqlPanel(QWidget):
         # Atajos solo con el foco dentro del panel SQL, nunca en el resto de QGIS (§8, AT-UX-013)
         self.shortcuts = []
         for keys, slot in (
-            ("Ctrl+Return", lambda: self.execute(RunScope.CURRENT)),
-            ("Ctrl+Shift+Return", self.run_notebook),
+            ("Ctrl+Return", lambda: self.run_cell(self.cell)),
+            ("Ctrl+Shift+Return", lambda: self.run_selection(self.cell)),
             ("Shift+Return", lambda: self.run_cell(self.cell, advance=True)),
             ("Ctrl+T", self.new_editor_tab),
             ("Ctrl+W", self.close_current_editor_tab),
@@ -677,7 +662,7 @@ class SqlPanel(QWidget):
         button.setObjectName("geoduckLoadButton")
         button.setProperty("geoduck", "load")
         button.setIcon(QgsApplication.getThemeIcon("mActionAddLayer.svg"))
-        button.setText(tr("Load into QGIS"))
+        button.setText(tr("Load"))  # corto, como la celda; la ayuda y el nombre accesible lo dicen entero
         button.setToolTip(tr("Loads the full result as a QGIS layer"))
         button.setAccessibleName(tr("Load into QGIS"))
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -691,24 +676,15 @@ class SqlPanel(QWidget):
         widget.load_slot.addWidget(button)
         widget.copy_button.clicked.connect(lambda _c=False, w=widget: self._copy_result(w))
         widget.results.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
-        # ▶ ▾: lo mismo que la barra superior, sobre esta celda (G2 y G6 dentro de una celda, AT-NB-008)
-        for text, scope, explain in (
-            (tr("Run statement (Ctrl+Enter)"), RunScope.CURRENT, False),
-            (tr("Run selection"), RunScope.SELECTION, False),
-            (tr("Explain"), None, True),
+        # ▶ ▾, como la DuckDB UI: celda, selección, celda y avanzar
+        for text, slot in (
+            (tr("Run cell (Ctrl+Enter)"), lambda w=widget: self.run_cell(w)),
+            (tr("Run selection (Ctrl+Shift+Enter)"), lambda w=widget: self.run_selection(w)),
+            (tr("Run cell and advance (Shift+Enter)"), lambda w=widget: self.run_cell(w, advance=True)),
         ):
             action = widget.run_menu.addAction(text)
-            action.triggered.connect(
-                lambda _c=False, w=widget, s=scope, e=explain: self._run_in_cell(w, s, explain=e)
-            )
+            action.triggered.connect(lambda _c=False, s=slot: s())
         self._render_cell(widget, self._coordinator.state)
-
-    def _run_in_cell(self, widget: CellWidget, scope: RunScope | None, *, explain: bool = False) -> None:
-        self.notebook_view.set_active(widget)
-        if explain:
-            self.explain()
-        elif scope is not None:
-            self.execute(scope)
 
     def close_current_editor_tab(self) -> bool:
         return self.close_editor_tab(self.editor_tabs.currentIndex())
@@ -801,20 +777,8 @@ class SqlPanel(QWidget):
         self.compact = compact
 
     def _build_actions(self) -> QHBoxLayout:
-        self.run_all_button = HintButton(tr("Run"), tr("Ctrl+Shift+Enter"), "primary", "▶")
-        self.run_all_button.setToolTip(tr("Runs every cell of the notebook, in order (Ctrl+Shift+Enter)"))
-        self.run_current_button = HintButton(tr("Statement"), tr("Ctrl+Enter"))
-        self.run_current_button.setToolTip(tr("Runs the statement under the cursor (Ctrl+Enter)"))
-        self.run_selection_button = HintButton(tr("Selection"))
-        self.run_selection_button.setToolTip(tr("Runs only the selected text"))
-        self.explain_button = HintButton(tr("Explain"))
-        self.explain_button.setToolTip(
-            tr(
-                "Explain: shows the plan of the statement under the cursor (or of the selection) without "
-                "running it"
-            )
-        )
-        self.explain_button.set_compact_icon(QgsApplication.getThemeIcon("mActionIdentify.svg"))
+        self.run_all_button = HintButton(tr("Run all"), "", "primary", "▶")
+        self.run_all_button.setToolTip(tr("Runs every cell of the notebook, in order"))
         self.cancel_button = HintButton(tr("Cancel"))
         self.cancel_button.setToolTip(tr("Cancels the running execution"))
         self.limit_combo = QComboBox()
@@ -825,9 +789,6 @@ class SqlPanel(QWidget):
         self.limit_combo.setAccessibleName(tr("Rows of each preview"))
         self.action_buttons = (
             self.run_all_button,
-            self.run_current_button,
-            self.run_selection_button,
-            self.explain_button,
             self.cancel_button,
         )
         self.compact = False
@@ -973,15 +934,10 @@ class SqlPanel(QWidget):
 
     # -- acciones ----------------------------------------------------------------------------------
 
-    def explain(self) -> None:
-        """«Explicar» (G6 · E3): el plan de la selección, o de la sentencia bajo el cursor, sin ejecutarla."""
-        scope = RunScope.SELECTION if self.editor.hasSelectedText() else RunScope.CURRENT
-        self.execute(scope, explain=True)
-
-    # -- celdas (G7 · E2): una celda, todas, o la sentencia/selección de la celda activa ------------------
+    # -- celdas (G7 · E2): todas, una celda o la selección de una celda -----------------------------------
 
     def run_notebook(self) -> None:
-        """«Ejecutar» (Ctrl+Mayús+Intro): todas las celdas del cuaderno, en orden, cada una con su base."""
+        """«Ejecutar todo»: todas las celdas del cuaderno, en orden, cada una con su base."""
         if self._coordinator.state is SessionState.READY:
             self.runner.run(
                 [w.cell for w in self.notebook_view.cell_widgets()],
@@ -989,8 +945,8 @@ class SqlPanel(QWidget):
             )
 
     def run_cell(self, widget: CellWidget, *, advance: bool = False) -> None:
-        """▶ de la celda (Mayús+Intro): toda la celda con su base. `advance`: pasa a la siguiente (la crea
-        si es la última), como la DuckDB UI."""
+        """▶ de la celda (Ctrl+Intro): toda la celda con su base. `advance` (Mayús+Intro): pasa a la
+        siguiente (la crea si es la última), como la DuckDB UI."""
         if self._coordinator.state is not SessionState.READY:
             return
         view = self.notebook_view
@@ -1020,27 +976,23 @@ class SqlPanel(QWidget):
         if outcome.error is not None and not outcome.notified:
             self._on_message(outcome.error)  # p. ej. la base de la celda ya no está adjunta
 
-    def execute(self, scope: RunScope, *, explain: bool = False) -> None:
-        """Sentencia bajo el cursor, selección o «Explicar» de la celda activa, con su base (G2, G6)."""
+    def run_selection(self, widget: CellWidget) -> None:
+        """«Ejecutar selección» (Ctrl+Mayús+Intro): solo el texto seleccionado de la celda, con su base."""
         if self._coordinator.state is not SessionState.READY or self.runner.running:
             return
-        widget = self.cell
+        self.notebook_view.set_active(widget)
+        if not widget.editor.hasSelectedText():
+            self._on_message(tr("Select the SQL to run first"))
+            return
         problem = widget.cell.database_problem(self._coordinator.catalog)
         if problem is not None:
             self._on_message(problem)
             return
-        editor = widget.editor  # la celda activa; la ejecución queda ligada a ella
+        editor = widget.editor  # la ejecución queda ligada a esta celda
         full_text = editor.text()
-        text, base, cursor = full_text, 0, 0
-        if scope is RunScope.SELECTION:
-            if not editor.hasSelectedText():
-                return
-            line_from, index_from, _l, _i = editor.getSelection()
-            base = offset_from(full_text, line_from, index_from)
-            text = editor.selectedText()
-        elif scope is RunScope.CURRENT:
-            line, index = editor.getCursorPosition()
-            cursor = offset_from(full_text, line, index)
+        line_from, index_from, _l, _i = editor.getSelection()
+        base = offset_from(full_text, line_from, index_from)
+        text = editor.selectedText()
         if not text.strip():
             return
         editor.clearWarnings()
@@ -1052,11 +1004,9 @@ class SqlPanel(QWidget):
         try:
             run_id = self._coordinator.execute_sql(
                 text,
-                scope,
-                cursor=cursor,
+                RunScope.SELECTION,
                 base=base,
                 preview_limit=int(self.limit_combo.currentData()),
-                explain=explain,
                 database=widget.cell.database,
             )
             self._run_editors[run_id] = editor
@@ -1123,7 +1073,7 @@ class SqlPanel(QWidget):
         run = event.run
         cell = self._cell_for(run.run_id)
         if run.run_id in self._run_cells and not self.runner.running:
-            # «Sentencia», «Selección» o «Explicar» en la celda: sigue al `USE` escrito en ella. Lo que se
+            # «Ejecutar selección» en la celda: sigue al `USE` escrito en ella. Lo que se
             # ejecuta fuera del panel (p. ej. el explorador) no cambia la base de ninguna celda.
             cell.cell.follow_use(run.current_database, self._coordinator.catalog)
         self._summarize(cell, run)
@@ -1342,9 +1292,7 @@ class SqlPanel(QWidget):
 
     def _render(self, state: SessionState) -> None:
         ready = state is SessionState.READY
-        for button in (self.run_current_button, self.run_selection_button, self.run_all_button):
-            button.setEnabled(ready)
-        self.explain_button.setEnabled(ready)
+        self.run_all_button.setEnabled(ready)
         loading = self._load_flow is not None and self._load_flow.loading
         self.cancel_button.setEnabled(state is SessionState.BUSY and (self._running or loading))
         for cell in self.cell_widgets():

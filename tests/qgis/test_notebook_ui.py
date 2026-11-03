@@ -157,23 +157,32 @@ def test_a_failing_cell_stops_the_notebook_and_a_detached_database_is_flagged(re
     assert messages and "fuera" in messages[-1] and last.results.count() == 0
 
 
-# -- AT-NB-008: Sentencia, Explicar, Mayús+Intro e historial dentro de una celda ---------------------------
+# -- AT-NB-008: atajos de la DuckDB UI e historial dentro de una celda -------------------------------------
 
 
-def test_statement_explain_and_run_and_advance_inside_a_cell(ready):
+def shortcut(panel, keys):
+    return next(s for s in panel.shortcuts if s.key().toString() == keys)
+
+
+def test_cell_shortcuts_like_the_duckdb_ui(ready):
     _plugin, panel, coordinator = ready
+    assert [a.text() for a in panel.cell.run_menu.actions()] == [
+        "Ejecutar celda (Ctrl+Intro)",
+        "Ejecutar selección (Ctrl+Mayús+Intro)",
+        "Ejecutar celda y avanzar (Mayús+Intro)",
+    ]
     cell = panel.cell
     cell.editor.setText("SELECT 1 AS a;\nSELECT 2 AS b;")
-    cell.editor.setCursorPosition(1, 3)
-    panel.run_current_button.click()  # Ctrl+Intro: la sentencia bajo el cursor (G5)
+    shortcut(panel, "Ctrl+Return").activated.emit()  # la celda entera
+    idle(panel, coordinator)
+    assert cell.results.count() == 2
+
+    cell.editor.setSelection(1, 0, 1, 13)
+    shortcut(panel, "Ctrl+Shift+Return").activated.emit()  # solo la selección
     idle(panel, coordinator)
     assert cell.results.count() == 1 and panel.current_view().preview.rows == ((2,),)
 
-    panel.explain_button.click()
-    idle(panel, coordinator)
-    assert cell.results.count() == 1 and panel.current_view().statement.text.startswith("EXPLAIN")
-
-    panel.run_cell(cell, advance=True)  # Mayús+Intro: toda la celda y pasa a una nueva
+    shortcut(panel, "Shift+Return").activated.emit()  # la celda y pasa a una nueva
     idle(panel, coordinator)
     assert cell.results.count() == 2 and len(panel.notebook_view.cell_widgets()) == 2
     assert panel.cell is not cell and panel.editor.text() == ""

@@ -91,7 +91,7 @@ Todo vive en el mismo `WorkspaceContent` de G5 y se ve igual en la ventana propi
 - **Autocompletado.** Lista pequeña bajo el cursor, que no tapa la línea que se escribe; el tipo de cada sugerencia (columna, tabla, vista, esquema o base, función) con su icono de QGIS; las palabras clave, sin icono. Orden: columnas de los objetos de la sentencia, tablas, vistas, esquemas, bases, funciones y palabras clave. Sustituye al autocompletado de palabras de `QgsCodeEditorSQL`, para que no haya dos listas.
 - **Pestañas de editor.** Encima del editor («Consulta 1», «Consulta 2»…), con «+» para una nueva y cierre en cada pestaña (también con el teclado); Ctrl+T nueva, Ctrl+W cerrar, solo con el foco en GeoDuck. En los editores de GeoDuck, Ctrl+T deja de intercambiar líneas (comando de QScintilla).
 - **Historial.** «Abrir en el editor» en el menú contextual de cada fila del registro.
-- **«Explicar».** Botón en la fila de «Ejecutar», con ayuda que explica que no ejecuta la sentencia; en una fila estrecha, solo su icono (no amplía el ancho mínimo de GeoDuck).
+- **«Explicar»** (retirado en G7: se escribe `EXPLAIN` en la celda). Botón en la fila de «Ejecutar», con ayuda que explica que no ejecuta la sentencia; en una fila estrecha, solo su icono (no amplía el ancho mínimo de GeoDuck).
 - **Idioma.** §5.
 
 ## 10. Notebook (G7 · `v0.8.0a1`; decisiones del propietario, 2026-11-03)
@@ -106,10 +106,11 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   - **Margen izquierdo:** asa «⠿» para **arrastrar** la celda a otra posición (se mueven con ella su texto, su base y
     su resultado; no se ejecuta nada) y tres «˅» para **plegar** por separado la celda entera, el editor y el
     resultado. Encima de cada celda, «+» al pasar el ratón inserta una celda ahí.
-  - **Cabecera:** botón ▶ con menú («Ejecutar celda», «Explicar») y, a la derecha, el selector de base
-    («memory ▾»).
+  - **Cabecera:** botón ▶ (ejecuta la celda) con menú ▾ («Ejecutar celda», «Ejecutar selección», «Ejecutar celda
+    y avanzar», cada uno con su atajo, como la DuckDB UI) y, a la derecha, el selector de base («memory ▾»).
   - **Editor** y, debajo, «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB
-    UI) y el resultado con su «Cargar en QGIS ▾», «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
+    UI) y el resultado con su «Cargar ▾» (icono de capa y texto corto; la ayuda y el nombre accesible dicen «Cargar
+    en QGIS», decisión del propietario 2026-11-03), «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
     portapapeles, como texto separado por tabuladores).
   - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
     resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»:
@@ -121,10 +122,11 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 - **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
-- **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo», «Cancelar».
-- **Atajos** (solo con el foco en GeoDuck): Ctrl+Intro ejecuta la sentencia bajo el cursor de la celda activa (como
-  en G2 y G5; el ▾ del ▶ de la celda ofrece también «Ejecutar selección» y «Explicar»); Mayús+Intro ejecuta la celda
-  entera y pasa a la siguiente (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda; Alt+Mayús+↑/↓ la mueve;
-  Ctrl+E vista de hoja.
+- **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo» (sin atajo), «Cancelar» y filas de la
+  vista previa. Sin «Sentencia», «Selección» ni «Explicar» (decisión del propietario, 2026-11-03): eso vive en el ▶
+  de cada celda.
+- **Atajos** (solo con el foco en GeoDuck, como la DuckDB UI): Ctrl+Intro ejecuta la celda activa; Ctrl+Mayús+Intro,
+  solo su selección; Mayús+Intro ejecuta la celda y pasa a la siguiente (la crea si es la última); Alt+↑/↓ cambia de
+  celda; Alt+Mayús+↑/↓ la mueve; Ctrl+E vista de hoja.
 - Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
   celdas, solo las visibles mantienen su tabla.

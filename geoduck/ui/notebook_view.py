@@ -140,7 +140,7 @@ class CellWidget(QFrame):
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
         header.setSpacing(6)
-        self.run_button = _tool("▶", tr("Run the cell (Shift+Enter)"), tr("Run the cell"))
+        self.run_button = _tool("▶", tr("Run the cell (Ctrl+Enter)"), tr("Run the cell"))
         self.run_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.run_menu = QMenu(self.run_button)
         self.run_button.setMenu(self.run_menu)
@@ -182,7 +182,7 @@ class CellWidget(QFrame):
         self.results.setDocumentMode(True)
         self.results.setUsesScrollButtons(True)
         self.results.setElideMode(Qt.TextElideMode.ElideRight)
-        self.empty_results = QLabel(tr("No results yet. Run the cell (Shift+Enter)."))
+        self.empty_results = QLabel(tr("No results yet. Run the cell (Ctrl+Enter)."))
         self.empty_results.setProperty("geoduck", "muted")
         self.empty_results.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.results_stack = QStackedWidget()
