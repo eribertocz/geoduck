@@ -122,8 +122,9 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
 - **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo», «Cancelar».
-- **Atajos** (solo con el foco en GeoDuck): Ctrl+Intro ejecuta la celda; Mayús+Intro ejecuta y pasa a la siguiente
-  (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda; Alt+Mayús+↑/↓ la mueve;
+- **Atajos** (solo con el foco en GeoDuck): Ctrl+Intro ejecuta la sentencia bajo el cursor de la celda activa (como
+  en G2 y G5; el ▾ del ▶ de la celda ofrece también «Ejecutar selección» y «Explicar»); Mayús+Intro ejecuta la celda
+  entera y pasa a la siguiente (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda; Alt+Mayús+↑/↓ la mueve;
   Ctrl+E vista de hoja.
 - Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
   celdas, solo las visibles mantienen su tabla.

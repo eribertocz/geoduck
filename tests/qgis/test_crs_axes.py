@@ -99,6 +99,8 @@ def run(session, sql):
     before = len(session.events)
     session.coordinator.execute_sql(sql, RunScope.ALL)
     assert wait_for(lambda: any(isinstance(e, StatementFinished) for e in session.events[before:]), TIMEOUT)
+    # La sentencia avisa antes de que la sesión quede libre (misma carrera que en `activate`)
+    assert wait_for(lambda: session.coordinator.state is not SessionState.BUSY, TIMEOUT)
     return next(e for e in session.events[before:] if isinstance(e, StatementFinished)).result
 
 

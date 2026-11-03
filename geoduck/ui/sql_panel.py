@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Editor SQL, resultados y registro (G2; sql-editor-spec §1, §3, §4, §7 P0; GD-SQL-001..005).
 
-Tres tarjetas en un divisor vertical que el usuario redimensiona: editor, resultados y registro (G5:
-docs/g5/maqueta/inventario.md §1.4–1.6 y §2). En el panel acoplado el registro va en su propia pestaña y
-«Cargar en QGIS ▾» ocupa todo el ancho al pie; en la ventana, el registro queda debajo y «Cargar en QGIS ▾»
-a la derecha de las pestañas de resultados.
+Dos secciones en un divisor vertical que el usuario redimensiona: el cuaderno (G7: celdas, cada una con su
+editor, su resultado y su «Cargar en QGIS ▾», `ui/notebook_view.py`) y el registro (G5:
+docs/g5/maqueta/inventario.md §1.4–1.6 y §2). En el panel acoplado el registro va en su propia pestaña; en la
+ventana, debajo del cuaderno.
 
 Editor: `QgsCodeEditorSQL` (spike G0-B, F-40). Las posiciones se traducen siempre con (línea, índice en
 caracteres), nunca con posiciones absolutas de QScintilla, que son bytes (F-41).
@@ -21,6 +21,7 @@ from qgis.PyQt.QtCore import QRect, QSize, Qt, QTime, pyqtSignal
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QKeySequence, QMouseEvent, QPainter, QResizeEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QButtonGroup,
     QComboBox,
     QFrame,
@@ -56,8 +57,10 @@ from geoduck.app.events import (
     StatementFinished,
     VocabularyChanged,
 )
+from geoduck.app.notebook_runner import CellOutcome, NotebookRunner
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.load import LoadMode
+from geoduck.domain.notebook import Cell, Notebook
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import (
     DEFAULT_PREVIEW_LIMIT,
@@ -65,6 +68,7 @@ from geoduck.domain.sql import (
     OutputKind,
     Preview,
     RunScope,
+    ScriptRun,
     SqlStatement,
     StatementStatus,
     result_title,
@@ -73,6 +77,7 @@ from geoduck.ui import theme
 from geoduck.ui.completer import SqlCompleter
 from geoduck.ui.i18n import N_, tr
 from geoduck.ui.load_dialog import OPTIONS
+from geoduck.ui.notebook_view import CellWidget, NotebookView
 from geoduck.ui.widgets import line_index_from, offset_from
 
 _STATUS_TEXT = {
@@ -490,6 +495,13 @@ class SqlPanel(QWidget):
         self._completers: dict[int, SqlCompleter] = {}
         self._run_editor: Any = None
         self._run_editors: dict[int, Any] = {}
+        #: Celda que se está ejecutando: sus resultados van a ella (G7).
+        self._run_cell: CellWidget | None = None
+        #: Celda de cada ejecución (`run_id`): los eventos de una celda no van a la siguiente (G7).
+        self._run_cells: dict[int, CellWidget] = {}
+        self.runner = NotebookRunner(coordinator, coordinator.dispatcher)
+        self.runner.on_start = self._cell_started
+        self.runner.on_cell = self._cell_done
         self._editor_numbers = 0
         #: Pregunta al cerrar una pestaña con SQL (`nombre` → cerrar sí/no); las pruebas la sustituyen.
         self.confirm_close: Callable[[str], bool] = self._ask_close
@@ -499,21 +511,18 @@ class SqlPanel(QWidget):
         layout.setSpacing(12)
         self._build_editor_tabs()
         self.editor_card = self._build_editor_card()
-        self._build_results()
         self._build_log()
         self.log_section = self._build_log_card()
-        # Divisor: editor | resultados | registro, redimensionable por el usuario.
+        # Divisor: celdas (cada una con su resultado, G7) | registro, redimensionable por el usuario.
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.splitter.setHandleWidth(12)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.addWidget(self.editor_card)
-        self.splitter.addWidget(self.results_card)
         self.splitter.addWidget(self.log_section)
-        for index, stretch in enumerate((3, 5, 2)):
+        for index, stretch in enumerate((8, 2)):
             self.splitter.setStretchFactor(index, stretch)
         self.splitter.setCollapsible(0, False)
-        self.splitter.setCollapsible(1, False)
-        self.splitter.setCollapsible(2, True)  # el registro sí se puede plegar
+        self.splitter.setCollapsible(1, True)  # el registro sí se puede plegar
         layout.addWidget(self.splitter, 1)
         self.bottom = QVBoxLayout()  # panel acoplado: «Cargar en QGIS ▾» a todo el ancho
         self.bottom.setContentsMargins(0, 0, 0, 0)
@@ -527,27 +536,27 @@ class SqlPanel(QWidget):
     def _connect_actions(self) -> None:
         self.run_current_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         self.run_selection_button.clicked.connect(lambda: self.execute(RunScope.SELECTION))
-        self.run_all_button.clicked.connect(lambda: self.execute(RunScope.ALL))
+        self.run_all_button.clicked.connect(self.run_notebook)
         self.explain_button.clicked.connect(self.explain)
         self.cancel_button.clicked.connect(self._coordinator.cancel_current_operation)
         self.log.cellDoubleClicked.connect(self._select_logged_statement)
         self.log.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.log.customContextMenuRequested.connect(self._log_menu)
-        self.results.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
         # Atajos solo con el foco dentro del panel SQL, nunca en el resto de QGIS (§8, AT-UX-013)
         self.shortcuts = []
-        for keys, scope in (("Ctrl+Return", RunScope.CURRENT), ("Ctrl+Shift+Return", RunScope.ALL)):
-            shortcut = QShortcut(QKeySequence(keys), self)
-            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-            shortcut.activated.connect(lambda s=scope: self.execute(s))
-            self.shortcuts.append(shortcut)
-        for keys, slot in (("Ctrl+T", self.new_editor_tab), ("Ctrl+W", self.close_current_editor_tab)):
+        for keys, slot in (
+            ("Ctrl+Return", lambda: self.execute(RunScope.CURRENT)),
+            ("Ctrl+Shift+Return", self.run_notebook),
+            ("Shift+Return", lambda: self.run_cell(self.cell, advance=True)),
+            ("Ctrl+T", self.new_editor_tab),
+            ("Ctrl+W", self.close_current_editor_tab),
+        ):
             shortcut = QShortcut(QKeySequence(keys), self)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(lambda s=slot: s())
             self.shortcuts.append(shortcut)
 
-    # -- pestañas de editor (G6 · E3, sql-editor-spec §7) ---------------------------------------------
+    # -- cuadernos (G7 · E2; las pestañas de G6 son cuadernos de celdas) ---------------------------------
 
     def _build_editor_tabs(self) -> None:
         self.editor_tabs = QTabWidget()
@@ -560,38 +569,95 @@ class SqlPanel(QWidget):
         self.new_tab_button = QToolButton()
         self.new_tab_button.setText("+")
         self.new_tab_button.setAutoRaise(True)
-        self.new_tab_button.setToolTip(tr("New SQL tab (Ctrl+T)"))
-        self.new_tab_button.setAccessibleName(tr("New SQL tab"))
+        self.new_tab_button.setToolTip(tr("New notebook (Ctrl+T)"))
+        self.new_tab_button.setAccessibleName(tr("New notebook"))
         self.new_tab_button.clicked.connect(self._new_empty_tab)
         self.editor_tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
         self.new_editor_tab()
+        # Después del primer cuaderno: `_render` necesita la barra de acciones, que aún no existe
+        self.editor_tabs.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
 
     def _new_empty_tab(self) -> None:
         self.new_editor_tab()
 
     @property
-    def editor(self) -> Any:
-        """Editor de la pestaña activa (siempre hay una)."""
+    def notebook_view(self) -> NotebookView:
+        """Cuaderno de la pestaña activa (siempre hay uno)."""
         return self.editor_tabs.currentWidget()
+
+    def notebook_views(self) -> list[NotebookView]:
+        return [self.editor_tabs.widget(i) for i in range(self.editor_tabs.count())]
+
+    @property
+    def cell(self) -> CellWidget:
+        """Celda activa del cuaderno activo (siempre hay una)."""
+        active = self.notebook_view.active
+        assert active is not None
+        return active
+
+    def cell_widgets(self) -> list[CellWidget]:
+        return [w for view in self.notebook_views() for w in view.cell_widgets()]
+
+    @property
+    def editor(self) -> Any:
+        """Editor de la celda activa."""
+        return self.cell.editor
+
+    @property
+    def results(self) -> QTabWidget:
+        """Resultados de la celda activa (una pestaña por sentencia, como G2)."""
+        return self.cell.results
+
+    @property
+    def results_stack(self) -> QStackedWidget:
+        return self.cell.results_stack
+
+    @property
+    def empty_results(self) -> QLabel:
+        return self.cell.empty_results
+
+    @property
+    def load_button(self) -> QToolButton:
+        """«Cargar en QGIS ▾» de la celda activa."""
+        return self.cell.load_button
+
+    @property
+    def load_menu(self) -> QMenu:
+        return self.cell.load_menu
 
     @property
     def completer(self) -> SqlCompleter:
         return self._completers[id(self.editor)]
 
     def editors(self) -> list[Any]:
-        return [self.editor_tabs.widget(i) for i in range(self.editor_tabs.count())]
+        return [w.editor for w in self.cell_widgets()]
 
-    def new_editor_tab(self, text: str = "") -> Any:
-        """Pestaña nueva, activa y con el foco; `text`, su SQL inicial (p. ej. del registro)."""
+    def _make_editor(self) -> Any:
         editor = QgsCodeEditorSQL()
         editor.setAccessibleName(tr("SQL editor"))
-        editor.setMinimumHeight(60)
-        _free_keys(editor, ("Ctrl+T", "Ctrl+W"))  # para «nueva pestaña» y «cerrar pestaña»
+        editor.setMinimumHeight(40)
+        # Ctrl+T/W: cuadernos; Mayús+Intro: ejecutar la celda; Ctrl+E y Alt+Mayús+↑/↓: celdas (G6, G7)
+        _free_keys(editor, ("Ctrl+T", "Ctrl+W", "Shift+Return", "Ctrl+E", "Alt+Shift+Up", "Alt+Shift+Down"))
         self._completers[id(editor)] = SqlCompleter(editor, self._coordinator)  # G6 · E2
         self._color_editor(editor)
+        return editor
+
+    def new_editor_tab(self, text: str = "") -> Any:
+        """Cuaderno nuevo, activo, con una celda con el foco; `text`, su SQL (p. ej. del registro). Devuelve
+        el editor de esa celda."""
         self._editor_numbers += 1
         name = tr("Query {0}").format(self._editor_numbers)
-        index = self.editor_tabs.addTab(editor, name)
+        catalog = self._coordinator.catalog
+        notebook = Notebook(name, [Cell(sql=text, database=catalog.default if catalog is not None else None)])
+        view = NotebookView(notebook, self._make_editor)
+        view.confirm_delete = lambda w: self.confirm_close(tr("This cell"))
+        view.run_requested.connect(self.run_cell)
+        view.active_changed.connect(lambda _w: self._render(self._coordinator.state))
+        view.cell_created.connect(self._setup_cell)
+        for widget in view.cell_widgets():
+            self._setup_cell(widget)
+        view.show_databases(catalog, catalog.default if catalog is not None else None)
+        index = self.editor_tabs.addTab(view, name)
         self.editor_tabs.setTabToolTip(index, name)
         bar = self.editor_tabs.tabBar()
         for side in (QTabBar.ButtonPosition.LeftSide, QTabBar.ButtonPosition.RightSide):
@@ -600,31 +666,73 @@ class SqlPanel(QWidget):
                 close.setFocusPolicy(Qt.FocusPolicy.TabFocus)
                 close.setToolTip(tr("Close tab (Ctrl+W)"))
                 close.setAccessibleName(tr("Close {0}").format(name))
-        if text:
-            editor.setText(text)
         self.editor_tabs.setCurrentIndex(index)
+        editor = view.cell_widgets()[0].editor
         editor.setFocus()
         return editor
+
+    def _setup_cell(self, widget: CellWidget) -> None:
+        """Botones de la celda que dependen del panel: «Cargar en QGIS ▾» (inventario V29) y «Copiar»."""
+        button = QToolButton()
+        button.setObjectName("geoduckLoadButton")
+        button.setProperty("geoduck", "load")
+        button.setIcon(QgsApplication.getThemeIcon("mActionAddLayer.svg"))
+        button.setText(tr("Load into QGIS"))
+        button.setToolTip(tr("Loads the full result as a QGIS layer"))
+        button.setAccessibleName(tr("Load into QGIS"))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        menu = QMenu(button)
+        menu.setObjectName("geoduckLoadMenu")
+        button.setMenu(menu)
+        button.clicked.connect(lambda _c=False, w=widget: self._load_cell(w))
+        menu.aboutToShow.connect(lambda w=widget: self._fill_load_menu(self._cell_view(w), w.load_menu))
+        widget.load_button, widget.load_menu = button, menu
+        widget.load_slot.addWidget(button)
+        widget.copy_button.clicked.connect(lambda _c=False, w=widget: self._copy_result(w))
+        widget.results.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
+        # ▶ ▾: lo mismo que la barra superior, sobre esta celda (G2 y G6 dentro de una celda, AT-NB-008)
+        for text, scope, explain in (
+            (tr("Run statement (Ctrl+Enter)"), RunScope.CURRENT, False),
+            (tr("Run selection"), RunScope.SELECTION, False),
+            (tr("Explain"), None, True),
+        ):
+            action = widget.run_menu.addAction(text)
+            action.triggered.connect(
+                lambda _c=False, w=widget, s=scope, e=explain: self._run_in_cell(w, s, explain=e)
+            )
+        self._render_cell(widget, self._coordinator.state)
+
+    def _run_in_cell(self, widget: CellWidget, scope: RunScope | None, *, explain: bool = False) -> None:
+        self.notebook_view.set_active(widget)
+        if explain:
+            self.explain()
+        elif scope is not None:
+            self.execute(scope)
 
     def close_current_editor_tab(self) -> bool:
         return self.close_editor_tab(self.editor_tabs.currentIndex())
 
     def close_editor_tab(self, index: int) -> bool:
-        """Cierra una pestaña: con SQL, pregunta antes; con su ejecución en curso, no se cierra. Si era la
-        última, queda una vacía."""
-        editor = self.editor_tabs.widget(index)
-        if editor is None:
+        """Cierra un cuaderno: con SQL, pregunta antes; con una celda ejecutándose, no se cierra. Si era el
+        último, queda uno vacío."""
+        view = self.editor_tabs.widget(index)
+        if view is None:
             return False
         name = self.editor_tabs.tabText(index)
-        if self._running and editor is self._run_editor:
+        widgets = view.cell_widgets()
+        if self._running and self._run_cell in widgets:
             self._on_message(tr("«{0}» is running: wait for it to finish or cancel it.").format(name))
             return False
-        if editor.text().strip() and not self.confirm_close(name):
+        if any(w.cell.sql.strip() for w in widgets) and not self.confirm_close(name):
             return False
         self.editor_tabs.removeTab(index)
-        self._completers.pop(id(editor), None)
-        self._run_editors = {k: e for k, e in self._run_editors.items() if e is not editor}
-        editor.deleteLater()
+        editors = {id(w.editor) for w in widgets}
+        for key in editors:
+            self._completers.pop(key, None)
+        self._run_editors = {k: e for k, e in self._run_editors.items() if id(e) not in editors}
+        self._run_cells = {k: w for k, w in self._run_cells.items() if w not in widgets}
+        view.deleteLater()
         if self.editor_tabs.count() == 0:
             self.new_editor_tab()
         return True
@@ -694,7 +802,7 @@ class SqlPanel(QWidget):
 
     def _build_actions(self) -> QHBoxLayout:
         self.run_all_button = HintButton(tr("Run"), tr("Ctrl+Shift+Enter"), "primary", "▶")
-        self.run_all_button.setToolTip(tr("Runs the whole script, in order (Ctrl+Shift+Enter)"))
+        self.run_all_button.setToolTip(tr("Runs every cell of the notebook, in order (Ctrl+Shift+Enter)"))
         self.run_current_button = HintButton(tr("Statement"), tr("Ctrl+Enter"))
         self.run_current_button.setToolTip(tr("Runs the statement under the cursor (Ctrl+Enter)"))
         self.run_selection_button = HintButton(tr("Selection"))
@@ -733,50 +841,8 @@ class SqlPanel(QWidget):
         actions.addWidget(self.limit_combo)
         return actions
 
-    def _build_results(self) -> None:
-        self.results = QTabWidget()
-        self.results.setProperty("geoduck", "results")
-        self.results.setDocumentMode(True)
-        self.results.setUsesScrollButtons(True)
-        self.results.setElideMode(Qt.TextElideMode.ElideRight)
-        self.empty_results = muted(QLabel(tr("No results yet. Run a query (Ctrl+Enter).")))
-        self.empty_results.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.results_stack = QStackedWidget()
-        self.results_stack.addWidget(self.empty_results)
-        self.results_stack.addWidget(self.results)
-        self.results_stack.setMinimumHeight(60)
-        self.results_card = card(name="geoduckResultsCard")
-        box = QVBoxLayout(self.results_card)
-        box.setContentsMargins(4, 4, 4, 4)
-        box.addWidget(self.results_stack)
-        # «Cargar en QGIS ▾»: uno solo, para la pestaña activa (inventario V29, P9). Clic = diálogo de G4;
-        # flecha = las tres modalidades, cada una abre el diálogo con ella marcada (ui-ux-spec §8).
-        self.load_button = QToolButton()
-        self.load_button.setObjectName("geoduckLoadButton")
-        self.load_button.setProperty("geoduck", "load")
-        self.load_button.setIcon(QgsApplication.getThemeIcon("mActionAddLayer.svg"))
-        self.load_button.setText(tr("Load into QGIS"))
-        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
-        self.load_button.setAccessibleName(tr("Load into QGIS"))
-        self.load_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.load_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.load_menu = QMenu(self.load_button)
-        self.load_menu.setObjectName("geoduckLoadMenu")
-        self.load_button.setMenu(self.load_menu)
-        self.load_button.clicked.connect(lambda _c=False: self._load_current())
-        self.load_menu.aboutToShow.connect(lambda: self._fill_load_menu(self.current_view()))
-
     def _place_load_button(self, *, wide: bool) -> None:
-        """Ventana: a la derecha de las pestañas de resultados. Panel: al pie, a todo el ancho."""
-        if wide:
-            self.bottom.removeWidget(self.load_button)
-            self.results.setCornerWidget(self.load_button, Qt.Corner.TopRightCorner)
-            self.load_button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-        else:
-            self.results.setCornerWidget(None, Qt.Corner.TopRightCorner)
-            self.bottom.addWidget(self.load_button)
-            self.load_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.load_button.show()
+        """G7: cada celda lleva su «Cargar en QGIS ▾» (`_setup_cell`); en el panel, el pie queda libre."""
 
     def _build_log_card(self) -> QFrame:
         frame = card(name="geoduckLogCard")
@@ -799,8 +865,8 @@ class SqlPanel(QWidget):
         mismos widgets."""
         if wide:
             self.splitter.addWidget(self.log_section)  # addWidget lo saca de la pestaña
-            self.splitter.setStretchFactor(2, 2)
-            self.splitter.setCollapsible(2, True)
+            self.splitter.setStretchFactor(1, 2)
+            self.splitter.setCollapsible(1, True)
             self.log_title.show()
         elif tabs is not None:
             tabs.insertTab(2, self.log_section, tr("Log"))
@@ -815,12 +881,14 @@ class SqlPanel(QWidget):
 
     def _retitle(self) -> None:
         palette = self._palette
-        for i in range(self.results.count()):
-            view = self.results.widget(i)
-            if isinstance(view, (ResultView, ErrorView)):
-                self.results.setTabText(i, view.tab_text(self.short_titles))
-                if isinstance(view, ErrorView):
-                    self.results.tabBar().setTabTextColor(i, theme.color(palette.error))
+        for cell in self.cell_widgets():
+            results = cell.results
+            for i in range(results.count()):
+                view = results.widget(i)
+                if isinstance(view, (ResultView, ErrorView)):
+                    results.setTabText(i, view.tab_text(self.short_titles))
+                    if isinstance(view, ErrorView):
+                        results.tabBar().setTabTextColor(i, theme.color(palette.error))
 
     def _build_log_filters(self) -> QWidget:
         """Todo / OK / Error con su número (ui-ux-spec §8, AT-UX-009). Filtrar oculta filas, no las borra."""
@@ -910,10 +978,58 @@ class SqlPanel(QWidget):
         scope = RunScope.SELECTION if self.editor.hasSelectedText() else RunScope.CURRENT
         self.execute(scope, explain=True)
 
-    def execute(self, scope: RunScope, *, explain: bool = False) -> None:
+    # -- celdas (G7 · E2): una celda, todas, o la sentencia/selección de la celda activa ------------------
+
+    def run_notebook(self) -> None:
+        """«Ejecutar» (Ctrl+Mayús+Intro): todas las celdas del cuaderno, en orden, cada una con su base."""
+        if self._coordinator.state is SessionState.READY:
+            self.runner.run(
+                [w.cell for w in self.notebook_view.cell_widgets()],
+                preview_limit=int(self.limit_combo.currentData()),
+            )
+
+    def run_cell(self, widget: CellWidget, *, advance: bool = False) -> None:
+        """▶ de la celda (Mayús+Intro): toda la celda con su base. `advance`: pasa a la siguiente (la crea
+        si es la última), como la DuckDB UI."""
         if self._coordinator.state is not SessionState.READY:
             return
-        editor = self.editor  # la pestaña activa; la ejecución queda ligada a ella
+        view = self.notebook_view
+        view.set_active(widget)
+        self.runner.run([widget.cell], preview_limit=int(self.limit_combo.currentData()))
+        if advance:
+            cells = view.cell_widgets()
+            index = cells.index(widget)
+            target = cells[index + 1] if index + 1 < len(cells) else view.add_cell(len(cells))
+            view.set_active(target)
+            target.editor.setFocus()
+
+    def _cell_started(self, cell: Cell, run_id: int) -> None:
+        widget = next((w for w in self.cell_widgets() if w.cell is cell), None)
+        if widget is None:
+            return
+        widget.editor.clearWarnings()
+        self._clear_results(widget)
+        self._run_text = widget.editor.text()
+        self._run_editor = widget.editor
+        self._run_cell = widget
+        self._run_cells[run_id] = widget
+        self._run_editors[run_id] = widget.editor
+        self._running = True
+
+    def _cell_done(self, outcome: CellOutcome) -> None:
+        if outcome.error is not None and not outcome.notified:
+            self._on_message(outcome.error)  # p. ej. la base de la celda ya no está adjunta
+
+    def execute(self, scope: RunScope, *, explain: bool = False) -> None:
+        """Sentencia bajo el cursor, selección o «Explicar» de la celda activa, con su base (G2, G6)."""
+        if self._coordinator.state is not SessionState.READY or self.runner.running:
+            return
+        widget = self.cell
+        problem = widget.cell.database_problem(self._coordinator.catalog)
+        if problem is not None:
+            self._on_message(problem)
+            return
+        editor = widget.editor  # la celda activa; la ejecución queda ligada a ella
         full_text = editor.text()
         text, base, cursor = full_text, 0, 0
         if scope is RunScope.SELECTION:
@@ -928,9 +1044,10 @@ class SqlPanel(QWidget):
         if not text.strip():
             return
         editor.clearWarnings()
-        self._clear_results()
+        self._clear_results(widget)
         self._run_text = full_text
         self._run_editor = editor
+        self._run_cell = widget
         self._running = True
         try:
             run_id = self._coordinator.execute_sql(
@@ -939,9 +1056,11 @@ class SqlPanel(QWidget):
                 cursor=cursor,
                 base=base,
                 preview_limit=int(self.limit_combo.currentData()),
-                **({"explain": True} if explain else {}),
+                explain=explain,
+                database=widget.cell.database,
             )
             self._run_editors[run_id] = editor
+            self._run_cells[run_id] = widget
         except GeoDuckError as exc:  # p. ej. DETACH con capas Conectadas sin guardar (§5.5)
             self._running = False
             self._on_message(exc.message)
@@ -956,6 +1075,9 @@ class SqlPanel(QWidget):
             self.completer.refresh()
         elif isinstance(event, CatalogChanged):
             self._coordinator.vocabulary()  # se pide ya, para que el autocompletado lo tenga a tiempo
+            in_use = event.catalog.default if event.catalog is not None else None
+            for view in self.notebook_views():
+                view.show_databases(event.catalog, in_use)
         elif isinstance(event, SessionStateChanged):
             if event.current is not SessionState.BUSY:
                 self._running = False
@@ -969,33 +1091,42 @@ class SqlPanel(QWidget):
         elif isinstance(event, ScriptFinished):
             self._on_script(event)
         elif isinstance(event, ScriptRejected):
+            self._running = False
             self._on_message(f"[{event.code.value}] {event.message}")
 
     def _on_statement(self, event: StatementFinished) -> None:
         result = event.result
+        cell = self._cell_for(event.run_id)
         title = result_title(self._run_text, result.statement)
         self._statements[(event.run_id, result.statement.index)] = result.statement
         self._add_log(event, title)
         tab: ResultView | ErrorView | None = None
         if result.preview is not None:
             tab = ResultView(event, title)
-            tab.load_button = self.load_button
-            tab.load_menu = self.load_menu
+            tab.load_button = cell.load_button
+            tab.load_menu = cell.load_menu
         elif result.status is StatementStatus.FAILED:
             tab = ErrorView(event, title)
             tab.go_button.clicked.connect(lambda _c=False, k=tab.key: self._select_statement(k))
         if tab is not None:
-            index = self.results.addTab(tab, tab.tab_text(self.short_titles))
-            self.results.setTabToolTip(index, result.statement.text.strip()[:500])
+            results = cell.results
+            index = results.addTab(tab, tab.tab_text(self.short_titles))
+            results.setTabToolTip(index, result.statement.text.strip()[:500])
             if isinstance(tab, ErrorView):
-                self.results.tabBar().setTabTextColor(index, theme.color(self._palette.error))
-            self.results_stack.setCurrentWidget(self.results)
+                results.tabBar().setTabTextColor(index, theme.color(self._palette.error))
+            cell.show_result_area()
         if result.status is StatementStatus.FAILED and result.error_offset is not None:
             self._point_error(result.error_offset, result.message)
         self._render(self._coordinator.state)
 
     def _on_script(self, event: ScriptFinished) -> None:
         run = event.run
+        cell = self._cell_for(run.run_id)
+        if run.run_id in self._run_cells and not self.runner.running:
+            # «Sentencia», «Selección» o «Explicar» en la celda: sigue al `USE` escrito en ella. Lo que se
+            # ejecuta fuera del panel (p. ej. el explorador) no cambia la base de ninguna celda.
+            cell.cell.follow_use(run.current_database, self._coordinator.catalog)
+        self._summarize(cell, run)
         if run.parse_error:
             self._on_message(tr("Syntax error: nothing was run.") + f" {run.parse_error}")
             if run.parse_error_offset is not None:
@@ -1004,8 +1135,32 @@ class SqlPanel(QWidget):
             failed = next(r for r in run.results if r.status is not StatementStatus.OK)
             code = failed.error_code.value if failed.error_code else ""
             self._on_message(f"[{code}] {failed.message}")
-        if self.results.count():
-            self.results.setCurrentIndex(self.results.count() - 1)
+        if cell.results.count():
+            cell.results.setCurrentIndex(cell.results.count() - 1)
+        cell.show_databases(self._coordinator.catalog, None)
+
+    def _cell_for(self, run_id: int) -> CellWidget:
+        """La celda donde se pidió la ejecución `run_id`; si ya se cerró, la activa."""
+        cell = self._run_cells.get(run_id)
+        return cell if cell is not None and self._cell_of(cell.editor) is not None else self.cell
+
+    def _summarize(self, cell: CellWidget, run: ScriptRun) -> None:
+        """«N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms»), como la DuckDB UI."""
+        ran = [r for r in run.results if r.status is not StatementStatus.SKIPPED]
+        duration = sum(r.duration_ms for r in ran)
+        last = next((r for r in reversed(ran) if r.preview is not None), None)
+        if last is None or last.preview is None:
+            text = tr("{0} ms").format(f"{duration:.0f}")
+        else:
+            rows = len(last.preview.rows)
+            count = f"{rows}+" if last.preview.truncated else str(rows)
+            text = (tr("{0} row") if count == "1" else tr("{0} rows")).format(count)
+        if len(ran) > 1:
+            text += " · " + tr("{0} statements").format(len(ran))
+        if last is not None:
+            text += " · " + tr("{0} ms").format(f"{duration:.0f}")
+        cell.status_label.setText(text)
+        cell.show_result_area()
 
     def _add_log(self, event: StatementFinished, title: str) -> None:
         r = event.result
@@ -1060,18 +1215,31 @@ class SqlPanel(QWidget):
         """Selecciona la sentencia en la pestaña donde se ejecutó (si sigue abierta), y pasa a ella."""
         statement = self._statements.get(key)
         editor = self._run_editors.get(key[0])
-        if statement is None or editor is None or self.editor_tabs.indexOf(editor) < 0:
+        cell = self._cell_of(editor)
+        if statement is None or editor is None or cell is None:
             return
         text = editor.text()
         if statement.end > len(text):
             return
-        self.editor_tabs.setCurrentWidget(editor)
+        self._show_cell(cell)
         start = statement.start + len(statement.text) - len(statement.text.lstrip())
         editor.setSelection(*line_index_from(text, start), *line_index_from(text, statement.end))
         editor.setFocus()
 
+    def _cell_of(self, editor: object) -> CellWidget | None:
+        """La celda (de cualquier cuaderno abierto) que contiene `editor`; None si se cerró."""
+        return next((w for w in self.cell_widgets() if w.editor is editor), None)
+
+    def _show_cell(self, cell: CellWidget) -> None:
+        for view in self.notebook_views():
+            if view.widget_for(cell.cell) is cell:
+                self.editor_tabs.setCurrentWidget(view)
+                view.set_active(cell)
+                view.ensureWidgetVisible(cell)
+                return
+
     def _point_error(self, offset: int, message: str) -> None:
-        editor = self._run_editor if self.editor_tabs.indexOf(self._run_editor) >= 0 else self.editor
+        editor = self._run_editor if self._cell_of(self._run_editor) is not None else self.editor
         line, index = line_index_from(editor.text(), offset)
         editor.addWarning(line, message)
         editor.setCursorPosition(line, index)
@@ -1106,30 +1274,51 @@ class SqlPanel(QWidget):
         action.triggered.connect(lambda: self.open_logged_sql(row))
         menu.exec(self.log.viewport().mapToGlobal(pos))
 
-    def _clear_results(self) -> None:
-        while self.results.count():
-            widget = self.results.widget(0)
-            self.results.removeTab(0)
+    def _clear_results(self, cell: CellWidget) -> None:
+        results = cell.results
+        while results.count():
+            widget = results.widget(0)
+            results.removeTab(0)
             if widget is not None:
                 widget.deleteLater()
-        self.results_stack.setCurrentWidget(self.empty_results)
+        cell.results_stack.setCurrentWidget(cell.empty_results)
+        cell.status_label.setText("")
+
+    @staticmethod
+    def _cell_view(cell: CellWidget) -> ResultView | None:
+        view = cell.results.currentWidget()
+        return view if isinstance(view, ResultView) else None
 
     def current_view(self) -> ResultView | None:
-        view = self.results.currentWidget()
-        return view if isinstance(view, ResultView) else None
+        return self._cell_view(self.cell)
 
     def _load_current(self) -> None:
         view = self.current_view()
         if view is not None:
             self._load(view)
 
+    def _load_cell(self, cell: CellWidget) -> None:
+        view = self._cell_view(cell)
+        if view is not None:
+            self._load(view)
+
+    def _copy_result(self, cell: CellWidget) -> None:
+        """«Copiar»: las filas mostradas, con cabecera, separadas por tabuladores (para pegar en una hoja)."""
+        view = self._cell_view(cell)
+        if view is None or view.preview is None:
+            return
+        preview = view.preview
+        lines = ["\t".join(preview.columns)]
+        lines += ["\t".join("" if v is None else str(v) for v in row) for row in preview.rows]
+        QApplication.clipboard().setText("\n".join(lines))
+
     def _load(self, view: ResultView, mode: LoadMode | None = None) -> None:
         if self._load_flow is not None and view.loadable:
             self._load_flow.start(view.statement.text, view.title, mode=mode)
 
-    def _fill_load_menu(self, view: ResultView | None) -> None:
+    def _fill_load_menu(self, view: ResultView | None, menu: QMenu | None = None) -> None:
         """Las tres modalidades en dos líneas; las no disponibles, desactivadas con el motivo."""
-        menu = self.load_menu
+        menu = menu if menu is not None else self.load_menu
         menu.clear()
         reasons = self._coordinator.load_modes()
         ready = self._coordinator.state is SessionState.READY
@@ -1147,7 +1336,8 @@ class SqlPanel(QWidget):
             menu.addAction(action)
 
     def result_views(self) -> list[ResultView]:
-        views = [self.results.widget(i) for i in range(self.results.count())]
+        """Resultados de todas las celdas de todos los cuadernos (p. ej. para marcarlos obsoletos)."""
+        views = [c.results.widget(i) for c in self.cell_widgets() for i in range(c.results.count())]
         return [v for v in views if isinstance(v, ResultView)]
 
     def _render(self, state: SessionState) -> None:
@@ -1157,11 +1347,20 @@ class SqlPanel(QWidget):
         self.explain_button.setEnabled(ready)
         loading = self._load_flow is not None and self._load_flow.loading
         self.cancel_button.setEnabled(state is SessionState.BUSY and (self._running or loading))
-        view = self.current_view()
-        self.load_button.setEnabled(
+        for cell in self.cell_widgets():
+            self._render_cell(cell, state)
+
+    def _render_cell(self, cell: CellWidget, state: SessionState) -> None:
+        if cell.load_button is None:
+            return
+        ready = state is SessionState.READY
+        view = self._cell_view(cell)
+        cell.load_button.setEnabled(
             view is not None and view.loadable and ready and self._load_flow is not None
         )
         if view is not None and not view.loadable:
-            self.load_button.setToolTip(tr("Only read queries can be loaded: this statement is not repeated"))
+            cell.load_button.setToolTip(tr("Only read queries can be loaded: this statement is not repeated"))
         else:
-            self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
+            cell.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
+        cell.copy_button.setEnabled(view is not None)
+        cell.run_button.setEnabled(ready)

@@ -142,6 +142,11 @@ class SessionCoordinator:
         return self._transaction
 
     @property
+    def dispatcher(self) -> Dispatcher:
+        """El que lleva las respuestas al hilo principal (para encadenar trabajo, p. ej. celdas)."""
+        return self._dispatcher
+
+    @property
     def catalog(self) -> CatalogSnapshot | None:
         """Última instantánea válida del catálogo; `None` si no hay sesión o no se pudo leer."""
         return self._catalog

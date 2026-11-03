@@ -43,7 +43,7 @@ def test_each_tab_keeps_its_text_and_only_the_active_one_runs(ready):
     assert first.text() == "CREATE TABLE a AS SELECT 1 AS x"
     assert second.text() == "SELECT 42 AS respuesta"
     assert panel.current_view().preview.rows == ((42,),)
-    panel.editor_tabs.setCurrentWidget(first)
+    panel.editor_tabs.setCurrentIndex(0)  # cada pestaña es un cuaderno (G7)
     assert panel.editor is first and coordinator.state is SessionState.READY
 
 
