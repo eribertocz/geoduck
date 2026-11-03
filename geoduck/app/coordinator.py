@@ -280,12 +280,10 @@ class SessionCoordinator:
         cursor: int = 0,
         base: int = 0,
         preview_limit: int = DEFAULT_PREVIEW_LIMIT,
-        explain: bool = False,
         database: str | None = None,
     ) -> int:
         """GD-SQL-001/002/004: ejecuta la sentencia actual, la selección o todo. La sesión pasa por `BUSY`;
-        se cancela con `cancel_current_operation`. Devuelve el `run_id`. `explain` («Explicar», G6 · E3):
-        el plan de una sola sentencia, sin ejecutarla."""
+        se cancela con `cancel_current_operation`. Devuelve el `run_id`. `database`: base de la celda (G7)."""
         engine = self._require_ready(tr("run SQL"))
         if not text.strip():
             raise SessionStateError(tr("There is no SQL to run"))
@@ -305,7 +303,6 @@ class SessionCoordinator:
             base=base,
             preview_limit=preview_limit,
             on_statement=on_statement,
-            explain=explain,
             database=database,
         )
         handle.future.add_done_callback(

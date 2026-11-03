@@ -91,12 +91,11 @@ class SessionEngine(Protocol):
         preview_limit: int = 200,
         on_statement: Callable[[StatementResult], None] | None = None,
         guard: Callable[[SqlStatement], str | None] | None = None,
-        explain: bool = False,
         database: str | None = None,
     ) -> ScriptHandle:
         """Ejecuta SQL del usuario en una operación serial; `on_statement` llega en el hilo del motor.
         `guard` (hilo del motor) puede vetar el script entero antes de ejecutar nada: devuelve el motivo.
-        `explain`: «Explicar» (una sentencia, como `EXPLAIN`; G6 · E3). `database`: base de la celda; se
+        `database`: base de la celda; se
         hace `USE` de ella en la misma operación, antes del SQL (G7)."""
         ...
 

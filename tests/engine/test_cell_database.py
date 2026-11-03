@@ -83,7 +83,7 @@ def test_a_detached_base_runs_nothing(worker):
 
 
 def test_explain_runs_in_the_base_of_the_cell(worker):
-    run = cell(worker, "SELECT origen FROM t", "db", explain=True)
+    run = cell(worker, "EXPLAIN SELECT origen FROM t", "db")
     assert run.results[0].output is OutputKind.PLAN and run.current_database == "db"
 
 

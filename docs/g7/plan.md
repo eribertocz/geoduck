@@ -48,7 +48,11 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 - Parquet con geometría sin SRC: al releerlo, DuckDB le asigna `OGC:CRS84`; decidir aviso o metadatos sin inventar SRC (E3).
 - Exportación cancelada o fallida: borrar el archivo parcial sin tocar uno previo (escribir a un temporal y renombrar) (E3).
 - Coste de muchos `QgsCodeEditorSQL` en una sola vista en Qt 5 y Qt 6 (E3).
-- ~~«Explicar» de una celda con base propia~~ Verificado en E1: `USE` + `EXPLAIN` en la misma operación.
+- ~~«Explicar» de una celda con base propia~~ Verificado en E1: `USE` + `EXPLAIN` en la misma operación (G7 retira «Explicar»; `EXPLAIN` escrito en la celda sigue igual).
+
+## 4 bis. Para después (fuera de G7, decisión del propietario 2026-11-03)
+
+- «Formatear sentencias» en el menú ⋯ de la celda, como la DuckDB UI (formato SQL, GD-SQL-008 P1 sin fase).
 
 ## 5. Estado
 
@@ -56,4 +60,5 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 |---|---|---|
 | E0 SPEC, maqueta y plan | Fusionado | #91 |
 | E1 Modelo y ejecución de celdas | Fusionado: `domain/notebook.py` (cuaderno y celda sin Qt: insertar, mover, duplicar, borrar; base desadjuntada; seguir el `USE` escrito en la celda); motor: `USE` de la base de la celda tras las comprobaciones y antes del SQL, en la misma operación, y `ScriptRun.current_database`; coordinador: relee el catálogo si cambia la base en uso; `app/notebook_runner.py`: una celda o todas en orden, parada en el primer fallo, rechazo o celda sin base. AT-NB-002, 003, 004 (motor y unitarias; la vista llega en E2) | #92 |
-| E2 Vista de celdas | En revisión: `ui/notebook_view.py` (celda con ⠿, tres pliegues, ▶ con menú, selector de base, resultado propio con «Cargar en QGIS ▾» y «Copiar», ⛶ y ⋯; «＋» entre celdas y al final; arrastrar, Alt+Mayús+↑/↓, Alt+↑/↓, Ctrl+E); cada pestaña de G6 es un cuaderno; atajos como la DuckDB UI (decisión del propietario: Ctrl+Intro la celda, Ctrl+Mayús+Intro la selección, Mayús+Intro la celda y avanzar); barra superior con solo «Ejecutar todo», «Cancelar» y filas; sin «Sentencia» ni «Explicar» (el plan, escribiendo `EXPLAIN`); menú ⋯ como la DuckDB UI (subir y bajar con Ctrl+↑/↓, duplicar, eliminar); «Cargar ▾» corto. Los eventos de cada ejecución van a la celda que la pidió (`run_id`). AT-NB-001, 005, 008 (`tests/qgis/test_notebook_ui.py`) | — |
+| E2 Vista de celdas | Fusionado: `ui/notebook_view.py` (celda con ⠿, tres pliegues, ▶ con menú, selector de base, resultado propio con «Cargar en QGIS ▾» y «Copiar», ⛶ y ⋯; «＋» entre celdas y al final; arrastrar, Alt+Mayús+↑/↓, Alt+↑/↓, Ctrl+E); cada pestaña de G6 es un cuaderno; atajos como la DuckDB UI (decisión del propietario: Ctrl+Intro la celda, Ctrl+Mayús+Intro la selección, Mayús+Intro la celda y avanzar); barra superior con solo «Ejecutar todo», «Cancelar» y filas; sin «Sentencia» ni «Explicar» (el plan, escribiendo `EXPLAIN`); menú ⋯ como la DuckDB UI (subir y bajar con Ctrl+↑/↓, duplicar, eliminar); «Cargar ▾» corto. Los eventos de cada ejecución van a la celda que la pidió (`run_id`). AT-NB-001, 005, 008 (`tests/qgis/test_notebook_ui.py`) | #93 |
+| E2b Quitar «Explicar» del motor | En revisión: sin parámetro `explain` en motor, worker, puertos y coordinador; el plan se pide con `EXPLAIN` escrito en la celda (AT-SQL-010) | — |

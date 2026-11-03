@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import duckdb
@@ -28,7 +27,6 @@ from geoduck.domain.errors import ErrorCode, GeoDuckError, InvalidArgumentError,
 from geoduck.domain.i18n import tr
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.sql import (
-    EXPLAINABLE_TYPES,
     PREVIEW_LIMITS,
     OutputKind,
     Preview,
@@ -89,14 +87,10 @@ def run_script(
     preview_limit: int,
     on_statement: StatementListener | None = None,
     guard: Callable[[SqlStatement], str | None] | None = None,
-    explain: bool = False,
     database: str | None = None,
 ) -> ScriptRun:
     """Ejecuta `text` según `scope`. Para `CURRENT`, `text` es el editor completo y `cursor` la posición;
-    para `SELECTION`, `text` es la selección y `base` su posición en el editor.
-
-    `explain` («Explicar», G6 · E3): una sola sentencia de `EXPLAINABLE_TYPES`, que se ejecuta como
-    `EXPLAIN <sentencia>` (nunca `ANALYZE`); si no, se rechaza sin ejecutar nada."""
+    para `SELECTION`, `text` es la selección y `base` su posición en el editor."""
     if preview_limit not in PREVIEW_LIMITS:
         raise InvalidArgumentError(tr("Preview limit not allowed: {0}").format(preview_limit))
     try:
@@ -113,8 +107,6 @@ def run_script(
     if scope is RunScope.CURRENT:
         chosen = statement_at(statements, cursor)
         statements = (chosen,) if chosen is not None else ()
-    if explain:
-        statements = (_as_explain(statements),)
     if guard is not None:  # antes de ejecutar nada: o el script entero, o nada
         for st in statements:
             reason = guard(st)
@@ -156,19 +148,6 @@ def _current_database(handle: ConnectionHandle) -> str | None:
     except (duckdb.Error, GeoDuckError):  # p. ej. transacción abortada o sesión invalidada: no se sabe
         return None
     return str(rows[0][0]) if rows else None
-
-
-def _as_explain(statements: tuple[SqlStatement, ...]) -> SqlStatement:
-    if len(statements) != 1:
-        raise InvalidArgumentError(tr("«Explain» needs a single statement: place the cursor in it"))
-    st = statements[0]
-    if st.type not in EXPLAINABLE_TYPES:
-        raise InvalidArgumentError(
-            tr(
-                "«Explain» only accepts queries (SELECT) and INSERT, UPDATE or DELETE; this statement is {0}"
-            ).format(st.type)
-        )
-    return replace(st, type="EXPLAIN", text="EXPLAIN " + st.text.strip())
 
 
 def _execute_one(handle: ConnectionHandle, st: SqlStatement, limit: int) -> StatementResult:
