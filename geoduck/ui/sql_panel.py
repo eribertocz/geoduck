@@ -28,11 +28,13 @@ from qgis.PyQt.QtWidgets import (
     QHeaderView,
     QLabel,
     QMenu,
+    QMessageBox,
     QPushButton,
     QShortcut,
     QSizePolicy,
     QSplitter,
     QStackedWidget,
+    QTabBar,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -87,6 +89,21 @@ LOG_FILTERS = ("all", "ok", "error")
 LOG_TIME, LOG_NAME, LOG_STATUS, LOG_DURATION, LOG_MESSAGE = range(5)
 
 
+def _free_keys(editor: Any, keys: tuple[str, ...]) -> None:
+    """Quita esas teclas de los comandos de QScintilla de este editor (Ctrl+T intercambia líneas), para que
+    lleguen a los atajos de GeoDuck. Solo en los editores de GeoDuck."""
+    commands = editor.standardCommands()
+    for key in keys:
+        sequence = QKeySequence(key)
+        code = int(sequence[0].toCombined()) if hasattr(sequence[0], "toCombined") else int(sequence[0])
+        command = commands.boundTo(code)
+        if command is not None:
+            if command.key() == code:
+                command.setKey(0)
+            else:
+                command.setAlternateKey(0)
+
+
 def card(*, name: str = "") -> QFrame:
     """Tarjeta de la maqueta: fondo de tarjeta, borde y esquinas redondeadas (theme.py)."""
     frame = QFrame()
@@ -122,6 +139,7 @@ class HintButton(QPushButton):
         row.setContentsMargins(12, 4, 12, 4)
         row.setSpacing(8)
         self._mark: QLabel | None = None
+        self._compact_icon: QLabel | None = None
         if icon:
             self._mark = QLabel(icon)
             self._mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -171,7 +189,18 @@ class HintButton(QPushButton):
 
     def set_hint_visible(self, visible: bool) -> None:
         self._hint.setVisible(visible and bool(self._hint.text()))
+        if self._compact_icon is not None:  # estrecho: solo el icono (texto en la ayuda y el nombre)
+            self._label.setVisible(visible)
+            self._compact_icon.setVisible(not visible)
         self.updateGeometry()
+
+    def set_compact_icon(self, icon: Any) -> None:
+        """Icono que sustituye al texto cuando el botón se compacta (G6 · E3: «Explicar»)."""
+        self._compact_icon = QLabel()
+        self._compact_icon.setPixmap(icon.pixmap(16, 16))
+        self._compact_icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._compact_icon.hide()
+        self.layout().insertWidget(0, self._compact_icon)
 
 
 class TypedHeader(QHeaderView):
@@ -456,15 +485,19 @@ class SqlPanel(QWidget):
         self._statements: dict[tuple[int, int], SqlStatement] = {}
         self._palette = theme.palette_for(self)
         self.short_titles = False
+        # G6 · E3: varias pestañas de editor en la misma sesión. Cada ejecución recuerda su pestaña
+        # (`_run_editors`), para señalar errores y sentencias en la pestaña correcta.
+        self._completers: dict[int, SqlCompleter] = {}
+        self._run_editor: Any = None
+        self._run_editors: dict[int, Any] = {}
+        self._editor_numbers = 0
+        #: Pregunta al cerrar una pestaña con SQL (`nombre` → cerrar sí/no); las pruebas la sustituyen.
+        self.confirm_close: Callable[[str], bool] = self._ask_close
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self.editor = QgsCodeEditorSQL()
-        self.editor.setAccessibleName(tr("Editor SQL"))
-        self.editor.setMinimumHeight(60)
-        self.completer = SqlCompleter(self.editor, coordinator)  # G6 · E2 (GD-SQL-007)
-        self._color_editor()
+        self._build_editor_tabs()
         self.editor_card = self._build_editor_card()
         self._build_results()
         self._build_log()
@@ -487,11 +520,19 @@ class SqlPanel(QWidget):
         layout.addLayout(self.bottom)
         self._place_load_button(wide=True)
 
+        self._connect_actions()
+        self._unsubscribe = coordinator.subscribe(self._on_event)
+        self._render(coordinator.state)
+
+    def _connect_actions(self) -> None:
         self.run_current_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         self.run_selection_button.clicked.connect(lambda: self.execute(RunScope.SELECTION))
         self.run_all_button.clicked.connect(lambda: self.execute(RunScope.ALL))
+        self.explain_button.clicked.connect(self.explain)
         self.cancel_button.clicked.connect(self._coordinator.cancel_current_operation)
         self.log.cellDoubleClicked.connect(self._select_logged_statement)
+        self.log.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.log.customContextMenuRequested.connect(self._log_menu)
         self.results.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
         # Atajos solo con el foco dentro del panel SQL, nunca en el resto de QGIS (§8, AT-UX-013)
         self.shortcuts = []
@@ -500,14 +541,107 @@ class SqlPanel(QWidget):
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(lambda s=scope: self.execute(s))
             self.shortcuts.append(shortcut)
-        self._unsubscribe = coordinator.subscribe(self._on_event)
-        self._render(coordinator.state)
+        for keys, slot in (("Ctrl+T", self.new_editor_tab), ("Ctrl+W", self.close_current_editor_tab)):
+            shortcut = QShortcut(QKeySequence(keys), self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda s=slot: s())
+            self.shortcuts.append(shortcut)
+
+    # -- pestañas de editor (G6 · E3, sql-editor-spec §7) ---------------------------------------------
+
+    def _build_editor_tabs(self) -> None:
+        self.editor_tabs = QTabWidget()
+        self.editor_tabs.setObjectName("geoduckEditorTabs")
+        self.editor_tabs.setDocumentMode(True)
+        self.editor_tabs.setTabsClosable(True)
+        self.editor_tabs.setMovable(True)
+        self.editor_tabs.setUsesScrollButtons(True)
+        self.editor_tabs.tabCloseRequested.connect(self.close_editor_tab)
+        self.new_tab_button = QToolButton()
+        self.new_tab_button.setText("+")
+        self.new_tab_button.setAutoRaise(True)
+        self.new_tab_button.setToolTip(tr("Nueva pestaña de SQL (Ctrl+T)"))
+        self.new_tab_button.setAccessibleName(tr("Nueva pestaña de SQL"))
+        self.new_tab_button.clicked.connect(self._new_empty_tab)
+        self.editor_tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
+        self.new_editor_tab()
+
+    def _new_empty_tab(self) -> None:
+        self.new_editor_tab()
+
+    @property
+    def editor(self) -> Any:
+        """Editor de la pestaña activa (siempre hay una)."""
+        return self.editor_tabs.currentWidget()
+
+    @property
+    def completer(self) -> SqlCompleter:
+        return self._completers[id(self.editor)]
+
+    def editors(self) -> list[Any]:
+        return [self.editor_tabs.widget(i) for i in range(self.editor_tabs.count())]
+
+    def new_editor_tab(self, text: str = "") -> Any:
+        """Pestaña nueva, activa y con el foco; `text`, su SQL inicial (p. ej. del registro)."""
+        editor = QgsCodeEditorSQL()
+        editor.setAccessibleName(tr("Editor SQL"))
+        editor.setMinimumHeight(60)
+        _free_keys(editor, ("Ctrl+T", "Ctrl+W"))  # para «nueva pestaña» y «cerrar pestaña»
+        self._completers[id(editor)] = SqlCompleter(editor, self._coordinator)  # G6 · E2
+        self._color_editor(editor)
+        self._editor_numbers += 1
+        name = tr("Consulta {0}").format(self._editor_numbers)
+        index = self.editor_tabs.addTab(editor, name)
+        self.editor_tabs.setTabToolTip(index, name)
+        bar = self.editor_tabs.tabBar()
+        for side in (QTabBar.ButtonPosition.LeftSide, QTabBar.ButtonPosition.RightSide):
+            close = bar.tabButton(index, side)
+            if close is not None:  # la «✕», también con el teclado (además de Ctrl+W)
+                close.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+                close.setToolTip(tr("Cerrar pestaña (Ctrl+W)"))
+                close.setAccessibleName(tr("Cerrar {0}").format(name))
+        if text:
+            editor.setText(text)
+        self.editor_tabs.setCurrentIndex(index)
+        editor.setFocus()
+        return editor
+
+    def close_current_editor_tab(self) -> bool:
+        return self.close_editor_tab(self.editor_tabs.currentIndex())
+
+    def close_editor_tab(self, index: int) -> bool:
+        """Cierra una pestaña: con SQL, pregunta antes; con su ejecución en curso, no se cierra. Si era la
+        última, queda una vacía."""
+        editor = self.editor_tabs.widget(index)
+        if editor is None:
+            return False
+        name = self.editor_tabs.tabText(index)
+        if self._running and editor is self._run_editor:
+            self._on_message(tr("«{0}» se está ejecutando: espere a que termine o cancélela.").format(name))
+            return False
+        if editor.text().strip() and not self.confirm_close(name):
+            return False
+        self.editor_tabs.removeTab(index)
+        self._completers.pop(id(editor), None)
+        self._run_editors = {k: e for k, e in self._run_editors.items() if e is not editor}
+        editor.deleteLater()
+        if self.editor_tabs.count() == 0:
+            self.new_editor_tab()
+        return True
+
+    def _ask_close(self, name: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            tr("Cerrar pestaña"),
+            tr("«{0}» tiene SQL que se perderá al cerrarla. ¿Cerrarla?").format(name),
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     # -- construcción ------------------------------------------------------------------------------
 
-    def _color_editor(self) -> None:
+    def _color_editor(self, editor: Any) -> None:
         """Palabras clave en el color de la paleta, solo en este editor (inventario §0.3)."""
-        lexer = self.editor.lexer()
+        lexer = editor.lexer()
         if lexer is None:
             return
         try:
@@ -526,7 +660,7 @@ class SqlPanel(QWidget):
         self.actions_bar.setLayout(self._build_actions())
         self.actions_bar.layout().setContentsMargins(0, 0, 0, 0)
         box.addWidget(self.actions_bar)
-        box.addWidget(self.editor, 1)
+        box.addWidget(self.editor_tabs, 1)
         self._wide_width = self.actions_bar.sizeHint().width() + 24  # con los atajos visibles
         # La fila no impone su ancho con los atajos: su mínimo es el de los botones sin atajo (E3)
         self.set_compact(True)
@@ -565,6 +699,11 @@ class SqlPanel(QWidget):
         self.run_current_button.setToolTip(tr("Ejecuta la sentencia bajo el cursor (Ctrl+Intro)"))
         self.run_selection_button = HintButton(tr("Selección"))
         self.run_selection_button.setToolTip(tr("Ejecuta solo el texto seleccionado"))
+        self.explain_button = HintButton(tr("Explicar"))
+        self.explain_button.setToolTip(
+            tr("Explicar: muestra el plan de la sentencia bajo el cursor (o de la selección) sin ejecutarla")
+        )
+        self.explain_button.set_compact_icon(QgsApplication.getThemeIcon("mActionIdentify.svg"))
         self.cancel_button = HintButton(tr("Cancelar"))
         self.cancel_button.setToolTip(tr("Cancela la ejecución en curso"))
         self.limit_combo = QComboBox()
@@ -577,6 +716,7 @@ class SqlPanel(QWidget):
             self.run_all_button,
             self.run_current_button,
             self.run_selection_button,
+            self.explain_button,
             self.cancel_button,
         )
         self.compact = False
@@ -752,36 +892,53 @@ class SqlPanel(QWidget):
         header.setStretchLastSection(True)
         for col in range(LOG_MESSAGE):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-        self.log.setToolTip(tr("Doble clic para seleccionar la sentencia en el editor"))
+        self.log.setToolTip(
+            tr("Doble clic: seleccionar la sentencia en el editor")
+            + "\n"
+            + tr("Clic derecho: abrir su SQL en una pestaña nueva")
+        )
         self.log.setAccessibleName(tr("Registro de ejecuciones"))
         self.log.setMinimumHeight(48)
 
     # -- acciones ----------------------------------------------------------------------------------
 
-    def execute(self, scope: RunScope) -> None:
+    def explain(self) -> None:
+        """«Explicar» (G6 · E3): el plan de la selección, o de la sentencia bajo el cursor, sin ejecutarla."""
+        scope = RunScope.SELECTION if self.editor.hasSelectedText() else RunScope.CURRENT
+        self.execute(scope, explain=True)
+
+    def execute(self, scope: RunScope, *, explain: bool = False) -> None:
         if self._coordinator.state is not SessionState.READY:
             return
-        full_text = self.editor.text()
+        editor = self.editor  # la pestaña activa; la ejecución queda ligada a ella
+        full_text = editor.text()
         text, base, cursor = full_text, 0, 0
         if scope is RunScope.SELECTION:
-            if not self.editor.hasSelectedText():
+            if not editor.hasSelectedText():
                 return
-            line_from, index_from, _l, _i = self.editor.getSelection()
+            line_from, index_from, _l, _i = editor.getSelection()
             base = offset_from(full_text, line_from, index_from)
-            text = self.editor.selectedText()
+            text = editor.selectedText()
         elif scope is RunScope.CURRENT:
-            line, index = self.editor.getCursorPosition()
+            line, index = editor.getCursorPosition()
             cursor = offset_from(full_text, line, index)
         if not text.strip():
             return
-        self.editor.clearWarnings()
+        editor.clearWarnings()
         self._clear_results()
         self._run_text = full_text
+        self._run_editor = editor
         self._running = True
         try:
-            self._coordinator.execute_sql(
-                text, scope, cursor=cursor, base=base, preview_limit=int(self.limit_combo.currentData())
+            run_id = self._coordinator.execute_sql(
+                text,
+                scope,
+                cursor=cursor,
+                base=base,
+                preview_limit=int(self.limit_combo.currentData()),
+                **({"explain": True} if explain else {}),
             )
+            self._run_editors[run_id] = editor
         except GeoDuckError as exc:  # p. ej. DETACH con capas Conectadas sin guardar (§5.5)
             self._running = False
             self._on_message(exc.message)
@@ -897,18 +1054,54 @@ class SqlPanel(QWidget):
             self._select_statement(tuple(key))
 
     def _select_statement(self, key: tuple[int, int]) -> None:
+        """Selecciona la sentencia en la pestaña donde se ejecutó (si sigue abierta), y pasa a ella."""
         statement = self._statements.get(key)
-        text = self.editor.text()
-        if statement is None or statement.end > len(text):
+        editor = self._run_editors.get(key[0])
+        if statement is None or editor is None or self.editor_tabs.indexOf(editor) < 0:
             return
+        text = editor.text()
+        if statement.end > len(text):
+            return
+        self.editor_tabs.setCurrentWidget(editor)
         start = statement.start + len(statement.text) - len(statement.text.lstrip())
-        self.editor.setSelection(*line_index_from(text, start), *line_index_from(text, statement.end))
-        self.editor.setFocus()
+        editor.setSelection(*line_index_from(text, start), *line_index_from(text, statement.end))
+        editor.setFocus()
 
     def _point_error(self, offset: int, message: str) -> None:
-        line, index = line_index_from(self.editor.text(), offset)
-        self.editor.addWarning(line, message)
-        self.editor.setCursorPosition(line, index)
+        editor = self._run_editor if self.editor_tabs.indexOf(self._run_editor) >= 0 else self.editor
+        line, index = line_index_from(editor.text(), offset)
+        editor.addWarning(line, message)
+        editor.setCursorPosition(line, index)
+
+    # -- historial de la sesión (G6 · E3): «Abrir en el editor» desde el registro ---------------------
+
+    def logged_sql(self, row: int) -> str | None:
+        """SQL que ejecutó la fila `row` del registro (solo en memoria, mientras dure el panel): el texto que
+        delimitó DuckDB, sin los espacios de los extremos ni el `;` final (DuckDB 1.5 y 2.0 no lo incluyen
+        igual), para que sea el mismo en cualquier versión."""
+        item = self.log.item(row, 0)
+        key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        statement = self._statements.get(tuple(key)) if key else None
+        if statement is None:
+            return None
+        text = statement.text.strip()
+        return text[:-1].rstrip() if text.endswith(";") else text
+
+    def open_logged_sql(self, row: int) -> Any:
+        """Copia el SQL de la fila a una pestaña nueva, sin ejecutarlo."""
+        sql = self.logged_sql(row)
+        return self.new_editor_tab(sql) if sql else None
+
+    def _log_menu(self, pos: Any) -> None:
+        item = self.log.itemAt(pos)
+        if item is None or self.logged_sql(item.row()) is None:
+            return
+        menu = QMenu(self)
+        action = menu.addAction(tr("Abrir en el editor"))
+        action.setToolTip(tr("Copia este SQL a una pestaña nueva, sin ejecutarlo"))
+        row = item.row()
+        action.triggered.connect(lambda: self.open_logged_sql(row))
+        menu.exec(self.log.viewport().mapToGlobal(pos))
 
     def _clear_results(self) -> None:
         while self.results.count():
@@ -958,6 +1151,7 @@ class SqlPanel(QWidget):
         ready = state is SessionState.READY
         for button in (self.run_current_button, self.run_selection_button, self.run_all_button):
             button.setEnabled(ready)
+        self.explain_button.setEnabled(ready)
         loading = self._load_flow is not None and self._load_flow.loading
         self.cancel_button.setEnabled(state is SessionState.BUSY and (self._running or loading))
         view = self.current_view()
