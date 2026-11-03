@@ -171,6 +171,13 @@ class WorkspaceController(QObject):
 
     def set_visible(self, visible: bool) -> None:
         shell = self.shell
+        if shell is self.window and self.window.isMinimized():
+            # Minimizada («Ver en el mapa»): el botón de GeoDuck la restaura, nunca la oculta
+            self.window.showNormal()
+            self.window.raise_()
+            self.window.activateWindow()
+            self.shown_changed.emit(True)
+            return
         if not visible:
             shell.hide()
             return
@@ -181,6 +188,12 @@ class WorkspaceController(QObject):
         shell.show()
         shell.raise_()
         shell.activateWindow()
+
+    def minimize_for_map(self) -> None:
+        """«Ver en el mapa» en la ventana propia: GeoDuck se minimiza para dejar ver el mapa (§8). En el
+        panel acoplado no se minimiza nada."""
+        if self.mode is WorkspaceMode.WINDOW and self.window.isVisible():
+            self.window.showMinimized()
 
     # -- alternancia --------------------------------------------------------------------------------
 

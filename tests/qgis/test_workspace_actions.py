@@ -130,6 +130,26 @@ def test_view_on_map_without_a_valid_extent_selects_without_zoom(plugin, iface, 
     assert iface.mapCanvas().extent() == before  # sin zoom
 
 
+def test_view_on_map_minimizes_the_window_and_the_toolbar_button_restores_it(plugin):  # noqa: F811
+    coordinator = start(plugin)
+    content, ws = plugin.content, plugin.workspace
+    content.load_flow._dialog_factory = KeepModeDialog
+    plugin.action.trigger()  # ventana propia visible
+    run(content.sql_panel, coordinator, POINTS)
+    content.sql_panel.result_views()[-1].load_button.click()
+    assert wait_for(lambda: len(layers()) == 1 and content.map_button.isEnabled(), 60)
+    content.map_button.click()
+    assert wait_for(ws.window.isMinimized)  # deja ver el mapa (decisión del propietario)
+    assert coordinator.state is SessionState.READY  # la sesión no cambia
+    plugin.action.trigger()  # el botón de GeoDuck la restaura (no la oculta)
+    assert wait_for(lambda: not ws.window.isMinimized() and ws.window.isVisible())
+    assert plugin.action.isChecked()
+    toggle(ws)  # en el panel acoplado no se minimiza nada
+    content.map_button.click()
+    wait_for(lambda: False, 0.3)
+    assert ws.dock.isVisible() and not ws.window.isMinimized()
+
+
 # -- AT-UX-009: registro Todo / OK / Error ------------------------------------------------------------------
 
 
