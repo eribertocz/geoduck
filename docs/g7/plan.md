@@ -33,14 +33,15 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 |---|---|---|
 | **E0** | SPEC, roadmap renumerado, maqueta y este plan | `spec_sync --check` |
 | **E1** | Modelo de cuaderno y celda (dominio, sin Qt); ejecución de una celda con `USE` de su base en la misma operación del worker; «Ejecutar todo» en orden con parada en el primer fallo; base desadjuntada | AT-NB-002, 003, 004 |
-| **E2** | Vista de celdas: editor, ▶ con menú, selector de base, resultado con «Cargar en QGIS ▾», añadir/mover/borrar/plegar, atajos; sustituye a las pestañas de G6 | AT-NB-001, 005, 008 |
+| **E2** | Vista de celdas: editor, ▶ con menú, selector de base, resultado con «Cargar en QGIS ▾» y «Copiar»; añadir (también entre celdas), arrastrar con el asa «⠿», subir/bajar con el teclado, duplicar, borrar; plegar celda, editor y resultado; vista de hoja (Ctrl+E); atajos; sustituye a las pestañas de G6 | AT-NB-001, 005, 008 |
 | **E3** | Lista de cuadernos y resumen del resultado; ventana y panel; rendimiento con muchas celdas | AT-NB-006, 007, 009 |
 | **E4** | Accesibilidad, panel estrecho, idioma (catálogo), pulido visual según la maqueta aprobada | AT-NB-010 |
 | **E5** | Aceptación: `docs/g7/acceptance.md`, guía manual en Windows, regresión completa | Gate |
 
 ## 4. Por verificar durante las entregas
 
-- Mayús+Intro (ejecutar y pasar a la siguiente) frente a los comandos de QScintilla (como Ctrl+T en G6) (E2).
+- Mayús+Intro, Ctrl+E y Alt+Mayús+↑/↓ frente a los comandos de QScintilla (como Ctrl+T en G6) (E2).
+- Arrastrar celdas con su editor QScintilla dentro, en Qt 5 y Qt 6 (E2).
 - Coste de muchos `QgsCodeEditorSQL` en una sola vista en Qt 5 y Qt 6 (E3).
 - «Explicar» de una celda con base propia: `USE` + `EXPLAIN` en la misma operación (E1).
 

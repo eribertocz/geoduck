@@ -36,6 +36,13 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
 .panel{width:430px}
 .ptabs{display:flex;gap:16px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--border)}
 .ptabs .on{border-bottom:2px solid var(--primary);font-weight:600;padding-bottom:4px}
+.row{display:grid;grid-template-columns:34px 1fr 30px;gap:4px;align-items:start}
+.gut{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--muted);padding-top:8px;font-size:12px}
+.gut .drag{cursor:grab;letter-spacing:-1px}
+.side{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--muted);padding-top:8px}
+.ins{color:var(--muted);font-size:12px;padding:0 0 0 38px;height:12px;line-height:12px}
+.sheet{display:grid;grid-template-rows:1fr 8px 1.4fr;height:560px;background:#fff;border:1px solid var(--border);border-radius:8px}
+.split{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--window);text-align:center;font-size:9px;color:var(--muted)}
 </style></head><body>
 
 <h3 style="margin:16px 16px 0">1 · Ventana propia (por defecto)</h3>
@@ -62,26 +69,29 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
       <div style="display:flex;align-items:center;gap:8px"><b style="font-size:14px">Consumidores</b><span style="flex:1"></span>
         <span class="btn primary">▶ Ejecutar todo <span style="opacity:.8;font-weight:400">Ctrl+Mayús+Intro</span></span><span class="btn">Cancelar</span></div>
       <div class="cells">
-        <div class="cell on">
+        <div class="ins">＋</div>
+        <div class="row"><div class="gut"><span class="drag" title="Arrastrar">⠿</span><span title="Plegar celda">˅</span><span title="Plegar editor">˅</span><span title="Plegar resultado">˅</span></div><div class="cell on">
           <div class="cellbar"><span class="run">▶ ▾</span><span class="chip">◫ db ▾</span></div>
           <div class="code"><span class="ln">1</span><span><span class="k">select</span> consumidor, medidor, geometry <span class="k">from</span> main.consumidores20261030 <span class="k">limit</span> 3</span></div>
           <div class="res">
-            <div class="resbar"><span class="muted">3 filas en 43 ms</span><span class="btn action">Cargar en QGIS ▾</span></div>
+            <div class="resbar"><span class="muted">3 filas en 43 ms</span><span><span class="btn">⧉ Copiar</span> <span class="btn action">Cargar en QGIS ▾</span></span></div>
             <table><tr><th><span class="t">#</span>Consumidor</th><th><span class="t">#</span>Medidor</th><th><span class="t">◈</span>geometry</th></tr>
               <tr><td class="n">642958</td><td class="n">1546753</td><td>POINT · 21 B</td></tr>
               <tr><td class="n">297960</td><td class="n">1361448</td><td>POINT · 21 B</td></tr>
               <tr><td class="n">725539</td><td class="n">1481809</td><td class="null">NULL</td></tr></table>
           </div>
-        </div>
-        <div class="cell">
+        </div><div class="side"><span title="Vista de hoja (Ctrl+E)">⛶</span><span title="Más">⋯</span></div></div>
+        <div class="ins">＋</div>
+        <div class="row"><div class="gut"><span class="drag" title="Arrastrar">⠿</span><span title="Plegar celda">˅</span><span title="Plegar editor">˅</span><span title="Plegar resultado">˅</span></div><div class="cell">
           <div class="cellbar"><span class="run">▶ ▾</span><span class="chip">◫ memory ▾</span></div>
           <div class="code"><span class="ln">1</span><span><span class="k">select</span> consumidor, ruta <span class="k">from</span> db.main.tabla2 <span class="muted">-- otra base, con su nombre</span></span></div>
-        </div>
-        <div class="cell">
+        </div><div class="side"><span title="Vista de hoja (Ctrl+E)">⛶</span><span title="Más">⋯</span></div></div>
+        <div class="ins">＋</div>
+        <div class="row"><div class="gut"><span class="drag" title="Arrastrar">⠿</span><span title="Plegar celda">˅</span><span title="Plegar editor">˅</span><span title="Plegar resultado">˅</span></div><div class="cell">
           <div class="cellbar"><span class="run">▶ ▾</span><span class="chip">◫ memory ▾</span></div>
           <div class="code"><span class="ln">1</span><span><span class="k">select</span> consumidor, ruta <span class="k">from</span> tabla3</span></div>
-        </div>
-        <div class="add">＋ Añadir celda</div>
+        </div><div class="side"><span title="Vista de hoja (Ctrl+E)">⛶</span><span title="Más">⋯</span></div></div>
+        <div class="add" style="margin-left:38px">＋ Añadir celda</div>
       </div>
     </div>
     <div class="card"><div class="h"><span>RESULTADO</span><span>»</span></div>
@@ -97,6 +107,7 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
 <li><b>Base de la celda</b> («db ▾», «memory ▾»): al ejecutar, GeoDuck hace <code>USE</code> de esa base y luego la celda, en una sola operación. Como en la DuckDB UI, la celda puede consultar <b>otras bases con su nombre</b> (celda 2: <code>db.main.tabla2</code> con «memory»).</li>
 <li><b>Resultado debajo de cada celda</b> con su «Cargar en QGIS ▾» (las tres modalidades de G3–G5). La geometría se ve como <code>POINT · 21 B</code>, no como bytes.</li>
 <li><b>Resumen</b> a la derecha: filas, columnas y tipos del resultado de la celda activa, sin consultas nuevas; plegable.</li>
+<li><b>Margen de cada celda:</b> «⠿» para arrastrarla; tres «˅» para plegar la celda, el editor o el resultado; «＋» encima inserta una celda; a la derecha «⛶» vista de hoja (Ctrl+E) y «⋯» (subir, bajar, duplicar, plegar, borrar).</li>
 <li><b>Cuadernos</b> encima de «Bases de datos» (el explorador de G5–G6, sin cambios).</li>
 </ol>
 
@@ -114,5 +125,20 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
     <div class="add">＋ Añadir celda</div>
     <span class="btn action" style="justify-content:center">Cargar en QGIS ▾</span>
   </div>
+</div>
+
+<h3 style="margin:24px 16px 0">3 · Vista de hoja de una celda (⛶, Ctrl+E)</h3>
+<div class="frame" style="max-width:1000px">
+  <div style="padding:12px">
+  <div class="sheet">
+    <div><div class="cellbar"><span class="run">▶ ▾</span><span><span class="chip">◫ memory ▾</span> <span class="muted" title="Volver a las celdas (Escape)">⛶ ⋯</span></span></div>
+      <div class="code"><span class="ln">1</span><span><span class="k">load</span> spatial; <span class="k">select</span> consumidor, medidor, geometry <span class="k">from</span> db.main.consumidores20261030 <span class="k">limit</span> 3;</span></div></div>
+    <div class="split">═══</div>
+    <div><div class="resbar"><span class="muted">3 filas · 2 sentencias en 55 ms</span><span><span class="btn">⧉ Copiar</span> <span class="btn action">Cargar en QGIS ▾</span></span></div>
+      <table><tr><th><span class="t">#</span>Consumidor</th><th><span class="t">#</span>Medidor</th><th><span class="t">◈</span>geometry</th></tr>
+      <tr><td class="n">642958</td><td class="n">1546753</td><td>POINT · 21 B</td></tr>
+      <tr><td class="n">297960</td><td class="n">1361448</td><td>POINT · 21 B</td></tr>
+      <tr><td class="n">725539</td><td class="n">1481809</td><td>POINT · 21 B</td></tr></table></div>
+  </div></div>
 </div>
 </body></html>

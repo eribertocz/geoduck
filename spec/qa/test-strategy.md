@@ -71,7 +71,7 @@
 | AT-UX-014 | fallo inyectado durante el traslado | el shell anterior sigue operativo; nada se repite |
 | AT-UX-015 | regresión G0–G4 | todas pasan; otras herramientas de QGIS sin cambios |
 | AT-I18N-001 | QGIS en inglés y en español; paquete ZIP | textos en el idioma de QGIS; traducción completa de la interfaz; sin texto vacío; idioma de QGIS sin cambios; SQL y datos sin traducir; el ZIP incluye la traducción |
-| AT-NB-001 | añadir, mover, borrar y plegar celdas; varios cuadernos | orden y contenido conservados; borrar una celda con SQL pide confirmación |
+| AT-NB-001 | añadir (al final y entre celdas), arrastrar, subir/bajar con el teclado, duplicar, borrar; plegar celda, editor y resultado por separado; vista de hoja (Ctrl+E) y vuelta; varios cuadernos | orden y contenido conservados (texto, base y resultado viajan con la celda; nada se ejecuta); borrar una celda con SQL pide confirmación |
 | AT-NB-002 | «Ejecutar todo» con una celda que falla | celdas en orden; se detiene en la que falla; las siguientes no se ejecutan |
 | AT-NB-003 | dos celdas con bases distintas, ejecutadas en cualquier orden | cada una lee su base; la base en uso queda la de la última ejecutada |
 | AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda (y al revés: celda en `db` que lee `memory.t`); `LOAD spatial; SELECT …` en una celda (resultado de la última, «2 sentencias»); `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |

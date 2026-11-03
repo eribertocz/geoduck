@@ -1125,18 +1125,28 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 
 - **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
   explorador de G5–G6, sin cambios). En el panel, los cuadernos van en el selector de la pestaña SQL.
-- **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento. Cada celda: botón ▶ (con menú:
-  «Ejecutar celda», «Explicar»), editor, selector de base a la derecha («memory ▾»), y debajo «N filas en X ms» (con varias
-  sentencias, «N filas · K sentencias en X ms», como la DuckDB UI) y el
-  resultado con su «Cargar en QGIS ▾». La celda activa tiene el borde de acento. Al final, «+ Añadir celda»; entre
-  celdas, «+» al pasar el ratón. Menú «⋯» de la celda: subir, bajar, plegar resultado, borrar (con confirmación si
-  tiene SQL).
+- **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento (capturas del propietario de la
+  DuckDB UI, 2026-11-03). Cada celda:
+  - **Margen izquierdo:** asa «⠿» para **arrastrar** la celda a otra posición (se mueven con ella su texto, su base y
+    su resultado; no se ejecuta nada) y tres «˅» para **plegar** por separado la celda entera, el editor y el
+    resultado. Encima de cada celda, «+» al pasar el ratón inserta una celda ahí.
+  - **Cabecera:** botón ▶ con menú («Ejecutar celda», «Explicar») y, a la derecha, el selector de base
+    («memory ▾»).
+  - **Editor** y, debajo, «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB
+    UI) y el resultado con su «Cargar en QGIS ▾» y «Copiar» (al portapapeles, como texto separado por
+    tabuladores).
+  - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
+    resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»:
+    subir, bajar, duplicar, plegar resultado, borrar (con confirmación si tiene SQL).
+  - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
+  - Teclado (además del ratón): Alt+Mayús+↑/↓ sube o baja la celda activa.
 - **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
 - **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo», «Cancelar».
 - **Atajos** (solo con el foco en GeoDuck): Ctrl+Intro ejecuta la celda; Mayús+Intro ejecuta y pasa a la siguiente
-  (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda.
+  (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda; Alt+Mayús+↑/↓ la mueve;
+  Ctrl+E vista de hoja.
 - Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
   celdas, solo las visibles mantienen su tabla.
 
@@ -1338,7 +1348,7 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-UX-014 | fallo inyectado durante el traslado | el shell anterior sigue operativo; nada se repite |
 | AT-UX-015 | regresión G0–G4 | todas pasan; otras herramientas de QGIS sin cambios |
 | AT-I18N-001 | QGIS en inglés y en español; paquete ZIP | textos en el idioma de QGIS; traducción completa de la interfaz; sin texto vacío; idioma de QGIS sin cambios; SQL y datos sin traducir; el ZIP incluye la traducción |
-| AT-NB-001 | añadir, mover, borrar y plegar celdas; varios cuadernos | orden y contenido conservados; borrar una celda con SQL pide confirmación |
+| AT-NB-001 | añadir (al final y entre celdas), arrastrar, subir/bajar con el teclado, duplicar, borrar; plegar celda, editor y resultado por separado; vista de hoja (Ctrl+E) y vuelta; varios cuadernos | orden y contenido conservados (texto, base y resultado viajan con la celda; nada se ejecuta); borrar una celda con SQL pide confirmación |
 | AT-NB-002 | «Ejecutar todo» con una celda que falla | celdas en orden; se detiene en la que falla; las siguientes no se ejecutan |
 | AT-NB-003 | dos celdas con bases distintas, ejecutadas en cualquier orden | cada una lee su base; la base en uso queda la de la última ejecutada |
 | AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda (y al revés: celda en `db` que lee `memory.t`); `LOAD spatial; SELECT …` en una celda (resultado de la última, «2 sentencias»); `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |
