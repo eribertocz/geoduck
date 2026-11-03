@@ -24,6 +24,7 @@ from qgis.PyQt.QtCore import QByteArray, QObject, QRect, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication
 
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, PREVIEW_LIMITS
+from geoduck.ui import theme
 from geoduck.ui.i18n import tr
 from geoduck.ui.shells import WINDOW_SIZE, DockShell, WindowShell
 from geoduck.ui.sql_panel import LOG_FILTERS
@@ -135,7 +136,11 @@ class WorkspaceController(QObject):
         self._settings = settings or QgsSettings()
         main = iface.mainWindow()
         self.window = WindowShell(main)
+        self.window.toggle_button = content.dock_button  # «Acoplar a QGIS», en la barra de sesión (V5)
         self.dock = DockShell(main)
+        style = theme.stylesheet(theme.palette_for(content))
+        for shell in (self.window, self.dock):  # la paleta de GeoDuck, solo en sus shells (inventario §0.3)
+            shell.setStyleSheet(style)
         self.window.hide()
         self.dock.hide()
         self._dock_added = False

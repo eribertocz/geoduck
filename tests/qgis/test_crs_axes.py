@@ -22,10 +22,10 @@ from geoduck.app.events import (
     LoadFinished,
     LoadPrepared,
     SpatialActivated,
-    SpatialChecked,
     StatementFinished,
 )
 from geoduck.domain.load import LoadMode, LoadRequest
+from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
 from geoduck.engine.probe import probe_spatial
 from geoduck.infra.diagnostics import _check_spatial
@@ -90,6 +90,9 @@ def assert_lapaz_degrees(layer, authid):
 def activate(session):
     session.coordinator.activate_spatial(install=False)
     assert wait_for(lambda: any(isinstance(e, SpatialActivated) for e in session.events), TIMEOUT)
+    # El aviso llega antes de que la sesión vuelva a estar lista: sin esperar, el SQL siguiente
+    # chocaba con «estado BUSY» (carrera vista en la CI de E4b, QGIS 3.44 · DuckDB 2.0.0)
+    assert wait_for(lambda: session.coordinator.state is SessionState.READY, TIMEOUT)
 
 
 def run(session, sql):
@@ -297,62 +300,3 @@ def test_dialog_offers_reprojection_only_for_copies_with_crs(session):
     assert not dialog.reproject_check.isEnabled()
     dialog.crs_widgets["b"].setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
     assert dialog.reproject_check.isEnabled()
-
-
-# -- «Activar spatial…»: consentimiento de LOAD y, aparte, de INSTALL (spatial-spec §10) -----------------
-
-
-def _dock(session, answers):
-    from geoduck.ui.workspace import WorkspaceContent
-
-    asked = []
-
-    def ask(_parent, title, _text):
-        asked.append(title)
-        return answers.pop(0)
-
-    dock = WorkspaceContent(session.coordinator, _report, ask_yes_no=ask)
-    return dock, asked
-
-
-def _report():
-    from geoduck.domain.diagnostics import DiagnosticReport
-
-    return DiagnosticReport(checks=())
-
-
-def _loaded(session):
-    return session.rows("SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'")[0][0]
-
-
-def test_spatial_is_not_loaded_without_consent(session):
-    dock, asked = _dock(session, [False])
-    dock.spatial_action.trigger()
-    assert wait_for(lambda: bool(asked), TIMEOUT)
-    assert asked == ["Activar spatial"]
-    assert "No se cargó spatial" in dock.message_label.text()
-    assert not _loaded(session)
-    dock.detach()
-
-
-@needs_spatial
-def test_spatial_loads_for_this_session_with_consent(session):
-    dock, asked = _dock(session, [True])
-    dock.spatial_action.trigger()
-    assert wait_for(lambda: any(isinstance(e, SpatialActivated) for e in session.events), TIMEOUT)
-    assert asked == ["Activar spatial"]  # ya instalada: no se pregunta por INSTALL
-    assert _loaded(session)
-    assert (
-        "Extensión spatial" in dock.message_label.text()
-        and "cargada en esta sesión" in dock.message_label.text()
-    )
-    dock.detach()
-
-
-def test_install_is_asked_separately_and_can_be_declined(session):
-    dock, asked = _dock(session, [True, False])
-    dock._confirm_spatial(SpatialChecked(installed=False, loaded=False))
-    assert asked == ["Activar spatial", "Instalar spatial"]
-    assert "No se instaló spatial" in dock.message_label.text()
-    assert not _loaded(session)
-    dock.detach()

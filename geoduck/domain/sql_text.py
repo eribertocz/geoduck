@@ -29,3 +29,25 @@ def quote_string_literal(value: str) -> str:
     """Devuelve `value` como literal SQL entre comillas simples, escapando `'`."""
     _reject_nul(value, "El literal")
     return "'" + value.replace("'", "''") + "'"
+
+
+def load_sql(sql: str) -> str:
+    """El SQL de una sentencia listo para envolverlo en una subconsulta al cargarlo en QGIS.
+
+    El texto de cada sentencia del editor incluye su `;` final y los comentarios de línea que la siguen
+    (`split_script`); dentro de `( … )` el `;` es un error de sintaxis y un `--` final comentaría el `)`.
+    Se quitan solo, del final, los espacios, los `;` y las líneas que son enteras comentario `--`; el resto
+    del texto no cambia. Termina en salto de línea para que un `--` al final de la última línea no alcance
+    al `)` de quien lo envuelva.
+    """
+    lines = sql.rstrip().split("\n")
+    while lines:
+        last = lines[-1].rstrip()
+        if not last or last.lstrip().startswith("--"):
+            lines.pop()
+            continue
+        if last.endswith(";"):
+            lines[-1] = last.rstrip(";").rstrip()
+            continue
+        break
+    return "\n".join(lines) + "\n"

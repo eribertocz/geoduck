@@ -79,7 +79,7 @@ Cada prueba comprueba coordenadas **y** CRS.
 | AX-4c elegir `EPSG:4326` etiqueta y no mueve | `test_ax_4c_choosing_a_crs_labels_without_moving[…]` |
 | AX-5 «Reproyectar a EPSG:32719» en copias con QGIS/PROJ | `test_ax_5_reproject_copies_with_qgis[memory/snapshot]`, `test_reproject_needs_a_source_crs[…]`, `test_reproject_after_choosing_the_source_crs` |
 | La Conectada nunca se reproyecta; el diálogo solo ofrece reproyectar copias con CRS | `test_connected_is_never_reprojected`, `test_dialog_offers_reprojection_only_for_copies_with_crs` |
-| «Activar spatial…» (ADR-0011, §10): sin consentimiento no carga; `LOAD` vale para la sesión; `INSTALL` se pregunta aparte y puede rechazarse | `test_spatial_is_not_loaded_without_consent`, `test_spatial_loads_for_this_session_with_consent`, `test_install_is_asked_separately_and_can_be_declined` |
+| «Activar spatial…» (ADR-0011, §10): sin consentimiento no carga; `LOAD` vale para la sesión; `INSTALL` se pregunta aparte y puede rechazarse | Verificado al cierre de G4. **Retirada en G5** (decisión del propietario, 2026-11-02; spatial-spec §10): `spatial` se carga con el SQL del usuario y sus pruebas de interfaz se eliminaron |
 | Sin CRS en la UI: se pregunta (G3, sigue igual) | `test_load_ui::test_unknown_crs_is_asked`, `test_load_memory::test_unknown_crs_warns_or_uses_the_user_choice` |
 
 ### AT-SPA-004 — ilegibles, mixtas, colecciones, Z/M/ZM, NULL, vacías, inválidas

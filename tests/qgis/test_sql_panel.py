@@ -10,6 +10,8 @@ from qgis.PyQt.QtWidgets import QLabel, QSplitter
 import geoduck
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.domain.sql import RunScope
+from geoduck.ui import theme
+from geoduck.ui.sql_panel import LOG_MESSAGE, LOG_NAME, LOG_STATUS
 from tests.qgis.conftest import wait_for
 
 pytestmark = pytest.mark.qgis
@@ -37,8 +39,11 @@ def tabs(panel):
 
 
 def log(panel):
-    """(#, resultado, estado) de cada fila del registro."""
-    return [tuple(panel.log.item(r, c).text() for c in (1, 2, 3)) for r in range(panel.log.rowCount())]
+    """(resultado, estado) de cada fila del registro (G5: hora · nombre · estado · duración · mensaje)."""
+    return [
+        tuple(panel.log.item(r, c).text() for c in (LOG_NAME, LOG_STATUS))
+        for r in range(panel.log.rowCount())
+    ]
 
 
 # -- funcionamiento (G2) ------------------------------------------------------------------------------
@@ -54,11 +59,14 @@ def test_script_with_create_and_two_selects(session):
         "SELECT * FROM productos;\nSELECT COUNT(*) AS n FROM productos;",
     )
     assert log(panel) == [
-        ("1", "Crear productos", "OK"),
-        ("2", "Productos", "OK"),
-        ("3", "Total productos", "OK"),
+        ("Crear productos", "OK"),
+        ("Productos", "OK"),
+        ("Total productos", "OK"),
     ]
-    assert tabs(panel) == ["2 · Productos", "3 · Total productos"]  # número de sentencia + nombre
+    assert tabs(panel) == [
+        "Productos (1 fila)",
+        "Total productos (1 fila)",
+    ]  # nombre (filas), como la maqueta
     first = panel.results.widget(0)
     assert first.table.item(0, 1).text() == "Medidor"
     assert first.caption.text().startswith("Vista previa") and not first.stale
@@ -71,7 +79,7 @@ def test_attach_in_sql_is_reflected_in_the_explorer(session, tmp_path):
     duckdb.connect(path).close()
     run(panel, coordinator, f"ATTACH '{path}' AS b;")
     assert wait_for(lambda: coordinator.catalog.get("b") is not None)
-    assert log(panel)[-1] == ("1", "Adjuntar b", "OK")
+    assert log(panel)[-1] == ("Adjuntar b", "OK")
     run(panel, coordinator, "DETACH b;")
     assert wait_for(lambda: coordinator.catalog.get("b") is None)
 
@@ -79,9 +87,11 @@ def test_attach_in_sql_is_reflected_in_the_explorer(session, tmp_path):
 def test_error_marks_the_line_and_stops(session):
     plugin, panel, coordinator = session
     run(panel, coordinator, "SELECT 1;\nSELECT * FROM nada;\nCREATE TABLE nunca(x INT);")
-    assert [s for _n, _t, s in log(panel)] == ["OK", "Error", "No ejecutada"]
+    assert [s for _n, s in log(panel)] == ["OK", "Error", "No ejecutada"]
     assert panel.editor.getCursorPosition()[0] == 1  # el cursor va a la línea del error
-    assert panel.log.item(1, 3).font().bold()  # el error destaca en el registro
+    error = panel.log.item(1, LOG_MESSAGE)
+    assert error.foreground().color().name() == theme.palette_for(panel).error.lower()  # el error, en rojo
+    assert tabs(panel)[-1] == "Error · sentencia 2"  # y su pestaña (inventario V28)
     assert "nada" in plugin.content.message_label.text()
 
 
@@ -91,7 +101,7 @@ def test_current_statement_only(session):
     panel.editor.setCursorPosition(0, 3)
     panel.run_current_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY and not panel._running)
-    assert log(panel) == [("1", "Crear a", "OK")]
+    assert log(panel) == [("Crear a", "OK")]
 
 
 def test_previous_preview_is_marked_possibly_stale(session):
@@ -106,7 +116,8 @@ def test_preview_is_bounded_by_the_selected_limit(session):
     panel.limit_combo.setCurrentIndex(panel.limit_combo.findData(50))
     run(panel, coordinator, "SELECT range FROM range(100000);")
     view = panel.results.widget(0)
-    assert view.table.rowCount() == 50 and "hay más" in view.caption.text()
+    assert view.table.rowCount() == 50 and "hay más" in tabs(panel)[0]
+    assert view.caption.text() == "Vista previa"  # siempre etiquetada (sql-editor-spec §1)
 
 
 def test_aborted_transaction_shows_rollback_and_recovers(session):
@@ -150,7 +161,7 @@ def test_explicit_names_from_comments_and_empty_state(session):
         coordinator,
         "CREATE TABLE v AS SELECT 1 AS x;\n-- Ventas del mes\nSELECT * FROM v;\nSELECT 2 AS total;",
     )
-    assert tabs(panel) == ["2 · Ventas del mes", "3 · Total"]
+    assert tabs(panel) == ["Ventas del mes (1 fila)", "Total (1 fila)"]
     assert "SELECT * FROM v" in panel.results.tabToolTip(0)
     assert panel.results_stack.currentWidget() is panel.results
 

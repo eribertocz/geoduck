@@ -16,6 +16,7 @@ from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
 from geoduck.ui.load_dialog import LoadDialog
 from geoduck.ui.map_view import NO_EXTENT
+from geoduck.ui.sql_panel import LOG_MESSAGE
 from tests.qgis.conftest import FakeIface, wait_for
 from tests.qgis.test_sql_panel import run
 from tests.qgis.test_workspace import WorkspaceMode, plugin, qgis_window, start, toggle  # noqa: F401
@@ -77,6 +78,23 @@ def test_load_menu_opens_the_g4_dialog_with_that_mode_and_loads_one_layer(plugin
     layer = layers()[0]
     assert layer.featureCount() == 300
     assert layer.providerType() == {LoadMode.MEMORY: "memory", LoadMode.SNAPSHOT: "ogr"}.get(mode, "geoduck")
+
+
+@pytest.mark.parametrize("mode", list(LoadMode))
+def test_a_statement_ending_in_semicolon_and_comment_loads(plugin, mode):  # noqa: F811
+    """Hallazgo de E4b: la sentencia del editor incluye su `;` y el comentario que la sigue; al cargarla,
+    dentro de la subconsulta, daba «Parser Error» (desde G3). Ahora `load_sql` los quita del final."""
+    coordinator = start(plugin)
+    plugin.content.load_flow._dialog_factory = KeepModeDialog
+    KeepModeDialog.seen.clear()
+    panel = plugin.content.sql_panel
+    run(panel, coordinator, POINTS + " WHERE id < 100;\n-- Total por zona\nSELECT 1 AS uno;")
+    panel.results.setCurrentIndex(0)
+    actions = menu_actions(panel.current_view())
+    actions[mode.value].trigger()
+    assert wait_for(lambda: len(layers()) == 1 and coordinator.state is SessionState.READY, 60)
+    assert layers()[0].featureCount() == 100
+    assert "No se puede cargar" not in plugin.content.message_label.text()
 
 
 def test_unavailable_modes_are_disabled_with_their_reason(plugin, monkeypatch):  # noqa: F811
@@ -169,7 +187,7 @@ def test_log_filters_hide_rows_without_deleting_and_keep_the_full_message(plugin
     buttons["error"].click()
     rows = log_rows(panel)
     assert len(rows) == 1
-    message = panel.log.item(rows[0], 5)
+    message = panel.log.item(rows[0], LOG_MESSAGE)
     assert "inexistente" in message.text()
     assert message.toolTip() == message.text()  # el mensaje completo, accesible
     assert message.data(Qt.ItemDataRole.AccessibleTextRole) == message.text()
@@ -214,13 +232,21 @@ def test_the_panel_log_tab_counts_errors_and_the_filter_is_remembered(iface):
 
 def test_existing_actions_are_where_section_8_puts_them(plugin):  # noqa: F811
     content = plugin.content
-    assert content.start_button.isVisibleTo(content)  # sin sesión: «Iniciar sesión» en la barra de sesión
+    card = content.databases_card
+    # Sin sesión: «Iniciar sesión» al pie de «Bases de datos» (decisión del propietario, 2026-11-02)
+    assert card.isAncestorOf(content.start_button) and content.start_button.isVisibleTo(content)
+    assert not content.close_button.isVisibleTo(content)
     assert content.add_button.menu().actions() == [content.open_action, content.create_action]
-    assert content.more_button.menu().actions() == [content.spatial_action]
+    assert not hasattr(content, "spatial_action") and not hasattr(
+        content, "more_button"
+    )  # sin «Activar spatial…»
     coordinator = start(plugin)
     assert not content.start_button.isVisibleTo(content) and content.close_button.isVisibleTo(content)
-    assert content.rollback_button.isHidden()  # solo con la transacción abortada
-    assert content.refresh_button.isEnabled() and content.spatial_action.isEnabled()
+    assert card.isAncestorOf(content.close_button) and content.close_button.text() == "Cerrar sesión"
+    assert content.session_bar.isAncestorOf(content.rollback_button) and content.rollback_button.isHidden()
+    assert content.refresh_button.isEnabled()
+    item = content.explorer.findItems("main", Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive)[0]
+    assert item is not None
     explorer = content.explorer
     root = explorer.topLevelItem(0)
     menu = explorer.database_menu(root)

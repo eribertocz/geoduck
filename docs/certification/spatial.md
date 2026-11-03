@@ -13,7 +13,7 @@
   `geometry_always_xy` y la mayoría de funciones `ST_*` requieren spatial (verificado: sin spatial,
   `GEOMETRY('EPSG:4326')` falla con «unrecognized coordinate system»).
 - G0 no depende de spatial. G4 tampoco: ninguna función de GeoDuck la necesita (spatial-spec §10); solo la
-  usan «Activar spatial…» y el SQL del usuario (pruebas AX-1b, AX-1c, AX-2 y AX-3).
+  usa el SQL del usuario (`LOAD spatial;`; pruebas AX-1b, AX-1c, AX-2 y AX-3).
 
 ## 2. Dónde se instala
 
@@ -161,14 +161,16 @@ no un `SELECT` (las consultas son de solo lectura, G3). Para las copias puede ej
 | e | a con «Reproyectar a…» = `EPSG:32719`, en Copia en memoria y en Copia rápida | SRC `EPSG:32719`; Identificar: x ≈ 590716,04, y ≈ 8175564,99. El mensaje dice «Reproyectada de … a EPSG:32719» |
 | f | En el diálogo, elija Conectada | «Reproyectar a…» no está disponible (la Conectada la reproyecta QGIS al vuelo) |
 
-### 7.5 AT-SPA-003 — «Activar spatial…» (consentimiento, ADR-0011)
+### 7.5 AT-SPA-003 — `spatial` con el SQL del usuario (ADR-0011)
+
+En G5 se retiró la acción «Activar spatial…» (decisión del propietario, 2026-11-02): `spatial` se carga con SQL.
 
 | # | Qué hacer | Qué debe pasar |
 |---|---|---|
-| a | En una sesión nueva, pulse «Activar spatial…» y responda **No** | No se carga nada; todo lo anterior sigue funcionando |
-| b | «Activar spatial…» y responda **Sí** a `LOAD`. Si no está instalada, aparece una **segunda** pregunta para `INSTALL`: pruebe primero **No** (debe informar el motivo) y luego **Sí** | `spatial` cargada solo en esta sesión. «Diagnóstico del entorno…» muestra `geometry_always_xy` y su valor; GeoDuck no lo cambió |
+| a | En una sesión nueva, sin escribir nada sobre spatial, use GeoDuck (pasos 7.2–7.4) | GeoDuck nunca carga ni instala `spatial` por su cuenta |
+| b | En el editor: `INSTALL spatial; LOAD spatial;` | `spatial` cargada en esta sesión. «Diagnóstico del entorno…» la muestra cargada, con `geometry_always_xy` y su valor; GeoDuck no lo cambió |
 | c | `SELECT ST_Transform('POINT(-68.15 -16.5)'::GEOMETRY('EPSG:4326'), 'EPSG:32719', true) AS g` → Copia en memoria | SRC `EPSG:32719`, x ≈ 590716,04, y ≈ 8175564,99 (igual que 7.4 e) |
-| d | Cierre la sesión y abra otra | `spatial` ya no está cargada: el consentimiento valía solo para la sesión anterior |
+| d | Cierre la sesión y abra otra | `spatial` ya no está cargada: `LOAD` valía solo para la sesión anterior |
 
 ### 7.6 AT-SPA-004 — ilegibles, tipos mixtos y dimensiones
 

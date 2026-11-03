@@ -32,7 +32,7 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 - **Múltiples geometrías:** selector pequeño con una casilla por columna, nombre/tipo/CRS; permitir una o varias (una capa por columna). No modal por cada consulta cuando no hay ambigüedad.
 - **Opciones espaciales del diálogo de carga (G4, spatial-spec):** «Usar como geometría: WKB/WKT» para columnas `BLOB`/`VARCHAR` (nunca marcadas por defecto); «Tipos mixtos: una capa por tipo» (Memoria e Instantánea, activada) o «Separar por tipo» (Conectada, desactivada); «Reproyectar a…» (solo Memoria e Instantánea, desactivada, con CRS conocido).
 - **Capa cargada por GeoDuck:** menú contextual «Diagnosticar geometrías…»; el resultado ofrece «Reparar en una copia…» (spatial-spec §9).
-- **Sesión:** acción «Activar spatial…» con confirmación de `LOAD` y, si hace falta, confirmación separada de `INSTALL`; válida solo para la sesión (spatial-spec §10).
+- **Sesión:** sin acción para `spatial`; `LOAD`/`INSTALL` los escribe el usuario en el editor (spatial-spec §10).
 - **Progreso:** nombre operación, estado, filas procesadas, tiempo, cancelar; sin porcentaje inventado cuando no existe total.
 - **Errores:** título comprensible, detalle expandible, acción de recuperación; conservar SQL para corregirlo.
 
@@ -59,16 +59,19 @@ Prueba de tareas guiadas con persona no programadora: adjuntar base, abrir tabla
 ## 8. Workspace UX (G5 · `v0.6.0a1`; ADR-0013; issue #49; decisiones del propietario, 2026-11-02)
 Un solo workspace (`WorkspaceController` + `WorkspaceContent`: explorador, editor, resultados, registro y estado) con **dos presentaciones**: ventana propia (`QMainWindow`, **por defecto**) y panel acoplado (`QDockWidget`). El diagrama de §2 describe el panel; la maqueta aprobada en issue #49 es la referencia visual de ambas.
 
-**Ventana propia.** Barra de sesión (estado, versión de DuckDB, «Acoplar a QGIS», «Cerrar sesión»); explorador lateral redimensionable; editor y resultados con divisor; registro inferior colapsable con filtros Todo/OK/Error; barra de estado (tarea, última carga con modalidad y origen, «Ver en el mapa», «Diagnóstico del entorno…», «Acerca de…», versión). Es **hija de la ventana principal de QGIS**: queda encima de QGIS, se minimiza con él y no tiene entrada propia en la barra de tareas. La **X la oculta**; el botón de GeoDuck de la barra de herramientas la vuelve a mostrar.
+**Ventana propia.** Barra de sesión (estado, versión de DuckDB, «Acoplar a QGIS»); explorador lateral redimensionable, con «Iniciar sesión» / «Cerrar sesión» al pie; editor y resultados con divisor; registro inferior colapsable con filtros Todo/OK/Error; barra de estado (tarea, última carga con modalidad y origen, «Ver en el mapa», «Diagnóstico del entorno…», «Acerca de…», versión). Es **hija de la ventana principal de QGIS**: queda encima de QGIS, se minimiza con él y no tiene entrada propia en la barra de tareas. La **X la oculta**; el botón de GeoDuck de la barra de herramientas la vuelve a mostrar.
 
-**Panel acoplado.** Encabezado (estado de sesión, «Abrir en ventana»); pestañas Explorador / SQL / Registro (con contador de errores); en SQL, editor y resultados en vertical con divisor; «Cargar en QGIS ▾» visible; mensaje de la última carga compacto con el detalle accesible. En un panel estrecho se compactan etiquetas, nunca se quitan acciones.
+**Panel acoplado.** Barra de título propia («GeoDuck», «Abrir en ventana», X que oculta el panel) y estado de sesión; pestañas Explorador / SQL / Registro (con contador de errores); en SQL, editor y resultados en vertical con divisor; «Cargar en QGIS ▾» visible; mensaje de la última carga compacto con el detalle accesible. En un panel estrecho se compactan etiquetas, nunca se quitan acciones.
 
 **Alternancia.** Es una operación de presentación: el contenido cambia de contenedor en el hilo GUI conservando su identidad y conexiones; nunca se repite SQL ni una carga, no se cancela nada y no hay `COMMIT`, `ROLLBACK` ni `DETACH`. Si el traslado falla, el shell de origen sigue operativo y se informa.
 
 **Ubicación de las acciones existentes.**
 - «+» del explorador: «Abrir existente…» y «Crear nueva…»; botón de actualizar el catálogo.
 - Menú contextual de una base: «Desadjuntar» (con las protecciones de G3).
-- Barra de sesión: «Iniciar sesión» sin sesión activa; «Revertir transacción» solo con la transacción abortada; menú «⋯» con «Activar spatial…».
+- Pie de «Bases de datos»: «Iniciar sesión» sin sesión activa y «Cerrar sesión» con ella (decisión del propietario, 2026-11-02). La ayuda «Doble clic o clic derecho → Cargar en QGIS…» va en cada tabla y vista del árbol.
+- Barra de sesión: «Revertir transacción» solo con la transacción abortada.
+- No hay acción «Activar spatial…» (decisión del propietario, 2026-11-02): el usuario escribe `INSTALL spatial; LOAD spatial;` en el editor, como en cualquier cliente de DuckDB (spatial-spec §10).
+- Identidad visual: paleta corporativa, forma y tipografía de `docs/g5/maqueta/inventario.md` §0, aplicadas solo a los widgets de GeoDuck (ADR-0011).
 - Capas de GeoDuck: «Diagnosticar geometrías…» en el menú de capa de QGIS (sin cambios).
 
 **«Cargar en QGIS ▾».** El menú muestra las tres modalidades con su descripción y las no disponibles desactivadas con el motivo. Elegir una abre **el diálogo de G4 con esa modalidad marcada** (geometrías, SRC, «Reproyectar a…», tipos mixtos); nada cambia en G3/G4.
