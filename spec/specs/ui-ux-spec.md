@@ -93,3 +93,24 @@ Todo vive en el mismo `WorkspaceContent` de G5 y se ve igual en la ventana propi
 - **Historial.** «Abrir en el editor» en el menú contextual de cada fila del registro.
 - **«Explicar».** Botón en la fila de «Ejecutar», con ayuda que explica que no ejecuta la sentencia; en una fila estrecha, solo su icono (no amplía el ancho mínimo de GeoDuck).
 - **Idioma.** §5.
+
+## 10. Notebook (G7 · `v0.8.0a1`; decisiones del propietario, 2026-11-03)
+
+Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin incrustarla** (roadmap, decisión
+2026-11-03). Maqueta en `docs/g7/maqueta/`. Todo en el mismo `WorkspaceContent` de G5, en ventana y en panel.
+
+- **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
+  explorador de G5–G6, sin cambios). En el panel, los cuadernos van en el selector de la pestaña SQL.
+- **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento. Cada celda: botón ▶ (con menú:
+  «Ejecutar celda», «Explicar»), editor, selector de base a la derecha («memory ▾»), y debajo «N filas en X ms» y el
+  resultado con su «Cargar en QGIS ▾». La celda activa tiene el borde de acento. Al final, «+ Añadir celda»; entre
+  celdas, «+» al pasar el ratón. Menú «⋯» de la celda: subir, bajar, plegar resultado, borrar (con confirmación si
+  tiene SQL).
+- **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
+  de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
+  muestra como ayuda del rótulo del resultado.
+- **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo», «Cancelar».
+- **Atajos** (solo con el foco en GeoDuck): Ctrl+Intro ejecuta la celda; Mayús+Intro ejecuta y pasa a la siguiente
+  (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda.
+- Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
+  celdas, solo las visibles mantienen su tabla.

@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 130071,
-      "sha256": "0c1c064d98ab690a7249d87c09ba3d8398e14976117de74df0977868cf9f48f1"
+      "bytes": 136578,
+      "sha256": "dd3030516d907e589546212332e961f5e7a9f876a6bb964dc1d66d555bbb7bc8"
     },
     {
       "path": "README.md",
@@ -66,8 +66,8 @@
     },
     {
       "path": "docs/adr/0011-coexistence-with-other-duckdb-plugins.md",
-      "bytes": 4523,
-      "sha256": "28438dee380cf5289311ee02e32dc86fa60ab47bd04c6aa8d5ff9ebf609bfa9a"
+      "bytes": 4529,
+      "sha256": "af32122e50d96785068c57faae74e8ecc09ab3992ce918f2611f58534013aab9"
     },
     {
       "path": "docs/adr/0012-three-load-modes.md",
@@ -101,8 +101,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 9779,
-      "sha256": "927087e991350b63701cd8c3f9aa170c4d8cb61aaa9d7a76fe39f19ea68e7517"
+      "bytes": 10705,
+      "sha256": "cc506b457d329e15e968c36d0f0caf9e05349752500b05187be9931507511aa2"
     },
     {
       "path": "docs/references.md",
@@ -111,8 +111,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 6326,
-      "sha256": "540501237ced4ddf695db379f1e71e1db2e736682a1fe08e451b49fe209fba59"
+      "bytes": 6958,
+      "sha256": "b76c24119d6e4d50cad1cee97320d84190d1eeef409ec88cb66da07b0ec3fb89"
     },
     {
       "path": "docs/security.md",
@@ -136,8 +136,8 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 11250,
-      "sha256": "64858954ce7e9cd74e6b5a64fd4e38c0873b5f89f88aba14de8106b3f6a9cecb"
+      "bytes": 12679,
+      "sha256": "a7e8db2c56145e989d368c94898690cb39b1f46a87da66026b106dd1751f709c"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
@@ -156,13 +156,13 @@
     },
     {
       "path": "specs/sql-editor-spec.md",
-      "bytes": 8138,
-      "sha256": "3ac68a451b453825743bcc78cc562c045483f24240c97ddc98479310a19cb7b5"
+      "bytes": 9878,
+      "sha256": "8463616fc32277eea0a409b23518f6127b7f3121010fd815c47d794c1e5f9a0c"
     },
     {
       "path": "specs/ui-ux-spec.md",
-      "bytes": 13046,
-      "sha256": "d96275e7f7d0ae7f762508e8d3663bf2beac0d70a3958cf6f8609dc56777787c"
+      "bytes": 14826,
+      "sha256": "2209292bc6985df5b3c891d2f876898c748a63940dcde82b2e225f9f98b5c084"
     }
   ]
 }

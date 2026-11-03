@@ -19,10 +19,11 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
 | G5 · `v0.6.0a1` Workspace UX | un workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado (ADR-0013, issue #49) | GD-UX-001..008 | AT-UX-001..015; las tres cargas de G3/G4 en ambos modos; alternar sin perder estado ni repetir operaciones |
 | G6 · `v0.7.0a1` SQL Professional | columnas en el explorador, autocompletado, pestañas de editor, historial de la sesión, «Explicar»; interfaz en inglés (#68) | GD-CAT-002, GD-SQL-007, GD-I18N-001 | AT-CAT-002, AT-SQL-007..010, AT-I18N-001; regresiones G0–G5; teclado, Qt 5 y Qt 6 |
-| G7 · `v0.8.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
-| G8 · `v0.9.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
-| G9 · `v0.10.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
-| G10+ · `v0.11.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
+| G7 · `v0.8.0a1` Notebook | cuadernos de celdas SQL en el mismo workspace: cada celda con su base, su resultado y «Cargar en QGIS ▾» (decisión del propietario, 2026-11-03) | GD-NB-001..006 | AT-NB-001..010; regresiones G0–G6 |
+| G8 · `v0.9.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
+| G9 · `v0.10.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
+| G10 · `v0.11.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
+| G11+ · `v0.12.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
 
 ## 3. Dependencias/gates críticos
 - **Decisión 2026-11-01:** ATTACH/DETACH escritos en SQL pasan de G1 a G2; G1 no incluye un editor SQL provisional.
@@ -33,7 +34,8 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 - **Spike G4-A** (reducido, decisión 2026-11-02): solo compatibilidades no demostradas — Z/M y colecciones por GeoArrow en QGIS 3.34/4.x, cabecera WKB y `ST_GeomFromWKB` sin `spatial` en DuckDB 1.5/2.0, `makeValid` en QGIS 3.34/4.x, coste de la muestra de tipos. CRS tipado y orden de ejes ya están demostrados (C4, F-10/F-14, AX).
 - **Decisión 2026-11-02:** G5 · Workspace UX (issue #49) entra antes de SQL Professional; las fases siguientes se desplazan un número (SQL Professional G6, Performance G7, Reliability & Distribution G8, Public Alpha G9). La issue #68 (inglés) pasa a `v0.7.0a1` con su mismo alcance. G6 parte del workspace de G5: el editor avanzado se integra en `WorkspaceContent`, sin volver a crear shells.
 - **Decisión 2026-11-02 (alcance de G6):** G6 incluye columnas en el explorador (GD-CAT-002, pedido del propietario), autocompletado, varias pestañas de editor, historial de la sesión dentro del registro, «Explicar» y la interfaz en inglés (#68). Formato SQL, historial en disco, búsqueda y reemplazo, snippets y `EXPLAIN ANALYZE` pasan a GD-SQL-008, sin fase asignada.
-- **Spike G7-A** (antes G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
+- **Decisión 2026-11-03:** G7 · Notebook entra antes de Performance; Performance pasa a G8, Reliability & Distribution a G9, Public Alpha a G10. Inspirado en la DuckDB UI (cuadernos de celdas), pero nativo en Qt y sobre la sesión única: no se incrusta la DuckDB UI (interfaz no libre, descargada de internet, servidor HTTP sin autenticación y fuera del worker; ADR-0006, ADR-0011).
+- **Spike G8-A** (antes G7-A y G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
 
 ## 4. Capacidad mínima de Alpha útil
 A partir de **v0.4.0a1**: abrir plugin → sesión DuckDB → ATTACH archivo → SELECT → seleccionar resultado → cargar tabla o geometría en QGIS → DETACH → capa permanece. Una demo de carga sin tests de integridad no aprueba el gate.
