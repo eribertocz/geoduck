@@ -38,7 +38,7 @@ from geoduck.ui.i18n import tr
 #: Tipo MIME del arrastre de una celda (su id).
 CELL_MIME = "application/x-geoduck-cell"
 #: Altura del editor de una celda: entre estas líneas, según su texto.
-EDITOR_LINES = (3, 18)
+EDITOR_LINES = (1, 18)
 #: Altura máxima del resultado de una celda (con desplazamiento propio).
 RESULT_MAX_HEIGHT = 320
 #: Altura mínima de un resultado con tabla: cabecera, pestañas y unas filas a la vista.
@@ -94,8 +94,7 @@ class CellWidget(QFrame):
         super().__init__(parent)
         self.cell = cell
         self.setObjectName("geoduckCell")
-        self.setProperty("geoduck", "cell")
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setFrameShape(QFrame.Shape.NoFrame)
         self.editor = make_editor()
         self.editor.setText(cell.sql)
         self.editor.textChanged.connect(self._text_changed)
@@ -106,21 +105,25 @@ class CellWidget(QFrame):
         #: «Exportar ▾» de la celda (CSV o Parquet, la consulta completa; G7 · E3).
         self.export_button: Any = None
         self.load_menu: Any = None
+        # Margen izquierdo (⠿ ˅ ˅ ˅) | tarjeta de la celda (cabecera, editor, resultado) | margen derecho
+        # (⛶ ⋯), como la maqueta: los márgenes quedan fuera de la tarjeta, que lleva el borde de acento.
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(2, 4, 2, 4)
+        outer.setContentsMargins(0, 2, 0, 2)
         outer.setSpacing(4)
         outer.addLayout(self._build_gutter())
-        body = QVBoxLayout()
+        self.card = QFrame()
+        self.card.setObjectName("geoduckCellCard")
+        self.card.setProperty("geoduck", "cell")
+        body = QVBoxLayout(self.card)
+        body.setContentsMargins(8, 6, 8, 6)
         body.setSpacing(4)
         body.addLayout(self._build_header())
-        self.splitter = QSplitter(
-            Qt.Orientation.Vertical
-        )  # editor | resultado (en la vista de hoja, ajustable)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)  # editor | resultado (ajustable en la hoja)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.addWidget(self.editor)
         self.splitter.addWidget(self._build_result())
         body.addWidget(self.splitter, 1)
-        outer.addLayout(body, 1)
+        outer.addWidget(self.card, 1)
         outer.addLayout(self._build_side())
         self._fit_editor()
         self.set_active(False)
@@ -149,6 +152,7 @@ class CellWidget(QFrame):
         header = QHBoxLayout()
         header.setSpacing(6)
         self.run_button = _tool("▶", tr("Run the cell (Ctrl+Enter)"), tr("Run the cell"))
+        self.run_button.setProperty("geoduck", "run-cell")
         self.run_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.run_menu = QMenu(self.run_button)
         self.run_button.setMenu(self.run_menu)
@@ -158,6 +162,7 @@ class CellWidget(QFrame):
         self.title.setProperty("geoduck", "muted")
         header.addWidget(self.title, 1)
         self.database_combo = QComboBox()
+        self.database_combo.setProperty("geoduck", "database")
         self.database_combo.setToolTip(
             tr("Database of the cell: names without a database are looked up here; other databases are")
             + " "
@@ -171,8 +176,10 @@ class CellWidget(QFrame):
 
     def _build_result(self) -> QWidget:
         self.result_box = QWidget()
+        self.result_box.setProperty("geoduck", "cell-result")  # fondo propio y línea arriba (opción A)
+        self.result_box.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         box = QVBoxLayout(self.result_box)
-        box.setContentsMargins(0, 0, 0, 0)
+        box.setContentsMargins(6, 4, 6, 4)
         box.setSpacing(2)
         row = QHBoxLayout()
         self.status_label = QLabel("")
@@ -186,6 +193,7 @@ class CellWidget(QFrame):
         row.addLayout(self.load_slot)
         box.addLayout(row)
         self.results = QTabWidget()
+        self.results.currentChanged.connect(lambda _i: self._fit_result())
         self.results.setProperty("geoduck", "results")
         self.results.setDocumentMode(True)
         self.results.setUsesScrollButtons(True)
@@ -249,9 +257,9 @@ class CellWidget(QFrame):
         super().mousePressEvent(event)
 
     def set_active(self, active: bool) -> None:
-        self.setProperty("active", "true" if active else "false")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        self.card.setProperty("active", "true" if active else "false")
+        self.card.style().unpolish(self.card)
+        self.card.style().polish(self.card)
 
     def _text_changed(self) -> None:
         self.cell.sql = self.editor.text()
@@ -284,7 +292,9 @@ class CellWidget(QFrame):
             self.database_combo.setCurrentIndex(self.database_combo.findData(current))
         self.database_combo.blockSignals(False)
         problem = self.cell.database_problem(catalog)
-        self.database_combo.setProperty("geoduck", "error" if problem else "")
+        self.database_combo.setProperty("problem", "true" if problem else "false")
+        self.database_combo.style().unpolish(self.database_combo)
+        self.database_combo.style().polish(self.database_combo)
         self.database_combo.setToolTip(problem or self.database_combo.toolTip())
 
     def _database_chosen(self, index: int) -> None:
@@ -305,12 +315,29 @@ class CellWidget(QFrame):
             self.results_stack.setVisible(not folded)
 
     def show_result_area(self) -> None:
-        """Tras ejecutar: la fila de estado siempre; la tabla, si hay resultados (un `CREATE` no tiene)."""
+        """Tras ejecutar: la fila de estado siempre; la tabla, si hay resultados (un `CREATE` no tiene). Con
+        un solo resultado no se muestra su pestaña: el rótulo «N filas» ya lo dice (opción A, propietario)."""
         self.result_box.show()
-        has_tabs = self.results.count() > 0
-        self.results_stack.setCurrentWidget(self.results if has_tabs else self.empty_results)
-        self.results_stack.setVisible(has_tabs and not self.fold_result.isChecked())
-        self.results_stack.setMinimumHeight(RESULT_MIN_HEIGHT if has_tabs and not self.sheet else 0)
+        count = self.results.count()
+        self.results_stack.setCurrentWidget(self.results if count else self.empty_results)
+        self.results_stack.setVisible(count > 0 and not self.fold_result.isChecked())
+        self.results.tabBar().setVisible(count > 1)
+        self._fit_result()
+
+    def _fit_result(self) -> None:
+        """Altura del resultado según sus filas (3 filas no necesitan 200 px), entre la mínima y la máxima."""
+        if self.sheet or not self.results.count():
+            self.results_stack.setMinimumHeight(0)
+            return
+        view = self.results.currentWidget()
+        table = getattr(view, "table", None)
+        needed = RESULT_MIN_HEIGHT
+        if table is not None:
+            needed = table.horizontalHeader().height() + table.verticalHeader().length() + 4
+            needed += view.sizeHint().height() - table.sizeHint().height()  # «Vista previa», avisos…
+            if self.results.tabBar().isVisible():
+                needed += self.results.tabBar().sizeHint().height()
+        self.results_stack.setMinimumHeight(min(max(needed, 60), RESULT_MIN_HEIGHT))
 
     def set_sheet(self, sheet: bool) -> None:
         self.sheet = sheet
@@ -388,8 +415,10 @@ class NotebookView(QScrollArea):
         self._cells.dropped.connect(self.move_cell)
         self.add_button = QToolButton()
         self.add_button.setText("＋ " + tr("Add cell"))
+        self.add_button.setProperty("geoduck", "add-cell")
         self.add_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.add_button.setAccessibleName(tr("Add cell"))
+        self.add_button.setToolTip(tr("Adds an empty cell at the end of the notebook"))
         self.add_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.add_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.add_button.clicked.connect(lambda _c=False: self.add_cell(len(self.notebook.cells)))

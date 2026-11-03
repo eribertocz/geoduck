@@ -14,9 +14,10 @@ from geoduck.domain.errors import ErrorCode
 from geoduck.domain.i18n import tr
 from geoduck.domain.transaction import TransactionState
 
-#: Tamaños de vista previa permitidos (sql-editor-spec §4). 200 por defecto.
-PREVIEW_LIMITS = (50, 200, 500, 1000)
-DEFAULT_PREVIEW_LIMIT = 200
+#: Tamaños de vista previa permitidos (sql-editor-spec §4). 50 por defecto (decisión del propietario,
+#: 2026-11-03: es solo una vista previa; «Cargar» y «Exportar» usan la consulta completa).
+PREVIEW_LIMITS = (10, 50, 200, 1000)
+DEFAULT_PREVIEW_LIMIT = 50
 
 #: Tipos de sentencia de DuckDB que solo leen. Son las únicas que se pueden repetir para cargar el resultado
 #: completo en QGIS (GD-SQL-006); todas las demás cambian, o pueden cambiar, estructura, datos o estado.

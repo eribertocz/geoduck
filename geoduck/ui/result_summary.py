@@ -8,12 +8,50 @@ del resultado de la celda (`summary_text`).
 
 from __future__ import annotations
 
-from qgis.core import QgsApplication
-from qgis.PyQt.QtWidgets import QFrame, QLabel, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import (
+    QAbstractItemView,
+    QFrame,
+    QHeaderView,
+    QLabel,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.i18n import tr
 from geoduck.domain.sql import Preview
+
+_NUMBERS = (
+    "TINYINT",
+    "SMALLINT",
+    "INTEGER",
+    "BIGINT",
+    "HUGEINT",
+    "UTINYINT",
+    "USMALLINT",
+    "UINTEGER",
+    "UBIGINT",
+    "UHUGEINT",
+    "FLOAT",
+    "DOUBLE",
+    "DECIMAL",
+    "REAL",
+)
+
+
+def type_marker(kind: str) -> str:
+    """«#» números, «Aa» texto, «◈» geometría (maqueta G7, como las cabeceras del resultado)."""
+    upper = kind.strip().upper()
+    if is_geometry_type(kind):
+        return "◈"
+    if upper.startswith(_NUMBERS):
+        return "#"
+    if upper.startswith(("VARCHAR", "TEXT", "STRING")):
+        return "Aa"
+    return ""
 
 
 def rows_text(preview: Preview) -> str:
@@ -47,31 +85,56 @@ class ResultSummary(QFrame):
         box = QVBoxLayout(self)
         box.setContentsMargins(12, 12, 12, 8)
         box.setSpacing(6)
-        title = QLabel(tr("Result"))
+        title = QLabel(tr("Result").upper())
+        title.setProperty("geoduck", "muted")
         font = title.font()
         font.setBold(True)
         title.setFont(font)
         box.addWidget(title)
-        self.line = QLabel("")
-        self.line.setProperty("geoduck", "muted")
+        self.line = QLabel("")  # «3 filas · 3 columnas»
+        line_font = self.line.font()
+        line_font.setBold(True)
+        self.line.setFont(line_font)
         self.line.setWordWrap(True)
         box.addWidget(self.line)
-        self.columns = QListWidget()
+        self.origin = QLabel("")  # «Celda 1 · db»
+        self.origin.setProperty("geoduck", "muted")
+        box.addWidget(self.origin)
+        self.columns = QTreeWidget()  # «# Consumidor   BIGINT», como la maqueta
         self.columns.setObjectName("geoduckResultColumns")
         self.columns.setAccessibleName(tr("Columns of the result"))
+        self.columns.setColumnCount(2)
+        self.columns.setHeaderHidden(True)
+        self.columns.setRootIsDecorated(False)
+        self.columns.setFrameShape(QFrame.Shape.NoFrame)
+        self.columns.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.columns.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        header = self.columns.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         box.addWidget(self.columns, 1)
         self.show_preview(None)
 
-    def show_preview(self, preview: Preview | None) -> None:
+    def show_preview(self, preview: Preview | None, origin: str = "") -> None:
+        """`origin`: de dónde sale el resultado («Celda 1 · db»)."""
         self.columns.clear()
         if preview is None:
             self.line.setText(tr("Run a cell to see its columns here."))
+            self.origin.setText("")
             return
         self.line.setText(summary_line(preview))
-        geometry = QgsApplication.getThemeIcon("mIconFieldGeometry.svg")
+        self.origin.setText(origin)
         for name, kind in zip(preview.columns, preview.types, strict=True):
-            item = QListWidgetItem(f"{name} · {kind}")
-            item.setToolTip(f"{name}\n{kind}")
-            if is_geometry_type(kind):
-                item.setIcon(geometry)
-            self.columns.addItem(item)
+            item = QTreeWidgetItem([f"{type_marker(kind)} {name}".strip(), kind])
+            item.setToolTip(0, f"{name}\n{kind}")
+            item.setTextAlignment(1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.columns.addTopLevelItem(item)
+
+    def items(self) -> list[tuple[str, str]]:
+        """(columna con su marca, tipo) de cada fila, como se ven."""
+        rows = []
+        for i in range(self.columns.topLevelItemCount()):
+            item = self.columns.topLevelItem(i)
+            rows.append((item.text(0), item.text(1)))
+        return rows

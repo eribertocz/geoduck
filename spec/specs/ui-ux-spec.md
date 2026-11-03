@@ -108,8 +108,11 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
     resultado. Encima de cada celda, «+» al pasar el ratón inserta una celda ahí.
   - **Cabecera:** botón ▶ (ejecuta la celda) con menú ▾ («Ejecutar celda», «Ejecutar selección», «Ejecutar celda
     y avanzar», cada uno con su atajo, como la DuckDB UI) y, a la derecha, el selector de base («memory ▾»).
-  - **Editor** y, debajo, «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB
-    UI) y el resultado con su «Cargar ▾» (icono de capa y texto corto; la ayuda y el nombre accesible dicen «Cargar
+  - **Editor** (crece con su texto, desde una línea) y, debajo, el **resultado** con fondo propio y una línea encima:
+    arriba «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB UI) y sus botones;
+    debajo la tabla, con la altura que pidan sus filas. Con un solo resultado no se muestra su pestaña (el rótulo ya lo
+    dice); con varias sentencias, una pestaña por cada una. Una celda sin tabla (`CREATE`) muestra solo el rótulo, sin
+    botones (decisión del propietario, 2026-11-03: opción A). Los botones: «Cargar ▾» (icono de capa y texto corto; la ayuda y el nombre accesible dicen «Cargar
     en QGIS», decisión del propietario 2026-11-03), «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
     portapapeles, como texto separado por tabuladores).
   - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
@@ -118,8 +121,11 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
     (con confirmación si tiene SQL). Plegar queda en el margen izquierdo.
   - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
   - Teclado (además del ratón): Ctrl+↑/↓ sube o baja la celda activa.
-- **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): celdas con ▶, base,
-  editor y resultado; el resumen, como ayuda (ⓘ) del rótulo del resultado; «Cargar en QGIS ▾» y «Exportar ▾» al pie.
+- **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): en una fila, el selector
+  del cuaderno, «▶ Ejecutar todo», «Cancelar» y filas; celdas con ▶, base, editor y resultado; el resumen, como ayuda
+  (ⓘ) del rótulo del resultado; «Copiar», «Exportar ▾» y «Cargar en QGIS ▾» al pie, para la celda activa.
+- **Celda como tarjeta:** borde redondeado; la activa, con el borde de acento; el margen izquierdo (⠿ ˅) y el derecho
+  (⛶ ⋯) quedan fuera de la tarjeta; la base, como etiqueta de color («memory ▾»; en rojo si se desadjuntó).
 - **Columna derecha (ventana, plegable con «ⓘ» en la barra superior):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
