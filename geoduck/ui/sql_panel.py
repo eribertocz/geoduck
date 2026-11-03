@@ -1079,11 +1079,16 @@ class SqlPanel(QWidget):
     # -- historial de la sesión (G6 · E3): «Abrir en el editor» desde el registro ---------------------
 
     def logged_sql(self, row: int) -> str | None:
-        """SQL exacto que ejecutó la fila `row` del registro (solo en memoria, mientras dure el panel)."""
+        """SQL que ejecutó la fila `row` del registro (solo en memoria, mientras dure el panel): el texto que
+        delimitó DuckDB, sin los espacios de los extremos ni el `;` final (DuckDB 1.5 y 2.0 no lo incluyen
+        igual), para que sea el mismo en cualquier versión."""
         item = self.log.item(row, 0)
         key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         statement = self._statements.get(tuple(key)) if key else None
-        return statement.text.strip() if statement is not None else None
+        if statement is None:
+            return None
+        text = statement.text.strip()
+        return text[:-1].rstrip() if text.endswith(";") else text
 
     def open_logged_sql(self, row: int) -> Any:
         """Copia el SQL de la fila a una pestaña nueva, sin ejecutarlo."""
