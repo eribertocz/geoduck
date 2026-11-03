@@ -73,7 +73,7 @@ class PreparingEngine(FakeEngine):
         super().__init__()
         self.prepared = Future()
 
-    def prepare_load(self, sql, geometry=None):
+    def prepare_load(self, sql, geometry=None, formats=None, *, database=None):
         return self.prepared
 
 

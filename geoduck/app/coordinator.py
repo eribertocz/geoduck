@@ -612,14 +612,20 @@ class SessionCoordinator:
         return self._loader.availability()
 
     def prepare_load(
-        self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
+        self,
+        sql: str,
+        geometry: str | None = None,
+        formats: Mapping[str, Any] | None = None,
+        *,
+        database: str | None = None,
     ) -> int:
-        """Pide el plan de carga (sin leer datos). Responde con `LoadPrepared` o `LoadPrepareFailed`."""
+        """Pide el plan de carga (sin leer datos). Responde con `LoadPrepared` o `LoadPrepareFailed`.
+        `database`: base donde se ejecutó el resultado de una celda (G7)."""
         engine = self._require_ready(tr("prepare the load"))
         sql = load_sql(sql)  # sin el `;` ni los comentarios finales de la sentencia del editor
         self._prepare_tokens += 1
         token = self._prepare_tokens
-        fut = engine.prepare_load(sql, geometry, formats) if formats else engine.prepare_load(sql, geometry)
+        fut = engine.prepare_load(sql, geometry, formats or None, database=database)
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_prepared(engine, token, f)))
         return token
 

@@ -92,3 +92,40 @@ def test_a_transaction_can_write_only_to_one_base(worker):
     run = cell(worker, "INSERT INTO t VALUES ('dos')", "mis ventas")
     assert run.results[-1].status is StatementStatus.FAILED  # error de DuckDB, tal cual
     assert "transaction" in run.results[-1].message.lower()
+
+
+# -- «Cargar» del resultado de una celda en la base donde se ejecutó -------------------------------------
+
+
+def current(worker):
+    return run_sql(worker, "SELECT current_database()").rows[0][0]
+
+
+def test_each_result_remembers_the_base_where_it_ran(worker):
+    run = cell(worker, "SELECT origen FROM t; USE memory; SELECT count(*) FROM tabla_memoria", "db")
+    assert [r.database for r in run.results] == ["db", None, "memory"]  # el USE no tiene vista previa
+
+
+def test_operations_run_in_the_base_of_the_result_and_restore_the_base_in_use(worker):
+    cell(worker, "SELECT 1", "mis ventas")
+    assert current(worker) == "mis ventas"
+    plan = worker.prepare_load("SELECT origen FROM t", database="db").result(TIMEOUT)
+    assert [f.name for f in plan.fields] == ["origen"]
+    batches = worker.read_table("SELECT origen FROM t", database="db").future.result(TIMEOUT)
+    assert batches[0].to_pylist() == [{"origen": "db"}]
+    assert worker.query("SELECT origen FROM t", database="db").future.result(TIMEOUT).rows == (("db",),)
+    assert current(worker) == "mis ventas"  # la base en uso no cambió
+    assert worker.query("SELECT origen FROM t").future.result(TIMEOUT).rows == (("mis ventas",),)
+
+
+def test_an_operation_on_a_detached_base_fails_and_keeps_the_base_in_use(worker):
+    with pytest.raises(InvalidArgumentError, match="ya no está adjunta"):
+        worker.query("SELECT 1", database="no_existe").future.result(TIMEOUT)
+    assert current(worker) == "memory"
+
+
+def test_the_base_in_use_comes_back_even_when_the_read_fails(worker):
+    cell(worker, "SELECT 1", "mis ventas")
+    with pytest.raises(Exception, match="no_hay"):
+        worker.query("SELECT * FROM no_hay", database="db").future.result(TIMEOUT)
+    assert current(worker) == "mis ventas"

@@ -10,6 +10,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 
+from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
 from tests.qgis.conftest import wait_for
@@ -217,3 +218,38 @@ def test_use_in_a_cell_changes_only_that_cell(ready, tmp_path):
     assert cell.cell.database == "usada" and cell.database_combo.currentData() == "usada"
     other = panel.notebook_view.add_cell(1, "SELECT current_database() AS db")
     assert other.cell.database == "usada"  # una celda nueva hereda la base de la activa
+
+
+@pytest.mark.parametrize("mode", [LoadMode.MEMORY, LoadMode.SNAPSHOT, LoadMode.CONNECTED])
+def test_a_cell_result_loads_from_its_own_base_after_another_cell_changed_it(ready, tmp_path, mode):
+    """Una celda en `otra` y la siguiente en `memory`: «Cargar» de la primera repite su consulta en `otra`
+    (antes fallaba con «Table t does not exist»), y la base en uso no cambia."""
+    gd, panel, coordinator = ready
+    if gd.coordinator.load_modes()[mode] is not None:
+        pytest.skip(gd.coordinator.load_modes()[mode])
+    coordinator.execute_sql(
+        f"ATTACH '{tmp_path / 'otra.duckdb'}' AS otra; CREATE TABLE otra.t AS SELECT 7 AS n", RunScope.ALL
+    )
+    idle(panel, coordinator)
+    assert wait_for(lambda: coordinator.catalog.get("otra") is not None)
+    view = panel.notebook_view
+    first = view.cell_widgets()[0]
+    first.editor.setText("SELECT n FROM t")
+    first.cell.database = "otra"
+    view.add_cell(1, "SELECT 1 AS uno").cell.database = "memory"
+    panel.run_all_button.click()
+    idle(panel, coordinator)
+    assert panel._cell_view(first).database == "otra" and coordinator.catalog.default == "memory"
+    messages = []
+    gd.content.load_flow._on_message = messages.append
+    AutoDialog.choice = mode
+    gd.content.load_flow._dialog_factory = AutoDialog
+    before = set(QgsProject.instance().mapLayers())
+    first.load_button.click()
+    assert wait_for(lambda: set(QgsProject.instance().mapLayers()) - before), messages
+    idle(panel, coordinator)
+    (layer_id,) = set(QgsProject.instance().mapLayers()) - before
+    layer = QgsProject.instance().mapLayer(layer_id)
+    assert [f["n"] for f in layer.getFeatures()] == [7]  # también Conectada, leyendo en `otra`
+    rows = coordinator._engine.query("SELECT current_database()").future.result(10).rows
+    assert rows == (("memory",),)  # la base en uso sigue siendo la de la última celda

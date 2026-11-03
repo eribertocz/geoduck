@@ -32,6 +32,9 @@ class LoadRequest:
     source: tuple[str, str, str] | None = None
     #: Tipo del origen del explorador: "table" o "view" (para indicarlo en los mensajes).
     source_kind: str | None = None
+    #: Base donde se ejecutó el resultado de una celda (G7): la consulta se repite en ella, sin cambiar la
+    #: base en uso. None: la base en uso (o una tabla del explorador, con su nombre calificado).
+    database: str | None = None
     #: Varias geometrías: una capa por columna (spatial-spec §7). Vacío o una sola = solo `geometry`.
     geometries: tuple[str, ...] = ()
     #: Columnas `BLOB`/`VARCHAR` marcadas como geometría: ((nombre, "wkb" | "wkt"), …) (spatial-spec §2.2).

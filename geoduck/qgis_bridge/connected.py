@@ -321,7 +321,7 @@ class ConnectedLoad:
 
     def start(self) -> None:
         request = self._request
-        self._handle = self._engine.submit(lambda h, t: _metadata(h, t, request))
+        self._handle = self._engine.submit(lambda h, t: _metadata(h, t, request), database=request.database)
         self._timer.start()
 
     def cancel(self) -> None:
@@ -362,6 +362,8 @@ class ConnectedLoad:
             "source": meta["source"],
             "scope": meta["scope"],
             "database": self._request.source[0] if self._request.source else None,
+            # G7: base donde se ejecutó el resultado de una celda; cada lectura se hace en ella
+            "usedb": self._request.database if not self._request.source else None,
             "sql": strip_terminator(self._request.sql),
             "geom": plan.geometry.name if plan.geometry is not None else None,
             "geomformat": (

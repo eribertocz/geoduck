@@ -108,6 +108,9 @@ class StatementResult:
     error_offset: int | None = None
     #: Estado transaccional comprobado después de la sentencia (decisión del 2026-11-01).
     transaction: TransactionState | None = None
+    #: Base en uso cuando se ejecutó (G7): «Cargar en QGIS» repite la consulta en esta base, aunque
+    #: después otra celda haya cambiado la base en uso. Solo para resultados con vista previa.
+    database: str | None = None
 
 
 @dataclass(frozen=True)

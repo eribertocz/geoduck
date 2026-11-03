@@ -61,7 +61,7 @@ from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
 from geoduck.engine.spatial import activate_spatial, spatial_state
-from geoduck.engine.sql import StatementListener, run_script
+from geoduck.engine.sql import StatementListener, run_in_database, run_script
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
 _log = logging.getLogger("geoduck.engine")
@@ -354,12 +354,24 @@ class SessionWorker:
         return self._submit_future(lambda h, _t: activate_spatial(h, install=install))
 
     def prepare_load(
-        self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
+        self,
+        sql: str,
+        geometry: str | None = None,
+        formats: Mapping[str, Any] | None = None,
+        *,
+        database: str | None = None,
     ) -> Future[Any]:
-        """Plan de carga (columnas normalizadas, geometrías, avisos) sin leer los datos."""
-        return self._submit_future(
-            lambda h, _t: prepare_load(h, sql, geometry, pick_first=True, formats=formats)
-        )
+        """Plan de carga (columnas normalizadas, geometrías, avisos) sin leer los datos. `database`: base
+        donde se ejecutó el resultado (G7); la base en uso no cambia."""
+        try:
+            return self.submit(
+                lambda h, _t: prepare_load(h, sql, geometry, pick_first=True, formats=formats),
+                database=database,
+            ).future
+        except SessionClosedError as exc:
+            failed: Future[Any] = Future()
+            failed.set_exception(exc)
+            return failed
 
     def load_query(
         self,
@@ -370,10 +382,12 @@ class SessionWorker:
         batch_size: int = DEFAULT_BATCH,
         on_plan: Callable[[Any], None],
         on_batch: Callable[[Any], None],
+        database: str | None = None,
     ) -> OperationHandle[LoadOutcome]:
         """Lectura normalizada por lotes de una consulta repetible (qgis-bridge-spec §2).
 
         `on_plan` y `on_batch` llegan en el hilo del worker; el consumidor aplica la contrapresión.
+        `database`: base donde se ejecutó el resultado (G7); la base en uso no cambia.
         """
         return self.submit(
             lambda h, t: load_query(
@@ -385,16 +399,20 @@ class SessionWorker:
                 batch_size=batch_size,
                 on_plan=on_plan,
                 on_batch=on_batch,
-            )
+            ),
+            database=database,
         )
 
-    def read_table(self, sql: str, *, priority: bool = True) -> OperationHandle[Any]:
+    def read_table(
+        self, sql: str, *, priority: bool = True, database: str | None = None
+    ) -> OperationHandle[Any]:
         """Lee entera una consulta acotada (una página de una capa Conectada) como `pyarrow.Table`.
 
         Quien llama limita la consulta (`LIMIT`); el worker queda libre en cuanto termina la lectura.
+        `database`: base del resultado de una celda (G7); la base en uso no cambia.
         """
 
-        def op(handle: ConnectionHandle, token: CancelToken) -> Any:
+        def read(handle: ConnectionHandle, token: CancelToken) -> Any:
             batches: list[Any] = []
             summary = handle.read_arrow(sql, batch_size=DEFAULT_BATCH, on_batch=batches.append, token=token)
             if summary.outcome is ReadOutcome.CANCELLED:
@@ -403,13 +421,15 @@ class SessionWorker:
                 raise EngineError(summary.error)
             return batches
 
-        return self.submit(op, priority=priority)
+        return self.submit(read, priority=priority, database=database)
 
     def query(
-        self, sql: str, *, max_rows: int = 1000, priority: bool = True
+        self, sql: str, *, max_rows: int = 1000, priority: bool = True, database: str | None = None
     ) -> OperationHandle[StatementOutcome]:
         """Consulta corta de metadatos (columnas, clave, extensión) con prioridad de lectura del mapa."""
-        return self.submit(lambda h, _t: h.execute(sql, max_rows=max_rows), priority=priority)
+        return self.submit(
+            lambda h, _t: h.execute(sql, max_rows=max_rows), priority=priority, database=database
+        )
 
     def detach(self, alias: str) -> Future[DetachResult]:
         """DetachDatabase (`geoduck.engine.detach`), en una sola operación serial."""
@@ -467,9 +487,19 @@ class SessionWorker:
             failed.set_exception(exc)
             return failed
 
-    def submit(self, fn: Operation[T], *, priority: bool = False) -> OperationHandle[T]:
+    def submit(
+        self, fn: Operation[T], *, priority: bool = False, database: str | None = None
+    ) -> OperationHandle[T]:
         """Encola una operación. `priority`: lectura corta del mapa (página de una capa Conectada), que se
-        atiende antes que el trabajo en cola sin interrumpir la operación en curso (ADR-0012 §5)."""
+        atiende antes que el trabajo en cola sin interrumpir la operación en curso (ADR-0012 §5).
+        `database` (G7): la operación corre con esa base en uso y después la base en uso vuelve a la de
+        antes (el resultado de una celda se repite en la base donde se ejecutó)."""
+        if database is not None:
+            inner = fn
+
+            def fn(handle: ConnectionHandle, token: CancelToken) -> T:
+                return run_in_database(handle, database, lambda: inner(handle, token))
+
         with self._lock:
             if not self._accepting:
                 if self._invalidated is not None:

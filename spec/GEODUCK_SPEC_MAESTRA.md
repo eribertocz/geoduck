@@ -607,7 +607,9 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   base (error de DuckDB, que se muestra tal cual). La base en uso de la sesión queda la de la última celda
   ejecutada. Una celda nueva toma la base en uso. Si el SQL de la celda contiene su propio `USE`, gana el del SQL y
   el selector de la celda lo refleja. Si la base de la celda se desadjunta, la celda lo indica y no se ejecuta hasta
-  elegir otra.
+  elegir otra. Cada resultado recuerda la base donde se ejecutó: «Cargar en QGIS» (las tres modalidades, también
+  cada lectura de una capa Conectada) y «Exportar» repiten la consulta en esa base y después dejan la base en uso
+  como estaba, en la misma operación del worker.
 - **Ejecutar todo** recorre las celdas en orden (cada una con su `USE`) y se detiene en la primera que falla; las
   siguientes quedan sin ejecutar. Se cancela como un script.
 - **Exportar (GD-NB-007).** «Exportar ▾» → CSV o Parquet exporta la **consulta completa**, no la vista previa:

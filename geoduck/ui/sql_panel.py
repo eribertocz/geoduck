@@ -265,6 +265,8 @@ class ResultView(QWidget):
         assert preview is not None
         self.preview = preview
         self.statement = result.statement
+        #: Base donde se ejecutó (G7): «Cargar» repite la consulta en ella.
+        self.database = result.database
         self.loadable = self.statement.replayable
         self.table = self._build_table(preview)
 
@@ -1264,7 +1266,7 @@ class SqlPanel(QWidget):
 
     def _load(self, view: ResultView, mode: LoadMode | None = None) -> None:
         if self._load_flow is not None and view.loadable:
-            self._load_flow.start(view.statement.text, view.title, mode=mode)
+            self._load_flow.start(view.statement.text, view.title, mode=mode, database=view.database)
 
     def _fill_load_menu(self, view: ResultView | None, menu: QMenu | None = None) -> None:
         """Las tres modalidades en dos líneas; las no disponibles, desactivadas con el motivo."""

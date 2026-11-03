@@ -88,6 +88,7 @@ class MemoryLoad:
             self._request.sql,
             geometry=self._request.geometry,
             formats=self._request.format_map or None,
+            database=self._request.database,
             on_plan=on_plan,
             on_batch=self._channel.put,
         )
