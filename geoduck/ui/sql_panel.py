@@ -543,6 +543,18 @@ class SqlPanel(QWidget):
         super().resizeEvent(event)
         self.set_compact(event.size().width() < self._wide_width)
 
+    def insert_text(self, text: str) -> None:
+        """Escribe `text` en el editor donde está el cursor (o en lugar de la selección) y deja el cursor
+        detrás, con el foco en el editor. Nunca ejecuta nada (GD-CAT-002)."""
+        editor = self.editor
+        if editor.hasSelectedText():
+            editor.replaceSelectedText(text)
+        else:
+            line, index = editor.getCursorPosition()
+            editor.insertAt(text, line, index)
+            editor.setCursorPosition(line, index + len(text))
+        editor.setFocus()
+
     def set_compact(self, compact: bool) -> None:
         """Panel estrecho: se ocultan los atajos de los botones y la etiqueta «Filas»; ninguna acción se
         quita (ui-ux-spec §8). El atajo sigue en la ayuda de cada botón."""

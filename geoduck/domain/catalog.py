@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import InvalidArgumentError
 
 #: DuckDB compara los nombres de catálogo plegando **solo** las letras ASCII: «Año» y «año» chocan,
@@ -44,6 +45,22 @@ class CatalogObject:
     name: str
     kind: ObjectKind
     temporary: bool = False
+
+
+@dataclass(frozen=True)
+class ColumnInfo:
+    """Columna de una tabla o vista (GD-CAT-002), tal como la informa `duckdb_columns()`."""
+
+    name: str
+    #: Tipo exacto de DuckDB (`DECIMAL(10,2)`, `GEOMETRY('EPSG:4326')`, `STRUCT(a INTEGER)`…).
+    data_type: str
+    #: `None` si DuckDB no lo informa.
+    nullable: bool | None
+
+    @property
+    def is_geometry(self) -> bool:
+        """Por el tipo, nunca por el nombre."""
+        return is_geometry_type(self.data_type)
 
 
 class AccessMode(str, Enum):

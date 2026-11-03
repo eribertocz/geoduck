@@ -22,6 +22,8 @@ from geoduck.app.events import (
     CatalogChanged,
     CatalogUnavailable,
     CloseConfirmationRequired,
+    ColumnsListed,
+    ColumnsUnavailable,
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
@@ -46,7 +48,13 @@ from geoduck.app.events import (
     TransactionStateChanged,
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, LayerLoader, LoadTask, SessionEngine
-from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
+from geoduck.domain.catalog import (
+    AttachRequest,
+    AttachResult,
+    CatalogSnapshot,
+    ColumnInfo,
+    DetachResult,
+)
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
@@ -86,6 +94,9 @@ class SessionCoordinator:
         self._catalog: CatalogSnapshot | None = None
         #: Cada lectura del catálogo recibe un número; solo se aplica la más reciente.
         self._catalog_generation = 0
+        #: Palabras clave de la sesión actual, pedidas con las primeras columnas: `(motor, palabras)`.
+        self._reserved: tuple[SessionEngine, frozenset[str]] | None = None
+        self._reserved_asked: SessionEngine | None = None
         #: Archivo que se adjunta en cuanto la sesión esté lista (StartSession(mode=file)).
         self._pending_attach: AttachRequest | None = None
         #: Último estado transaccional comprobado en DuckDB; `None` sin sesión.
@@ -474,6 +485,57 @@ class SessionCoordinator:
         reading.add_done_callback(
             lambda fut: self._dispatcher.post(lambda: self._on_catalog(engine, generation, fut))
         )
+
+    def list_columns(self, source: tuple[str, str, str]) -> None:
+        """Pide las columnas de `source = (base, esquema, objeto)` (session-spec `ListColumns`).
+
+        Con la sesión ocupada, la lectura espera su turno en el worker. La respuesta (`ColumnsListed` o
+        `ColumnsUnavailable`) solo se publica si el catálogo mostrado sigue siendo el mismo: tras DDL,
+        ATTACH/DETACH o invalidación, una respuesta anterior se descarta.
+        """
+        engine = self._engine
+        if engine is None or self._sm.state not in (SessionState.READY, SessionState.BUSY):
+            raise SessionStateError(f"No se pueden leer columnas en estado {self._sm.state.value}")
+        catalog = self._catalog
+        if (self._reserved is None or self._reserved[0] is not engine) and self._reserved_asked is not engine:
+            self._reserved_asked = engine
+            words = engine.reserved_words()
+            words.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_reserved(engine, f)))
+        fut = engine.list_columns(*source)
+        fut.add_done_callback(
+            lambda f: self._dispatcher.post(lambda: self._on_columns(engine, catalog, source, f))
+        )
+
+    @property
+    def reserved_words(self) -> frozenset[str] | None:
+        """Palabras clave de DuckDB de esta sesión; `None` si aún no se conocen (entonces se cita todo)."""
+        if self._reserved is None or self._reserved[0] is not self._engine:
+            return None
+        return self._reserved[1]
+
+    def _on_reserved(self, engine: SessionEngine, fut: Future[frozenset[str]]) -> None:
+        if engine is not self._engine:
+            return
+        if fut.exception() is None:
+            self._reserved = (engine, fut.result())
+        else:
+            self._reserved_asked = None  # se reintenta con las próximas columnas
+
+    def _on_columns(
+        self,
+        engine: SessionEngine,
+        catalog: CatalogSnapshot | None,
+        source: tuple[str, str, str],
+        fut: Future[tuple[ColumnInfo, ...]],
+    ) -> None:
+        if engine is not self._engine or catalog is not self._catalog:
+            return  # sesión cerrada o catálogo nuevo: la respuesta ya no corresponde a lo que se ve
+        exc = fut.exception()
+        if exc is not None:
+            code, message = _describe(exc)
+            self._emit(ColumnsUnavailable(source, code, message))
+            return
+        self._emit(ColumnsListed(source, fut.result()))
 
     def cancel_current_operation(self) -> bool:
         if self._load is not None:

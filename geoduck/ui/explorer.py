@@ -5,13 +5,17 @@ Solo muestra la instantánea que publica la capa de aplicación, leída de DuckD
 con éxito; nunca la modifica por su cuenta ni la anticipa. G5 (ui-ux-spec §8, AT-UX-006): objetos agrupados
 en «Tablas (n)» y «Vistas (n)» por esquema, temporales en «Tablas temporales (n)» / «Vistas temporales (n)»
 bajo la base raíz, acceso de cada base y búsqueda sobre esa instantánea (nunca lee filas ni consulta DuckDB).
+G6 (GD-CAT-002, ui-ux-spec §9): cada tabla y vista se expande y muestra sus columnas, que se piden al expandir
+(`columns_requested`) y llegan con `show_columns`; doble clic o arrastre insertan su nombre en el editor.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from typing import Any
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.core import QgsApplication
+from qgis.PyQt.QtCore import QMimeData, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -25,7 +29,14 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from geoduck.domain.catalog import AccessMode, AttachedDatabase, CatalogObject, CatalogSnapshot, ObjectKind
+from geoduck.domain.catalog import (
+    AccessMode,
+    AttachedDatabase,
+    CatalogObject,
+    CatalogSnapshot,
+    ColumnInfo,
+    ObjectKind,
+)
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui import theme
 from geoduck.ui.i18n import tr
@@ -35,6 +46,10 @@ _OBJECT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 _SOURCE_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 _NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 _GROUP_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+#: Nombre de una columna (solo en los elementos de columna).
+_COLUMN_ROLE = int(Qt.ItemDataRole.UserRole) + 5
+#: Estado de las columnas de una tabla o vista: None (sin pedir), "loading", "loaded" o "error".
+_COLUMNS_STATE_ROLE = int(Qt.ItemDataRole.UserRole) + 6
 
 
 class _DatabaseDelegate(QStyledItemDelegate):
@@ -77,6 +92,10 @@ class CatalogExplorer(QTreeWidget):
     #: (consulta de lectura, nombre propuesto, `(base, esquema, nombre, "table"|"view")`) al elegir
     #: «Cargar en QGIS…».
     load_requested = pyqtSignal(str, str, object)
+    #: `(base, esquema, objeto)` al expandir una tabla o vista cuyas columnas aún no se conocen.
+    columns_requested = pyqtSignal(object)
+    #: Texto SQL (nombre de columna, ya citado si hace falta) al hacer doble clic en una columna.
+    insert_requested = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -92,8 +111,16 @@ class CatalogExplorer(QTreeWidget):
         self.setItemDelegate(_DatabaseDelegate(theme.palette_for(self).muted, self))
         #: Acciones del menú contextual de una base (las pone el workspace).
         self.database_actions: list[QAction] = []
+        #: Cómo se escribe un nombre en SQL (lo pone el workspace con las palabras clave de la sesión).
+        self.name_for_sql: Callable[[str], str] = quote_identifier
+        self.itemExpanded.connect(self._expanded)
+        self.setDragEnabled(True)  # arrastrar una columna al editor (solo las columnas, ver `mimeData`)
+        self.setDragDropMode(QTreeWidget.DragDropMode.DragOnly)
 
     def show_catalog(self, catalog: CatalogSnapshot | None) -> None:
+        # Las tablas y vistas que estaban abiertas se vuelven a abrir (y piden sus columnas de nuevo): las
+        # columnas guardadas pueden ser de antes del cambio, así que nunca se reutilizan.
+        reopen = {item.data(0, _SOURCE_ROLE)[:3] for item in self._object_items() if item.isExpanded()}
         self._catalog = catalog
         self._groups: list[QTreeWidgetItem] = []
         self.clear()
@@ -129,6 +156,9 @@ class CatalogExplorer(QTreeWidget):
         for group in self._groups:
             group.setExpanded(group.data(0, _GROUP_ROLE) == "tables")
         self.set_filter(self._filter)
+        for item in self._object_items():
+            if item.data(0, _SOURCE_ROLE)[:3] in reopen:
+                item.setExpanded(True)
 
     def _add_temporaries(self, parent: QTreeWidgetItem, temporaries: tuple[CatalogObject, ...]) -> None:
         tables = [o for o in temporaries if o.kind is ObjectKind.TABLE]
@@ -169,7 +199,91 @@ class CatalogExplorer(QTreeWidget):
         item.setData(0, _OBJECT_ROLE, object_sql(obj))
         kind = "table" if obj.kind is ObjectKind.TABLE else "view"
         item.setData(0, _SOURCE_ROLE, (obj.database, obj.schema, obj.name, kind))
+        # Expandible aunque aún no tenga hijos: las columnas se piden al expandir (GD-CAT-002)
+        item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
         return item
+
+    # -- columnas (GD-CAT-002) --------------------------------------------------------------------------
+
+    def _object_items(self) -> list[QTreeWidgetItem]:
+        """Tablas y vistas del árbol."""
+        found: list[QTreeWidgetItem] = []
+        stack = [self.topLevelItem(i) for i in range(self.topLevelItemCount())]
+        while stack:
+            item = stack.pop()
+            if item is None:
+                continue
+            if item.data(0, _SOURCE_ROLE):
+                found.append(item)
+            else:
+                stack.extend(item.child(i) for i in range(item.childCount()))
+        return found
+
+    def _expanded(self, item: QTreeWidgetItem) -> None:
+        source = item.data(0, _SOURCE_ROLE)
+        if not source or item.data(0, _COLUMNS_STATE_ROLE) in ("loading", "loaded"):
+            return
+        item.takeChildren()
+        placeholder = QTreeWidgetItem([tr("Cargando…")])
+        placeholder.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.addChild(placeholder)
+        item.setData(0, _COLUMNS_STATE_ROLE, "loading")
+        self.columns_requested.emit(tuple(source[:3]))
+
+    def _items_for(self, source: Sequence[str]) -> list[QTreeWidgetItem]:
+        return [
+            i
+            for i in self._object_items()
+            if tuple(i.data(0, _SOURCE_ROLE)[:3]) == tuple(source)
+            and i.data(0, _COLUMNS_STATE_ROLE) == "loading"
+        ]
+
+    def show_columns(self, source: Sequence[str], columns: Sequence[ColumnInfo]) -> None:
+        """Columnas de una tabla o vista pedida con `columns_requested`. Si ya no se espera (se cerró el
+        árbol o cambió el catálogo), no hace nada."""
+        geometry_icon = QgsApplication.getThemeIcon("mIconFieldGeometry.svg")
+        for item in self._items_for(source):
+            item.takeChildren()
+            for column in columns:
+                child = QTreeWidgetItem([f"{column.name} · {column.data_type}"])
+                child.setData(0, _COLUMN_ROLE, column.name)
+                if column.nullable is None:
+                    nullable = tr("No disponible")
+                else:
+                    nullable = tr("sí") if column.nullable else tr("no")
+                child.setToolTip(
+                    0,
+                    f"{column.name}\n{column.data_type}\n"
+                    + tr("Admite NULL: {0}").format(nullable)
+                    + "\n"
+                    + tr("Doble clic o arrastrar → insertar en el editor"),
+                )
+                if column.is_geometry:
+                    child.setIcon(0, geometry_icon)
+                child.setFlags(
+                    Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
+                )
+                item.addChild(child)
+            item.setData(0, _COLUMNS_STATE_ROLE, "loaded")
+
+    def show_columns_error(self, source: Sequence[str], message: str) -> None:
+        """No se pudieron leer: lo dice en el nodo y vuelve a intentarlo la próxima vez que se expanda."""
+        for item in self._items_for(source):
+            item.takeChildren()
+            child = QTreeWidgetItem([tr("No se pudieron leer las columnas")])
+            child.setToolTip(0, message)
+            child.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            item.addChild(child)
+            item.setData(0, _COLUMNS_STATE_ROLE, "error")
+
+    def mimeData(self, items: Sequence[QTreeWidgetItem]) -> QMimeData | None:  # noqa: N802 - Qt
+        """Solo las columnas se arrastran: su nombre, como texto, para soltarlo en el editor SQL."""
+        names = [i.data(0, _COLUMN_ROLE) for i in items]
+        if not names or any(n is None for n in names):
+            return None
+        data = QMimeData()
+        data.setText(", ".join(self.name_for_sql(str(n)) for n in names))
+        return data
 
     # -- búsqueda (AT-UX-006): solo sobre la instantánea mostrada --------------------------------------
 
@@ -223,9 +337,24 @@ class CatalogExplorer(QTreeWidget):
         action.triggered.connect(lambda: self.load_requested.emit(sql, name, source))
         menu.exec(self.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
 
+    def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 - Qt
+        """En una tabla o vista, el doble clic carga (G5) y no abre ni cierra sus columnas."""
+        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        item = self.itemAt(pos)
+        if item is not None and item.data(0, _SOURCE_ROLE):
+            self._double_clicked(item)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
     def _double_clicked(self, item: QTreeWidgetItem, _column: int = 0) -> None:
-        """Doble clic sobre una tabla o vista: lo mismo que «Cargar en QGIS…» (issue #67). Sobre una base o
-        un esquema no hace nada más que expandir o contraer, como siempre."""
+        """Doble clic sobre una tabla o vista: lo mismo que «Cargar en QGIS…» (issue #67); sobre una columna,
+        su nombre al editor (GD-CAT-002). Sobre una base o un esquema no hace nada más que expandir o
+        contraer, como siempre."""
+        column = item.data(0, _COLUMN_ROLE) if item is not None else None
+        if column is not None:
+            self.insert_requested.emit(self.name_for_sql(str(column)))
+            return
         sql = item.data(0, _OBJECT_ROLE) if item is not None else None
         if not sql or not self.loading_enabled:
             return

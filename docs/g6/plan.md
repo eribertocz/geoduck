@@ -43,4 +43,5 @@ Tag y release `v0.7.0a1` solo con autorización del propietario.
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC y plan | En revisión | — |
+| E0 SPEC y plan | En revisión | #85 |
+| E1 Columnas en el explorador | En revisión: `ListColumns` (worker, `duckdb_columns()` filtrado y citado), palabras clave de `duckdb_keywords()` para citar solo cuando hace falta, nodos perezosos («Cargando…», error en el nodo y reintento), icono de geometría por tipo, ayuda con tipo y nulos, doble clic y arrastre; tablas abiertas se reabren y releen tras DDL; respuestas de un catálogo anterior descartadas. AT-CAT-002 | — |

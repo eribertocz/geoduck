@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from geoduck.domain.bridge_types import LoadPlan
-from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot
+from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import ErrorCode
 from geoduck.domain.load import LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
@@ -52,6 +52,23 @@ class CatalogChanged:
 class CatalogUnavailable:
     """No se pudo leer el catálogo. La instantánea anterior se descarta: nunca se muestra una dudosa."""
 
+    code: ErrorCode
+    message: str
+
+
+@dataclass(frozen=True)
+class ColumnsListed:
+    """Columnas de `source = (base, esquema, objeto)` (GD-CAT-002), del catálogo que se muestra ahora."""
+
+    source: tuple[str, str, str]
+    columns: tuple[ColumnInfo, ...]
+
+
+@dataclass(frozen=True)
+class ColumnsUnavailable:
+    """No se pudieron leer las columnas de `source` (p. ej. el objeto ya no existe)."""
+
+    source: tuple[str, str, str]
     code: ErrorCode
     message: str
 
@@ -209,6 +226,8 @@ AppEvent = (
     | SessionInvalidated
     | CatalogChanged
     | CatalogUnavailable
+    | ColumnsListed
+    | ColumnsUnavailable
     | DatabaseAttached
     | AttachFailed
     | DatabaseDetached
