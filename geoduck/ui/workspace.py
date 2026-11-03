@@ -82,6 +82,8 @@ STATE_TEXT = {
 
 #: Ancho inicial (px) del explorador lateral en la ventana propia, como en la maqueta.
 EXPLORER_WIDTH = 280
+#: Altura inicial de la lista «Cuadernos» en la ventana (luego, la del usuario).
+NOTEBOOKS_HEIGHT = 140
 
 _CAN_CLOSE = {SessionState.CONNECTING, SessionState.READY, SessionState.BUSY, SessionState.ERROR_RECOVERABLE}
 
@@ -132,6 +134,11 @@ class WorkspaceContent(QWidget):
         self.side_splitter.setChildrenCollapsible(False)
         self.side_splitter.setObjectName("geoduckSideSplitter")
         self.side_splitter.hide()
+        # Columna izquierda de la ventana (G7 · E3): «Cuadernos» encima de «Bases de datos»
+        self.left_column = QSplitter(Qt.Orientation.Vertical)
+        self.left_column.setObjectName("geoduckLeftColumn")
+        self.left_column.setChildrenCollapsible(False)
+        self.left_column.addWidget(self.sql_panel.notebook_list)
         self._side_sized = False
         self._presented = False
         self.wide = False
@@ -311,17 +318,20 @@ class WorkspaceContent(QWidget):
             return  # ya está así: rehacer las pestañas movería la pestaña activa
         self._presented = True
         if wide:
-            self.side_splitter.addWidget(self.databases_card)  # addWidget saca el widget de la pestaña
+            self.left_column.insertWidget(1, self.databases_card)  # insertWidget lo saca de la pestaña
+            self.side_splitter.addWidget(self.left_column)
             self.side_splitter.addWidget(self.sql_panel)
             self.sql_panel.set_presentation(wide=True)  # registro debajo; «Cargar en QGIS ▾» junto a pestañas
             self.side_splitter.setStretchFactor(0, 0)
             self.side_splitter.setStretchFactor(1, 1)
             if not self._side_sized:  # ancho inicial del explorador; luego, el del usuario (preferencia)
                 self.side_splitter.setSizes([EXPLORER_WIDTH, 4 * EXPLORER_WIDTH])
+                self.left_column.setSizes([NOTEBOOKS_HEIGHT, 4 * NOTEBOOKS_HEIGHT])
                 self._side_sized = True
             self.tabs.hide()
             self.side_splitter.show()
             self.databases_card.show()
+            self.sql_panel.notebook_list.show()
             self.sql_panel.show()
             self.sql_panel.log_section.show()
         else:  # en pestañas, QTabWidget muestra solo la activa: mostrar las demás las dibujaría encima

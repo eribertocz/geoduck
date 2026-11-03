@@ -5,7 +5,7 @@ con PyQGIS y DuckDB reales."""
 from __future__ import annotations
 
 import pytest
-from qgis.core import QgsProject
+from qgis.core import QgsProject, QgsSettings
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
@@ -16,7 +16,7 @@ from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
 from tests.qgis.conftest import wait_for
 from tests.qgis.test_load_ui import AutoDialog
-from tests.qgis.test_workspace import plugin, qgis_window, start  # noqa: F401
+from tests.qgis.test_workspace import plugin, qgis_window, start, toggle  # noqa: F401
 
 pytestmark = pytest.mark.qgis
 
@@ -323,3 +323,110 @@ def test_cancel_an_export_leaves_no_file(ready, tmp_path):
     idle(panel, coordinator)
     assert "cancel" in messages[-1].lower()
     assert list(tmp_path.iterdir()) == []  # ni el archivo ni el temporal
+
+
+# -- AT-NB-007: lista de cuadernos (solo en memoria) ------------------------------------------------------
+
+
+def test_the_notebook_list_creates_renames_switches_and_closes(ready):
+    gd, panel, _coordinator = ready
+    notebooks = panel.notebook_list
+    assert notebooks.parent() is gd.content.left_column  # ventana: encima de «Bases de datos»
+    assert gd.content.left_column.indexOf(gd.content.databases_card) == 1
+    assert not panel.editor_tabs.tabBar().isVisible()
+    panel.cell.editor.setText("SELECT 'uno'")
+    notebooks.new_button.click()
+    panel.cell.editor.setText("SELECT 'dos'")
+    assert notebooks.names() == ["Consulta 1", "Consulta 2"] and notebooks.list.currentRow() == 1
+
+    notebooks.list.item(0).setText("Ventas")  # como al renombrar con doble clic o F2
+    assert notebooks.names() == ["Ventas", "Consulta 2"] and panel.editor_tabs.tabText(0) == "Ventas"
+    assert panel.editor_tabs.widget(0).notebook.name == "Ventas"
+    notebooks.list.item(1).setText("   ")  # vacío: vuelve el nombre de antes
+    assert notebooks.names() == ["Ventas", "Consulta 2"]
+
+    notebooks.list.setCurrentRow(0)  # cambiar de cuaderno conserva el estado de cada uno
+    assert panel.editor.text() == "SELECT 'uno'"
+    notebooks.list.setCurrentRow(1)
+    assert panel.editor.text() == "SELECT 'dos'"
+
+    panel.confirm_close = lambda _name: True
+    notebooks._on_close(0)  # Supr o «Cerrar» del menú
+    assert notebooks.names() == ["Consulta 2"] and panel.editor.text() == "SELECT 'dos'"
+    stored = [k for k in QgsSettings().allKeys() if k.startswith("geoduck")]
+    assert not any("Ventas" in str(QgsSettings().value(k)) for k in stored)  # nada en disco
+
+
+def test_in_the_panel_the_selector_shows_the_same_notebooks(ready):
+    gd, panel, _coordinator = ready
+    panel.new_editor_tab("SELECT 2")
+    toggle(gd.workspace)  # panel acoplado
+    selector = panel.notebook_selector
+    assert selector.isVisibleTo(panel) and not panel.summary.isVisibleTo(panel)
+    combo = selector.combo
+    assert [combo.itemText(i) for i in range(combo.count())] == ["Consulta 1", "Consulta 2"]
+    combo.setCurrentIndex(0)
+    assert panel.editor_tabs.currentIndex() == 0
+    selector.new_button.click()
+    assert combo.count() == 3 and combo.currentIndex() == 2
+    toggle(gd.workspace)  # ventana
+    assert not selector.isVisibleTo(panel) and panel.notebook_list.names()[-1] == "Consulta 3"
+
+
+# -- AT-NB-006: resumen del resultado, sin consultas nuevas -----------------------------------------------
+
+
+def test_the_summary_shows_rows_columns_and_types_without_querying(ready):
+    gd, panel, coordinator = ready
+    cell = panel.cell
+    cell.editor.setText("SELECT range AS id, 'x' AS nombre FROM range(500)")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    summary = panel.summary
+    assert summary.isVisibleTo(panel) and summary.line.text() == "200+ filas · 2 columnas"
+    assert [summary.columns.item(i).text() for i in range(summary.columns.count())] == [
+        "id · BIGINT",
+        "nombre · VARCHAR",
+    ]
+    asked = []
+    engine = coordinator._engine
+    original = engine.submit
+    engine.submit = lambda *a, **k: (asked.append(a), original(*a, **k))[1]
+    try:
+        other = panel.notebook_view.add_cell(1)  # la celda activa cambia: resumen vacío
+        assert summary.columns.count() == 0
+        panel.notebook_view.set_active(cell)
+        assert summary.columns.count() == 2
+        toggle(gd.workspace)  # panel: el resumen es la ayuda (ⓘ) del rótulo
+        assert cell.status_label.text().endswith(" ⓘ")
+        assert cell.status_label.toolTip().splitlines()[:2] == ["200+ filas · 2 columnas", "id · BIGINT"]
+        assert other.status_label.toolTip() == ""
+    finally:
+        engine.submit = original
+    assert asked == []  # ninguna consulta nueva
+    panel.summary_button.setChecked(False)
+
+
+# -- AT-NB-009: ventana ↔ panel con varias celdas, resultados y una ejecución en curso ------------------
+
+
+def test_toggling_keeps_cells_results_and_a_running_cell(ready):
+    gd, panel, coordinator = ready
+    view = panel.notebook_view
+    first = view.cell_widgets()[0]
+    first.editor.setText("SELECT 1 AS a")
+    second = view.add_cell(1, "SELECT count(*) FROM range(3000000000)")  # larga
+    panel.run_cell(first)
+    idle(panel, coordinator)
+    before = [(w.editor.text(), w.results.count(), w.cell.database) for w in view.cell_widgets()]
+    panel.run_cell(second)
+    assert wait_for(lambda: coordinator.state is SessionState.BUSY)
+    toggle(gd.workspace)
+    toggle(gd.workspace)
+    assert panel.notebook_view is view
+    after = [(w.editor.text(), w.results.count(), w.cell.database) for w in view.cell_widgets()]
+    assert after[0] == before[0] and after[1][0] == before[1][0]
+    panel.cancel_button.click()
+    idle(panel, coordinator)
+    assert first.results.count() == 1 and panel._cell_view(first).preview.rows == ((1,),)  # un solo resultado
+    assert coordinator.state is SessionState.READY
