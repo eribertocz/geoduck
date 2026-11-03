@@ -621,8 +621,8 @@ class SqlPanel(QWidget):
         editor = QgsCodeEditorSQL()
         editor.setAccessibleName(tr("SQL editor"))
         editor.setMinimumHeight(40)
-        # Ctrl+T/W: cuadernos; Mayús+Intro: ejecutar la celda; Ctrl+E y Alt+Mayús+↑/↓: celdas (G6, G7)
-        _free_keys(editor, ("Ctrl+T", "Ctrl+W", "Shift+Return", "Ctrl+E", "Alt+Shift+Up", "Alt+Shift+Down"))
+        # Ctrl+T/W: cuadernos; Mayús+Intro: ejecutar la celda; Ctrl+E y Ctrl+↑/↓: celdas (G6, G7)
+        _free_keys(editor, ("Ctrl+T", "Ctrl+W", "Shift+Return", "Ctrl+E", "Ctrl+Up", "Ctrl+Down"))
         self._completers[id(editor)] = SqlCompleter(editor, self._coordinator)  # G6 · E2
         self._color_editor(editor)
         return editor

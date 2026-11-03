@@ -61,7 +61,7 @@ class _DragHandle(QLabel):
     def __init__(self, cell: CellWidget) -> None:
         super().__init__("⠿")
         self._cell = cell
-        self.setToolTip(tr("Drag to move the cell (Alt+Shift+↑/↓ with the keyboard)"))
+        self.setToolTip(tr("Drag to move the cell (Ctrl+↑/↓ with the keyboard)"))
         self.setAccessibleName(tr("Move the cell"))
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.setAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -204,20 +204,26 @@ class CellWidget(QFrame):
         side.addWidget(self.sheet_button)
         self.more_button = _tool("⋯", tr("More actions"))
         self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        # Como la DuckDB UI: mover (con su atajo a la vista), duplicar y eliminar
         menu = QMenu(self.more_button)
-        for key, text in (
-            ("up", tr("Move up")),
-            ("down", tr("Move down")),
-            ("duplicate", tr("Duplicate")),
-            ("fold", tr("Fold the result")),
-            ("delete", tr("Delete")),
+        for key, text, keys, icon in (
+            ("up", tr("Move cell up"), "Ctrl+Up", ""),
+            ("down", tr("Move cell down"), "Ctrl+Down", ""),
+            ("-", "", "", ""),
+            ("duplicate", tr("Duplicate cell"), "", "mActionEditCopy.svg"),
+            ("delete", tr("Delete"), "", "mActionDeleteSelected.svg"),
         ):
+            if key == "-":
+                menu.addSeparator()
+                continue
             action = menu.addAction(text)
             action.setObjectName(f"geoduckCell_{key}")
-            if key == "fold":
-                action.triggered.connect(lambda _c=False: self.fold_result.toggle())
-            else:
-                action.triggered.connect(lambda _c=False, k=key: self.action_requested.emit(self, k))
+            if icon:
+                action.setIcon(QgsApplication.getThemeIcon(icon))
+            if keys:  # solo se muestra en el menú: el atajo real es de la vista (NotebookView)
+                action.setShortcut(QKeySequence(keys))
+                action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+            action.triggered.connect(lambda _c=False, k=key: self.action_requested.emit(self, k))
         self.more_button.setMenu(menu)
         side.addWidget(self.more_button)
         side.addStretch(1)
@@ -354,7 +360,7 @@ class _Cells(QWidget):
 class NotebookView(QScrollArea):
     """Las celdas de un cuaderno, con «+ Añadir celda» al final.
 
-    La celda activa recibe Ctrl+E y Alt+Mayús+↑/↓."""
+    La celda activa recibe Ctrl+E y Ctrl+↑/↓."""
 
     run_requested = pyqtSignal(object)  # CellWidget
     active_changed = pyqtSignal(object)  # CellWidget
@@ -392,8 +398,8 @@ class NotebookView(QScrollArea):
         self.shortcuts: list[QShortcut] = []
         for keys, slot in (
             ("Ctrl+E", lambda: self.active is not None and self.toggle_sheet(self.active)),
-            ("Alt+Shift+Up", lambda: self._step(-1)),
-            ("Alt+Shift+Down", lambda: self._step(1)),
+            ("Ctrl+Up", lambda: self._step(-1)),
+            ("Ctrl+Down", lambda: self._step(1)),
             ("Alt+Up", lambda: self._focus_step(-1)),
             ("Alt+Down", lambda: self._focus_step(1)),
         ):

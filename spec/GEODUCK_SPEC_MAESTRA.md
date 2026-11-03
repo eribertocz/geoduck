@@ -1147,10 +1147,11 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
     en QGIS», decisión del propietario 2026-11-03), «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
     portapapeles, como texto separado por tabuladores).
   - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
-    resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»:
-    subir, bajar, duplicar, plegar resultado, borrar (con confirmación si tiene SQL).
+    resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»,
+    como la DuckDB UI: «Subir celda» (Ctrl+↑), «Bajar celda» (Ctrl+↓), separador, «Duplicar celda» y «Eliminar»
+    (con confirmación si tiene SQL). Plegar queda en el margen izquierdo.
   - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
-  - Teclado (además del ratón): Alt+Mayús+↑/↓ sube o baja la celda activa.
+  - Teclado (además del ratón): Ctrl+↑/↓ sube o baja la celda activa.
 - **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): celdas con ▶, base,
   editor y resultado; el resumen, como ayuda (ⓘ) del rótulo del resultado; «Cargar en QGIS ▾» y «Exportar ▾» al pie.
 - **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
@@ -1161,7 +1162,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   de cada celda.
 - **Atajos** (solo con el foco en GeoDuck, como la DuckDB UI): Ctrl+Intro ejecuta la celda activa; Ctrl+Mayús+Intro,
   solo su selección; Mayús+Intro ejecuta la celda y pasa a la siguiente (la crea si es la última); Alt+↑/↓ cambia de
-  celda; Alt+Mayús+↑/↓ la mueve; Ctrl+E vista de hoja.
+  celda; Ctrl+↑/↓ la mueve; Ctrl+E vista de hoja.
 - Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
   celdas, solo las visibles mantienen su tabla.
 

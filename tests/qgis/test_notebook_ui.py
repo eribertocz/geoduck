@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import pytest
 from qgis.core import QgsProject
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 
 from geoduck.domain.session import SessionState
@@ -52,9 +54,17 @@ def test_cells_are_added_moved_folded_and_deleted(ready):
     view._cells.dropped.emit(third.cell.id, 0)
     assert sqls(panel) == ["SELECT 3", "SELECT 1", "", "SELECT 2"]
     view.set_active(third)
-    view._step(1)  # Alt+Mayús+↓
+    next(s for s in view.shortcuts if s.key().toString() == "Ctrl+Down").activated.emit()  # Ctrl+↓
     assert sqls(panel) == ["SELECT 1", "SELECT 3", "", "SELECT 2"]
     assert view.notebook.cells[1] is third.cell  # el modelo sigue a la vista
+    _plugin.content.show()
+    third.editor.setFocus()
+    QTest.keyClick(
+        third.editor, Qt.Key.Key_Up, Qt.KeyboardModifier.ControlModifier
+    )  # tecla real, no QScintilla
+    assert wait_for(lambda: sqls(panel) == ["SELECT 3", "SELECT 1", "", "SELECT 2"])
+    QTest.keyClick(third.editor, Qt.Key.Key_Down, Qt.KeyboardModifier.ControlModifier)
+    assert wait_for(lambda: sqls(panel) == ["SELECT 1", "SELECT 3", "", "SELECT 2"])
 
     third.fold_editor.setChecked(True)
     assert third.editor.isHidden() and not third.fold_result.isChecked()
@@ -86,6 +96,14 @@ def test_duplicate_keeps_sql_and_database(ready):
     _plugin, panel, _coordinator = ready
     view = panel.notebook_view
     first = view.cell_widgets()[0]
+    menu = first.more_button.menu()  # ⋯, como la DuckDB UI
+    assert [(a.text(), a.shortcut().toString()) for a in menu.actions()] == [
+        ("Subir celda", "Ctrl+Up"),
+        ("Bajar celda", "Ctrl+Down"),
+        ("", ""),
+        ("Duplicar celda", ""),
+        ("Eliminar", ""),
+    ]
     first.editor.setText("SELECT 'copia'")
     first.cell.database = "memory"
     view._action(first, "duplicate")

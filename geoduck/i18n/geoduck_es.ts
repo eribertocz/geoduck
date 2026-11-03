@@ -1782,7 +1782,6 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/load_dialog.py" line="105" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="665" />
             <location filename="../../geoduck/ui/sql_panel.py" line="667" />
             <source>Load into QGIS</source>
             <translation>Cargar en QGIS</translation>
@@ -1860,6 +1859,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/load_dialog.py" line="212" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="665" />
             <source>Load</source>
             <translation>Cargar</translation>
         </message>
@@ -1981,8 +1981,8 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/notebook_view.py" line="64" />
-            <source>Drag to move the cell (Alt+Shift+↑/↓ with the keyboard)</source>
-            <translation>Arrastra para mover la celda (Alt+Mayús+↑/↓ con el teclado)</translation>
+            <source>Drag to move the cell (Ctrl+↑/↓ with the keyboard)</source>
+            <translation>Arrastra para mover la celda (Ctrl+↑/↓ con el teclado)</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/notebook_view.py" line="65" />
@@ -2001,7 +2001,6 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/notebook_view.py" line="128" />
-            <location filename="../../geoduck/ui/notebook_view.py" line="212" />
             <source>Fold the result</source>
             <translation>Plegar el resultado</translation>
         </message>
@@ -2046,8 +2045,8 @@
             <translation>Más acciones</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="378" />
-            <location filename="../../geoduck/ui/notebook_view.py" line="376" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="384" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="382" />
             <source>Add cell</source>
             <translation>Añadir celda</translation>
         </message>
@@ -2057,27 +2056,27 @@
             <translation>siguen disponibles con su nombre (base.esquema.tabla)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="209" />
-            <source>Move up</source>
-            <translation>Subir</translation>
-        </message>
-        <message>
             <location filename="../../geoduck/ui/notebook_view.py" line="210" />
-            <source>Move down</source>
-            <translation>Bajar</translation>
+            <source>Move cell up</source>
+            <translation>Subir celda</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/notebook_view.py" line="211" />
-            <source>Duplicate</source>
-            <translation>Duplicar</translation>
+            <source>Move cell down</source>
+            <translation>Bajar celda</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/notebook_view.py" line="213" />
+            <source>Duplicate cell</source>
+            <translation>Duplicar celda</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/notebook_view.py" line="214" />
             <source>Delete</source>
             <translation>Eliminar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="428" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="434" />
             <source>Insert a cell here</source>
             <translation>Insertar una celda aquí</translation>
         </message>
@@ -2087,7 +2086,7 @@
             <translation>Base de la celda: los nombres sin base se buscan aquí; las demás bases</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="268" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="274" />
             <source>{0} (not attached)</source>
             <translation>{0} (no adjunta)</translation>
         </message>
