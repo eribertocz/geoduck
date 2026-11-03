@@ -13,6 +13,7 @@ import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
+from dataclasses import replace
 from typing import Any
 
 from geoduck.app.events import (
@@ -59,6 +60,7 @@ from geoduck.domain.sql import (
     StatementStatus,
     detach_target,
 )
+from geoduck.domain.sql_text import load_sql
 from geoduck.domain.transaction import CloseChoice, TransactionState
 
 _log = logging.getLogger("geoduck.app")
@@ -492,6 +494,7 @@ class SessionCoordinator:
     ) -> int:
         """Pide el plan de carga (sin leer datos). Responde con `LoadPrepared` o `LoadPrepareFailed`."""
         engine = self._require_ready("preparar la carga")
+        sql = load_sql(sql)  # sin el `;` ni los comentarios finales de la sentencia del editor
         self._prepare_tokens += 1
         token = self._prepare_tokens
         fut = engine.prepare_load(sql, geometry, formats) if formats else engine.prepare_load(sql, geometry)
@@ -541,6 +544,7 @@ class SessionCoordinator:
         """Carga en QGIS. Memoria e Instantánea ocupan la sesión (BUSY) hasta publicar o descartar;
         se cancelan con `cancel_current_operation`. Devuelve el id de la carga."""
         engine = self._require_ready("cargar en QGIS")
+        request = replace(request, sql=load_sql(request.sql))  # ver `load_sql`
         if self._loader is None:
             raise SessionStateError("La carga en QGIS no está disponible")
         reason = self.load_modes().get(request.mode)

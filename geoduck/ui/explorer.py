@@ -9,17 +9,68 @@ bajo la base raíz, acceso de cada base y búsqueda sobre esa instantánea (nunc
 
 from __future__ import annotations
 
+from typing import Any
+
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtWidgets import QAction, QMenu, QTreeWidget, QTreeWidgetItem, QWidget
+from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
+from qgis.PyQt.QtWidgets import (
+    QAction,
+    QApplication,
+    QMenu,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QWidget,
+)
 
 from geoduck.domain.catalog import AccessMode, AttachedDatabase, CatalogObject, CatalogSnapshot, ObjectKind
 from geoduck.domain.sql_text import quote_identifier
+from geoduck.ui import theme
 from geoduck.ui.i18n import tr
 
 _DATABASE_ROLE = int(Qt.ItemDataRole.UserRole)
 _OBJECT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 _SOURCE_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 _NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+_GROUP_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+
+
+class _DatabaseDelegate(QStyledItemDelegate):
+    """Base: nombre en negrita y « · raíz, en uso» en gris (inventario V14). El texto del elemento no cambia
+    (lo leen la búsqueda, la accesibilidad y las pruebas); solo cómo se dibuja."""
+
+    def __init__(self, muted: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._muted = QColor(muted)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: Any) -> None:
+        name = index.data(_NAME_ROLE)
+        text = index.data(Qt.ItemDataRole.DisplayRole) or ""
+        if index.parent().isValid() or not name or not str(text).startswith(str(name)):
+            super().paint(painter, option, index)
+            return
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        widget = opt.widget
+        style = widget.style() if widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)
+        rect = style.subElementRect(QStyle.SubElement.SE_ItemViewItemText, opt, widget)
+        strong = QFont(opt.font)
+        strong.setBold(True)
+        notes = str(text)[len(str(name)) :]
+        painter.save()
+        painter.setFont(strong)
+        painter.setPen(opt.palette.color(QPalette.ColorRole.Text))
+        align = int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        painter.drawText(rect, align, str(name))
+        rect.setLeft(rect.left() + QFontMetrics(strong).horizontalAdvance(str(name)))
+        painter.setFont(opt.font)
+        painter.setPen(self._muted)
+        painter.drawText(rect, align, notes)
+        painter.restore()
 
 
 class CatalogExplorer(QTreeWidget):
@@ -38,11 +89,13 @@ class CatalogExplorer(QTreeWidget):
         self.setMinimumHeight(140)
         self._catalog: CatalogSnapshot | None = None
         self._filter = ""
+        self.setItemDelegate(_DatabaseDelegate(theme.palette_for(self).muted, self))
         #: Acciones del menú contextual de una base (las pone el workspace).
         self.database_actions: list[QAction] = []
 
     def show_catalog(self, catalog: CatalogSnapshot | None) -> None:
         self._catalog = catalog
+        self._groups: list[QTreeWidgetItem] = []
         self.clear()
         if catalog is None:
             return
@@ -58,12 +111,10 @@ class CatalogExplorer(QTreeWidget):
                 schema_item.setData(0, _DATABASE_ROLE, db.name)
                 schema_item.setData(0, _NAME_ROLE, schema)
                 objects = catalog.objects_in(db.name, schema)
-                self._add_group(
-                    schema_item, tr("Tablas"), [o for o in objects if o.kind is ObjectKind.TABLE], db.name
-                )
-                self._add_group(
-                    schema_item, tr("Vistas"), [o for o in objects if o.kind is ObjectKind.VIEW], db.name
-                )
+                tables = [o for o in objects if o.kind is ObjectKind.TABLE]
+                views = [o for o in objects if o.kind is ObjectKind.VIEW]
+                self._add_group(schema_item, tr("Tablas"), tables, db.name, "tables")
+                self._add_group(schema_item, tr("Vistas"), views, db.name, "views")
                 if catalog.is_root(db.name) and schema == "main" and temporaries:
                     self._add_temporaries(schema_item, temporaries)
                     temp_placed = True
@@ -73,22 +124,32 @@ class CatalogExplorer(QTreeWidget):
             holder = QTreeWidgetItem([tr("Temporales de la sesión")])
             self._add_temporaries(holder, temporaries)
             self.addTopLevelItem(holder)
-        self.expandToDepth(2)  # bases, esquemas y grupos desplegados: los objetos a la vista
+        # Como la maqueta (V18): bases, esquemas y «Tablas (n)» abiertos; vistas y temporales, cerrados
+        self.expandToDepth(1)
+        for group in self._groups:
+            group.setExpanded(group.data(0, _GROUP_ROLE) == "tables")
         self.set_filter(self._filter)
 
     def _add_temporaries(self, parent: QTreeWidgetItem, temporaries: tuple[CatalogObject, ...]) -> None:
         tables = [o for o in temporaries if o.kind is ObjectKind.TABLE]
         views = [o for o in temporaries if o.kind is ObjectKind.VIEW]
-        self._add_group(parent, tr("Tablas temporales"), tables, None)
-        self._add_group(parent, tr("Vistas temporales"), views, None)
+        self._add_group(parent, tr("Tablas temporales"), tables, None, "temp")
+        self._add_group(parent, tr("Vistas temporales"), views, None, "temp")
 
     def _add_group(
-        self, parent: QTreeWidgetItem, title: str, objects: list[CatalogObject], database: str | None
+        self,
+        parent: QTreeWidgetItem,
+        title: str,
+        objects: list[CatalogObject],
+        database: str | None,
+        kind: str,
     ) -> None:
         if not objects:
             return
         group = QTreeWidgetItem([f"{title} ({len(objects)})"])
         group.setData(0, _DATABASE_ROLE, database)
+        group.setData(0, _GROUP_ROLE, kind)
+        self._groups.append(group)
         for obj in objects:
             group.addChild(self._object_item(obj, database))
         parent.addChild(group)
@@ -97,7 +158,12 @@ class CatalogExplorer(QTreeWidget):
     def _object_item(obj: CatalogObject, database: str | None) -> QTreeWidgetItem:
         kind = tr("tabla") if obj.kind is ObjectKind.TABLE else tr("vista")
         item = QTreeWidgetItem([obj.name])
-        item.setToolTip(0, f"{kind} {obj.database}.{obj.schema}.{obj.name}")
+        # La ayuda de carga va en cada tabla y vista (decisión del propietario, 2026-11-02)
+        item.setToolTip(
+            0,
+            f"{kind} {obj.database}.{obj.schema}.{obj.name}\n"
+            + tr("Doble clic o clic derecho → Cargar en QGIS…"),
+        )
         item.setData(0, _DATABASE_ROLE, database)
         item.setData(0, _NAME_ROLE, obj.name)
         item.setData(0, _OBJECT_ROLE, object_sql(obj))

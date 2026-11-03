@@ -15,7 +15,7 @@ El cierre de G4 no autoriza `v0.5.0a1`: tag y release los decide el propietario.
 |---|---|---|
 | D1 | Selector múltiple; una capa por columna marcada; entrega atómica; también en Conectada | spatial-spec §3, §7 |
 | D2 | Diagnóstico bajo demanda; reparación explícita en una copia (QGIS/GEOS), sin tocar el origen | §9 |
-| D3 | `spatial` nunca se instala ni carga sola; «Activar spatial…» con consentimiento de `LOAD` y, aparte, de `INSTALL`, válido para la sesión; ninguna función de G4 la necesita | §10 |
+| D3 | `spatial` nunca se instala ni carga sola; «Activar spatial…» con consentimiento de `LOAD` y, aparte, de `INSTALL`, válido para la sesión; ninguna función de G4 la necesita. **Retirada en G5 (decisión del propietario, 2026-11-02):** el usuario carga `spatial` con su propio SQL | §10 |
 | D4 | Reproyección con QGIS/PROJ solo en Memoria e Instantánea («Reproyectar a…»); la Conectada reproyecta al vuelo; ejes según C4 (no se toca `geometry_always_xy`) | §4 |
 | D5 | Conectada: `Unknown` por defecto, «Separar por tipo» opcional con filtro empujado; copias: una capa por familia (opción activada) o error | §6 |
 | 8 | Columnas `BLOB` (WKB) y `VARCHAR` (WKT) como geometría solo por selección explícita; sin inferencia ni cambios en el origen | §2.2, §5 |

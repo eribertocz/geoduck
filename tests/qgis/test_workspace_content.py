@@ -120,7 +120,7 @@ def test_results_show_each_column_type_and_tell_null_from_empty(plugin):  # noqa
         "DATE '2026-11-02' AS d",
     )
     table = panel.results.widget(0).table
-    headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
+    headers = panel.results.widget(0).header_labels()  # marca gris + nombre en negrita (inventario V31)
     assert headers == ["# n", "Aa t", "Aa nulo", "Aa vacio", "Aa texto", "d"]
     tips = [table.horizontalHeaderItem(c).toolTip() for c in range(table.columnCount())]
     assert tips == ["INTEGER", "VARCHAR", "VARCHAR", "VARCHAR", "VARCHAR", "DATE"]
@@ -138,7 +138,7 @@ def test_there_is_more_only_when_rows_exceed_the_limit(plugin, rows, more):  # n
     run(panel, coordinator, f"SELECT range AS n FROM range({rows})")
     view = panel.results.widget(0)
     assert view.table.rowCount() == min(rows, 50)
-    assert ("hay más" in view.caption.text()) is more
+    assert ("hay más" in panel.results.tabText(0)) is more
 
 
 # -- AT-UX-013: teclado, panel estrecho, DPI y tema --------------------------------------------------------
@@ -176,25 +176,27 @@ def test_a_narrow_panel_compacts_labels_but_keeps_every_action(plugin):  # noqa:
     content.tabs.setCurrentWidget(panel)
     ws.dock.setFloating(True)
     ws.dock.resize(320, 700)
-    assert wait_for(lambda: panel.compact)  # al ancho mínimo del panel no caben las etiquetas
+    assert wait_for(lambda: panel.compact)  # al ancho mínimo del panel no caben los atajos
     for button in panel.action_buttons:
-        assert (
-            button.isVisibleTo(content) and button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
-        assert button.toolTip() and button.accessibleName()
+        assert button.isVisibleTo(content) and not button._hint.isVisibleTo(button)  # atajo oculto
+        assert button.text() and button.toolTip() and button.accessibleName()  # texto y acción, siempre
         right = button.mapTo(panel, button.rect().topRight()).x()
         assert 0 <= right <= panel.width()  # dentro del panel: alcanzable
     assert panel.limit_combo.isVisibleTo(content)
-    ws.dock.resize(700, 700)
+    ws.dock.resize(1000, 700)  # con espacio, los atajos vuelven
     assert wait_for(lambda: not panel.compact)
-    assert panel.run_all_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+    assert panel.run_all_button._hint.isVisibleTo(panel.run_all_button)
 
 
 def test_every_action_is_reachable_with_the_keyboard(plugin):  # noqa: F811
     start(plugin)
     content = plugin.content
     plugin.action.trigger()
-    buttons = [b for b in content.findChildren(QAbstractButton) if b.isVisibleTo(content)]
+    buttons = [
+        b
+        for b in content.findChildren(QAbstractButton)
+        if b.isVisibleTo(content) and not isinstance(b.parent(), QLineEdit)  # «✕» de borrar de Qt
+    ]
     assert buttons
     unreachable = [b.text() or b.toolTip() for b in buttons if not b.focusPolicy() & Qt.FocusPolicy.TabFocus]
     assert unreachable == []

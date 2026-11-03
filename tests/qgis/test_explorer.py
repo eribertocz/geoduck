@@ -161,21 +161,36 @@ def test_temporaries_are_grouped_under_the_root(iface):
 # -- diálogo -----------------------------------------------------------------------------------------
 
 
-def test_attach_dialog_builds_requests(qgis_app):
-    from geoduck.ui.attach_dialog import AttachDialog
+def test_attach_dialog_builds_requests(qgis_app, tmp_path):
+    from geoduck.ui.attach_dialog import READ_ONLY_HELP, READ_WRITE_HELP, AttachDialog
 
     dialog = AttachDialog(OpenAction.CREATE_NEW)
-    assert not dialog.access_combo.isEnabled()  # «Crear nueva» solo en RW
-    dialog.path_edit.setText("/datos/nueva.duckdb")
+    assert dialog.windowTitle() == "Crear base DuckDB"
+    assert not dialog.readonly_check.isVisibleTo(dialog)  # «Crear»: sin acceso que elegir, siempre RW
+    assert not dialog.ok_button.isEnabled()  # sin archivo no se puede crear
+    dialog.path_edit.setText(str(tmp_path / "nueva.duckdb"))
+    assert dialog.ok_button.isEnabled() and dialog.alias_edit.placeholderText() == "nueva"
     request = dialog.build_request()
     assert request.access is RW and request.action is OpenAction.CREATE_NEW and request.alias is None
+    existing = tmp_path / "ya.duckdb"
+    existing.write_bytes(b"")
+    dialog.path_edit.setText(str(existing))
+    assert not dialog.ok_button.isEnabled() and "no lo sobrescribe" in dialog.path_hint.text()
 
     dialog = AttachDialog(OpenAction.OPEN_EXISTING)
-    assert dialog.access_combo.currentData() is RO  # por defecto, solo lectura
+    assert dialog.windowTitle() == "Abrir base DuckDB"
+    assert dialog.readonly_check.isChecked() and dialog.access is RO  # por defecto, solo lectura
+    assert dialog.access_help.text() == READ_ONLY_HELP
+    dialog.readonly_check.setChecked(False)
+    assert dialog.access is RW and dialog.access_help.text() == READ_WRITE_HELP
+    dialog.readonly_check.setChecked(True)
+    dialog.path_edit.setText(str(tmp_path / "no_existe.duckdb"))
+    assert not dialog.ok_button.isEnabled() and dialog.path_hint.text() == "No se encuentra el archivo."
     dialog.path_edit.setText("")
     dialog._accept()
     assert dialog.request is None and not dialog.error_label.isHidden()  # sigue abierto con el error
     dialog.path_edit.setText("/datos/x.duckdb")
+    assert dialog.alias_edit.placeholderText() == "x"  # el alias por defecto, a la vista
     dialog.alias_edit.setText("Mi base")
     dialog._accept()
     assert dialog.request == AttachRequest("/datos/x.duckdb", RO, OpenAction.OPEN_EXISTING, "Mi base")

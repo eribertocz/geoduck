@@ -8,14 +8,18 @@ estado de la sesión ni conecta señales del contenido: el contenido y las tarea
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import pyqtSignal
-from qgis.PyQt.QtGui import QCloseEvent, QHideEvent, QShowEvent
+from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtGui import QCloseEvent, QFont, QHideEvent, QIcon, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -23,21 +27,17 @@ from qgis.PyQt.QtWidgets import (
 from geoduck.ui.i18n import tr
 
 WINDOW_SIZE = (1100, 720)
+ICON = str(Path(__file__).resolve().parents[1] / "resources" / "icon.svg")
 
 
 class _Slot(QWidget):
-    """Encabezado con el botón de alternancia y, debajo, el lugar del contenido."""
+    """El lugar del contenido dentro de un shell."""
 
-    def __init__(self, button: QPushButton, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.content_layout = QVBoxLayout(self)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
-        header = QHBoxLayout()
-        header.setContentsMargins(8, 6, 8, 0)
-        header.addStretch(1)
-        header.addWidget(button)
-        self.content_layout.addLayout(header)
 
     def put(self, content: QWidget) -> None:
         # addWidget cambia el padre en un solo paso: el contenido nunca queda sin padre (ADR-0013)
@@ -58,10 +58,11 @@ class WindowShell(QMainWindow):
         super().__init__(parent)
         self.setObjectName("GeoDuckWindow")
         self.setWindowTitle(tr("GeoDuck"))
-        self.toggle_button = QPushButton(QgsApplication.getThemeIcon("mDockify.svg"), tr("Acoplar a QGIS"))
-        self.toggle_button.setObjectName("geoduckDockButton")
-        self.toggle_button.setToolTip(tr("Muestra GeoDuck como panel acoplado a QGIS, con la misma sesión"))
-        self.slot = _Slot(self.toggle_button, self)
+        self.setWindowIcon(QIcon(ICON))
+        #: Botón «Acoplar a QGIS»: vive en la barra de sesión del contenido; lo asigna el controlador.
+        self.toggle_button: QPushButton | None = None
+        self.slot = _Slot(self)
+        self.slot.setObjectName("geoduckWindowCentral")
         self.setCentralWidget(self.slot)
         self.resize(*WINDOW_SIZE)
 
@@ -87,9 +88,39 @@ class DockShell(QDockWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(tr("GeoDuck"), parent)
         self.setObjectName("GeoDuckDock")  # el mismo nombre de G0–G4: QGIS conserva su posición
+        # Barra de título propia (inventario P1, P4): «GeoDuck», «Abrir en ventana» y una X que lo oculta
+        self.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetClosable | QDockWidget.DockWidgetFeature.DockWidgetMovable
+        )
+        title = QWidget()
+        title.setObjectName("geoduckDockTitle")
+        title.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        row = QHBoxLayout(title)
+        row.setContentsMargins(12, 6, 6, 6)
+        row.setSpacing(6)
+        name = QLabel(tr("GeoDuck"))
+        font = QFont(name.font())
+        font.setBold(True)
+        name.setFont(font)
+        row.addWidget(name)
+        row.addStretch(1)
         self.toggle_button = QPushButton(QgsApplication.getThemeIcon("mDockify.svg"), tr("Abrir en ventana"))
         self.toggle_button.setObjectName("geoduckWindowButton")
+        self.toggle_button.setProperty("geoduck", "secondary")
         self.toggle_button.setToolTip(tr("Muestra GeoDuck en su propia ventana, con la misma sesión"))
-        self.slot = _Slot(self.toggle_button, self)
+        row.addWidget(self.toggle_button)
+        self.close_button = QToolButton()
+        self.close_button.setObjectName("geoduckDockClose")
+        self.close_button.setIcon(QgsApplication.getThemeIcon("mIconClose.svg"))
+        self.close_button.setText("✕")
+        self.close_button.setAutoRaise(True)
+        self.close_button.setToolTip(tr("Ocultar el panel (la sesión sigue abierta)"))
+        self.close_button.setAccessibleName(tr("Ocultar el panel"))
+        self.close_button.clicked.connect(self.close)
+        row.addWidget(self.close_button)
+        self.title_bar = title
+        self.setTitleBarWidget(title)
+        self.slot = _Slot(self)
+        self.slot.setObjectName("geoduckDockBody")
         self.setWidget(self.slot)
         self.visibilityChanged.connect(self.shown_changed)
