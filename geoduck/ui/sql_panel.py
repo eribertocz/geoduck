@@ -62,6 +62,7 @@ from geoduck.app.events import (
     VocabularyChanged,
 )
 from geoduck.app.notebook_runner import CellOutcome, NotebookRunner
+from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat, ExportRequest
 from geoduck.domain.load import LoadMode
@@ -452,6 +453,8 @@ MENU_TEXTS = OPTIONS
 
 
 def column_marker(name: str, kind: str) -> tuple[str, str]:
+    if is_geometry_type(kind):
+        return "◈", name  # maqueta G7: «◈ geometry»
     if _is_numeric(kind):
         return "#", name
     if _is_text(kind):
@@ -526,6 +529,7 @@ class SqlPanel(QWidget):
         layout.setSpacing(12)
         self._build_editor_tabs()
         self.editor_card = self._build_editor_card()
+        self._refresh_notebooks()  # el nombre del cuaderno en la barra superior
         self._build_log()
         self.log_section = self._build_log_card()
         # Divisor: celdas (cada una con su resultado, G7) | registro, redimensionable por el usuario.
@@ -587,6 +591,7 @@ class SqlPanel(QWidget):
         self.new_editor_tab()
         # Después del primer cuaderno: `_render` necesita la barra de acciones, que aún no existe
         self.editor_tabs.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
+        self.editor_tabs.currentChanged.connect(lambda _i: self._refresh_notebooks())
 
     def _new_empty_tab(self) -> None:
         self.new_editor_tab()
@@ -594,6 +599,9 @@ class SqlPanel(QWidget):
     def _refresh_notebooks(self) -> None:
         self.notebook_list.refresh()
         self.notebook_selector.refresh()
+        title = getattr(self, "notebook_title", None)
+        if title is not None:
+            title.setText(self.editor_tabs.tabText(self.editor_tabs.currentIndex()))
 
     def rename_notebook(self, index: int, name: str) -> None:
         """Renombrar un cuaderno (lista «Cuadernos»): solo su nombre; nada se guarda en disco."""
@@ -796,7 +804,6 @@ class SqlPanel(QWidget):
         self.actions_bar.setLayout(self._build_actions())
         self.actions_bar.layout().setContentsMargins(0, 0, 0, 0)
         box.addWidget(self.actions_bar)
-        box.addWidget(self.notebook_selector)  # solo en el panel (`set_presentation`)
         # Cuaderno | resumen del resultado de la celda activa (ventana; plegable, G7 · E3)
         self.summary = ResultSummary()
         self.center = QSplitter(Qt.Orientation.Horizontal)
@@ -808,6 +815,7 @@ class SqlPanel(QWidget):
         self.center.setCollapsible(1, True)
         self.center.setSizes([4 * SUMMARY_WIDTH, SUMMARY_WIDTH])
         box.addWidget(self.center, 1)
+        box.addWidget(self._build_cell_foot())  # solo en el panel
         self._wide_width = self.actions_bar.sizeHint().width() + 24  # con los atajos visibles
         # La fila no impone su ancho con los atajos: su mínimo es el de los botones sin atajo (E3)
         self.set_compact(True)
@@ -857,9 +865,17 @@ class SqlPanel(QWidget):
         self.compact = False
         actions = QHBoxLayout()
         actions.setSpacing(8)
+        # Maqueta G7: a la izquierda, el nombre del cuaderno (ventana) o su selector (panel)
+        self.notebook_title = QLabel("")
+        self.notebook_title.setObjectName("geoduckNotebookTitle")
+        title_font = self.notebook_title.font()
+        title_font.setBold(True)
+        self.notebook_title.setFont(title_font)
+        actions.addWidget(self.notebook_title)
+        actions.addWidget(self.notebook_selector, 1)  # solo en el panel (`set_presentation`)
+        actions.addStretch(1)
         for button in self.action_buttons:
             actions.addWidget(button)
-        actions.addStretch(1)
         self.limit_label = muted(QLabel(tr("Rows")))
         actions.addWidget(self.limit_label)
         actions.addWidget(self.limit_combo)
@@ -875,7 +891,51 @@ class SqlPanel(QWidget):
         return actions
 
     def _place_load_button(self, *, wide: bool) -> None:
-        """G7: cada celda lleva su «Cargar en QGIS ▾» (`_setup_cell`); en el panel, el pie queda libre."""
+        """Ventana: «Copiar», «Exportar ▾» y «Cargar ▾» en cada celda. Panel (minimalista, maqueta G7): al
+        pie, para la celda activa."""
+        self.cell_foot.setVisible(not wide)
+
+    def _build_cell_foot(self) -> QWidget:
+        self.cell_foot = QWidget()
+        self.cell_foot.setObjectName("geoduckCellFoot")
+        row = QHBoxLayout(self.cell_foot)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        self.foot_copy = QToolButton()
+        self.foot_copy.setIcon(QgsApplication.getThemeIcon("mActionEditCopy.svg"))
+        self.foot_copy.setToolTip(tr("Copies the shown rows as text separated by tabs"))
+        self.foot_copy.setAccessibleName(tr("Copy"))
+        self.foot_copy.clicked.connect(lambda _c=False: self._copy_result(self.cell))
+        self.foot_export = QToolButton()
+        self.foot_export.setIcon(QgsApplication.getThemeIcon("mActionFileSaveAs.svg"))
+        self.foot_export.setText(tr("Export"))
+        self.foot_export.setToolTip(tr("Exports the full query to CSV or Parquet (not only the preview)"))
+        self.foot_export.setAccessibleName(tr("Export the result"))
+        self.foot_export.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.foot_export.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        export_menu = QMenu(self.foot_export)
+        for fmt, text in ((ExportFormat.CSV, tr("CSV…")), (ExportFormat.PARQUET, tr("Parquet…"))):
+            action = export_menu.addAction(text)
+            action.triggered.connect(lambda _c=False, f=fmt: self.export_cell(self.cell, f))
+        self.foot_export.setMenu(export_menu)
+        self.foot_load = QToolButton()
+        self.foot_load.setProperty("geoduck", "load")
+        self.foot_load.setIcon(QgsApplication.getThemeIcon("mActionAddLayer.svg"))
+        self.foot_load.setText(tr("Load into QGIS"))
+        self.foot_load.setToolTip(tr("Loads the full result as a QGIS layer"))
+        self.foot_load.setAccessibleName(tr("Load into QGIS"))
+        self.foot_load.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.foot_load.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.foot_load.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        load_menu = QMenu(self.foot_load)
+        self.foot_load.setMenu(load_menu)
+        self.foot_load.clicked.connect(lambda _c=False: self._load_cell(self.cell))
+        load_menu.aboutToShow.connect(lambda: self._fill_load_menu(self.current_view(), load_menu))
+        row.addWidget(self.foot_copy)
+        row.addWidget(self.foot_export)
+        row.addWidget(self.foot_load, 1)
+        self.cell_foot.hide()
+        return self.cell_foot
 
     def _build_log_card(self) -> QFrame:
         frame = card(name="geoduckLogCard")
@@ -906,6 +966,7 @@ class SqlPanel(QWidget):
             self.log_title.hide()  # el título ya está en la pestaña
         self.short_titles = not wide
         self.notebook_selector.setVisible(not wide)  # en la ventana, la lista «Cuadernos» (columna izquierda)
+        self.notebook_title.setVisible(wide)
         self.summary_button.setVisible(wide)  # en el panel, el resumen es la ayuda (ⓘ) del rótulo
         self.summary.setVisible(wide and self.summary_button.isChecked())
         self._place_load_button(wide=wide)
@@ -1319,7 +1380,10 @@ class SqlPanel(QWidget):
         return view if isinstance(view, ResultView) else None
 
     def current_view(self) -> ResultView | None:
-        return self._cell_view(self.cell)
+        notebook = self.editor_tabs.currentWidget()  # al cerrar el último cuaderno, por un momento no hay
+        if not isinstance(notebook, NotebookView) or notebook.active is None:
+            return None
+        return self._cell_view(notebook.active)
 
     def _load_current(self) -> None:
         view = self.current_view()
@@ -1413,6 +1477,13 @@ class SqlPanel(QWidget):
     def _render(self, state: SessionState) -> None:
         ready = state is SessionState.READY
         self.run_all_button.setEnabled(ready)
+        foot = getattr(self, "foot_load", None)
+        if foot is not None:  # pie del panel: el resultado de la celda activa
+            view = self.current_view()
+            loadable = view is not None and view.loadable and ready
+            self.foot_load.setEnabled(loadable and self._load_flow is not None)
+            self.foot_export.setEnabled(loadable)
+            self.foot_copy.setEnabled(view is not None)
         loading = self._load_flow is not None and self._load_flow.loading
         busy_here = self._running or loading or self._exporting
         self.cancel_button.setEnabled(state is SessionState.BUSY and busy_here)
@@ -1437,6 +1508,11 @@ class SqlPanel(QWidget):
         else:
             cell.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
         cell.copy_button.setEnabled(view is not None)
+        # Opción A (propietario): los botones solo con una tabla; en el panel, al pie (celda activa)
+        in_cell = view is not None and not self.short_titles
+        for button in (cell.copy_button, cell.export_button, cell.load_button):
+            if button is not None:
+                button.setVisible(in_cell)
         # Resumen (GD-NB-004): en la ayuda del rótulo; en el panel, con su «ⓘ»
         preview = view.preview if view is not None else None
         cell.status_label.setToolTip(summary_text(preview) if preview is not None else "")
@@ -1445,7 +1521,10 @@ class SqlPanel(QWidget):
         notebook = self.editor_tabs.currentWidget()  # al crear el primer cuaderno aún no hay pestaña activa
         summary = getattr(self, "summary", None)
         if summary is not None and isinstance(notebook, NotebookView) and notebook.active is cell:
-            summary.show_preview(preview)
+            number = notebook.cell_widgets().index(cell) + 1
+            where = view.database if view is not None and view.database else cell.cell.database or ""
+            origin = tr("Cell {0}").format(number) + (f" · {where}" if where else "")
+            summary.show_preview(preview, origin)
         if cell.export_button is not None:
             cell.export_button.setEnabled(view is not None and view.loadable and ready)
         cell.run_button.setEnabled(ready)

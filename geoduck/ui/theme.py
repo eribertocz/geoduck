@@ -204,6 +204,25 @@ QTabWidget[geoduck="results"] > QTabBar::tab:selected {{
     border-bottom: 2px solid {p.primary}; font-weight: 600;
 }}
 QTabWidget[geoduck="panel-tabs"]::pane {{ border: none; }}
+
+/* Cuaderno (G7 · E4, maqueta docs/g7/maqueta): celda como tarjeta, la activa con el borde de acento */
+QFrame[geoduck="cell"] {{ background: {p.card}; border: 1px solid {p.border}; border-radius: 8px; }}
+QFrame[geoduck="cell"][active="true"] {{ border: 2px solid {p.action}; }}
+QFrame[geoduck="cell"] QLabel {{ background: transparent; }}
+*[geoduck="cell-result"] {{ background: {p.header}; border: none; border-top: 1px solid {p.border_soft}; }}
+QToolButton[geoduck="run-cell"] {{
+    color: {p.action}; border: 1px solid {p.border}; border-radius: 4px; padding: 1px 6px;
+}}
+QComboBox[geoduck="database"] {{
+    background: {p.chip}; color: {p.action}; border: none; border-radius: 4px; padding: 1px 8px;
+}}
+QComboBox[geoduck="database"][problem="true"] {{ background: {p.error_bg}; color: {p.error}; }}
+QComboBox[geoduck="database"]::drop-down {{ border: none; width: 14px; }}
+QToolButton[geoduck="run-cell"]::menu-button {{ border: none; width: 12px; }}
+QToolButton[geoduck="add-cell"] {{
+    background: {p.card}; color: {p.muted}; border: 1px dashed {p.border}; border-radius: 6px; padding: 6px;
+}}
+QToolButton[geoduck="add-cell"]:hover {{ color: {p.text}; }}
 QTabWidget[geoduck="panel-tabs"] > QTabBar::tab {{
     background: transparent; color: {p.muted}; border: none; padding: 8px 12px;
     border-bottom: 2px solid transparent;

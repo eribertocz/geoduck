@@ -23,7 +23,7 @@ El editor acepta el SQL disponible en DuckDB >=1.5 (DDL, DML, vistas, macros, tr
 Una sentencia no se clasifica solo por su primera palabra: `WITH` puede anteceder DML; el parser y el comportamiento del motor son la fuente de verdad.
 
 ## 4. Previsualización y paginación
-- Vista previa por defecto: 200 filas; opción 50/200/500/1000; siempre visualmente etiquetada «Vista previa».
+- Vista previa por defecto: 50 filas; opción 10/50/200/1000 (decisión del propietario, 2026-11-03; antes 200 y 50/200/500/1000); siempre visualmente etiquetada «Vista previa». La elección del usuario se recuerda; un valor guardado que ya no existe (500) vuelve a 50.
 - Nunca materializar `fetchall()` en resultados sin límite conocido.
 - Para lecturas reejecutables, usar una consulta acotada, respetando semántica SQL y su ordenación; si no hay `ORDER BY` no garantizar que la paginación sea estable.
 - No calcular `COUNT(*)` completo automáticamente para todo SELECT.

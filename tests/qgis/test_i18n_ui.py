@@ -44,6 +44,9 @@ out = {
     "load": plugin.content.sql_panel.load_button.accessibleName(),
     "state": plugin.content.state_label.text(),
     "tab": panel.editor_tabs.tabText(0),
+    "notebook": [
+        panel.notebook_list.names()[0], panel.cell.run_button.toolTip(), panel.notebook_view.add_button.text()
+    ],
     "after": [QgsApplication.locale(), QLocale().name()],
     "before": list(before),
 }
@@ -81,6 +84,7 @@ def run_qgis(locale: str, tmp_path: Path) -> dict:
 def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
     out = run_qgis("en_US", tmp_path)
     assert (out["run"], out["tab"], out["state"]) == ("Run all", "Query 1", "No session")
+    assert out["notebook"] == ["Query 1", "Run the cell (Ctrl+Enter)", "＋ Add cell"]  # G7
     assert "Load into QGIS" in out["load"]
     assert "cannot be empty" in out["error"]  # también los mensajes del motor
     assert out["after"] == out["before"]  # el idioma de QGIS no cambia
@@ -89,6 +93,7 @@ def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
 def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
     out = run_qgis("es_ES", tmp_path)
     assert (out["run"], out["tab"], out["state"]) == ("Ejecutar todo", "Consulta 1", "Sin sesión")
+    assert out["notebook"] == ["Consulta 1", "Ejecutar la celda (Ctrl+Intro)", "＋ Añadir celda"]  # G7
     assert "Cargar en QGIS" in out["load"]
     assert "no puede estar vacío" in out["error"]
     assert out["after"] == out["before"]

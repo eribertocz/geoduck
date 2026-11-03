@@ -13,7 +13,7 @@ import duckdb
 import pytest
 
 from geoduck.domain.errors import ErrorCode, InvalidArgumentError
-from geoduck.domain.sql import OutputKind, RunScope, StatementStatus
+from geoduck.domain.sql import PREVIEW_LIMITS, OutputKind, RunScope, StatementStatus
 from geoduck.domain.transaction import TransactionState as T
 from geoduck.engine.compat import EngineCapabilities
 from geoduck.engine.worker import SessionWorker
@@ -149,7 +149,7 @@ def test_selection_runs_only_the_selected_text_with_editor_positions(worker):
 # -- AT-SQL-005: vista previa acotada, sin fetchall --------------------------------------------------
 
 
-@pytest.mark.parametrize("limit", [50, 200, 500, 1000])
+@pytest.mark.parametrize("limit", list(PREVIEW_LIMITS))
 def test_preview_is_bounded(worker, limit):
     result = run(worker, "SELECT range FROM range(1000000);", preview_limit=limit).results[0]
     assert len(result.preview.rows) == limit and result.preview.truncated and result.preview.limit == limit

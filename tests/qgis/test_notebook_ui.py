@@ -168,7 +168,7 @@ def test_a_failing_cell_stops_the_notebook_and_a_detached_database_is_flagged(re
     last.cell.database = "fuera"
     coordinator.execute_sql("DETACH fuera", RunScope.ALL)
     idle(panel, coordinator)
-    assert wait_for(lambda: last.database_combo.property("geoduck") == "error")  # se ve y avisa
+    assert wait_for(lambda: last.database_combo.property("problem") == "true")  # se ve y avisa
     assert last.database_combo.currentText().startswith("fuera")
     messages = []
     panel._on_message = messages.append
@@ -274,7 +274,7 @@ def test_export_writes_the_whole_query_from_the_base_of_the_cell(ready, tmp_path
     panel.notebook_view.add_cell(1, "SELECT 1").cell.database = "memory"  # cambia la base en uso
     panel.run_all_button.click()
     idle(panel, coordinator)
-    assert len(panel._cell_view(cell).preview.rows) == 200  # la vista previa
+    assert len(panel._cell_view(cell).preview.rows) == 50  # la vista previa
     asked = []
     panel.choose_export_path = lambda fmt, name: (asked.append((fmt, name)), str(tmp_path / "salida"))[1]
     messages = []
@@ -285,7 +285,7 @@ def test_export_writes_the_whole_query_from_the_base_of_the_cell(ready, tmp_path
     assert wait_for((tmp_path / "salida.csv").exists)  # se añade la extensión
     lines = (tmp_path / "salida.csv").read_text().splitlines()
     assert lines[0] == "n" and len(lines) == 1001  # todas las filas, no las 200 de la vista previa
-    assert asked == [(ExportFormat.CSV, "T.csv")]  # el nombre del resultado, sin «(200+ filas)»
+    assert asked == [(ExportFormat.CSV, "T.csv")]  # el nombre del resultado, sin «(50+ filas)»
     assert "1000" in messages[-1] and "salida.csv" in messages[-1]
 
 
@@ -383,23 +383,21 @@ def test_the_summary_shows_rows_columns_and_types_without_querying(ready):
     panel.run_cell(cell)
     idle(panel, coordinator)
     summary = panel.summary
-    assert summary.isVisibleTo(panel) and summary.line.text() == "200+ filas · 2 columnas"
-    assert [summary.columns.item(i).text() for i in range(summary.columns.count())] == [
-        "id · BIGINT",
-        "nombre · VARCHAR",
-    ]
+    assert summary.isVisibleTo(panel) and summary.line.text() == "50+ filas · 2 columnas"
+    assert summary.items() == [("# id", "BIGINT"), ("Aa nombre", "VARCHAR")]
+    assert summary.origin.text() == "Celda 1 · memory"
     asked = []
     engine = coordinator._engine
     original = engine.submit
     engine.submit = lambda *a, **k: (asked.append(a), original(*a, **k))[1]
     try:
         other = panel.notebook_view.add_cell(1)  # la celda activa cambia: resumen vacío
-        assert summary.columns.count() == 0
+        assert summary.columns.topLevelItemCount() == 0
         panel.notebook_view.set_active(cell)
-        assert summary.columns.count() == 2
+        assert summary.columns.topLevelItemCount() == 2
         toggle(gd.workspace)  # panel: el resumen es la ayuda (ⓘ) del rótulo
         assert cell.status_label.text().endswith(" ⓘ")
-        assert cell.status_label.toolTip().splitlines()[:2] == ["200+ filas · 2 columnas", "id · BIGINT"]
+        assert cell.status_label.toolTip().splitlines()[:2] == ["50+ filas · 2 columnas", "id · BIGINT"]
         assert other.status_label.toolTip() == ""
     finally:
         engine.submit = original
@@ -430,3 +428,46 @@ def test_toggling_keeps_cells_results_and_a_running_cell(ready):
     idle(panel, coordinator)
     assert first.results.count() == 1 and panel._cell_view(first).preview.rows == ((1,),)  # un solo resultado
     assert coordinator.state is SessionState.READY
+
+
+# -- AT-NB-010: accesibilidad del cuaderno ---------------------------------------------------------------
+
+
+def test_every_cell_action_has_a_name_help_and_keyboard_focus(ready):
+    gd, panel, coordinator = ready
+    cell = panel.cell
+    cell.editor.setText("SELECT 1 AS a")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    widgets = [cell.run_button, cell.database_combo, cell.fold_cell, cell.fold_editor, cell.fold_result]
+    widgets += [cell.sheet_button, cell.more_button, cell.copy_button, cell.export_button, cell.load_button]
+    widgets += [panel.notebook_view.add_button, panel.notebook_list.new_button, panel.summary_button]
+    for widget in widgets:
+        name = widget.accessibleName() or (widget.text() if hasattr(widget, "text") else "")
+        assert name, widget.objectName() or widget.toolTip()
+        assert widget.toolTip(), name
+        assert widget.focusPolicy() & Qt.FocusPolicy.TabFocus, name  # se alcanza con el teclado
+    toggle(gd.workspace)  # panel: el pie, también accesible
+    for widget in (panel.foot_copy, panel.foot_export, panel.foot_load, panel.notebook_selector.combo):
+        assert widget.accessibleName() and widget.toolTip()
+        assert widget.focusPolicy() & Qt.FocusPolicy.TabFocus
+    assert panel.foot_load.isEnabled() and panel.foot_export.isEnabled()
+    assert not cell.load_button.isVisibleTo(panel)  # en el panel, los botones van al pie
+
+
+def test_one_result_has_no_tab_and_a_cell_without_table_has_no_buttons(ready):
+    _plugin, panel, coordinator = ready
+    cell = panel.cell
+    cell.editor.setText("CREATE TABLE sin_tabla(x INT)")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    assert not cell.load_button.isVisibleTo(cell) and not cell.export_button.isVisibleTo(cell)
+    assert "ms" in cell.status_label.text()
+    cell.editor.setText("SELECT 1 AS a")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    assert cell.load_button.isVisibleTo(cell) and not cell.results.tabBar().isVisibleTo(cell)
+    cell.editor.setText("SELECT 1 AS a; SELECT 2 AS b")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    assert cell.results.tabBar().isVisibleTo(cell)  # con varias sentencias, sus pestañas
