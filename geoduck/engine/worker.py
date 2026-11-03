@@ -439,6 +439,7 @@ class SessionWorker:
         on_statement: StatementListener | None = None,
         guard: Callable[[SqlStatement], str | None] | None = None,
         explain: bool = False,
+        database: str | None = None,
     ) -> OperationHandle[ScriptRun]:
         """Ejecuta SQL del usuario en una sola operación serial (`geoduck.engine.sql`). Se cancela con
         `cancel(handle.op_id)`."""
@@ -455,6 +456,7 @@ class SessionWorker:
                 on_statement=on_statement,
                 guard=guard,
                 explain=explain,
+                database=database,
             )
         )
 

@@ -1,6 +1,6 @@
 # G7 · `v0.8.0a1` Notebook — plan
 
-**Estado:** E0 en revisión (decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..006.
+**Estado:** En curso (E0 fusionado, #91; decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..006.
 **Contrato:** sql-editor-spec §7 («G7 · Notebook»), ui-ux-spec §10, `docs/g7/maqueta/` (maqueta propuesta, a
 aprobar). Parte del workspace de G5 y del editor de G6: nada de G3/G4 cambia.
 
@@ -48,10 +48,11 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 - Parquet con geometría sin SRC: al releerlo, DuckDB le asigna `OGC:CRS84`; decidir aviso o metadatos sin inventar SRC (E3).
 - Exportación cancelada o fallida: borrar el archivo parcial sin tocar uno previo (escribir a un temporal y renombrar) (E3).
 - Coste de muchos `QgsCodeEditorSQL` en una sola vista en Qt 5 y Qt 6 (E3).
-- «Explicar» de una celda con base propia: `USE` + `EXPLAIN` en la misma operación (E1).
+- ~~«Explicar» de una celda con base propia~~ Verificado en E1: `USE` + `EXPLAIN` en la misma operación.
 
 ## 5. Estado
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, maqueta y plan | En revisión | — |
+| E0 SPEC, maqueta y plan | Fusionado | #91 |
+| E1 Modelo y ejecución de celdas | En revisión: `domain/notebook.py` (cuaderno y celda sin Qt: insertar, mover, duplicar, borrar; base desadjuntada; seguir el `USE` escrito en la celda); motor: `USE` de la base de la celda tras las comprobaciones y antes del SQL, en la misma operación, y `ScriptRun.current_database`; coordinador: relee el catálogo si cambia la base en uso; `app/notebook_runner.py`: una celda o todas en orden, parada en el primer fallo, rechazo o celda sin base. AT-NB-002, 003, 004 (motor y unitarias; la vista llega en E2) | — |
