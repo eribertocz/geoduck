@@ -39,6 +39,7 @@ from geoduck.domain.catalog import (
     ColumnInfo,
     DetachResult,
 )
+from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import (
     ActiveResultError,
     EngineError,
@@ -55,7 +56,7 @@ from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlSt
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.attach import attach_database
 from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, prepare_load
-from geoduck.engine.catalog import read_catalog, read_columns, read_reserved_words
+from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
 from geoduck.engine.spatial import activate_spatial, spatial_state
@@ -334,9 +335,9 @@ class SessionWorker:
         """Columnas de una tabla o vista (session-spec `ListColumns`), en una operación serial breve."""
         return self._submit_future(lambda h, _t: read_columns(h, database, schema, name))
 
-    def reserved_words(self) -> Future[frozenset[str]]:
-        """Palabras clave que obligan a citar un identificador (`duckdb_keywords()`)."""
-        return self._submit_future(lambda h, _t: read_reserved_words(h))
+    def vocabulary(self) -> Future[Vocabulary]:
+        """Palabras clave y funciones de la sesión (`duckdb_keywords()`, `duckdb_functions()`)."""
+        return self._submit_future(lambda h, _t: read_vocabulary(h))
 
     def attach(self, request: AttachRequest) -> Future[AttachResult]:
         """«Abrir existente» o «Crear nueva» (`geoduck.engine.attach`), en una sola operación serial."""

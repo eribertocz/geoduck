@@ -14,6 +14,7 @@ from geoduck.domain.catalog import (
     ColumnInfo,
     DetachResult,
 )
+from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
@@ -55,8 +56,8 @@ class SessionEngine(Protocol):
         """Columnas de una tabla o vista (session-spec `ListColumns`): solo metadatos, en su orden."""
         ...
 
-    def reserved_words(self) -> Future[frozenset[str]]:
-        """Palabras clave de DuckDB que obligan a citar un identificador."""
+    def vocabulary(self) -> Future[Vocabulary]:
+        """Palabras clave y funciones de DuckDB en la sesión (cambian tras `LOAD` de una extensión)."""
         ...
 
     def attach(self, request: AttachRequest) -> Future[AttachResult]:

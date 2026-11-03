@@ -74,6 +74,11 @@ class ColumnsUnavailable:
 
 
 @dataclass(frozen=True)
+class VocabularyChanged:
+    """Llegó el vocabulario de DuckDB (palabras clave y funciones) del catálogo mostrado."""
+
+
+@dataclass(frozen=True)
 class DatabaseAttached:
     database: AttachedDatabase
 
@@ -228,6 +233,7 @@ AppEvent = (
     | CatalogUnavailable
     | ColumnsListed
     | ColumnsUnavailable
+    | VocabularyChanged
     | DatabaseAttached
     | AttachFailed
     | DatabaseDetached

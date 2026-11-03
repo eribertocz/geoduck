@@ -88,7 +88,7 @@ Un solo workspace (`WorkspaceController` + `WorkspaceContent`: explorador, edito
 Todo vive en el mismo `WorkspaceContent` de G5 y se ve igual en la ventana propia y en el panel; no se crean ventanas, paneles ni conexiones nuevas.
 
 - **Columnas en el explorador (GD-CAT-002).** Cada tabla y vista se puede expandir y muestra sus columnas como `nombre · TIPO`, con un icono propio para las de tipo `GEOMETRY` (por el tipo, nunca por el nombre). Ayuda: tipo exacto y «Admite NULL: sí/no». Se leen al expandir (session-spec `ListColumns`), con un nodo «Cargando…» mientras tanto. La búsqueda sigue filtrando por tablas y vistas, no por columnas. **Doble clic o arrastrar una columna** al editor inserta su nombre (entre comillas si hace falta) en la posición del cursor; el doble clic en una tabla o vista sigue siendo «Cargar en QGIS…» (§3).
-- **Autocompletado.** Lista pequeña bajo el cursor, que no tapa la línea que se escribe; tipo de cada sugerencia (tabla, vista, columna, función) en un texto discreto.
+- **Autocompletado.** Lista pequeña bajo el cursor, que no tapa la línea que se escribe; el tipo de cada sugerencia (columna, tabla, vista, esquema o base, función) con su icono de QGIS; las palabras clave, sin icono. Orden: columnas de los objetos de la sentencia, tablas, vistas, esquemas, bases, funciones y palabras clave. Sustituye al autocompletado de palabras de `QgsCodeEditorSQL`, para que no haya dos listas.
 - **Pestañas de editor.** Encima del editor, con «+» para una nueva y cierre en cada pestaña; Ctrl+T nueva, Ctrl+W cerrar, solo con el foco en GeoDuck.
 - **Historial.** «Abrir en el editor» en el menú contextual de cada fila del registro.
 - **«Explicar».** Botón junto a «Ejecutar», con ayuda que explica que no ejecuta la sentencia.

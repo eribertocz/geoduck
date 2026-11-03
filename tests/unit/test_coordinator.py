@@ -26,6 +26,7 @@ from geoduck.app.events import (
     StatementFinished,
     TransactionFailed,
     TransactionStateChanged,
+    VocabularyChanged,
 )
 from geoduck.domain.catalog import (
     AccessMode,
@@ -37,6 +38,7 @@ from geoduck.domain.catalog import (
     DetachResult,
     OpenAction,
 )
+from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import (
     EngineError,
     ErrorCode,
@@ -130,7 +132,7 @@ class FakeEngine:
         self.column_reads.append(((database, schema, name), Future()))
         return self.column_reads[-1][1]
 
-    def reserved_words(self):
+    def vocabulary(self):
         self.word_reads.append(Future())
         return self.word_reads[-1]
 
@@ -1100,7 +1102,7 @@ def test_reserved_words_are_read_once_per_session(env):
     assert coordinator.reserved_words is None  # aún desconocidas: el explorador cita todo
     coordinator.list_columns(("memory", "main", "a"))
     coordinator.list_columns(("memory", "main", "b"))
-    engines[0].word_reads[0].set_result(frozenset({"select"}))
+    engines[0].word_reads[0].set_result(Vocabulary(frozenset({"select"})))
     dispatcher.drain()
     coordinator.list_columns(("memory", "main", "c"))
     assert len(engines[0].word_reads) == 1 and coordinator.reserved_words == frozenset({"select"})
@@ -1117,3 +1119,31 @@ def test_columns_need_a_session(env):
     coordinator, _dispatcher, _engines, _events = env
     with pytest.raises(SessionStateError):
         coordinator.list_columns(("memory", "main", "t"))
+
+
+def test_columns_are_kept_for_the_completion_until_the_catalog_changes(env):
+    coordinator, dispatcher, engines, _events = _with_catalog(env)
+    coordinator.list_columns(("memory", "main", "t"))
+    engines[0].column_reads[0][1].set_result((ID,))
+    dispatcher.drain()
+    assert coordinator.known_columns() == {("memory", "main", "t"): (ID,)}
+    coordinator.refresh_catalog()
+    engines[0].catalog_reads[-1].set_result(WITH_SALES)
+    dispatcher.drain()
+    assert coordinator.known_columns() == {}
+
+
+def test_the_vocabulary_is_read_again_after_a_catalog_change(env):
+    coordinator, dispatcher, engines, events = _with_catalog(env)
+    assert coordinator.vocabulary() is None
+    assert coordinator.vocabulary() is None  # una sola petición en curso
+    assert len(engines[0].word_reads) == 1
+    engines[0].word_reads[0].set_result(Vocabulary(functions=("sum",)))
+    dispatcher.drain()
+    assert coordinator.vocabulary().functions == ("sum",)
+    assert any(isinstance(e, VocabularyChanged) for e in events)
+    coordinator.refresh_catalog()  # p. ej. tras LOAD spatial
+    engines[0].catalog_reads[-1].set_result(WITH_SALES)
+    dispatcher.drain()
+    assert coordinator.vocabulary() is None and len(engines[0].word_reads) == 2
+    assert coordinator.reserved_words == frozenset()  # las palabras clave siguen valiendo para citar
