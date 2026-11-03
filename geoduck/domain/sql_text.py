@@ -9,6 +9,8 @@ escrito por el usuario se ejecuta tal cual.
 
 from __future__ import annotations
 
+import re
+
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 
 
@@ -23,6 +25,17 @@ def quote_identifier(name: str) -> str:
         raise GeoDuckError("El identificador no puede estar vacío", code=ErrorCode.INVALID_ARGUMENT)
     _reject_nul(name, "El identificador")
     return '"' + name.replace('"', '""') + '"'
+
+
+_BARE = re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def sql_name(name: str, reserved: frozenset[str] | None) -> str:
+    """Nombre listo para escribir en SQL: tal cual si es un identificador simple en minúsculas que no es
+    palabra clave; si no, entre comillas dobles. Sin la lista de palabras clave (`None`), siempre citado."""
+    if reserved is not None and _BARE.match(name) and name not in reserved:
+        return name
+    return quote_identifier(name)
 
 
 def quote_string_literal(value: str) -> str:

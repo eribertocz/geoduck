@@ -11,6 +11,8 @@ from geoduck.app.events import (
     CatalogChanged,
     CatalogUnavailable,
     CloseConfirmationRequired,
+    ColumnsListed,
+    ColumnsUnavailable,
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
@@ -31,6 +33,7 @@ from geoduck.domain.catalog import (
     AttachRequest,
     AttachResult,
     CatalogSnapshot,
+    ColumnInfo,
     DetachResult,
     OpenAction,
 )
@@ -76,6 +79,8 @@ class FakeEngine:
         self.scripts: list[dict] = []
         self.rollbacks: list[Future] = []
         self.cancelled = False
+        self.column_reads: list[tuple[tuple[str, str, str], Future]] = []
+        self.word_reads: list[Future] = []
 
     def start(self):
         return self.started
@@ -120,6 +125,14 @@ class FakeEngine:
     def read_catalog(self):
         self.catalog_reads.append(Future())
         return self.catalog_reads[-1]
+
+    def list_columns(self, database, schema, name):
+        self.column_reads.append(((database, schema, name), Future()))
+        return self.column_reads[-1][1]
+
+    def reserved_words(self):
+        self.word_reads.append(Future())
+        return self.word_reads[-1]
 
 
 INFO = EngineInfo("2.0.0", ":memory:", True, "memory")
@@ -1037,3 +1050,70 @@ def test_close_during_sql_ignores_late_results(env):
     dispatcher.drain()
     assert coordinator.state is S.DISCONNECTED
     assert not any(isinstance(e, (StatementFinished, ScriptFinished)) for e in events)
+
+
+# -- columnas del explorador (G6 · E1, GD-CAT-002) ------------------------------------------------
+
+ID = ColumnInfo("id", "INTEGER", False)
+
+
+def _with_catalog(env, snapshot=ONLY_ROOT):
+    coordinator, dispatcher, engines, events = _ready(env)
+    coordinator.refresh_catalog()
+    engines[-1].catalog_reads[-1].set_result(snapshot)
+    dispatcher.drain()
+    return coordinator, dispatcher, engines, events
+
+
+def test_columns_are_published_for_the_catalog_on_screen(env):
+    coordinator, dispatcher, engines, events = _with_catalog(env)
+    coordinator.list_columns(("memory", "main", "t"))
+    ((source, fut),) = engines[0].column_reads
+    assert source == ("memory", "main", "t")
+    fut.set_result((ID,))
+    dispatcher.drain()
+    assert [e for e in events if isinstance(e, ColumnsListed)] == [ColumnsListed(source, (ID,))]
+
+
+def test_an_answer_for_an_older_catalog_is_discarded(env):
+    coordinator, dispatcher, engines, events = _with_catalog(env)
+    coordinator.list_columns(("memory", "main", "t"))
+    coordinator.refresh_catalog()  # p. ej. tras un ALTER TABLE desde el editor
+    engines[0].catalog_reads[-1].set_result(WITH_SALES)
+    dispatcher.drain()
+    engines[0].column_reads[0][1].set_result((ID,))
+    dispatcher.drain()
+    assert not [e for e in events if isinstance(e, ColumnsListed)]
+
+
+def test_a_failed_read_is_reported_for_that_object(env):
+    coordinator, dispatcher, engines, events = _with_catalog(env)
+    coordinator.list_columns(("memory", "main", "borrada"))
+    engines[0].column_reads[0][1].set_exception(EngineError("memory.main.borrada ya no existe"))
+    dispatcher.drain()
+    (failed,) = [e for e in events if isinstance(e, ColumnsUnavailable)]
+    assert failed.source == ("memory", "main", "borrada") and "ya no existe" in failed.message
+
+
+def test_reserved_words_are_read_once_per_session(env):
+    coordinator, dispatcher, engines, _events = _with_catalog(env)
+    assert coordinator.reserved_words is None  # aún desconocidas: el explorador cita todo
+    coordinator.list_columns(("memory", "main", "a"))
+    coordinator.list_columns(("memory", "main", "b"))
+    engines[0].word_reads[0].set_result(frozenset({"select"}))
+    dispatcher.drain()
+    coordinator.list_columns(("memory", "main", "c"))
+    assert len(engines[0].word_reads) == 1 and coordinator.reserved_words == frozenset({"select"})
+    coordinator.close_session()  # otra sesión, otras palabras
+    engines[0].stopped.set_result(None)
+    dispatcher.drain()
+    _with_catalog(env)
+    assert coordinator.reserved_words is None
+    coordinator.list_columns(("memory", "main", "a"))
+    assert len(engines[1].word_reads) == 1
+
+
+def test_columns_need_a_session(env):
+    coordinator, _dispatcher, _engines, _events = env
+    with pytest.raises(SessionStateError):
+        coordinator.list_columns(("memory", "main", "t"))

@@ -38,6 +38,8 @@ from geoduck.app.events import (
     CatalogChanged,
     CatalogUnavailable,
     CloseConfirmationRequired,
+    ColumnsListed,
+    ColumnsUnavailable,
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
@@ -54,6 +56,7 @@ from geoduck.domain.catalog import AttachRequest, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import ErrorCause, SessionState
+from geoduck.domain.sql_text import sql_name
 from geoduck.domain.transaction import CloseChoice
 from geoduck.domain.versions import release_stage
 from geoduck.ui import theme
@@ -166,6 +169,9 @@ class WorkspaceContent(QWidget):
         self.sql_panel.log_counts_changed.connect(self._update_log_tab)
         self.explorer.itemSelectionChanged.connect(lambda: self._render(self._coordinator.state))
         self.explorer.load_requested.connect(self.load_flow.start)
+        self.explorer.columns_requested.connect(self._request_columns)
+        self.explorer.insert_requested.connect(self._insert_in_editor)
+        self.explorer.name_for_sql = lambda name: sql_name(name, self._coordinator.reserved_words)
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
     @staticmethod
@@ -540,6 +546,18 @@ class WorkspaceContent(QWidget):
 
     # -- render ------------------------------------------------------------------------------------
 
+    def _request_columns(self, source: tuple[str, str, str]) -> None:
+        try:
+            self._coordinator.list_columns(source)
+        except GeoDuckError as exc:  # sin sesión utilizable: el nodo lo dice y se reintenta al expandir
+            self.explorer.show_columns_error(source, exc.message)
+
+    def _insert_in_editor(self, text: str) -> None:
+        """Doble clic en una columna (GD-CAT-002): al editor; en el panel, se pasa a la pestaña SQL."""
+        if not self.wide:
+            self.tabs.setCurrentWidget(self.sql_panel)
+        self.sql_panel.insert_text(text)
+
     def _on_event(self, event: AppEvent) -> None:  # noqa: PLR0912 - un despacho por evento
         if isinstance(event, LoadFinished):
             report = event.report
@@ -569,6 +587,10 @@ class WorkspaceContent(QWidget):
             self.explorer.show_catalog(event.catalog)
             self._update_engine_label()
             self._render(self._coordinator.state)
+        elif isinstance(event, ColumnsListed):
+            self.explorer.show_columns(event.source, event.columns)
+        elif isinstance(event, ColumnsUnavailable):
+            self.explorer.show_columns_error(event.source, event.message)
         elif isinstance(event, CatalogUnavailable):
             self._show_message(tr("No se pudo leer el catálogo."), event.code.value, event.message)
         elif isinstance(event, DatabaseAttached):

@@ -7,7 +7,13 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from typing import Any, Protocol
 
-from geoduck.domain.catalog import AttachRequest, AttachResult, CatalogSnapshot, DetachResult
+from geoduck.domain.catalog import (
+    AttachRequest,
+    AttachResult,
+    CatalogSnapshot,
+    ColumnInfo,
+    DetachResult,
+)
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
@@ -43,6 +49,14 @@ class SessionEngine(Protocol):
 
     def read_catalog(self) -> Future[CatalogSnapshot]:
         """Instantánea del catálogo leída de DuckDB (nunca parcial). Falla si la sesión no acepta trabajo."""
+        ...
+
+    def list_columns(self, database: str, schema: str, name: str) -> Future[tuple[ColumnInfo, ...]]:
+        """Columnas de una tabla o vista (session-spec `ListColumns`): solo metadatos, en su orden."""
+        ...
+
+    def reserved_words(self) -> Future[frozenset[str]]:
+        """Palabras clave de DuckDB que obligan a citar un identificador."""
         ...
 
     def attach(self, request: AttachRequest) -> Future[AttachResult]:

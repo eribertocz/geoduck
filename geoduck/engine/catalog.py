@@ -16,10 +16,12 @@ from geoduck.domain.catalog import (
     AttachedDatabase,
     CatalogObject,
     CatalogSnapshot,
+    ColumnInfo,
     ObjectKind,
     catalog_key,
 )
 from geoduck.domain.errors import EngineError
+from geoduck.domain.sql_text import quote_string_literal
 
 if TYPE_CHECKING:
     from geoduck.engine.worker import ConnectionHandle
@@ -85,3 +87,37 @@ def _bounded(handle: ConnectionHandle, sql: str) -> tuple[tuple[object, ...], ..
     if out.truncated:
         raise EngineError(f"El catálogo tiene más de {OBJECT_LIMIT} objetos; no se muestra incompleto")
     return out.rows
+
+
+#: Máximo de columnas de un objeto; por encima, la lectura falla en vez de truncarse.
+COLUMN_LIMIT = 10_000
+
+
+def read_columns(handle: ConnectionHandle, database: str, schema: str, name: str) -> tuple[ColumnInfo, ...]:
+    """Columnas de una tabla o vista, en su orden (session-spec `ListColumns`). Solo metadatos."""
+    where = " AND ".join(
+        f"{col} = {quote_string_literal(value)}"
+        for col, value in (("database_name", database), ("schema_name", schema), ("table_name", name))
+    )
+    out = handle.execute(
+        f"SELECT column_name, data_type, is_nullable FROM duckdb_columns() WHERE {where} "
+        "ORDER BY column_index",
+        max_rows=COLUMN_LIMIT,
+    )
+    if out.truncated:
+        raise EngineError(f"{name} tiene más de {COLUMN_LIMIT} columnas; no se muestran incompletas")
+    if not out.rows:  # una tabla o vista siempre tiene columnas: el objeto ya no existe
+        raise EngineError(f"{database}.{schema}.{name} ya no existe")
+    return tuple(
+        ColumnInfo(str(col), str(data_type), None if nullable is None else bool(nullable))
+        for col, data_type, nullable in out.rows
+    )
+
+
+def read_reserved_words(handle: ConnectionHandle) -> frozenset[str]:
+    """Palabras clave de DuckDB que obligan a citar un identificador (todas menos `unreserved`)."""
+    out = handle.execute(
+        "SELECT keyword_name FROM duckdb_keywords() WHERE keyword_category <> 'unreserved'",
+        max_rows=OBJECT_LIMIT,
+    )
+    return frozenset(str(row[0]) for row in out.rows)
