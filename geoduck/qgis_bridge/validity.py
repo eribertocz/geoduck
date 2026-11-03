@@ -26,6 +26,7 @@ from qgis.core import (
 )
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 from geoduck.domain.validity import MAX_REASONS, GeometryDiagnosis, RepairReport
 from geoduck.qgis_bridge.families import FamilyLayers
 from geoduck.qgis_bridge.provider import KEY
@@ -44,7 +45,7 @@ def _geos_engine() -> Any:
 
 def _reason(g: QgsGeometry) -> str:
     errors = g.validateGeometry(_geos_engine())
-    return errors[0].what() if errors else "inválida según GEOS"
+    return errors[0].what() if errors else tr("invalid according to GEOS")
 
 
 def _parts(g: QgsGeometry) -> int:
@@ -55,7 +56,9 @@ class DiagnoseTask(QgsTask):  # type: ignore[misc]
     """Recorre la capa y cuenta cada estado. El resultado llega a `on_done` en el hilo principal."""
 
     def __init__(self, layer: QgsVectorLayer, on_done: Done) -> None:
-        super().__init__(f"GeoDuck: diagnosticar geometrías de «{layer.name()}»", QgsTask.Flag.CanCancel)
+        super().__init__(
+            tr("GeoDuck: diagnose geometries of «{0}»").format(layer.name()), QgsTask.Flag.CanCancel
+        )
         self._source = QgsVectorLayerFeatureSource(layer)
         self._id, self._name = layer.id(), layer.name()
         self._total = max(layer.featureCount(), 1)
@@ -85,7 +88,7 @@ class DiagnoseTask(QgsTask):  # type: ignore[misc]
         examined = 0
         for f in self._source.getFeatures(request):
             if self.isCanceled():
-                raise CancelledError("Diagnóstico cancelado")
+                raise CancelledError(tr("Diagnosis cancelled"))
             examined += 1
             g = f.geometry()
             fid = int(f.id())
@@ -124,7 +127,7 @@ class DiagnoseTask(QgsTask):  # type: ignore[misc]
         if result and self.diagnosis is not None:
             self._on_done(self.diagnosis)
         else:
-            self._on_done(self.error or CancelledError("Diagnóstico cancelado"))
+            self._on_done(self.error or CancelledError(tr("Diagnosis cancelled")))
 
 
 class RepairTask(QgsTask):  # type: ignore[misc]
@@ -137,7 +140,9 @@ class RepairTask(QgsTask):  # type: ignore[misc]
         on_done: Done,
         project: QgsProject | None = None,
     ) -> None:
-        super().__init__(f"GeoDuck: reparar geometrías de «{layer.name()}»", QgsTask.Flag.CanCancel)
+        super().__init__(
+            tr("GeoDuck: repair geometries of «{0}»").format(layer.name()), QgsTask.Flag.CanCancel
+        )
         self._source = QgsVectorLayerFeatureSource(layer)
         self._name = layer.name()
         self._fields = layer.fields()
@@ -163,7 +168,7 @@ class RepairTask(QgsTask):  # type: ignore[misc]
     def _repair(self) -> None:
         for done, f in enumerate(self._source.getFeatures(), start=1):
             if self.isCanceled():
-                raise CancelledError("Reparación cancelada")
+                raise CancelledError(tr("Repair cancelled"))
             fid = int(f.id())
             copy = QgsFeature(self._fields)
             copy.setAttributes(f.attributes())
@@ -194,7 +199,7 @@ class RepairTask(QgsTask):  # type: ignore[misc]
 
     def finished(self, result: bool) -> None:  # hilo principal: crea y publica las capas
         if not result:
-            self._on_done(self.error or CancelledError("Reparación cancelada"))
+            self._on_done(self.error or CancelledError(tr("Repair cancelled")))
             return
         try:
             layers = FamilyLayers(f"{self._name} (reparada)", self._fields, self._crs, split=True)

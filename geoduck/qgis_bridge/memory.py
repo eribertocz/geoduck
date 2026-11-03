@@ -20,6 +20,7 @@ from qgis.PyQt.QtCore import QTimer
 from geoduck.domain.bridge_types import LoadPlan, missing_crs_warning
 from geoduck.domain.channel import BatchChannel
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
 from geoduck.qgis_bridge.convert import (
@@ -96,7 +97,7 @@ class MemoryLoad:
     def cancel(self) -> None:
         if self._finished:
             return
-        self._fail(LoadCancelledError("Carga cancelada"))
+        self._fail(LoadCancelledError(tr("Loading cancelled")))
 
     def _on_read_done(self, fut: Any) -> None:  # hilo del worker
         exc = fut.exception()
@@ -108,9 +109,9 @@ class MemoryLoad:
         if outcome.summary.outcome is ReadOutcome.EXHAUSTED:
             self._channel.finish()
         elif outcome.summary.outcome is ReadOutcome.CANCELLED:
-            self._channel.fail(LoadCancelledError("Carga cancelada"))
+            self._channel.fail(LoadCancelledError(tr("Loading cancelled")))
         else:
-            self._channel.fail(GeoDuckError(f"La lectura falló: {outcome.summary.error}"))
+            self._channel.fail(GeoDuckError(tr("Reading failed: {0}").format(outcome.summary.error)))
 
     # -- hilo principal --------------------------------------------------------------------------
 
@@ -181,7 +182,7 @@ class MemoryLoad:
     def _finish(self) -> None:
         plan = self._plan
         if plan is None:
-            raise GeoDuckError("La lectura terminó sin plan")
+            raise GeoDuckError(tr("Reading ended without a plan"))
         if self._layers is None:  # resultado vacío
             self._layers = FamilyLayers(
                 self._request.layer_name, fields_for(plan), QgsCoordinateReferenceSystem(), split=True
@@ -191,7 +192,9 @@ class MemoryLoad:
         count = sum(layer.featureCount() for layer in layers)
         if not (read == self._rows == count):
             raise GeoDuckError(
-                f"Conteos distintos: leídas {read}, convertidas {self._rows}, en las capas {count}"
+                tr("Different counts: read {0}, converted {1}, in the layers {2}").format(
+                    read, self._rows, count
+                )
             )
         self._timer.stop()
         self._finished = True
@@ -201,7 +204,7 @@ class MemoryLoad:
         if self._reprojector is not None:
             warnings = (*warnings, self._reprojector.note)
         if plan.geometry is not None and not self._layers.types:
-            warnings = (*warnings, "Sin geometrías: se carga como tabla")
+            warnings = (*warnings, tr("No geometries: loaded as a table"))
         elif plan.geometry is not None and not layer.crs().isValid():
             warnings = (*warnings, missing_crs_warning(plan.geometry, self._request.crs_override))
         self._on_progress(self._rows)

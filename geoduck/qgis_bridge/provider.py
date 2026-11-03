@@ -62,6 +62,7 @@ from geoduck.domain.bridge_types import (
     geometry_read_sql,
     strip_terminator,
 )
+from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
@@ -76,7 +77,7 @@ from geoduck.qgis_bridge.qgis_compat import (
 from geoduck.qgis_bridge.sql_compile import compile_expression
 
 KEY = "geoduck"
-DESCRIPTION = "GeoDuck (DuckDB conectada)"
+DESCRIPTION = tr("GeoDuck (connected DuckDB)")
 #: Filas por página (qgis-bridge-spec §5.2): el worker queda libre entre páginas.
 PAGE = 50_000
 #: Columna interna con el FID en la consulta base.
@@ -377,7 +378,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             if self.closed or (feedback is not None and feedback.isCanceled()) or waited >= budget:
                 engine.cancel(handle.op_id)  # descarta la página pendiente (§5.3)
                 if waited >= budget:
-                    self.p.note_error("La sesión está ocupada; la capa se completará al repintar")
+                    self.p.note_error(tr("The session is busy; the layer will be completed when repainting"))
                 return None
 
     def _next_page(self) -> bool:
@@ -388,7 +389,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             return False
         engine = self.p.engine()
         if engine is None:
-            self.p.note_error("Sesión no disponible")
+            self.p.note_error(tr("Session not available"))
             return False
         requested = size + self.ties
         try:
@@ -597,7 +598,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             count = int(params.get("count", "-1")) if not self._subset else -1
             wkb = params.get("type") or ""
         except Exception as exc:
-            self.last_error = f"URI no válida: {exc}"
+            self.last_error = tr("Invalid URI: {0}").format(exc)
             return
         self.fields_ = fields_for(self.plan)
         self.kinds = {f.name: f.kind for f in self.plan.fields}
@@ -693,7 +694,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         """La capa queda no disponible (vacía). Se avisa una vez en el registro de QGIS, sin errores."""
         if not self.unavailable:
             QgsMessageLog.logMessage(
-                f"Capa conectada no disponible ({self.source or 'consulta'}): {message}",
+                tr("Connected layer not available ({0}): {1}").format(self.source or tr("query"), message),
                 "GeoDuck",
                 Qgis.MessageLevel.Warning,
             )
@@ -749,7 +750,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         verdict = self.verdict
         if verdict is None:
             self.pushError(
-                "Guardado sin pasar por GeoDuck: rechazado para no escribir fuera de una transacción"
+                tr("Saving without going through GeoDuck: rejected so as not to write outside a transaction")
             )
             return False
         if not verdict.ok:
@@ -796,7 +797,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         return str(self._subset)
 
     def subsetStringDialect(self) -> str:
-        return "SQL de DuckDB (cláusula WHERE)"
+        return tr("DuckDB SQL (WHERE clause)")
 
     def subsetStringHelpUrl(self) -> str:
         return "https://duckdb.org/docs/stable/sql/query_syntax/where"
@@ -814,12 +815,12 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             except FutureTimeout:
                 engine.cancel(handle.op_id)
                 self.pushError(
-                    "La sesión está ocupada: aplique el filtro cuando termine la operación en curso"
+                    tr("The session is busy: apply the filter when the running operation finishes")
                 )
                 return False
             except Exception as exc:
                 self.pushError(
-                    f"Filtro no válido para DuckDB: {str(exc).splitlines()[0] if str(exc) else exc}"
+                    tr("Invalid filter for DuckDB: {0}").format(str(exc).splitlines()[0] if str(exc) else exc)
                 )
                 return False
         self._subset = subset

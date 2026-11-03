@@ -11,6 +11,7 @@ from __future__ import annotations
 import duckdb
 
 from geoduck.domain.diagnostics import SpatialProbe
+from geoduck.domain.i18n import tr
 
 
 def _setting(con: duckdb.DuckDBPyConnection, name: str) -> object:
@@ -45,7 +46,7 @@ def probe_spatial() -> SpatialProbe:
                 "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'"
             ).fetchone()
             if row is not None:
-                always_xy = "sin fijar" if row[0] in (None, "") else str(row[0]).lower()
+                always_xy = tr("not set") if row[0] in (None, "") else str(row[0]).lower()
         return SpatialProbe(
             installed=installed,
             always_xy=always_xy,

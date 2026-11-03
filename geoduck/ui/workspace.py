@@ -65,19 +65,19 @@ from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.close_dialog import CloseTransactionDialog
 from geoduck.ui.diagnostics_dialog import DiagnosticsDialog
 from geoduck.ui.explorer import CatalogExplorer
-from geoduck.ui.i18n import tr
+from geoduck.ui.i18n import N_, tr
 from geoduck.ui.load_flow import LoadFlow
 from geoduck.ui.sql_panel import SqlPanel, muted
 from geoduck.ui.widgets import ElidedLabel
 
 STATE_TEXT = {
-    SessionState.DISCONNECTED: "Sin sesión",
-    SessionState.CONNECTING: "Conectando…",
-    SessionState.READY: "Lista",
-    SessionState.BUSY: "Ejecutando…",
-    SessionState.DETACHING: "Desadjuntando…",
-    SessionState.CLOSING: "Cerrando…",
-    SessionState.ERROR_RECOVERABLE: "Fallo recuperable",
+    SessionState.DISCONNECTED: N_("No session"),
+    SessionState.CONNECTING: N_("Connecting…"),
+    SessionState.READY: N_("Ready"),
+    SessionState.BUSY: N_("Running…"),
+    SessionState.DETACHING: N_("Detaching…"),
+    SessionState.CLOSING: N_("Closing…"),
+    SessionState.ERROR_RECOVERABLE: N_("Recoverable failure"),
 }
 
 #: Ancho inicial (px) del explorador lateral en la ventana propia, como en la maqueta.
@@ -191,23 +191,23 @@ class WorkspaceContent(QWidget):
         self.session_bar = bar
         bar.setToolTip(
             tr(
-                "Sesión DuckDB temporal (:memory:). Las tablas que cree desaparecen al cerrar la sesión; "
-                "las capas ya entregadas a QGIS no dependen de ella."
+                "Temporary DuckDB session (:memory:). The tables you create disappear when the "
+                "session closes; layers already delivered to QGIS do not depend on it."
             )
         )
         row = QHBoxLayout(bar)
         row.setContentsMargins(16, 10, 16, 10)
         row.setSpacing(8)
         self.state_dot = QLabel("●")
-        self.state_dot.setAccessibleName(tr("Indicador de estado"))
+        self.state_dot.setAccessibleName(tr("Status indicator"))
         row.addWidget(self.state_dot)
-        self.session_title = self._bold(QLabel(tr("Sesión DuckDB")))
+        self.session_title = self._bold(QLabel(tr("DuckDB session")))
         row.addWidget(self.session_title)
         detail = QHBoxLayout()  # «Lista · DuckDB 2.0.0 · en memoria», como una sola línea
         detail.setSpacing(4)
         self.state_label = muted(QLabel())
         self.state_label.setObjectName("geoduckStateLabel")
-        self.state_label.setAccessibleName(tr("Estado de la sesión"))
+        self.state_label.setAccessibleName(tr("Session status"))
         detail.addWidget(self.state_label)
         self.engine_label = muted(QLabel())
         # Recortable: no fija el ancho mínimo del panel; el texto completo, en la ayuda
@@ -220,39 +220,37 @@ class WorkspaceContent(QWidget):
 
     def _build_session_buttons(self, row: QHBoxLayout) -> None:
         #: «Acoplar a QGIS»: lo conecta el controlador como botón de alternancia de la ventana (ADR-0013).
-        self.dock_button = QPushButton(QgsApplication.getThemeIcon("mDockify.svg"), tr("Acoplar a QGIS"))
+        self.dock_button = QPushButton(QgsApplication.getThemeIcon("mDockify.svg"), tr("Dock to QGIS"))
         self.dock_button.setObjectName("geoduckDockButton")
         self.dock_button.setProperty("geoduck", "secondary")
-        self.dock_button.setToolTip(tr("Muestra GeoDuck como panel acoplado a QGIS, con la misma sesión"))
-        self.start_button = QPushButton(tr("Iniciar sesión"))
+        self.dock_button.setToolTip(tr("Shows GeoDuck as a panel docked to QGIS, with the same session"))
+        self.start_button = QPushButton(tr("Start session"))
         self.start_button.setProperty("geoduck", "primary")
-        self.start_button.setAccessibleName(tr("Iniciar sesión en memoria"))
+        self.start_button.setAccessibleName(tr("Start in-memory session"))
         self.start_button.setDefault(True)
-        self.rollback_button = QPushButton(tr("Revertir transacción"))
+        self.rollback_button = QPushButton(tr("Roll back transaction"))
         self.rollback_button.setProperty("geoduck", "danger")
-        self.rollback_button.setToolTip(
-            tr("La transacción está abortada: ROLLBACK para volver a usar la sesión")
-        )
+        self.rollback_button.setToolTip(tr("The transaction is aborted: ROLLBACK to use the session again"))
         self.rollback_button.hide()
-        self.close_button = QPushButton(tr("Cerrar sesión"))
+        self.close_button = QPushButton(tr("Close session"))
         self.close_button.setProperty("geoduck", "secondary")
-        self.close_button.setAccessibleName(tr("Cerrar la sesión DuckDB"))
+        self.close_button.setAccessibleName(tr("Close the DuckDB session"))
         row.addWidget(self.rollback_button)  # aviso de estado: solo con la transacción abortada
         row.addWidget(self.dock_button)
 
     def _build_catalog_actions(self) -> None:
         # «+» = Abrir existente / Crear nueva; actualizar el catálogo; «Desadjuntar» en el menú de la base
-        self.open_action = QAction(tr("Abrir existente…"), self)
-        self.open_action.setToolTip(tr("Adjunta un archivo DuckDB existente; nunca crea uno"))
-        self.create_action = QAction(tr("Crear nueva…"), self)
-        self.create_action.setToolTip(tr("Crea un archivo DuckDB nuevo; nunca sobrescribe uno existente"))
-        self.detach_action = QAction(tr("Desadjuntar"), self)
-        self.detach_action.setToolTip(tr("Desadjunta la base seleccionada y libera el archivo"))
+        self.open_action = QAction(tr("Open existing…"), self)
+        self.open_action.setToolTip(tr("Attaches an existing DuckDB file; never creates one"))
+        self.create_action = QAction(tr("Create new…"), self)
+        self.create_action.setToolTip(tr("Creates a new DuckDB file; never overwrites an existing one"))
+        self.detach_action = QAction(tr("Detach"), self)
+        self.detach_action.setToolTip(tr("Detaches the selected database and releases the file"))
         self.add_button = QToolButton()
         self.add_button.setProperty("geoduck", "square")
         self.add_button.setText("+")
-        self.add_button.setToolTip(tr("Abrir o crear una base DuckDB"))
-        self.add_button.setAccessibleName(tr("Abrir o crear una base DuckDB"))
+        self.add_button.setToolTip(tr("Open or create a DuckDB database"))
+        self.add_button.setAccessibleName(tr("Open or create a DuckDB database"))
         self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         add_menu = QMenu(self.add_button)
         add_menu.setToolTipsVisible(True)
@@ -262,9 +260,9 @@ class WorkspaceContent(QWidget):
         self.refresh_button = QToolButton()
         self.refresh_button.setProperty("geoduck", "square")
         self.refresh_button.setIcon(QgsApplication.getThemeIcon("mActionRefresh.svg"))
-        self.refresh_button.setText(tr("Actualizar"))
-        self.refresh_button.setToolTip(tr("Vuelve a leer las bases, esquemas, tablas y vistas"))
-        self.refresh_button.setAccessibleName(tr("Actualizar el catálogo"))
+        self.refresh_button.setText(tr("Refresh"))
+        self.refresh_button.setToolTip(tr("Reads the databases, schemas, tables and views again"))
+        self.refresh_button.setAccessibleName(tr("Refresh the catalog"))
 
     def _build_databases_card(self) -> QFrame:
         """Bases de la sesión y sus esquemas, tablas y vistas (GD-CAT-001)."""
@@ -276,14 +274,14 @@ class WorkspaceContent(QWidget):
         card_layout.setSpacing(10)
         self._build_catalog_actions()
         title = QHBoxLayout()
-        title.addWidget(self._bold(QLabel(tr("Bases de datos"))))
+        title.addWidget(self._bold(QLabel(tr("Databases"))))
         title.addStretch(1)
         title.addWidget(self.add_button)
         title.addWidget(self.refresh_button)
         card_layout.addLayout(title)
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText(tr("Buscar bases, esquemas y tablas…"))
-        self.search_edit.setAccessibleName(tr("Buscar en el explorador"))
+        self.search_edit.setPlaceholderText(tr("Search databases, schemas and tables…"))
+        self.search_edit.setAccessibleName(tr("Search the explorer"))
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.setProperty("geoduck", "search")
         self.search_edit.addAction(
@@ -327,7 +325,7 @@ class WorkspaceContent(QWidget):
             self.sql_panel.show()
             self.sql_panel.log_section.show()
         else:  # en pestañas, QTabWidget muestra solo la activa: mostrar las demás las dibujaría encima
-            self.tabs.insertTab(0, self.databases_card, tr("Explorador"))
+            self.tabs.insertTab(0, self.databases_card, tr("Explorer"))
             self.tabs.insertTab(1, self.sql_panel, tr("SQL"))
             self.sql_panel.set_presentation(wide=False, tabs=self.tabs)  # pestaña «Registro»; carga al pie
             self._update_log_tab(*self.sql_panel.log_counts())
@@ -345,11 +343,11 @@ class WorkspaceContent(QWidget):
         self.compact = False
         self.wide = True
         self._labels = [
-            (self.session_title, tr("Sesión DuckDB"), tr("Sesión")),
-            (self.rollback_button, tr("Revertir transacción"), tr("Revertir")),
-            (self.dock_button, tr("Acoplar a QGIS"), tr("Acoplar")),
-            (self.map_button, tr("Ver en el mapa"), tr("Mapa")),
-            (self.diagnostics_button, tr("Diagnóstico del entorno…"), tr("Diagnóstico…")),
+            (self.session_title, tr("DuckDB session"), tr("Session")),
+            (self.rollback_button, tr("Roll back transaction"), tr("Roll back")),
+            (self.dock_button, tr("Dock to QGIS"), tr("Dock")),
+            (self.map_button, tr("View on map"), tr("Map")),
+            (self.diagnostics_button, tr("Environment diagnostics…"), tr("Diagnostics…")),
         ]
         for widget, long_text, _short in self._labels:
             if not widget.accessibleName():
@@ -366,8 +364,8 @@ class WorkspaceContent(QWidget):
             widget.setText(short_text if compact else long_text)
         self.compact = compact
         if not self.wide:  # panel (inventario P2, P11): «Sesión», «Diagnóstico…»
-            self.session_title.setText(tr("Sesión"))
-            self.diagnostics_button.setText(tr("Diagnóstico…"))
+            self.session_title.setText(tr("Session"))
+            self.diagnostics_button.setText(tr("Diagnostics…"))
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - API de Qt
         super().resizeEvent(event)
@@ -380,7 +378,7 @@ class WorkspaceContent(QWidget):
         self.message_label = ElidedLabel()
         self.message_label.setWordWrap(True)
         self.message_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.message_label.setAccessibleName(tr("Mensaje"))
+        self.message_label.setAccessibleName(tr("Message"))
         self.message_label.setProperty("geoduck", "message-info")
         self.message_kind = "info"
         self.message_label.hide()
@@ -435,23 +433,25 @@ class WorkspaceContent(QWidget):
         footer = QHBoxLayout()
         footer.setSpacing(12)
         self.footer_row = footer
-        self.map_button = QPushButton(tr("Ver en el mapa"))
+        self.map_button = QPushButton(tr("View on map"))
         self.map_button.setProperty("geoduck", "link")
         self.map_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.map_button.setToolTip(tr("Trae QGIS al frente, selecciona la última capa cargada y hace zoom"))
+        self.map_button.setToolTip(
+            tr("Brings QGIS to the front, selects the last loaded layer and zooms to it")
+        )
         self.map_button.setEnabled(False)
         footer.addWidget(self.map_button)
         footer.addStretch(1)
-        self.diagnostics_button = QPushButton(tr("Diagnóstico del entorno…"))
+        self.diagnostics_button = QPushButton(tr("Environment diagnostics…"))
         self.diagnostics_button.setProperty("geoduck", "link")
         self.diagnostics_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.diagnostics_button.setToolTip(
-            tr("Comprueba Python, QGIS, DuckDB, PyArrow y la extensión spatial")
+            tr("Checks Python, QGIS, DuckDB, PyArrow and the spatial extension")
         )
-        self.about_button = QPushButton(tr("Acerca de…"))
+        self.about_button = QPushButton(tr("About…"))
         self.about_button.setProperty("geoduck", "link")
         self.about_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.about_button.setToolTip(tr("Versión, licencia, enlaces y componentes detectados"))
+        self.about_button.setToolTip(tr("Version, license, links and detected components"))
         footer.addWidget(self.diagnostics_button)
         footer.addWidget(self.about_button)
         stage = release_stage(__version__)
@@ -503,7 +503,7 @@ class WorkspaceContent(QWidget):
         """Pestaña «Registro» del panel con el número de errores (§8)."""
         index = self.tabs.indexOf(self.sql_panel.log_section)
         if index >= 0:
-            self.tabs.setTabText(index, tr("Registro") + (f" ({errors})" if errors else ""))
+            self.tabs.setTabText(index, tr("Log") + (f" ({errors})" if errors else ""))
 
     def _detach(self) -> None:
         name = self.explorer.selected_database()
@@ -521,10 +521,10 @@ class WorkspaceContent(QWidget):
         else:
             failing = [c.title for c in self._report.checks if c.status is CheckStatus.FAIL]
             self.env_label.setText(
-                tr("El entorno no está listo para GeoDuck: ")
+                tr("The environment is not ready for GeoDuck: ")
                 + ", ".join(failing)
                 + ". "
-                + tr("Abra «Diagnóstico del entorno» para ver qué hacer.")
+                + tr("Open «Environment diagnostics» to see what to do.")
             )
             self.env_banner.show()
         self._render(self._coordinator.state)
@@ -576,9 +576,9 @@ class WorkspaceContent(QWidget):
         elif isinstance(event, SessionStarted):
             info = event.info
             cancel = (
-                tr("cancelación inmediata disponible")
+                tr("immediate cancellation available")
                 if info.interrupt_enabled
-                else tr("cancelación entre lotes")
+                else tr("cancellation between batches")
             )
             self._engine_version = f"DuckDB {info.duckdb_version}"
             self.engine_label.setToolTip(f"DuckDB {info.duckdb_version} · {cancel}")
@@ -592,36 +592,35 @@ class WorkspaceContent(QWidget):
         elif isinstance(event, ColumnsUnavailable):
             self.explorer.show_columns_error(event.source, event.message)
         elif isinstance(event, CatalogUnavailable):
-            self._show_message(tr("No se pudo leer el catálogo."), event.code.value, event.message)
+            self._show_message(tr("The catalog could not be read."), event.code.value, event.message)
         elif isinstance(event, DatabaseAttached):
             self.explorer.select_database(event.database.name)
         elif isinstance(event, DatabaseDetached):
             self._render(self._coordinator.state)
         elif isinstance(event, AttachFailed):
-            self._show_message(tr("No se adjuntó la base."), event.code.value, event.message)
+            self._show_message(tr("The database was not attached."), event.code.value, event.message)
         elif isinstance(event, DetachFailed):
-            self._show_message(tr("No se desadjuntó la base."), event.code.value, event.message)
+            self._show_message(tr("The database was not detached."), event.code.value, event.message)
         elif isinstance(event, CloseConfirmationRequired):
             self._coordinator.resolve_close(self._ask_close_choice(event, self))
         elif isinstance(event, SessionInvalidated):
             self._set_message_kind("error")
             self.message_label.setText(
-                tr("Sesión invalidada:")
+                tr("Session invalidated:")
                 + f" {event.message} [{event.code.value}] "
-                + tr("Inicie una sesión nueva o cierre.")
+                + tr("Start a new session or close.")
             )
             self.message_label.show()
         elif isinstance(event, TransactionFailed):
             self._set_message_kind("error")
             self.message_label.setText(
-                tr("No se completó la operación sobre la transacción.")
-                + f" [{event.code.value}] {event.message}"
+                tr("The transaction operation did not complete.") + f" [{event.code.value}] {event.message}"
             )
             self.message_label.show()
         elif isinstance(event, SessionFailed):
             self._set_message_kind("error")
             self.message_label.setText(
-                tr("No se pudo completar la operación.") + f" [{event.code.value}] {event.message}"
+                tr("The operation could not be completed.") + f" [{event.code.value}] {event.message}"
             )
             self.message_label.show()
 
@@ -652,7 +651,7 @@ class WorkspaceContent(QWidget):
         catalog = self._coordinator.catalog
         root = catalog.get(catalog.root) if catalog is not None else None
         if root is not None and not self.compact_session:
-            parts.append(tr("en memoria") if root.in_memory else os.path.basename(root.path or ""))
+            parts.append(tr("in memory") if root.in_memory else os.path.basename(root.path or ""))
         self.engine_label.setText("· " + " · ".join(parts))
 
     def _paint_state(self, state: SessionState) -> None:

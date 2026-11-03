@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from geoduck.domain.i18n import tr
+
 #: Motivos de GEOS que se muestran (los primeros); el resto se cuenta.
 MAX_REASONS = 10
 
@@ -35,16 +37,16 @@ class GeometryDiagnosis:
 
     def lines(self) -> list[str]:
         out = [
-            f"Examinadas: {self.examined}",
-            f"Válidas: {self.valid}",
-            f"Inválidas: {self.invalid}",
-            f"Vacías: {self.empty}",
-            f"Sin geometría (NULL): {self.null}",
-            f"Ilegibles: {self.unreadable}",
+            tr("Examined: {0}").format(self.examined),
+            tr("Valid: {0}").format(self.valid),
+            tr("Invalid: {0}").format(self.invalid),
+            tr("Empty: {0}").format(self.empty),
+            tr("No geometry (NULL): {0}").format(self.null),
+            tr("Unreadable: {0}").format(self.unreadable),
         ]
         if self.reasons:
-            out.append("Motivos (primeras inválidas):")
-            out.extend(f"  · entidad {fid}: {reason}" for fid, reason in self.reasons)
+            out.append(tr("Reasons (first invalid ones):"))
+            out.extend(tr("  · feature {0}: {1}").format(fid, reason) for fid, reason in self.reasons)
         return out
 
 
@@ -65,16 +67,18 @@ class RepairReport:
     def message(self) -> str:
         names = ", ".join(f"«{n}»" for n in self.layers)
         parts = [
-            f"Copia reparada {names}: {self.repaired} geometrías reparadas",
-            f"{self.changed_type} cambiaron de tipo",
-            f"{self.changed_dimension} de dimensión",
-            f"{self.changed_parts} de número de partes",
+            tr("Repaired copy {0}: {1} geometries repaired").format(names, self.repaired),
+            tr("{0} changed type").format(self.changed_type),
+            tr("{0} changed dimension").format(self.changed_dimension),
+            tr("{0} changed number of parts").format(self.changed_parts),
         ]
-        text = "; ".join(parts) + ". La capa original no cambia."
+        text = "; ".join(parts) + tr(". The original layer does not change.")
         if self.failed_fids:
             ids = ", ".join(str(f) for f in self.failed_fids[:MAX_REASONS])
             more = "…" if len(self.failed_fids) > MAX_REASONS else ""
-            text += f" No se pudieron reparar {len(self.failed_fids)} (quedan sin geometría): {ids}{more}."
+            text += tr(" {0} could not be repaired (left without geometry): {1}{2}.").format(
+                len(self.failed_fids), ids, more
+            )
         if self.warnings:
             text += " " + "; ".join(self.warnings) + "."
         return text

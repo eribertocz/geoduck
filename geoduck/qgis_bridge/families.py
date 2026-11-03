@@ -31,6 +31,7 @@ from qgis.core import (
 )
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 
 _BY_GEOMETRY_TYPE = {
     QgsWkbTypes.geometryType(Qgis.WkbType.Point): "Point",
@@ -38,7 +39,7 @@ _BY_GEOMETRY_TYPE = {
     QgsWkbTypes.geometryType(Qgis.WkbType.Polygon): "Polygon",
 }
 COLLECTION = "GeometryCollection"
-NO_GEOMETRY = "sin geometría"
+NO_GEOMETRY = tr("no geometry")
 
 
 def family(t: Qgis.WkbType) -> str:
@@ -120,8 +121,10 @@ class FamilyLayers:
         if not self._split and len(self.types) > 1:
             names = ", ".join(sorted(QgsWkbTypes.displayString(t) for s in self.types.values() for t in s))
             raise GeoDuckError(
-                f"Geometrías de tipos distintos ({names}) y la opción «Tipos mixtos: una capa por tipo» "
-                "está desactivada: no se cargó nada",
+                tr(
+                    "Geometries of different types ({0}) and the option «Mixed types: "
+                    "one layer per type» is off: nothing was loaded"
+                ).format(names),
                 code=ErrorCode.INVALID_ARGUMENT,
             )
         for key, feats in groups.items():
@@ -139,10 +142,10 @@ class FamilyLayers:
         if uri != "None":
             layer.setCrs(self._crs)  # siempre explícito: sin CRS, QGIS asignaría uno en silencio (C4)
         if not layer.isValid():
-            raise GeoDuckError("QGIS no pudo crear la capa en memoria")
+            raise GeoDuckError(tr("QGIS could not create the memory layer"))
         provider = layer.dataProvider()
         if self._fields.count() and not provider.addAttributes(list(self._fields)):
-            raise GeoDuckError(f"QGIS rechazó los campos: {provider.lastError()}")
+            raise GeoDuckError(tr("QGIS rejected the fields: {0}").format(provider.lastError()))
         layer.updateFields()
         return layer
 
@@ -151,7 +154,9 @@ class FamilyLayers:
         provider = layer.dataProvider()
         ok, _ = provider.addFeatures(features)
         if not ok:
-            raise GeoDuckError(f"QGIS rechazó entidades: {provider.lastError() or 'sin detalle'}")
+            raise GeoDuckError(
+                tr("QGIS rejected features: {0}").format(provider.lastError() or tr("no detail"))
+            )
 
     def finish(self) -> tuple[list[QgsVectorLayer], list[str]]:
         """Capas definitivas (privadas) y avisos. Fija el tipo de cada capa con sus dimensiones."""
@@ -167,9 +172,9 @@ class FamilyLayers:
             final[key] = layer
             added_z, added_m = added_z + z, added_m + m
         if added_z:
-            warnings.append(f"Z añadida con valor NaN a {added_z} geometrías sin Z")
+            warnings.append(tr("Z added with NaN value to {0} geometries without Z").format(added_z))
         if added_m:
-            warnings.append(f"M añadida con valor NaN a {added_m} geometrías sin M")
+            warnings.append(tr("M added with NaN value to {0} geometries without M").format(added_m))
         if len(final) == 1:
             layer = next(iter(final.values()))
             if nogeom is not None and nogeom.featureCount():  # una familia: las nulas quedan con ella
@@ -181,7 +186,7 @@ class FamilyLayers:
         if nogeom is not None and nogeom.featureCount():
             nogeom.setName(f"{self._name} — {NO_GEOMETRY}")
             layers.append(nogeom)
-        warnings.append(f"Tipos de geometría mixtos: {len(final)} capas, una por tipo")
+        warnings.append(tr("Mixed geometry types: {0} layers, one per type").format(len(final)))
         return layers, warnings
 
     def _normalized(self, layer: QgsVectorLayer, types: set[Qgis.WkbType]) -> tuple[QgsVectorLayer, int, int]:

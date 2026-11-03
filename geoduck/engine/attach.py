@@ -35,6 +35,7 @@ from geoduck.domain.catalog import (
     catalog_key,
 )
 from geoduck.domain.errors import AttachError, EngineError, ErrorCode, InvalidArgumentError
+from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.engine.catalog import read_catalog
 
@@ -48,22 +49,26 @@ _RULES: tuple[tuple[str, ErrorCode, str], ...] = (
     (
         "current transaction is aborted",
         ErrorCode.TRANSACTION_ABORTED,
-        "La transacción está abortada; reviértala.",
+        tr("The transaction is aborted; roll it back."),
     ),
-    ("conflicting lock is held", ErrorCode.DB_LOCKED, "Otro proceso tiene el archivo bloqueado."),
-    ("could not set lock", ErrorCode.DB_LOCKED, "Otro proceso tiene el archivo bloqueado."),
+    ("conflicting lock is held", ErrorCode.DB_LOCKED, tr("Another process has locked the file.")),
+    ("could not set lock", ErrorCode.DB_LOCKED, tr("Another process has locked the file.")),
     (
         "unique file handle conflict",
         ErrorCode.DB_ALIAS_CONFLICT,
-        "El archivo ya está adjunto en esta sesión.",
+        tr("The file is already attached in this session."),
     ),
-    ("already exists", ErrorCode.DB_ALIAS_CONFLICT, "Ya hay una base con ese alias."),
-    ("reserved name", ErrorCode.DB_ALIAS_CONFLICT, "Ese alias está reservado por DuckDB."),
-    ("database does not exist", ErrorCode.DB_NOT_FOUND, "El archivo no existe."),
-    ("no such file or directory", ErrorCode.DB_NOT_FOUND, "El archivo o su carpeta no existen."),
-    ("permission denied", ErrorCode.DB_READ_ONLY, "No hay permiso de escritura sobre el archivo."),
-    ("read-only file system", ErrorCode.DB_READ_ONLY, "El sistema de archivos es de solo lectura."),
-    ("not a valid duckdb database file", ErrorCode.ENGINE_ERROR, "El archivo no es una base DuckDB válida."),
+    ("already exists", ErrorCode.DB_ALIAS_CONFLICT, tr("There is already a database with that alias.")),
+    ("reserved name", ErrorCode.DB_ALIAS_CONFLICT, tr("That alias is reserved by DuckDB.")),
+    ("database does not exist", ErrorCode.DB_NOT_FOUND, tr("The file does not exist.")),
+    ("no such file or directory", ErrorCode.DB_NOT_FOUND, tr("The file or its folder does not exist.")),
+    ("permission denied", ErrorCode.DB_READ_ONLY, tr("There is no write permission on the file.")),
+    ("read-only file system", ErrorCode.DB_READ_ONLY, tr("The file system is read only.")),
+    (
+        "not a valid duckdb database file",
+        ErrorCode.ENGINE_ERROR,
+        tr("The file is not a valid DuckDB database."),
+    ),
 )
 
 
@@ -77,7 +82,7 @@ def classify_attach_error(exc: BaseException) -> AttachError:
         if needle in text:
             return AttachError(message, code=code, detail=f"{type(exc).__name__}: {needle}")
     return AttachError(
-        "DuckDB no pudo adjuntar el archivo.", code=ErrorCode.ENGINE_ERROR, detail=type(exc).__name__
+        tr("DuckDB could not attach the file."), code=ErrorCode.ENGINE_ERROR, detail=type(exc).__name__
     )
 
 
@@ -98,7 +103,7 @@ def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str)
     if identity is not None and _identity(path) != identity:
         _detach_quietly(handle, alias)
         raise AttachError(
-            "El archivo cambió o desapareció mientras se abría; no se usó.",
+            tr("The file changed or disappeared while it was being opened; it was not used."),
             code=ErrorCode.DB_NOT_FOUND,
             detail="file_replaced_during_attach",
         )
@@ -106,21 +111,21 @@ def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str)
     database = catalog.get(alias)
     if database is None or database.access is not request.access:
         _detach_quietly(handle, alias)
-        raise EngineError("La base adjuntada no coincide con lo pedido; se desadjuntó")
+        raise EngineError(tr("The attached database does not match the request; it was detached"))
     return AttachResult(database, catalog)
 
 
 def _check_alias(catalog: CatalogSnapshot, alias: str) -> None:
     if catalog_key(alias) in RESERVED_CATALOG_NAMES:
         raise AttachError(
-            f"El alias «{alias}» está reservado por DuckDB.",
+            tr("The alias «{0}» is reserved by DuckDB.").format(alias),
             code=ErrorCode.DB_ALIAS_CONFLICT,
             detail="reserved",
         )
     existing = catalog.get(alias)
     if existing is not None:
         raise AttachError(
-            f"Ya hay una base llamada «{existing.name}» en la sesión.",
+            tr("There is already a database called «{0}» in the session.").format(existing.name),
             code=ErrorCode.DB_ALIAS_CONFLICT,
             detail="alias_in_catalog",
         )
@@ -130,16 +135,25 @@ def _check_path(path: str, action: OpenAction) -> tuple[int, int, int, int] | No
     """Comprueba la ruta antes del `ATTACH`. Devuelve la identidad del archivo para «Abrir existente»."""
     if action is OpenAction.OPEN_EXISTING:
         if not os.path.isfile(path):
-            raise AttachError("El archivo no existe.", code=ErrorCode.DB_NOT_FOUND, detail="missing_file")
+            raise AttachError(
+                tr("The file does not exist."), code=ErrorCode.DB_NOT_FOUND, detail="missing_file"
+            )
         return _identity(path)
     if os.path.lexists(path):
-        raise InvalidArgumentError("Ya existe un archivo con ese nombre; «Crear nueva» nunca lo sobrescribe.")
+        raise InvalidArgumentError(
+            tr("A file with that name already exists; «Create new» never overwrites it.")
+        )
     if os.path.lexists(path + ".wal"):
         raise InvalidArgumentError(
-            "Existe un archivo .wal con ese nombre; DuckDB lo aplicaría a la base nueva. Elija otro nombre."
+            tr(
+                "There is a .wal file with that name; DuckDB would apply it to the "
+                "new database. Choose another name."
+            )
         )
     if not os.path.isdir(os.path.dirname(path)):
-        raise AttachError("La carpeta no existe.", code=ErrorCode.DB_NOT_FOUND, detail="missing_directory")
+        raise AttachError(
+            tr("The folder does not exist."), code=ErrorCode.DB_NOT_FOUND, detail="missing_directory"
+        )
     return None
 
 

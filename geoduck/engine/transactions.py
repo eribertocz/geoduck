@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 import duckdb
 
 from geoduck.domain.errors import EngineError, ErrorCode, TransactionError
+from geoduck.domain.i18n import tr
 from geoduck.domain.transaction import TransactionState
 
 if TYPE_CHECKING:
@@ -50,13 +51,15 @@ def commit(handle: ConnectionHandle) -> TransactionState:
     state = probe_transaction(handle)
     if state is TransactionState.ABORTED:
         raise TransactionError(
-            "La transacción está abortada: COMMIT la revertiría sin avisar. Solo se puede revertir "
-            "(ROLLBACK).",
+            tr(
+                "The transaction is aborted: COMMIT would roll it back without "
+                "warning. It can only be rolled back (ROLLBACK)."
+            ),
             detail="commit_aborted",
         )
     if state is TransactionState.NONE:
         raise TransactionError(
-            "No hay una transacción abierta.", code=ErrorCode.INVALID_ARGUMENT, detail="no_transaction"
+            tr("There is no open transaction."), code=ErrorCode.INVALID_ARGUMENT, detail="no_transaction"
         )
     _execute(handle, "COMMIT")
     return _expect_none(handle, "COMMIT")
@@ -65,7 +68,7 @@ def commit(handle: ConnectionHandle) -> TransactionState:
 def rollback(handle: ConnectionHandle) -> TransactionState:
     if probe_transaction(handle) is TransactionState.NONE:
         raise TransactionError(
-            "No hay una transacción abierta.", code=ErrorCode.INVALID_ARGUMENT, detail="no_transaction"
+            tr("There is no open transaction."), code=ErrorCode.INVALID_ARGUMENT, detail="no_transaction"
         )
     _execute(handle, "ROLLBACK")
     return _expect_none(handle, "ROLLBACK")
@@ -74,7 +77,7 @@ def rollback(handle: ConnectionHandle) -> TransactionState:
 def _expect_none(handle: ConnectionHandle, statement: str) -> TransactionState:
     state = probe_transaction(handle)
     if state is not TransactionState.NONE:
-        raise EngineError(f"Tras {statement} la transacción sigue {state.value}")
+        raise EngineError(tr("After {0} the transaction is still {1}").format(statement, state.value))
     return state
 
 

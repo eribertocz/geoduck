@@ -29,6 +29,7 @@ from qgis.core import Qgis, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import FieldKind, GeometryFormat, geometry_write_sql
+from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.qgis_bridge.provider import HASH, KEY, id_columns, row_hash_sql
 
@@ -146,7 +147,9 @@ def collect(layer: QgsVectorLayer) -> _Batch:  # noqa: PLR0912, PLR0915 - una va
     for fid, g in [*geoms.items(), *((k, f.geometry()) for k, f in added.items())]:
         if not compatible(layer_type, g):
             raise SaveError(
-                f"Geometría incompatible con la capa ({QgsWkbTypes.displayString(layer_type)}) en {fid}"
+                tr("Geometry incompatible with the layer ({0}) in {1}").format(
+                    QgsWkbTypes.displayString(layer_type), fid
+                )
             )
     updates: dict[tuple[str, ...], dict[str, list[Any]]] = {}
     for fid, ch in sorted(changed.items()):
@@ -157,10 +160,10 @@ def collect(layer: QgsVectorLayer) -> _Batch:  # noqa: PLR0912, PLR0915 - una va
             plan = plans[i]
             if plan.name in locked:
                 raise SaveError(
-                    f"No se puede cambiar «{plan.name}»: identifica la entidad (clave de la tabla)"
+                    tr("«{0}» cannot be changed: it identifies the feature (table key)").format(plan.name)
                 )
             if not plan.writable:
-                raise SaveError(f"«{plan.name}» es de solo lectura en QGIS ({plan.source_type})")
+                raise SaveError(tr("«{0}» is read only in QGIS ({1})").format(plan.name, plan.source_type))
             names.append(plan.name)
         if not names:
             continue
@@ -177,7 +180,7 @@ def collect(layer: QgsVectorLayer) -> _Batch:  # noqa: PLR0912, PLR0915 - una va
     for tmp, f in sorted(added.items()):
         for i, pl in enumerate(plans):
             if not pl.writable and pl.name != key and not is_null(f.attribute(i)):
-                raise SaveError(f"«{pl.name}» es de solo lectura en QGIS ({pl.source_type})")
+                raise SaveError(tr("«{0}» is read only in QGIS ({1})").format(pl.name, pl.source_type))
         if key is not None:
             explicit = f.attribute(p.field_index[key])
             added_ids.append(None if explicit is None or is_null(explicit) else int(explicit))
@@ -188,7 +191,7 @@ def collect(layer: QgsVectorLayer) -> _Batch:  # noqa: PLR0912, PLR0915 - una va
         if p.plan.geometry is not None:
             rows[-1]["__wkb"] = _wkb(f.geometry())
     if key is not None and any(i is None for i in added_ids) and p.key_default is None:
-        raise SaveError(f"«{key}» no tiene secuencia: indique el identificador de cada entidad nueva")
+        raise SaveError(tr("«{0}» has no sequence: enter the identifier of every new feature").format(key))
     add_cols: dict[str, list[Any]] = {}
     for name in [pl.name for pl in writable] + (["__wkb"] if p.plan.geometry is not None else []):
         values = [r[name] for r in rows]
@@ -196,7 +199,9 @@ def collect(layer: QgsVectorLayer) -> _Batch:  # noqa: PLR0912, PLR0915 - una va
             continue  # sin valor en ninguna alta: DuckDB pone el valor por defecto de la columna
         missing = [k for k in locked if k == name and any(v is None for v in values)]
         if missing and name not in p.defaults:
-            raise SaveError(f"«{name}» identifica la entidad: indique su valor en cada entidad nueva")
+            raise SaveError(
+                tr("«{0}» identifies the feature: enter its value in every new feature").format(name)
+            )
         add_cols[name] = values
 
     touched = sorted(set(changed) | set(geoms) | set(deleted))
@@ -272,7 +277,7 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
         handle.execute("BEGIN")
     except Exception as exc:
         raise SaveError(
-            "La sesión tiene una transacción abierta: confírmela o reviértala antes de guardar la capa"
+            tr("The session has an open transaction: commit or roll it back before saving the layer")
         ) from exc
     try:
         located: dict[int, tuple[int, int]] = {}
@@ -286,9 +291,11 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
             if conflicts:
                 sample = ", ".join(map(str, list(conflicts)[:5]))
                 raise SaveError(
-                    f"Conflicto: {len(conflicts)} entidad(es) cambiaron, se movieron o ya no existen en "
-                    f"DuckDB desde que QGIS las leyó (p. ej. {sample}). "
-                    "Guarde de nuevo para sobrescribir, o descarte sus cambios.",
+                    tr(
+                        "Conflict: {0} feature(s) changed, moved or no longer exist in "
+                        "DuckDB since QGIS read them (e.g. {1}). Save again to overwrite, or "
+                        "discard your changes."
+                    ).format(len(conflicts), sample),
                     conflicts,
                 )
         rid = {fid: located[fid][0] for fid in located}
@@ -316,7 +323,7 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
                     f"UPDATE {table} SET {sets} FROM {_UPD} u WHERE {table}.rowid = u.__rid"
                 )
             if _affected(done) not in (-1, len(data["__rid"])):
-                raise SaveError("Actualización incompleta: alguna entidad ya no existe")
+                raise SaveError(tr("Incomplete update: some feature no longer exists"))
             token.raise_if_cancelled()
         if batch.geometries["__fid"] and geom is not None:
             data = {"__rid": [rid[f] for f in batch.geometries["__fid"]], "__wkb": batch.geometries["__wkb"]}
@@ -331,7 +338,7 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
             with handle.registered(_DEL, _table({"__rid": [rid[f] for f in batch.deleted]})):
                 done = handle.execute(f"DELETE FROM {table} WHERE rowid IN (SELECT __rid FROM {_DEL})")
             if _affected(done) not in (-1, len(batch.deleted)):
-                raise SaveError("Borrado incompleto: alguna entidad ya no existe")
+                raise SaveError(tr("Incomplete deletion: some feature no longer exists"))
             reload = True  # un borrado puede compactar la tabla y mover los rowid
             token.raise_if_cancelled()
         before = None
@@ -471,7 +478,7 @@ class EditSession:
         p = self.provider
         engine = p.engine()
         if engine is None:
-            return Verdict(False, "La sesión de DuckDB de esta capa no está disponible")
+            return Verdict(False, tr("The DuckDB session of this layer is not available"))
         if self._pending:
             self._flush()
         for fut in self._captures:  # huellas pendientes de las últimas ediciones
@@ -492,13 +499,15 @@ class EditSession:
             try:
                 fid_map, reload = handle.future.result()  # el veredicto real: nunca éxito sin COMMIT
             except BaseException as exc:
-                return Verdict(False, "La sesión está ocupada; guarde de nuevo al terminar: " + _message(exc))
+                return Verdict(
+                    False, tr("The session is busy; save again when it finishes: ") + _message(exc)
+                )
         except SaveError as exc:
             for fid, h in exc.conflicts.items():
                 p.seen[fid] = h  # guardar otra vez sobrescribe a sabiendas (§5.4)
             return Verdict(False, str(exc), conflicts=tuple(exc.conflicts))
         except BaseException as exc:
-            return Verdict(False, "El guardado falló y se revirtió: " + _message(exc))
+            return Verdict(False, tr("Saving failed and was rolled back: ") + _message(exc))
         for fid in batch.touched:
             p.seen.pop(fid, None)
         return Verdict(True, fid_map=fid_map, reload=reload)

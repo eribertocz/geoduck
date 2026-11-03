@@ -51,6 +51,7 @@ from geoduck.domain.errors import (
     UnsupportedEngineError,
     WrongThreadError,
 )
+from geoduck.domain.i18n import tr
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
 from geoduck.domain.transaction import TransactionState
@@ -83,7 +84,7 @@ class CancelToken:
 
     def raise_if_cancelled(self) -> None:
         if self.cancelled:
-            raise OperationCancelledError("Operación cancelada")
+            raise OperationCancelledError(tr("Operation cancelled"))
 
 
 class ConnectionHandle:
@@ -106,12 +107,12 @@ class ConnectionHandle:
 
     def _guard(self) -> None:
         if threading.get_ident() != self._owner:
-            raise WrongThreadError("La conexión DuckDB solo puede usarse desde su hilo propietario")
+            raise WrongThreadError(tr("The DuckDB connection can only be used from its owner thread"))
         if self._closed:
-            raise SessionClosedError("La sesión está cerrada")
+            raise SessionClosedError(tr("The session is closed"))
         if self._reader_open:
             raise ActiveResultError(
-                "Hay un lector Arrow abierto en esta sesión; termine o cancele la lectura primero"
+                tr("There is an open Arrow reader in this session; finish or cancel the reading first")
             )
 
     def extract_statements(self, text: str) -> list[Any]:
@@ -167,7 +168,7 @@ class ConnectionHandle:
         relation = self._con.sql(sql)
         if relation is None:
             raise GeoDuckError(
-                "La sentencia no produce filas; no se puede leer como Arrow",
+                tr("The statement produces no rows; it cannot be read as Arrow"),
                 code=ErrorCode.INVALID_ARGUMENT,
             )
         reader = relation.to_arrow_reader(batch_size=batch_size)
@@ -282,7 +283,7 @@ class SessionWorker:
     def start(self) -> Future[EngineInfo]:
         with self._lock:
             if self._thread is not None:
-                raise GeoDuckError("El worker ya se inició", code=ErrorCode.INVALID_TRANSITION)
+                raise GeoDuckError("The worker has already started", code=ErrorCode.INVALID_TRANSITION)
             self._thread = threading.Thread(target=self._run, name=self._name, daemon=True)
             self._thread.start()
         return self._started
@@ -397,7 +398,7 @@ class SessionWorker:
             batches: list[Any] = []
             summary = handle.read_arrow(sql, batch_size=DEFAULT_BATCH, on_batch=batches.append, token=token)
             if summary.outcome is ReadOutcome.CANCELLED:
-                raise OperationCancelledError("Lectura cancelada")
+                raise OperationCancelledError(tr("Reading cancelled"))
             if summary.outcome is ReadOutcome.FAILED:
                 raise EngineError(summary.error)
             return batches
@@ -473,7 +474,7 @@ class SessionWorker:
             if not self._accepting:
                 if self._invalidated is not None:
                     raise self._invalidated.fresh()
-                raise SessionClosedError("La sesión no acepta operaciones")
+                raise SessionClosedError(tr("The session does not accept operations"))
             job: _Job[T] = _Job(next(self._ids), fn)
             self._pending[job.op_id] = job
             self._queue.put((_PRIORITY if priority else _NORMAL, next(self._order), job))
@@ -517,7 +518,9 @@ class SessionWorker:
         if not caps.supported:
             minimum = ".".join(map(str, MINIMUM))
             raise UnsupportedEngineError(
-                f"DuckDB {duckdb.__version__} no es compatible; se requiere {minimum} o superior"
+                tr("DuckDB {0} is not supported; {1} or later is required").format(
+                    duckdb.__version__, minimum
+                )
             )
         con = duckdb.connect(database=self._database)
         try:
@@ -556,7 +559,7 @@ class SessionWorker:
         except BaseException as exc:  # un fallo del propio bucle: el hilo no puede seguir
             _log.exception("El hilo de la sesión terminó inesperadamente")
             cause = SessionInvalidatedError(
-                "El hilo de la sesión terminó inesperadamente; la sesión se invalidó",
+                tr("The session thread ended unexpectedly; the session was invalidated"),
                 detail=type(exc).__name__,
             )
         finally:
@@ -573,7 +576,9 @@ class SessionWorker:
             for job in leftovers:
                 if not job.future.done():
                     job.future.set_exception(
-                        cause.fresh() if cause is not None else SessionClosedError("La sesión se cerró")
+                        cause.fresh()
+                        if cause is not None
+                        else SessionClosedError(tr("The session was closed"))
                     )
             handle._close()
             try:
@@ -623,7 +628,8 @@ class SessionWorker:
             if fatal_cause is None:
                 return None, _classify(exc, job.token), None, interrupted
             fatal = SessionInvalidatedError(
-                "DuckDB informó un error fatal; la sesión se invalidó", detail=_first_line(fatal_cause)
+                tr("DuckDB reported a fatal error; the session was invalidated"),
+                detail=_first_line(fatal_cause),
             )
             return None, fatal.fresh(), fatal, interrupted
 
@@ -637,11 +643,14 @@ class SessionWorker:
         if state is None:
             if interrupted:
                 return SessionInvalidatedError(
-                    "La conexión DuckDB no responde tras una interrupción; la sesión se invalidó",
+                    tr(
+                        "The DuckDB connection does not respond after an interruption; the "
+                        "session was invalidated"
+                    ),
                     detail="unresponsive_after_interrupt",
                 )
             return SessionInvalidatedError(
-                "No se pudo comprobar el estado de la conexión; la sesión se invalidó",
+                tr("The state of the connection could not be checked; the session was invalidated"),
                 detail="transaction_state_unknown",
             )
         if isinstance(failure, GeoDuckError):
@@ -714,10 +723,10 @@ def _classify(exc: BaseException, token: CancelToken) -> BaseException:
     if isinstance(exc, GeoDuckError):
         return exc
     if is_interrupt_error(exc) or (token.cancelled and isinstance(exc, (duckdb.Error, OSError))):
-        return OperationCancelledError("Operación cancelada", detail=type(exc).__name__)
+        return OperationCancelledError(tr("Operation cancelled"), detail=type(exc).__name__)
     if isinstance(exc, duckdb.Error) and is_aborted_error(exc):
         return GeoDuckError(
-            "La transacción está abortada; solo se puede revertir (ROLLBACK).",
+            tr("The transaction is aborted; it can only be rolled back (ROLLBACK)."),
             code=ErrorCode.TRANSACTION_ABORTED,
             detail=type(exc).__name__,
         )
@@ -730,7 +739,9 @@ def _wrap_start_error(exc: BaseException) -> BaseException:
     if isinstance(exc, GeoDuckError):
         return exc
     if isinstance(exc, duckdb.Error):
-        return EngineError(f"No se pudo iniciar DuckDB: {_first_line(exc)}", detail=type(exc).__name__)
+        return EngineError(
+            tr("DuckDB could not start: {0}").format(_first_line(exc)), detail=type(exc).__name__
+        )
     return exc
 
 

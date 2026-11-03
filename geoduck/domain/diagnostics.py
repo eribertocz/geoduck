@@ -6,6 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from geoduck.domain.i18n import tr
+
 
 class CheckStatus(str, Enum):
     OK = "OK"
@@ -26,7 +28,7 @@ class Check:
 
     def __post_init__(self) -> None:
         if self.status is CheckStatus.FAIL and not self.action:
-            raise ValueError(f"La comprobación {self.id} falla sin acción recomendada")
+            raise ValueError(f"Check {self.id} fails without a recommended action")
 
 
 @dataclass(frozen=True)
@@ -60,7 +62,7 @@ class DiagnosticReport:
         raise KeyError(check_id)
 
     def to_text(self) -> str:
-        lines = ["Diagnóstico de GeoDuck", ""]
+        lines = [tr("GeoDuck diagnostics"), ""]
         lines += [f"{k}: {v}" for k, v in self.facts.items()]
         lines.append("")
         for c in self.checks:
@@ -68,7 +70,7 @@ class DiagnosticReport:
             if c.action and c.status is not CheckStatus.OK:
                 lines.append(f"       → {c.action}")
         lines.append("")
-        lines.append("Resultado: " + ("utilizable" if self.ok else "NO utilizable"))
+        lines.append("Resultado: " + ("utilizable" if self.ok else tr("NOT usable")))
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, object]:

@@ -163,6 +163,7 @@ def test_temporaries_are_grouped_under_the_root(iface):
 
 def test_attach_dialog_builds_requests(qgis_app, tmp_path):
     from geoduck.ui.attach_dialog import READ_ONLY_HELP, READ_WRITE_HELP, AttachDialog
+    from geoduck.ui.i18n import tr
 
     dialog = AttachDialog(OpenAction.CREATE_NEW)
     assert dialog.windowTitle() == "Crear base DuckDB"
@@ -180,9 +181,9 @@ def test_attach_dialog_builds_requests(qgis_app, tmp_path):
     dialog = AttachDialog(OpenAction.OPEN_EXISTING)
     assert dialog.windowTitle() == "Abrir base DuckDB"
     assert dialog.readonly_check.isChecked() and dialog.access is RO  # por defecto, solo lectura
-    assert dialog.access_help.text() == READ_ONLY_HELP
+    assert dialog.access_help.text() == tr(READ_ONLY_HELP)
     dialog.readonly_check.setChecked(False)
-    assert dialog.access is RW and dialog.access_help.text() == READ_WRITE_HELP
+    assert dialog.access is RW and dialog.access_help.text() == tr(READ_WRITE_HELP)
     dialog.readonly_check.setChecked(True)
     dialog.path_edit.setText(str(tmp_path / "no_existe.duckdb"))
     assert not dialog.ok_button.isEnabled() and dialog.path_hint.text() == "No se encuentra el archivo."

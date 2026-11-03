@@ -14,6 +14,7 @@ from typing import Any
 from qgis.core import QgsProject
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.connected import ConnectedLoad
@@ -131,7 +132,7 @@ class BridgeLoader:
             raise GeoDuckError(reason, code=ErrorCode.INVALID_ARGUMENT)
         if request.reproject_to and request.mode is LoadMode.CONNECTED:
             raise GeoDuckError(
-                "La capa Conectada no se reproyecta: QGIS lo hace al vuelo (spatial-spec §4)",
+                tr("The Connected layer is not reprojected: QGIS does it on the fly (spatial-spec §4)"),
                 code=ErrorCode.INVALID_ARGUMENT,
             )
         requests = request.split()

@@ -15,6 +15,7 @@ from typing import Any
 from qgis.core import QgsMapLayer, QgsProject
 from qgis.PyQt.QtCore import QTimer
 
+from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadReport, LoadRequest
 from geoduck.qgis_bridge.vsimem import VsimemRegistry
 
@@ -145,4 +146,4 @@ class MultiLoad:
 def _cancelled() -> BaseException:
     from geoduck.qgis_bridge.memory import LoadCancelledError  # noqa: PLC0415 - evita ciclo
 
-    return LoadCancelledError("Carga cancelada")
+    return LoadCancelledError(tr("Loading cancelled"))

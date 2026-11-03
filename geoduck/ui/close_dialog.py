@@ -18,26 +18,28 @@ from geoduck.ui.i18n import tr
 class CloseTransactionDialog(QDialog):
     def __init__(self, request: CloseConfirmationRequired, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("GeoDuck — Transacción abierta"))
+        self.setWindowTitle(tr("GeoDuck — Open transaction"))
         self.setModal(True)
         self.choice = CloseChoice.CANCEL
 
         if request.transaction is TransactionState.ABORTED:
             text = tr(
-                "La transacción está abortada. Para cerrar la sesión hay que revertirla (ROLLBACK); "
-                "confirmarla no es posible."
+                "The transaction is aborted. To close the session it must be rolled back (ROLLBACK); "
+                "committing it is not possible."
             )
         else:
-            text = tr("Hay una transacción abierta. ¿Qué hacer con sus cambios antes de cerrar la sesión?")
+            text = tr(
+                "There is an open transaction. What should happen to its changes before closing the session?"
+            )
         message = QLabel(text)
         message.setWordWrap(True)
 
-        self.commit_button = QPushButton(tr("Confirmar (COMMIT) y cerrar"))
-        self.rollback_button = QPushButton(tr("Revertir (ROLLBACK) y cerrar"))
-        self.cancel_button = QPushButton(tr("Cancelar cierre"))
+        self.commit_button = QPushButton(tr("Commit (COMMIT) and close"))
+        self.rollback_button = QPushButton(tr("Roll back (ROLLBACK) and close"))
+        self.cancel_button = QPushButton(tr("Cancel closing"))
         self.commit_button.setEnabled(request.commit_allowed)
         if not request.commit_allowed:
-            self.commit_button.setToolTip(tr("COMMIT no es válido en este momento"))
+            self.commit_button.setToolTip(tr("COMMIT is not valid right now"))
         self.cancel_button.setDefault(True)  # la opción por defecto no modifica nada
         self.cancel_button.setAutoDefault(True)
         self.commit_button.setAutoDefault(False)

@@ -104,7 +104,7 @@ class CatalogExplorer(QTreeWidget):
         self.itemDoubleClicked.connect(self._double_clicked)
         self.loading_enabled = False
         self.setHeaderHidden(True)
-        self.setAccessibleName(tr("Explorador de bases de datos"))
+        self.setAccessibleName(tr("Database explorer"))
         self.setMinimumHeight(140)
         self._catalog: CatalogSnapshot | None = None
         self._filter = ""
@@ -132,7 +132,7 @@ class CatalogExplorer(QTreeWidget):
             item = QTreeWidgetItem([database_label(catalog, db)])
             item.setData(0, _DATABASE_ROLE, db.name)
             item.setData(0, _NAME_ROLE, db.name)
-            item.setToolTip(0, db.path or tr("En memoria"))
+            item.setToolTip(0, db.path or tr("In memory"))
             for schema in catalog.schemas_of(db.name):
                 schema_item = QTreeWidgetItem([schema])
                 schema_item.setData(0, _DATABASE_ROLE, db.name)
@@ -140,15 +140,15 @@ class CatalogExplorer(QTreeWidget):
                 objects = catalog.objects_in(db.name, schema)
                 tables = [o for o in objects if o.kind is ObjectKind.TABLE]
                 views = [o for o in objects if o.kind is ObjectKind.VIEW]
-                self._add_group(schema_item, tr("Tablas"), tables, db.name, "tables")
-                self._add_group(schema_item, tr("Vistas"), views, db.name, "views")
+                self._add_group(schema_item, tr("Tables"), tables, db.name, "tables")
+                self._add_group(schema_item, tr("Views"), views, db.name, "views")
                 if catalog.is_root(db.name) and schema == "main" and temporaries:
                     self._add_temporaries(schema_item, temporaries)
                     temp_placed = True
                 item.addChild(schema_item)
             self.addTopLevelItem(item)
         if temporaries and not temp_placed:  # sin esquema «main» en la raíz: grupos en la raíz del árbol
-            holder = QTreeWidgetItem([tr("Temporales de la sesión")])
+            holder = QTreeWidgetItem([tr("Session temporaries")])
             self._add_temporaries(holder, temporaries)
             self.addTopLevelItem(holder)
         # Como la maqueta (V18): bases, esquemas y «Tablas (n)» abiertos; vistas y temporales, cerrados
@@ -163,8 +163,8 @@ class CatalogExplorer(QTreeWidget):
     def _add_temporaries(self, parent: QTreeWidgetItem, temporaries: tuple[CatalogObject, ...]) -> None:
         tables = [o for o in temporaries if o.kind is ObjectKind.TABLE]
         views = [o for o in temporaries if o.kind is ObjectKind.VIEW]
-        self._add_group(parent, tr("Tablas temporales"), tables, None, "temp")
-        self._add_group(parent, tr("Vistas temporales"), views, None, "temp")
+        self._add_group(parent, tr("Temporary tables"), tables, None, "temp")
+        self._add_group(parent, tr("Temporary views"), views, None, "temp")
 
     def _add_group(
         self,
@@ -186,13 +186,13 @@ class CatalogExplorer(QTreeWidget):
 
     @staticmethod
     def _object_item(obj: CatalogObject, database: str | None) -> QTreeWidgetItem:
-        kind = tr("tabla") if obj.kind is ObjectKind.TABLE else tr("vista")
+        kind = tr("table") if obj.kind is ObjectKind.TABLE else tr("view")
         item = QTreeWidgetItem([obj.name])
         # La ayuda de carga va en cada tabla y vista (decisión del propietario, 2026-11-02)
         item.setToolTip(
             0,
             f"{kind} {obj.database}.{obj.schema}.{obj.name}\n"
-            + tr("Doble clic o clic derecho → Cargar en QGIS…"),
+            + tr("Double-click or right-click → Load into QGIS…"),
         )
         item.setData(0, _DATABASE_ROLE, database)
         item.setData(0, _NAME_ROLE, obj.name)
@@ -224,7 +224,7 @@ class CatalogExplorer(QTreeWidget):
         if not source or item.data(0, _COLUMNS_STATE_ROLE) in ("loading", "loaded"):
             return
         item.takeChildren()
-        placeholder = QTreeWidgetItem([tr("Cargando…")])
+        placeholder = QTreeWidgetItem([tr("Loading…")])
         placeholder.setFlags(Qt.ItemFlag.ItemIsEnabled)
         item.addChild(placeholder)
         item.setData(0, _COLUMNS_STATE_ROLE, "loading")
@@ -248,15 +248,15 @@ class CatalogExplorer(QTreeWidget):
                 child = QTreeWidgetItem([f"{column.name} · {column.data_type}"])
                 child.setData(0, _COLUMN_ROLE, column.name)
                 if column.nullable is None:
-                    nullable = tr("No disponible")
+                    nullable = tr("Not available")
                 else:
-                    nullable = tr("sí") if column.nullable else tr("no")
+                    nullable = tr("yes") if column.nullable else tr("no")
                 child.setToolTip(
                     0,
                     f"{column.name}\n{column.data_type}\n"
-                    + tr("Admite NULL: {0}").format(nullable)
+                    + tr("Allows NULL: {0}").format(nullable)
                     + "\n"
-                    + tr("Doble clic o arrastrar → insertar en el editor"),
+                    + tr("Double-click or drag → insert into the editor"),
                 )
                 if column.is_geometry:
                     child.setIcon(0, geometry_icon)
@@ -270,7 +270,7 @@ class CatalogExplorer(QTreeWidget):
         """No se pudieron leer: lo dice en el nodo y vuelve a intentarlo la próxima vez que se expanda."""
         for item in self._items_for(source):
             item.takeChildren()
-            child = QTreeWidgetItem([tr("No se pudieron leer las columnas")])
+            child = QTreeWidgetItem([tr("The columns could not be read")])
             child.setToolTip(0, message)
             child.setFlags(Qt.ItemFlag.ItemIsEnabled)
             item.addChild(child)
@@ -330,7 +330,7 @@ class CatalogExplorer(QTreeWidget):
         if not sql:
             return
         menu = QMenu(self)
-        action = menu.addAction(tr("Cargar en QGIS…"))
+        action = menu.addAction(tr("Load into QGIS…"))
         action.setEnabled(self.loading_enabled)
         name = str(item.data(0, _NAME_ROLE))
         source = item.data(0, _SOURCE_ROLE)
@@ -382,13 +382,13 @@ def database_label(catalog: CatalogSnapshot, db: AttachedDatabase) -> str:
     escribibles y temporales), como en la maqueta."""
     notes = []
     if catalog.is_root(db.name):
-        notes.append(tr("raíz"))
+        notes.append(tr("root"))
     if catalog.default_database.key == db.key:
-        notes.append(tr("en uso"))
+        notes.append(tr("in use"))
     if db.access is AccessMode.READ_ONLY:
-        notes.append(tr("solo lectura"))
+        notes.append(tr("read only"))
     elif not db.in_memory:
-        notes.append(tr("lectura y escritura"))
+        notes.append(tr("read-write"))
     return db.name + (f" · {', '.join(notes)}" if notes else "")
 
 

@@ -25,6 +25,7 @@ from qgis.PyQt.QtCore import QByteArray, QDate, QDateTime, QMetaType, Qt
 
 from geoduck.domain.bridge_types import FieldKind, LoadPlan, unreadable_error
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 
 _JULIAN_EPOCH = 2440588  # día juliano del 1970-01-01
 _UTC = Qt.TimeSpec.UTC
@@ -141,8 +142,10 @@ def layer_type_for(geometries: list[QgsGeometry | None]) -> Qgis.WkbType | None:
     if len(singles) > 1:
         names = ", ".join(sorted(QgsWkbTypes.displayString(t) for t in flat))
         raise GeoDuckError(
-            f"Geometrías de tipos distintos ({names}): una capa en memoria admite un solo tipo; "
-            "use «Copia rápida» o filtre por tipo",
+            tr(
+                "Geometries of different types ({0}): a memory layer accepts a "
+                "single type; use «Fast copy» or filter by type"
+            ).format(names),
             code=ErrorCode.INVALID_ARGUMENT,
         )
     single = next(iter(singles))
@@ -167,8 +170,9 @@ def fit_geometry(g: QgsGeometry, layer_type: Qgis.WkbType) -> QgsGeometry:
         g.convertToMultiType()
         return g
     raise GeoDuckError(
-        f"Geometría {QgsWkbTypes.displayString(t)} en una capa {QgsWkbTypes.displayString(layer_type)}: "
-        "use «Copia rápida» o filtre por tipo",
+        tr("{0} geometry in a {1} layer: use «Fast copy» or filter by type").format(
+            QgsWkbTypes.displayString(t), QgsWkbTypes.displayString(layer_type)
+        ),
         code=ErrorCode.INVALID_ARGUMENT,
     )
 

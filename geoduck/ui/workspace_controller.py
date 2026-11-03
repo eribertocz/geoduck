@@ -231,7 +231,7 @@ class WorkspaceController(QObject):
         except Exception as exc:  # cualquier fallo de Qt durante el traslado: se revierte y se informa
             self._revert(source, target, moved)
             self._switching = False
-            message = tr("No se pudo cambiar la presentación; GeoDuck sigue aquí.")
+            message = tr("The presentation could not be changed; GeoDuck is still here.")
             self.content.show_text(f"{message} ({exc})")
             self.shown_changed.emit(self.is_visible())
             return False

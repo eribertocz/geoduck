@@ -25,6 +25,7 @@ from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import FieldKind, LoadPlan, missing_crs_warning
 from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.i18n import tr
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
 from geoduck.qgis_bridge.convert import crs_from_field, strip_unreadable
@@ -61,9 +62,9 @@ _WKB_NAMES = {
 def unavailable_reason() -> str | None:
     """None si la Instantánea está disponible; si no, el motivo para mostrarlo en la interfaz."""
     if int(gdal.VersionInfo()) < MIN_GDAL:
-        return f"Necesita GDAL 3.8 o posterior (este QGIS trae GDAL {gdal.__version__})"
+        return tr("Requires GDAL 3.8 or later (this QGIS comes with GDAL {0})").format(gdal.__version__)
     if not hasattr(ogr.Layer, "WritePyArrow") or ogr.GetDriverByName("GPKG") is None:
-        return "El GDAL de este QGIS no puede escribir GeoPackage desde Arrow"
+        return tr("The GDAL of this QGIS cannot write GeoPackage from Arrow")
     return None
 
 
@@ -91,7 +92,9 @@ class _Writer:
                 return None
             srs = osr.SpatialReference()
             if srs.SetFromUserInput(self.crs_override) != 0:
-                raise GeoDuckError(f"CRS no reconocido: {self.crs_override}", code=ErrorCode.INVALID_ARGUMENT)
+                raise GeoDuckError(
+                    tr("CRS not recognized: {0}").format(self.crs_override), code=ErrorCode.INVALID_ARGUMENT
+                )
             srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             return srs
         info = None
@@ -115,7 +118,7 @@ class _Writer:
         driver = ogr.GetDriverByName("GPKG")
         self.ds = driver.CreateDataSource(self.path)
         if self.ds is None:
-            raise GeoDuckError(_last_error("GDAL no pudo crear el GeoPackage"))
+            raise GeoDuckError(_last_error(tr("GDAL could not create the GeoPackage")))
         names = {f.name.lower() for f in self.plan.fields}
         fid = "fid" if "fid" not in names else "geoduck_fid"
         geom = self.plan.geometry
@@ -128,15 +131,15 @@ class _Writer:
             "datos", srs, ogr.wkbUnknown if geom is not None else ogr.wkbNone, options
         )
         if self.layer is None:
-            raise GeoDuckError(_last_error("GDAL no pudo crear la capa"))
+            raise GeoDuckError(_last_error(tr("GDAL could not create the layer")))
         for f in self.plan.fields:
             kind, subtype = _OGR_TYPE[f.kind]
             definition = ogr.FieldDefn(f.name, kind)
             definition.SetSubType(subtype)
             if self.layer.CreateField(definition) != 0:
-                raise GeoDuckError(_last_error(f"GDAL rechazó el campo «{f.name}»"))
+                raise GeoDuckError(_last_error(tr("GDAL rejected the field «{0}»").format(f.name)))
         if self.ds.StartTransaction() != 0:
-            raise GeoDuckError(_last_error("GDAL no pudo iniciar la transacción"))
+            raise GeoDuckError(_last_error(tr("GDAL could not start the transaction")))
 
     def write(self, batch: pa.RecordBatch) -> None:
         batch = strip_unreadable(batch, self.plan, self.rows)
@@ -147,7 +150,7 @@ class _Writer:
         if geom is not None:
             self._collect_types(batch.column(batch.schema.get_field_index(geom.name)))
         if self.layer.WritePyArrow(batch, options=options) != 0:
-            raise GeoDuckError(_last_error("GDAL no pudo escribir el lote"))
+            raise GeoDuckError(_last_error(tr("GDAL could not write the batch")))
         self.rows += batch.num_rows
 
     def _collect_types(self, wkb: pa.Array) -> None:
@@ -162,7 +165,7 @@ class _Writer:
         if self.ds is None:
             self.open(None)
         if self.ds.CommitTransaction() != 0:
-            raise GeoDuckError(_last_error("GDAL no pudo confirmar el GeoPackage"))
+            raise GeoDuckError(_last_error(tr("GDAL could not commit the GeoPackage")))
         self._declare_geometry_type()
         self.ds = None  # cierra y vuelca el archivo
         self.layer = None
@@ -273,7 +276,7 @@ class SnapshotLoad:
 
         def on_batch(batch: pa.RecordBatch) -> None:  # hilo del worker
             if self._cancelled.is_set():
-                raise LoadCancelledError("Carga cancelada")
+                raise LoadCancelledError(tr("Loading cancelled"))
             assert self._writer is not None
             gdal.PushErrorHandler("CPLQuietErrorHandler")  # propio de este hilo: no toca a QGIS
             try:
@@ -306,9 +309,9 @@ class SnapshotLoad:
             if exc is None:
                 outcome = fut.result()
                 if self._cancelled.is_set() or outcome.summary.outcome is ReadOutcome.CANCELLED:
-                    exc = LoadCancelledError("Carga cancelada")
+                    exc = LoadCancelledError(tr("Loading cancelled"))
                 elif outcome.summary.outcome is not ReadOutcome.EXHAUSTED:
-                    exc = GeoDuckError(f"La lectura falló: {outcome.summary.error}")
+                    exc = GeoDuckError(tr("Reading failed: {0}").format(outcome.summary.error))
             if exc is None and writer is not None:
                 writer.commit()
                 families = writer.families() if writer.plan.geometry is not None else {}
@@ -321,7 +324,7 @@ class SnapshotLoad:
                     writer.abort()
                 else:
                     unlink(self._path)
-                result = ("error", exc or GeoDuckError("La lectura terminó sin plan"))
+                result = ("error", exc or GeoDuckError(tr("Reading ended without a plan")))
         except BaseException as err:
             if writer is not None:
                 writer.abort()
@@ -346,13 +349,16 @@ class SnapshotLoad:
                 column = plan.geometry.name if plan is not None and plan.geometry is not None else "geom"
                 quoted = '"' + column.replace('"', '""') + '"'
                 specs.append(
-                    (f"{self._path}|layername=datos|subset={quoted} IS NULL", f"{name} — sin geometría")
+                    (
+                        f"{self._path}|layername=datos|subset={quoted} IS NULL",
+                        tr("{0} — no geometry").format(name),
+                    )
                 )
         layers = []
         for uri, layer_name in specs:
             layer = QgsVectorLayer(uri, layer_name, "ogr")
             if not layer.isValid():
-                raise GeoDuckError("QGIS no pudo abrir el GeoPackage creado")
+                raise GeoDuckError(tr("QGIS could not open the created GeoPackage"))
             if self._writer is not None and not self._writer.has_crs and layer.isSpatial():
                 # Sin CRS en los datos: QGIS 3.34 asigna uno en silencio al abrir el GeoPackage (C4).
                 layer.setCrs(QgsCoordinateReferenceSystem())
@@ -378,15 +384,19 @@ class SnapshotLoad:
         try:
             if len(families) > 1 and not self._request.split_families:
                 raise GeoDuckError(
-                    f"Geometrías de tipos distintos ({', '.join(families.values())}) y la opción "
-                    "«Tipos mixtos: una capa por tipo» está desactivada: no se cargó nada",
+                    tr(
+                        "Geometries of different types ({0}) and the option «Mixed types: "
+                        "one layer per type» is off: nothing was loaded"
+                    ).format(", ".join(families.values())),
                     code=ErrorCode.INVALID_ARGUMENT,
                 )
             layers = self._open_layers(families, nulls)
             count = sum(layer.featureCount() for layer in layers)
             if not (read == written == count):
                 raise GeoDuckError(
-                    f"Conteos distintos: leídas {read}, escritas {written}, en las capas {count}"
+                    tr("Different counts: read {0}, written {1}, in the layers {2}").format(
+                        read, written, count
+                    )
                 )
             self._registry.track(self._path)
             self._project.addMapLayers(layers)  # todas o ninguna (§8)
@@ -399,9 +409,9 @@ class SnapshotLoad:
         if self._reprojector is not None:
             warnings = (*warnings, self._reprojector.note)
         if self._writer is not None and self._writer.mixed_dimensions():
-            warnings = (*warnings, "Dimensiones Z/M mixtas: las geometrías sin ellas se muestran con NaN")
+            warnings = (*warnings, tr("Mixed Z/M dimensions: geometries without them are shown with NaN"))
         if len(layers) > 1:
-            warnings = (*warnings, f"Tipos de geometría mixtos: {len(layers)} capas, una por tipo")
+            warnings = (*warnings, tr("Mixed geometry types: {0} layers, one per type").format(len(layers)))
         if plan.geometry is not None and not layer.crs().isValid():
             warnings = (*warnings, missing_crs_warning(plan.geometry, self._request.crs_override))
         self._on_progress(written)

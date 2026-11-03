@@ -14,6 +14,7 @@ from qgis.PyQt.QtWidgets import QDialog
 import geoduck
 from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
+from geoduck.ui.i18n import tr
 from geoduck.ui.load_dialog import LoadDialog
 from geoduck.ui.map_view import NO_EXTENT
 from geoduck.ui.sql_panel import LOG_MESSAGE
@@ -124,7 +125,7 @@ def test_view_on_map_selects_and_zooms_to_a_valid_extent(plugin, iface):  # noqa
     assert iface.active_layer is layer  # seleccionada en el panel de capas
     extent = iface.mapCanvas().extent()
     assert extent.contains(layer.extent().center())  # zoom a la capa
-    assert NO_EXTENT not in content.message_label.text()
+    assert tr(NO_EXTENT) not in content.message_label.text()
     QgsProject.instance().removeMapLayer(layer.id())
     assert not content.map_button.isEnabled()  # la capa ya no está: la acción se desactiva
 
@@ -144,7 +145,7 @@ def test_view_on_map_without_a_valid_extent_selects_without_zoom(plugin, iface, 
     before = iface.mapCanvas().extent()
     content.map_button.click()
     assert iface.active_layer is layers()[0]
-    assert content.message_label.text() == NO_EXTENT
+    assert content.message_label.text() == tr(NO_EXTENT)
     assert iface.mapCanvas().extent() == before  # sin zoom
 
 

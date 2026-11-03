@@ -40,11 +40,11 @@ SETTING = "geoduck/load_mode"
 #: Modalidades: nombre y para qué sirve (textos de la maqueta; los mismos en «Cargar en QGIS ▾»).
 OPTIONS = {
     LoadMode.MEMORY: (
-        tr("Copia en memoria"),
-        tr("Capa temporal de QGIS. Para resultados pequeños o medianos."),
+        tr("Memory copy"),
+        tr("QGIS temporary layer. For small or medium results."),
     ),
-    LoadMode.SNAPSHOT: (tr("Copia rápida"), tr("GeoPackage en memoria. Ideal para resultados grandes.")),
-    LoadMode.CONNECTED: (tr("Conectada"), tr("Lee DuckDB bajo demanda. Editable si viene de una tabla.")),
+    LoadMode.SNAPSHOT: (tr("Fast copy"), tr("In-memory GeoPackage. Ideal for large results.")),
+    LoadMode.CONNECTED: (tr("Connected"), tr("Reads DuckDB on demand. Editable if it comes from a table.")),
 }
 
 
@@ -102,7 +102,7 @@ class LoadDialog(QDialog):
         replay_notice: bool = True,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Cargar en QGIS"))
+        self.setWindowTitle(tr("Load into QGIS"))
         self._sql = sql
         self._plan = plan
         self.setMinimumWidth(520)
@@ -113,13 +113,13 @@ class LoadDialog(QDialog):
 
         # 1. Capa
         self.name_edit = QLineEdit(title)
-        self.name_edit.setAccessibleName(tr("Nombre de la capa"))
-        layout.addWidget(_heading(tr("Nombre de la capa")))
+        self.name_edit.setAccessibleName(tr("Layer name"))
+        layout.addWidget(_heading(tr("Layer name")))
         layout.addWidget(self.name_edit)
 
         # 2. Modalidad: tarjetas de dos líneas, los mismos textos que «Cargar en QGIS ▾» (inventario V30)
         layout.addSpacing(6)
-        layout.addWidget(_heading(tr("Modalidad")))
+        layout.addWidget(_heading(tr("Mode")))
         self.mode_group = QButtonGroup(self)
         self.mode_buttons: dict[LoadMode, QRadioButton] = {}
         self._mode_cards: dict[LoadMode, ModeCard] = {}
@@ -152,13 +152,13 @@ class LoadDialog(QDialog):
         self._candidates = dict(plan.candidates)
         for name, fmt in plan.candidates:
             self.candidate_combo.addItem(f"{name} ({fmt.value.upper()})", name)
-        self.geometry_heading = _heading(tr("Geometría"))
+        self.geometry_heading = _heading(tr("Geometry"))
         layout.addSpacing(6)
         layout.addWidget(self.geometry_heading)
         geo_form = QFormLayout()
-        self.geometry_label = QLabel(tr("Geometrías"))
+        self.geometry_label = QLabel(tr("Geometries"))
         geo_form.addRow(self.geometry_label, self.geometry_box)
-        self.candidate_label = QLabel(tr("Usar como geometría"))
+        self.candidate_label = QLabel(tr("Use as geometry"))
         geo_form.addRow(self.candidate_label, self.candidate_combo)
         self.candidate_label.setVisible(bool(plan.candidates))
         self.candidate_combo.setVisible(bool(plan.candidates))
@@ -169,8 +169,8 @@ class LoadDialog(QDialog):
 
         # 4. Opciones de la modalidad elegida (solo con geometría): copias, «Reproyectar a…» y tipos mixtos;
         # Conectada, «Separar por tipo» y la nota de que QGIS reproyecta al vuelo (spatial-spec §4, §6)
-        self.reproject_check = QCheckBox(tr("Reproyectar a…"))
-        self.reproject_check.setToolTip(tr("Transforma las coordenadas al copiar, con QGIS/PROJ."))
+        self.reproject_check = QCheckBox(tr("Reproject to…"))
+        self.reproject_check.setToolTip(tr("Transforms the coordinates while copying, with QGIS/PROJ."))
         self.reproject_widget = QgsProjectionSelectionWidget()
         self.reproject_widget.setEnabled(False)
         self.reproject_row = QWidget()
@@ -178,18 +178,20 @@ class LoadDialog(QDialog):
         reproject_layout.setContentsMargins(0, 0, 0, 0)
         reproject_layout.addWidget(self.reproject_check)
         reproject_layout.addWidget(self.reproject_widget, 1)
-        self.reproject_note = QLabel(tr("Se puede reproyectar cuando cada geometría tiene SRC."))
+        self.reproject_note = QLabel(tr("It can be reprojected when every geometry has a CRS."))
         self.reproject_note.setProperty("geoduck", "muted")
-        self.on_the_fly_note = QLabel(tr("QGIS la reproyecta al vuelo en el mapa."))
+        self.on_the_fly_note = QLabel(tr("QGIS reprojects it on the fly in the map."))
         self.on_the_fly_note.setProperty("geoduck", "muted")
-        self.split_check = QCheckBox(tr("Tipos mixtos: una capa por tipo"))
+        self.split_check = QCheckBox(tr("Mixed types: one layer per type"))
         self.split_check.setChecked(True)
-        self.split_check.setToolTip(tr("Si se desactiva y hay varios tipos de geometría, no se carga nada."))
-        self.separate_check = QCheckBox(tr("Separar por tipo"))
-        self.separate_check.setToolTip(
-            tr("Una capa Conectada por tipo de geometría, filtrada en DuckDB. Sin marcar: una sola capa.")
+        self.split_check.setToolTip(
+            tr("If unchecked and there are several geometry types, nothing is loaded.")
         )
-        self.options_heading = _heading(tr("Opciones"))
+        self.separate_check = QCheckBox(tr("Split by type"))
+        self.separate_check.setToolTip(
+            tr("One Connected layer per geometry type, filtered in DuckDB. Unchecked: a single layer.")
+        )
+        self.options_heading = _heading(tr("Options"))
         layout.addSpacing(6)
         layout.addWidget(self.options_heading)
         for widget in (self.reproject_row, self.reproject_note, self.split_check, self.separate_check):
@@ -202,15 +204,15 @@ class LoadDialog(QDialog):
         layout.addSpacing(4)
         layout.addWidget(self.warnings_label)
         if replay_notice:
-            notice = QLabel(tr("Se vuelve a ejecutar la consulta: puede diferir de la vista previa."))
+            notice = QLabel(tr("The query is run again: it may differ from the preview."))
             notice.setProperty("geoduck", "muted")
             notice.setWordWrap(True)
             layout.addWidget(notice)
 
-        self._ok = QPushButton(tr("Cargar"))
+        self._ok = QPushButton(tr("Load"))
         self._ok.setProperty("geoduck", "primary")
         self._ok.setDefault(True)
-        cancel = QPushButton(tr("Cancelar"))
+        cancel = QPushButton(tr("Cancel"))
         cancel.setProperty("geoduck", "secondary")
         self._has_mode = choice is not None
         self._ok.clicked.connect(self.accept)
@@ -290,27 +292,27 @@ class LoadDialog(QDialog):
                 widget.crsChanged.connect(lambda _crs: self._refresh())
                 self.crs_widgets[name] = widget
                 self.crs_form.addRow(
-                    tr("SRC de «{}»").format(name) if len(checked) > 1 else tr("SRC"), widget
+                    tr("CRS of «{}»").format(name) if len(checked) > 1 else tr("CRS"), widget
                 )
         warnings = [w for w in self._plan.warnings if "geometría secundaria" not in w]
         others = [n for n in self.geometry_checks if n not in checked]
         if others:
-            warnings.append(tr("Geometrías que no se cargan: ") + ", ".join(others))
+            warnings.append(tr("Geometries that are not loaded: ") + ", ".join(others))
         if len(checked) > 1:
-            warnings.append(tr("Se crea una capa por geometría: {} capas").format(len(checked)))
+            warnings.append(tr("One layer per geometry is created: {} layers").format(len(checked)))
         unrecognized = [
             self._declared[n] for n in unknown if self._declared.get(n) and n not in self._formats
         ]
         if unrecognized:
             warnings.append(
-                tr("QGIS no reconoce el SRC declarado ({}). Elija uno o continúe sin SRC.").format(
-                    ", ".join(f"«{c}»" for c in unrecognized)
-                )
+                tr(
+                    "QGIS does not recognize the declared CRS ({}). Choose one or continue without a CRS."
+                ).format(", ".join(f"«{c}»" for c in unrecognized))
             )
         elif unknown:
-            warnings.append(tr("Los datos no declaran SRC. Elija uno o continúe sin SRC."))
+            warnings.append(tr("The data do not declare a CRS. Choose one or continue without a CRS."))
         if self.geometry_checks and not checked:
-            warnings.append(tr("Marque al menos una geometría."))
+            warnings.append(tr("Check at least one geometry."))
         copy = self.mode() in (LoadMode.MEMORY, LoadMode.SNAPSHOT)
         connected = self.mode() is LoadMode.CONNECTED
         self.split_check.setVisible(bool(checked) and copy)
@@ -348,7 +350,7 @@ class LoadDialog(QDialog):
     def request(self) -> LoadRequest:
         mode = self.mode()
         if mode is None:
-            raise ValueError("Ninguna modalidad disponible")
+            raise ValueError(tr("No mode available"))
         QgsSettings().setValue(SETTING, mode.value)
         overrides = []
         for column, widget in self.crs_widgets.items():  # sin CRS en los datos: el elegido, o "" = sin CRS
@@ -357,7 +359,7 @@ class LoadDialog(QDialog):
         checked = self.checked_geometries()
         geometry = checked[0] if checked else None
         crs_override = dict(overrides).get(geometry) if geometry is not None else None
-        name = self.name_edit.text().strip() or tr("Resultado")
+        name = self.name_edit.text().strip() or tr("Result")
         return LoadRequest(
             sql=self._sql,
             mode=mode,
