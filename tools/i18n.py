@@ -2,16 +2,13 @@
 """Catálogo de traducción de GeoDuck (G6 · E4, GD-I18N-001, issue #68).
 
 Los textos del código están en inglés, dentro de `tr("…")` o `N_("…")`. El español vive en
-`geoduck/i18n/geoduck_es.ts` (XML de Qt Linguist, editable) y se compila a `geoduck_es.qm` con
-`lrelease` de Qt.
+`geoduck/i18n/geoduck_es.ts` (XML de Qt Linguist, editable), que GeoDuck lee tal cual (sin `.qm`).
 
     python tools/i18n.py --check    # CI: el .ts tiene cada texto del código, traducido y con los
-                                    # mismos marcadores ({0}, {}); con lrelease, el .qm está al día
+                                    # mismos marcadores ({0}, {})
     python tools/i18n.py --write    # actualiza el .ts (añade los nuevos sin traducir, quita los que
-                                    # ya no están) y, con lrelease, recompila el .qm
+                                    # ya no están)
     python tools/i18n.py --write --seed pares.json    # rellena traducciones desde [[es, en], …]
-
-`lrelease`: el de la variable `LRELEASE`, o `lrelease`/`lrelease6` del PATH (vienen con QGIS en conda-forge).
 """
 
 from __future__ import annotations
@@ -19,19 +16,14 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import os
 import re
-import shutil
-import subprocess
 import sys
-import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "geoduck"
 TS = PKG / "i18n" / "geoduck_es.ts"
-QM = TS.with_suffix(".qm")
 CONTEXT = "GeoDuck"
 MARKERS = ("tr", "N_")
 _PLACEHOLDER = re.compile(r"\{[^{}]*\}")
@@ -104,20 +96,6 @@ def problems(sources: dict[str, list[str]], translations: dict[str, str]) -> lis
     return errors
 
 
-def lrelease() -> str | None:
-    for name in (os.environ.get("LRELEASE"), "lrelease", "lrelease6"):
-        if name and shutil.which(name):
-            return shutil.which(name)
-    return None
-
-
-def compile_qm(target: Path) -> None:
-    tool = lrelease()
-    if tool is None:
-        raise SystemExit("No se encontró lrelease (variable LRELEASE, o lrelease/lrelease6 en el PATH)")
-    subprocess.run([tool, "-silent", "-removeidentical", str(TS), "-qm", str(target)], check=True)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -134,24 +112,12 @@ def main() -> int:
             for es, en in json.loads(args.seed.read_text(encoding="utf-8")):
                 translations.setdefault(en, es) if not translations.get(en) else None
         write_ts(sources, {s: translations.get(s, "") for s in sources})
-        if lrelease() is not None:
-            compile_qm(QM)
-            print(f"{TS.relative_to(ROOT)} y {QM.relative_to(ROOT)} al día ({len(sources)} textos)")
-        else:
-            print(f"{TS.relative_to(ROOT)} al día ({len(sources)} textos); sin lrelease, .qm sin compilar")
+        print(f"{TS.relative_to(ROOT)} al día ({len(sources)} textos)")
         missing = problems(sources, read_ts())
         for line in missing:
             print("  " + line)
         return 1 if missing else 0
     errors = problems(sources, translations)
-    if lrelease() is not None:
-        with tempfile.TemporaryDirectory() as tmp:
-            fresh = Path(tmp) / "fresh.qm"
-            compile_qm(fresh)
-            if not QM.exists() or fresh.read_bytes() != QM.read_bytes():
-                errors.append(f"{QM.relative_to(ROOT)} no corresponde al .ts: python tools/i18n.py --write")
-    elif not QM.exists():
-        errors.append(f"Falta {QM.relative_to(ROOT)}")
     for line in errors:
         print(line)
     if not errors:

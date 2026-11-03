@@ -10,10 +10,11 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
-from qgis.PyQt.QtCore import QCoreApplication, QTranslator
+from qgis.PyQt.QtCore import QCoreApplication
 
 from tests.conftest import spanish_catalog
 
@@ -98,13 +99,22 @@ def test_another_language_falls_back_to_english(tmp_path):
     assert out["run"] == "Run" and out["after"] == out["before"]
 
 
-def test_the_compiled_qm_translates_every_text_like_the_ts(qgis_app):
-    # QCoreApplication.translate, como GeoDuck (QTranslator.translate de PyQt6 solo admite ASCII)
-    translator = QTranslator()
-    assert translator.load(str(ROOT / "geoduck" / "i18n" / "geoduck_es.qm"))
-    QCoreApplication.installTranslator(translator)
+def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, monkeypatch):
+    """F-107: el hilo del motor traduce mensajes; GeoDuck no llama a Qt para traducir."""
+    from geoduck.domain import i18n
+    from geoduck.ui import i18n as ui_i18n
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("QCoreApplication.translate no debe usarse")
+
+    monkeypatch.setattr(QCoreApplication, "translate", forbidden)
+    assert ui_i18n.install() == "es"
     try:
-        for source, spanish in spanish_catalog().items():
-            assert QCoreApplication.translate("GeoDuck", source) == spanish, source
+        results = []
+        worker = threading.Thread(target=lambda: results.append(i18n.tr("Operation cancelled")))
+        worker.start()
+        worker.join(5)
+        assert results == [spanish_catalog()["Operation cancelled"]]
+        assert i18n.tr("Run") == "Ejecutar"
     finally:
-        QCoreApplication.removeTranslator(translator)
+        ui_i18n.uninstall()
