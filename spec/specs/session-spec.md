@@ -36,6 +36,12 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - Tras operaciones con cambios de catálogo, reconsulta estado real antes de actualizar UI.
 - No convertir `DETACH` en borrado de archivo ni en cierre ficticio.
 
+### `ListColumns(database, schema, object)` (G6 · GD-CAT-002)
+- Lo pide el explorador al expandir una tabla o vista, y el autocompletado cuando necesita las columnas de un objeto. Nunca se enumeran todas las columnas de todas las bases.
+- Se ejecuta en el mismo worker serializado, con `duckdb_columns()` filtrado por base, esquema y objeto; solo metadatos, nunca filas. Devuelve, en el orden de la tabla: nombre, tipo exacto tal como lo informa DuckDB y si admite `NULL`.
+- La respuesta lleva el `catalog_epoch` de la petición (sql-editor-spec §2). Tras `ATTACH`/`DETACH`, DDL desde SQL o invalidación de sesión (INV-1..INV-5) las columnas guardadas se descartan, y una respuesta de un epoch anterior no se muestra.
+- Si el objeto ya no existe, el error se muestra en el nodo y el catálogo se refresca; no bloquea la sesión.
+
 ### `CloseSession()`
 Solo lo inicia «Cerrar sesión» o la descarga de GeoDuck. Ocultar o cerrar la ventana propia o el panel (ui-ux-spec §8) **no** es `CloseSession`: no hay `DETACH`, `ROLLBACK`, cancelación ni capas invalidadas.
 

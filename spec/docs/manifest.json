@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 122475,
-      "sha256": "c9aac9d0ed59b60826bdcbffdaca18cc51073ee93f1928f554d061553c224e40"
+      "bytes": 129400,
+      "sha256": "d2e0866d45c7738c6b63d4f44a43b920f6e5aea234591b2c79a3dff826e47615"
     },
     {
       "path": "README.md",
@@ -101,8 +101,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 9266,
-      "sha256": "9b8556bae3611a58d70aee8a016f56851bfa34d1e08dbcf14413dbf6bafc4f34"
+      "bytes": 9760,
+      "sha256": "5702e8cf27d0d79cb99e3a4c80d283f624bf180e1a461fef1a5f060a95739fb7"
     },
     {
       "path": "docs/references.md",
@@ -111,8 +111,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 5833,
-      "sha256": "03422e2e8322591327a67c90d7c3c8ea8991f6087ec19ca611991d00f48aa67e"
+      "bytes": 6326,
+      "sha256": "540501237ced4ddf695db379f1e71e1db2e736682a1fe08e451b49fe209fba59"
     },
     {
       "path": "docs/security.md",
@@ -136,8 +136,8 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 9909,
-      "sha256": "1c44e5f2692d23f3b261047e20d502c064cfd75233123e29063d501828a82e2b"
+      "bytes": 11250,
+      "sha256": "64858954ce7e9cd74e6b5a64fd4e38c0873b5f89f88aba14de8106b3f6a9cecb"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
@@ -146,8 +146,8 @@
     },
     {
       "path": "specs/session-spec.md",
-      "bytes": 7938,
-      "sha256": "88ec57f9214c038bce0977bf4e08e962f447f76f824a2c65a123f68b8822a94d"
+      "bytes": 8772,
+      "sha256": "22557495f2d26b83669bf904e74695d24aae06cc26762daf4e481d2120f83034"
     },
     {
       "path": "specs/spatial-spec.md",
@@ -156,13 +156,13 @@
     },
     {
       "path": "specs/sql-editor-spec.md",
-      "bytes": 6240,
-      "sha256": "7847f763f11e7682549a98793261e46bc360544e00c5b8359e85ed4a5a67cb24"
+      "bytes": 8138,
+      "sha256": "3ac68a451b453825743bcc78cc562c045483f24240c97ddc98479310a19cb7b5"
     },
     {
       "path": "specs/ui-ux-spec.md",
-      "bytes": 10530,
-      "sha256": "fc947a09fb47e37b79331f0d23bd8766eb7bcc83e7cd71778a319c0fcf46c699"
+      "bytes": 12394,
+      "sha256": "b2827b2c908be4698e2dc980a96e7428e486f32eab5bb8d9f6626adb0b563c9d"
     }
   ]
 }

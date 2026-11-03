@@ -28,13 +28,17 @@
 | AT-SES-004 | cargar capa → DETACH → inspeccionar capa | capa intacta; archivo liberado por GeoDuck |
 | AT-SES-005 | BEGIN → INSERT → fallo → rollback | semántica DuckDB 1.5.x/2.x respetada |
 | AT-CAT-001 | múltiples catálogos/esquemas y vistas | explorador completo y refrescado |
+| AT-CAT-002 | expandir tabla y vista en varias bases y esquemas, nombres con espacios y comillas; DDL, ATTACH/DETACH e invalidación mientras se cargan | columnas y tipos exactos, geometría por tipo, nulos; una sola lectura al expandir, sin filas; doble clic y arrastre insertan el nombre citado; nada obsoleto tras invalidar |
 | AT-SQL-001 | CREATE/INSERT/COPY/EXPLAIN/SELECT | ejecución según DuckDB |
 | AT-SQL-002 | script 2 SELECT + CREATE | estados ordenados, 2 resultados |
 | AT-SQL-003 | pestañas de distintos resultados | cada preview corresponde al SQL correcto |
 | AT-SQL-004 | ejecutar selección/actual/todo | solo lo elegido se ejecuta |
 | AT-SQL-005 | SELECT un millón | preview acotada, no fetchall |
 | AT-SQL-006 | DML RETURNING → cargar | no repetir DML; carga completa no disponible por replay |
-| AT-SQL-007 | autocompletado en catálogos adjuntos | contexto correcto |
+| AT-SQL-007 | autocompletado en catálogos adjuntos, tras DDL y ATTACH/DETACH, dentro de comentarios y cadenas | contexto correcto; nombres citados; aceptar nunca ejecuta SQL; sin sugerencias obsoletas; Escape/Intro/Tab como en sql-editor-spec §7 |
+| AT-SQL-008 | varias pestañas de editor, ejecutar en cada una, alternar ventana ↔ panel, cerrar con texto y con ejecución en curso | cada pestaña conserva su estado; se ejecuta solo la activa; confirmación al cerrar; sin sesiones nuevas |
+| AT-SQL-009 | «Abrir en el editor» desde el registro, con SQL de varias sentencias | el SQL vuelve exacto a una pestaña nueva sin ejecutarse; nada escrito en disco |
+| AT-SQL-010 | «Explicar» sobre SELECT, DML y varias sentencias | plan en una pestaña de resultados; la tabla no cambia; varias sentencias rechazadas sin ejecutar nada; nunca ANALYZE |
 | AT-BRD-001 | SELECT sin geometría → QGIS | tabla memory íntegra |
 | AT-BRD-002 | lector Arrow multi-lote | conteos/valores coinciden |
 | AT-BRD-003 | cancelar carga prolongada | GUI responde, lector cerrado |
@@ -66,6 +70,7 @@
 | AT-UX-013 | teclado, panel estrecho, DPI y tema | todas las acciones alcanzables; atajos solo dentro de GeoDuck |
 | AT-UX-014 | fallo inyectado durante el traslado | el shell anterior sigue operativo; nada se repite |
 | AT-UX-015 | regresión G0–G4 | todas pasan; otras herramientas de QGIS sin cambios |
+| AT-I18N-001 | QGIS en inglés y en español; paquete ZIP | textos en el idioma de QGIS; traducción completa de la interfaz; sin texto vacío; idioma de QGIS sin cambios; SQL y datos sin traducir; el ZIP incluye la traducción |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
