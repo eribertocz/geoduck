@@ -38,7 +38,7 @@
 | AT-SQL-007 | autocompletado en catálogos adjuntos, tras DDL y ATTACH/DETACH, dentro de comentarios y cadenas | contexto correcto; nombres citados; aceptar nunca ejecuta SQL; sin sugerencias obsoletas; Escape/Intro/Tab como en sql-editor-spec §7 |
 | AT-SQL-008 | varias pestañas de editor, ejecutar en cada una, alternar ventana ↔ panel, cerrar con texto y con ejecución en curso | cada pestaña conserva su estado; se ejecuta solo la activa; confirmación al cerrar; sin sesiones nuevas |
 | AT-SQL-009 | «Abrir en el editor» desde el registro, con SQL de varias sentencias | el SQL vuelve exacto a una pestaña nueva sin ejecutarse; nada escrito en disco |
-| AT-SQL-010 | «Explicar» sobre SELECT, DML y varias sentencias (G7: `EXPLAIN` escrito en la celda; el rechazo de varias sentencias sigue en el motor) | plan en una pestaña de resultados; la tabla no cambia; varias sentencias rechazadas sin ejecutar nada; nunca ANALYZE |
+| AT-SQL-010 | `EXPLAIN` escrito en la celda sobre SELECT y DML (G7 retira «Explicar» de la interfaz y del motor) | plan en una pestaña de resultados; la tabla no cambia |
 | AT-BRD-001 | SELECT sin geometría → QGIS | tabla memory íntegra |
 | AT-BRD-002 | lector Arrow multi-lote | conteos/valores coinciden |
 | AT-BRD-003 | cancelar carga prolongada | GUI responde, lector cerrado |

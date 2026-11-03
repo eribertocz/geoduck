@@ -315,7 +315,7 @@ def test_axis_order_is_reported_only_with_spatial_and_geometry(worker):
     assert not state.loaded and state.always_xy is None
 
 
-# -- «Explicar» (G6 · E3, AT-SQL-010) ----------------------------------------------------------------
+# -- EXPLAIN escrito en la celda (AT-SQL-010; G7 retira «Explicar») ----------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -324,37 +324,8 @@ def test_axis_order_is_reported_only_with_spatial_and_geometry(worker):
 )
 def test_explain_shows_the_plan_and_never_runs_the_statement(worker, sql):
     worker.submit(lambda h, t: h.execute("CREATE OR REPLACE TABLE ex AS SELECT 1 AS x")).future.result(30)
-    run = worker.run_script(run_id=1, text=sql, scope=RunScope.ALL, explain=True).future.result(30)
+    run = worker.run_script(run_id=1, text="EXPLAIN " + sql, scope=RunScope.ALL).future.result(30)
     (result,) = run.results
     assert result.status is StatementStatus.OK and result.output is OutputKind.PLAN
-    assert result.statement.text == "EXPLAIN " + sql
     rows = worker.submit(lambda h, t: h.execute("SELECT * FROM ex").rows).future.result(30)
     assert rows == ((1,),)  # la tabla no cambió
-
-
-@pytest.mark.parametrize(
-    ("text", "match"),
-    [
-        ("SELECT 1; SELECT 2", "una sola sentencia"),
-        ("CREATE TABLE nunca AS SELECT 1", "CREATE"),
-        ("SET threads = 1", "SET|VARIABLE"),
-        ("BEGIN", "TRANSACTION"),
-        ("EXPLAIN SELECT 1", "EXPLAIN"),
-        ("EXPLAIN ANALYZE SELECT 1", "EXPLAIN|ANALYZE"),
-    ],
-)
-def test_explain_rejects_without_running_anything(worker, text, match):
-    with pytest.raises(InvalidArgumentError, match=match):
-        worker.run_script(run_id=1, text=text, scope=RunScope.ALL, explain=True).future.result(30)
-    tables = worker.submit(
-        lambda h, t: h.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'nunca'").rows
-    ).future.result(30)
-    assert tables == ((0,),)
-
-
-def test_explain_of_the_statement_at_the_cursor(worker):
-    text = "SELECT 1 AS a; SELECT 2 AS b"
-    run = worker.run_script(
-        run_id=1, text=text, scope=RunScope.CURRENT, cursor=20, explain=True
-    ).future.result(30)
-    assert run.results[0].statement.text == "EXPLAIN SELECT 2 AS b"
