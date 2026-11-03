@@ -85,7 +85,7 @@ def test_names_with_quotes_never_inject_sql(worker):
 
 
 def test_reserved_words_decide_when_a_name_is_quoted(worker):
-    words = worker.reserved_words().result(TIMEOUT)
+    words = worker.vocabulary().result(TIMEOUT).reserved
     assert {"select", "order"} <= words
     assert "fecha" not in words
     assert sql_name("fecha", words) == "fecha"
@@ -96,3 +96,13 @@ def test_reserved_words_decide_when_a_name_is_quoted(worker):
     cols = worker.list_columns(root(worker), "main", "r").result(TIMEOUT)
     names = ", ".join(sql_name(c.name, words) for c in cols)
     assert run_sql(worker, f"SELECT {names} FROM r").columns == ("select", "fecha", 'Mi "col"')
+
+
+def test_vocabulary_has_keywords_and_named_functions_and_grows_after_load(worker):
+    vocabulary = worker.vocabulary().result(TIMEOUT)
+    assert {"select", "from", "where"} <= set(vocabulary.keywords)
+    assert {"sum", "lower", "read_parquet"} <= set(vocabulary.functions)
+    assert all(f.replace("_", "a").isalnum() for f in vocabulary.functions)  # sin operadores
+    assert len(vocabulary.functions) == len(set(vocabulary.functions))
+    run_sql(worker, "CREATE MACRO doble(x) AS x * 2")
+    assert "doble" in worker.vocabulary().result(TIMEOUT).functions

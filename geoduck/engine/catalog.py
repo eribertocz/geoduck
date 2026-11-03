@@ -8,6 +8,7 @@ se pueden leer, o la información es incoherente, falla.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from geoduck.domain.catalog import (
@@ -20,6 +21,7 @@ from geoduck.domain.catalog import (
     ObjectKind,
     catalog_key,
 )
+from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import EngineError
 from geoduck.domain.sql_text import quote_string_literal
 
@@ -114,10 +116,23 @@ def read_columns(handle: ConnectionHandle, database: str, schema: str, name: str
     )
 
 
-def read_reserved_words(handle: ConnectionHandle) -> frozenset[str]:
-    """Palabras clave de DuckDB que obligan a citar un identificador (todas menos `unreserved`)."""
-    out = handle.execute(
-        "SELECT keyword_name FROM duckdb_keywords() WHERE keyword_category <> 'unreserved'",
+def read_vocabulary(handle: ConnectionHandle) -> Vocabulary:
+    """Palabras clave (`duckdb_keywords()`) y funciones (`duckdb_functions()`, sin `pragma` ni operadores)
+    de la sesión, para citar nombres y para el autocompletado (G6 · E2)."""
+    keywords = handle.execute(
+        "SELECT keyword_name, keyword_category FROM duckdb_keywords() ORDER BY keyword_name",
         max_rows=OBJECT_LIMIT,
     )
-    return frozenset(str(row[0]) for row in out.rows)
+    functions = handle.execute(
+        "SELECT DISTINCT function_name FROM duckdb_functions() "
+        "WHERE function_type <> 'pragma' ORDER BY function_name",
+        max_rows=OBJECT_LIMIT,
+    )
+    return Vocabulary(
+        reserved=frozenset(str(name) for name, category in keywords.rows if category != "unreserved"),
+        keywords=tuple(str(name) for name, _category in keywords.rows),
+        functions=tuple(str(row[0]) for row in functions.rows if _FUNCTION_NAME.match(str(row[0]))),
+    )
+
+
+_FUNCTION_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")

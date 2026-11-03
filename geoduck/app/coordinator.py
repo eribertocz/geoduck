@@ -46,6 +46,7 @@ from geoduck.app.events import (
     StatementFinished,
     TransactionFailed,
     TransactionStateChanged,
+    VocabularyChanged,
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, LayerLoader, LoadTask, SessionEngine
 from geoduck.domain.catalog import (
@@ -55,6 +56,7 @@ from geoduck.domain.catalog import (
     ColumnInfo,
     DetachResult,
 )
+from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
@@ -94,9 +96,15 @@ class SessionCoordinator:
         self._catalog: CatalogSnapshot | None = None
         #: Cada lectura del catálogo recibe un número; solo se aplica la más reciente.
         self._catalog_generation = 0
-        #: Palabras clave de la sesión actual, pedidas con las primeras columnas: `(motor, palabras)`.
-        self._reserved: tuple[SessionEngine, frozenset[str]] | None = None
-        self._reserved_asked: SessionEngine | None = None
+        #: Vocabulario de DuckDB (palabras clave y funciones) del catálogo mostrado: `(motor, catálogo, …)`.
+        #: Se vuelve a leer tras un cambio de catálogo (p. ej. `LOAD` añade funciones).
+        self._vocabulary: tuple[SessionEngine, CatalogSnapshot | None, Vocabulary] | None = None
+        self._vocabulary_asked: tuple[SessionEngine, CatalogSnapshot | None] | None = None
+        #: Columnas ya leídas del catálogo mostrado: `(catálogo, {(base, esquema, objeto): columnas})`.
+        self._columns: tuple[CatalogSnapshot | None, dict[tuple[str, str, str], tuple[ColumnInfo, ...]]] = (
+            None,
+            {},
+        )
         #: Archivo que se adjunta en cuanto la sesión esté lista (StartSession(mode=file)).
         self._pending_attach: AttachRequest | None = None
         #: Último estado transaccional comprobado en DuckDB; `None` sin sesión.
@@ -497,29 +505,55 @@ class SessionCoordinator:
         if engine is None or self._sm.state not in (SessionState.READY, SessionState.BUSY):
             raise SessionStateError(f"No se pueden leer columnas en estado {self._sm.state.value}")
         catalog = self._catalog
-        if (self._reserved is None or self._reserved[0] is not engine) and self._reserved_asked is not engine:
-            self._reserved_asked = engine
-            words = engine.reserved_words()
-            words.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_reserved(engine, f)))
+        self.vocabulary()  # para citar los nombres hacen falta las palabras clave
         fut = engine.list_columns(*source)
         fut.add_done_callback(
             lambda f: self._dispatcher.post(lambda: self._on_columns(engine, catalog, source, f))
         )
 
+    def known_columns(self) -> dict[tuple[str, str, str], tuple[ColumnInfo, ...]]:
+        """Columnas ya leídas del catálogo que se muestra (vacío tras un cambio de catálogo)."""
+        catalog, known = self._columns
+        return dict(known) if catalog is self._catalog else {}
+
+    def vocabulary(self) -> Vocabulary | None:
+        """Vocabulario del catálogo mostrado; si aún no se conoce, lo pide (una vez) y devuelve `None`.
+        Al llegar se publica `VocabularyChanged`."""
+        engine, catalog = self._engine, self._catalog
+        if engine is None:
+            return None
+        if self._vocabulary is not None and self._vocabulary[:2] == (engine, catalog):
+            return self._vocabulary[2]
+        if self._vocabulary_asked != (engine, catalog) and self._sm.state in (
+            SessionState.READY,
+            SessionState.BUSY,
+        ):
+            self._vocabulary_asked = (engine, catalog)
+            fut = engine.vocabulary()
+            fut.add_done_callback(
+                lambda f: self._dispatcher.post(lambda: self._on_vocabulary(engine, catalog, f))
+            )
+        return None
+
     @property
     def reserved_words(self) -> frozenset[str] | None:
-        """Palabras clave de DuckDB de esta sesión; `None` si aún no se conocen (entonces se cita todo)."""
-        if self._reserved is None or self._reserved[0] is not self._engine:
+        """Palabras clave que obligan a citar, de esta sesión (aunque el catálogo haya cambiado: no cambian
+        con él); `None` si aún no se conocen (entonces se cita todo)."""
+        if self._vocabulary is None or self._vocabulary[0] is not self._engine:
             return None
-        return self._reserved[1]
+        return self._vocabulary[2].reserved
 
-    def _on_reserved(self, engine: SessionEngine, fut: Future[frozenset[str]]) -> None:
+    def _on_vocabulary(
+        self, engine: SessionEngine, catalog: CatalogSnapshot | None, fut: Future[Vocabulary]
+    ) -> None:
         if engine is not self._engine:
             return
-        if fut.exception() is None:
-            self._reserved = (engine, fut.result())
-        else:
-            self._reserved_asked = None  # se reintenta con las próximas columnas
+        if fut.exception() is not None:
+            self._vocabulary_asked = None  # se reintenta la próxima vez
+            return
+        self._vocabulary = (engine, catalog, fut.result())
+        if catalog is self._catalog:
+            self._emit(VocabularyChanged())
 
     def _on_columns(
         self,
@@ -535,6 +569,9 @@ class SessionCoordinator:
             code, message = _describe(exc)
             self._emit(ColumnsUnavailable(source, code, message))
             return
+        if self._columns[0] is not catalog:
+            self._columns = (catalog, {})
+        self._columns[1][source] = fut.result()
         self._emit(ColumnsListed(source, fut.result()))
 
     def cancel_current_operation(self) -> bool:

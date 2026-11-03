@@ -45,11 +45,14 @@ from qgis.PyQt.QtWidgets import (
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.app.events import (
     AppEvent,
+    CatalogChanged,
+    ColumnsListed,
     PreviewsInvalidated,
     ScriptFinished,
     ScriptRejected,
     SessionStateChanged,
     StatementFinished,
+    VocabularyChanged,
 )
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.load import LoadMode
@@ -65,8 +68,10 @@ from geoduck.domain.sql import (
     result_title,
 )
 from geoduck.ui import theme
+from geoduck.ui.completer import SqlCompleter
 from geoduck.ui.i18n import tr
 from geoduck.ui.load_dialog import OPTIONS
+from geoduck.ui.widgets import line_index_from, offset_from
 
 _STATUS_TEXT = {
     StatementStatus.OK: "OK",
@@ -80,17 +85,6 @@ _STATUS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 LOG_FILTERS = ("all", "ok", "error")
 #: Columnas del registro (inventario V38): hora · nombre · estado · duración · mensaje.
 LOG_TIME, LOG_NAME, LOG_STATUS, LOG_DURATION, LOG_MESSAGE = range(5)
-
-
-def offset_from(text: str, line: int, index: int) -> int:
-    lines = text.split("\n")
-    return sum(len(t) + 1 for t in lines[:line]) + index
-
-
-def line_index_from(text: str, offset: int) -> tuple[int, int]:
-    before = text[:offset]
-    line = before.count("\n")
-    return line, offset - (before.rfind("\n") + 1)
 
 
 def card(*, name: str = "") -> QFrame:
@@ -469,6 +463,7 @@ class SqlPanel(QWidget):
         self.editor = QgsCodeEditorSQL()
         self.editor.setAccessibleName(tr("Editor SQL"))
         self.editor.setMinimumHeight(60)
+        self.completer = SqlCompleter(self.editor, coordinator)  # G6 · E2 (GD-SQL-007)
         self._color_editor()
         self.editor_card = self._build_editor_card()
         self._build_results()
@@ -797,7 +792,11 @@ class SqlPanel(QWidget):
     # -- eventos -----------------------------------------------------------------------------------
 
     def _on_event(self, event: AppEvent) -> None:
-        if isinstance(event, SessionStateChanged):
+        if isinstance(event, (ColumnsListed, VocabularyChanged)):
+            self.completer.refresh()
+        elif isinstance(event, CatalogChanged):
+            self._coordinator.vocabulary()  # se pide ya, para que el autocompletado lo tenga a tiempo
+        elif isinstance(event, SessionStateChanged):
             if event.current is not SessionState.BUSY:
                 self._running = False
             self._render(event.current)

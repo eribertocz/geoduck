@@ -60,3 +60,16 @@ class ElidedLabel(QLabel):
             int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
             self.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, rect.width()),
         )
+
+
+def offset_from(text: str, line: int, index: int) -> int:
+    """Posición en `text` de (línea, índice) del editor."""
+    lines = text.split("\n")
+    return sum(len(t) + 1 for t in lines[:line]) + index
+
+
+def line_index_from(text: str, offset: int) -> tuple[int, int]:
+    """(línea, índice) del editor de una posición en `text`."""
+    before = text[:offset]
+    line = before.count("\n")
+    return line, offset - (before.rfind("\n") + 1)
