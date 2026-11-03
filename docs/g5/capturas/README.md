@@ -10,3 +10,5 @@ Windows de E5.
 | `panel.png`, `panel_oscuro.png`, `panel_explorador.png` | Panel acoplado: pestañas SQL y Explorador |
 | `menu_cargar.png` | Menú «Cargar en QGIS ▾» |
 | `dialogo_abrir.png`, `dialogo_crear.png` | «Abrir base DuckDB» y «Crear base DuckDB» |
+| `dialogo_cargar.png`, `dialogo_cargar_conectada.png` | «Cargar en QGIS» con Copia en memoria y con Conectada |
+| `acerca_de.png` | «Acerca de GeoDuck» |

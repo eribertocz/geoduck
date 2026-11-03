@@ -222,6 +222,16 @@ QTabWidget[geoduck="panel-tabs"] > QTabBar::tab:selected {{
 }}
 *[geoduck="message-info"] {{ color: {p.text}; padding: 2px 0px; }}
 
+*[geoduck="option-card"] {{ background: {p.card}; border: 1px solid {p.border}; border-radius: 8px; }}
+*[geoduck="option-card"][selected="true"] {{ background: {p.chip}; border: 1px solid {p.primary}; }}
+*[geoduck="option-card"] QLabel, *[geoduck="option-card"] QRadioButton {{ background: transparent; }}
+*[geoduck="option-card"] QRadioButton {{ spacing: 0px; }}
+*[geoduck="option-card"] QRadioButton::indicator {{ width: 0px; height: 0px; }}
+*[geoduck="option-card"] QRadioButton:disabled {{ color: {p.muted}; }}
+QLabel[geoduck="notice"] {{
+    background: {p.header}; border: 1px solid {p.border_soft}; border-radius: 6px; padding: 6px 10px;
+}}
+
 QMenu#geoduckLoadMenu {{
     background: {p.card}; border: 1px solid {p.border}; border-radius: 8px; padding: 6px;
 }}

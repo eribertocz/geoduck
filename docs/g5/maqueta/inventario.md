@@ -193,5 +193,9 @@ ninguna acción quitada) y todo lo de G0–G4. Los datos de la maqueta son de ej
 - La línea bajo las pestañas dice solo «Vista previa» (y, si aplica, «Posiblemente obsoleta»): el número de
   filas ya está en la pestaña.
 - En el registro, la hora y la ejecución/sentencia quedan en la ayuda de la hora (P2).
+- Diálogo «Cargar en QGIS» (solo diseño, decisión del propietario): nombre, modalidad en tarjetas con los
+  textos del menú, geometría y SRC, y solo las opciones de la modalidad elegida. «Reproyectar a…» aparece
+  solo en copias con geometría y SRC; si falta el SRC se dice por qué; con Conectada, «QGIS la reproyecta al
+  vuelo en el mapa». «Acerca de GeoDuck»: cabecera con versión en etiqueta, componentes en tarjeta, enlaces.
 - **Hallazgo corregido:** cargar en QGIS una sentencia terminada en `;` (o seguida de un comentario) daba
   «Parser Error» desde G3. `load_sql` quita del final el `;` y las líneas de comentario antes de envolverla.

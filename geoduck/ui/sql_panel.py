@@ -66,6 +66,7 @@ from geoduck.domain.sql import (
 )
 from geoduck.ui import theme
 from geoduck.ui.i18n import tr
+from geoduck.ui.load_dialog import OPTIONS
 
 _STATUS_TEXT = {
     StatementStatus.OK: "OK",
@@ -409,15 +410,8 @@ class ModeItem(QFrame):
         event.accept()
 
 
-#: Textos del menú (maqueta): nombre corto y para qué sirve.
-MENU_TEXTS = {
-    LoadMode.MEMORY: (
-        tr("Copia en memoria"),
-        tr("Capa temporal de QGIS. Para resultados pequeños o medianos."),
-    ),
-    LoadMode.SNAPSHOT: (tr("Copia rápida"), tr("GeoPackage en memoria. Ideal para resultados grandes.")),
-    LoadMode.CONNECTED: (tr("Conectada"), tr("Lee DuckDB bajo demanda. Editable si viene de una tabla.")),
-}
+#: Textos del menú: los mismos del diálogo de G4 (`load_dialog.OPTIONS`, textos de la maqueta).
+MENU_TEXTS = OPTIONS
 
 
 def column_marker(name: str, kind: str) -> tuple[str, str]:

@@ -9,10 +9,11 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont, QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
-    QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -21,8 +22,8 @@ from geoduck import __version__
 from geoduck.domain.diagnostics import DiagnosticReport
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.versions import release_stage
+from geoduck.ui import theme
 from geoduck.ui.i18n import tr
-from geoduck.ui.widgets import secondary
 
 REPOSITORY = "https://github.com/eribertocz/geoduck"
 _ICON = Path(__file__).resolve().parent.parent / "resources" / "icon.svg"
@@ -59,60 +60,90 @@ class AboutDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Acerca de GeoDuck"))
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(460)
+        palette = theme.palette_for(self)
+        self.setStyleSheet(theme.stylesheet(palette))
 
-        icon = QLabel()
-        icon.setPixmap(QIcon(str(_ICON)).pixmap(48, 48))
-        name = QLabel("GeoDuck")
-        font = QFont(name.font())
-        font.setPointSizeF(font.pointSizeF() * 1.4)
-        font.setBold(True)
-        name.setFont(font)
-        version = secondary(QLabel(version_text()))
-        heading = QVBoxLayout()
-        heading.setSpacing(2)
-        heading.addWidget(name)
-        heading.addWidget(version)
-        top = QHBoxLayout()
-        top.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
-        top.addLayout(heading, 1)
+        top = self._build_header(palette)
 
-        summary = QLabel(
-            tr("Sesión DuckDB dentro de QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra.")
-        )
-        summary.setWordWrap(True)
+        # Componentes detectados, en una tarjeta (sin rutas ni datos personales)
+        box = QFrame()
+        box.setProperty("geoduck", "card")
+        self.components = QFormLayout(box)
+        self.components.setContentsMargins(14, 10, 14, 10)
+        self.components.setHorizontalSpacing(24)
+        self.components.setVerticalSpacing(6)
+        for label, value in components(report, engine):
+            text = QLabel(value)
+            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            key = QLabel(label)
+            key.setProperty("geoduck", "muted")
+            self.components.addRow(key, text)
 
+        link = f"color: {palette.action};"
         self.links = QLabel(
-            f'<a href="{REPOSITORY}">{tr("Repositorio")}</a> · '
-            f'<a href="{REPOSITORY}/issues">{tr("Informar de un problema")}</a> · '
-            f'<a href="{REPOSITORY}/blob/main/LICENSE">GPL-2.0-or-later</a>'
+            f'<a style="{link}" href="{REPOSITORY}">{tr("Repositorio")}</a> &nbsp;·&nbsp; '
+            f'<a style="{link}" href="{REPOSITORY}/issues">{tr("Informar de un problema")}</a> &nbsp;·&nbsp; '
+            f'<a style="{link}" href="{REPOSITORY}/blob/main/LICENSE">GPL-2.0-or-later</a>'
         )
         self.links.setTextFormat(Qt.TextFormat.RichText)
         self.links.setOpenExternalLinks(True)
 
-        self.components = QFormLayout()
-        self.components.setContentsMargins(0, 4, 0, 0)
-        for label, value in components(report, engine):
-            text = QLabel(value)
-            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            self.components.addRow(secondary(QLabel(label)), text)
-
-        note = secondary(
-            QLabel(
-                tr(
-                    "Versión Alpha: puede cambiar sin aviso. La compatibilidad certificada en Windows está "
-                    "pendiente; consulte «Diagnóstico del entorno» para su instalación."
-                )
+        note = QLabel(
+            tr(
+                "Versión Alpha: puede cambiar sin aviso. La compatibilidad certificada en Windows está "
+                "pendiente; consulte «Diagnóstico del entorno» para su instalación."
             )
         )
+        note.setProperty("geoduck", "muted")
+        note.setWordWrap(True)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.rejected.connect(self.reject)
+        close = QPushButton(tr("Cerrar"))
+        close.setProperty("geoduck", "secondary")
+        close.setDefault(True)
+        close.clicked.connect(self.reject)
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.links, 1)
+        buttons.addWidget(close)
+
         layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(14)
         layout.addLayout(top)
-        layout.addWidget(summary)
-        layout.addWidget(self.links)
-        layout.addLayout(self.components)
+        layout.addWidget(box)
         layout.addWidget(note)
-        layout.addWidget(buttons)
+        layout.addLayout(buttons)
+
+    def _build_header(self, palette: theme.Palette) -> QHBoxLayout:
+        """Icono, nombre, versión en una etiqueta y resumen."""
+        icon = QLabel()
+        icon.setPixmap(QIcon(str(_ICON)).pixmap(56, 56))
+        name = QLabel("GeoDuck")
+        font = QFont(name.font())
+        font.setPointSizeF(font.pointSizeF() * 1.6)
+        font.setBold(True)
+        name.setFont(font)
+        self.version = QLabel(version_text())
+        self.version.setStyleSheet(
+            f"background: {palette.chip}; color: {palette.text}; border: 1px solid {palette.border};"
+            "border-radius: 10px; padding: 2px 10px;"
+        )
+        name_row = QHBoxLayout()
+        name_row.setSpacing(10)
+        name_row.addWidget(name)
+        name_row.addWidget(self.version, 0, Qt.AlignmentFlag.AlignVCenter)
+        name_row.addStretch(1)
+        summary = QLabel(
+            tr("Sesión DuckDB dentro de QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra.")
+        )
+        summary.setProperty("geoduck", "muted")
+        summary.setWordWrap(True)
+        heading = QVBoxLayout()
+        heading.setSpacing(4)
+        heading.addLayout(name_row)
+        heading.addWidget(summary)
+        top = QHBoxLayout()
+        top.setSpacing(14)
+        top.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
+        top.addLayout(heading, 1)
+        return top

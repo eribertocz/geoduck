@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import ClassVar
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +29,7 @@ import geoduck
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
 from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
+from geoduck.ui.about_dialog import AboutDialog
 from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.load_dialog import LoadDialog
 from tests.qgis.conftest import FakeIface
@@ -56,6 +58,25 @@ EDITOR = (
     "SELECT CodigoMunicipio, count(*) AS n FROM db.consumidores GROUP BY 1;\n"
     "SELECT * FROM inexistente;"
 )
+
+
+class CaptureDialog(LoadDialog):
+    """Diálogo «Cargar en QGIS» real: se captura en vez de abrirse (modalidad: Copia en memoria)."""
+
+    shots: ClassVar[list[str]] = []
+
+    def exec(self):
+        self.mode_buttons[LoadMode.MEMORY].setChecked(True)
+        self.adjustSize()
+        self.show()
+        pump(timeout=0.3)
+        self.grab().save(CaptureDialog.shots.pop(0))
+        self.mode_buttons[LoadMode.CONNECTED].setChecked(True)
+        self.adjustSize()
+        pump(timeout=0.3)
+        self.grab().save(CaptureDialog.shots.pop(0))
+        self.close()
+        return QDialog.DialogCode.Rejected
 
 
 class AutoDialog(LoadDialog):
@@ -135,6 +156,18 @@ def main(out_dir: str, dark: bool) -> None:  # noqa: PLR0915 - un recorrido line
         content.explorer.setCurrentItem(item[0])
     pump(timeout=0.5)
     ws.window.grab().save(str(out / f"ventana_{tag}.png"))
+    CaptureDialog.shots = [
+        str(out / f"dialogo_cargar_{tag}.png"),
+        str(out / f"dialogo_cargar_conectada_{tag}.png"),
+    ]
+    content.load_flow._dialog_factory = CaptureDialog
+    panel.load_button.click()
+    pump(lambda: not CaptureDialog.shots, 30)
+    about = AboutDialog(content._report, coordinator.engine_info, content)
+    about.show()
+    pump(timeout=0.3)
+    about.grab().save(str(out / f"acerca_de_{tag}.png"))
+    about.close()
     panel._fill_load_menu(panel.current_view())
     panel.load_menu.adjustSize()
     panel.load_menu.grab().save(str(out / f"menu_cargar_{tag}.png"))
