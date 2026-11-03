@@ -27,6 +27,9 @@ from geoduck.app.events import (
     DatabaseAttached,
     DatabaseDetached,
     DetachFailed,
+    ExportFailed,
+    ExportFinished,
+    ExportStarted,
     LoadFailed,
     LoadFinished,
     LoadPrepared,
@@ -59,6 +62,7 @@ from geoduck.domain.catalog import (
 )
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
+from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
@@ -89,6 +93,7 @@ class SessionCoordinator:
         #: Carga en QGIS en curso (Memoria o Instantánea); la sesión está en BUSY mientras dura.
         self._load: LoadTask | None = None
         self._load_ids = 0
+        self._export_ids = 0
         self._prepare_tokens = 0
         self._dispatcher = dispatcher
         self._sm = SessionStateMachine()
@@ -709,6 +714,37 @@ class SessionCoordinator:
             self._emit(LoadFailed(load_id, code, message, cancelled=code is ErrorCode.CANCELLED))
             return
         self._emit(LoadFinished(load_id, result))
+
+    # -- «Exportar ▾» (G7 · E3, GD-NB-007) ----------------------------------------------------------
+
+    def export(self, request: ExportRequest) -> int:
+        """Exporta la consulta completa de un resultado (solo lectura repetible, como «Cargar en QGIS»).
+        La sesión pasa por `BUSY`; se cancela con `cancel_current_operation`. Devuelve el id."""
+        engine = self._require_ready(tr("export"))
+        request = replace(request, sql=load_sql(request.sql))
+        self._export_ids += 1
+        export_id = self._export_ids
+        self._sm.transition(SessionState.BUSY)
+        self._emit(ExportStarted(export_id, request))
+        handle = engine.export_query(request)
+        handle.future.add_done_callback(
+            lambda fut: self._dispatcher.post(lambda: self._on_exported(engine, export_id, fut))
+        )
+        return export_id
+
+    def _on_exported(self, engine: SessionEngine, export_id: int, fut: Future[ExportReport]) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return
+        if exc is not None:
+            self._end_failed_operation(exc)
+            code, message = _describe(exc)
+            self._emit(ExportFailed(export_id, code, message, cancelled=code is ErrorCode.CANCELLED))
+            return
+        self._sm.transition(SessionState.READY)
+        self._emit(ExportFinished(export_id, fut.result()))
 
     def shutdown(self, timeout: float = 10.0) -> bool:
         """Cierre bloqueante para la descarga del complemento. Devuelve False si venció el plazo."""

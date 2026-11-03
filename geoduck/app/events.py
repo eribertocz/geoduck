@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from geoduck.domain.bridge_types import LoadPlan
 from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import ErrorCode
+from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.load import LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
@@ -203,6 +204,28 @@ class LoadFailed:
 
 
 @dataclass(frozen=True)
+class ExportStarted:
+    """«Exportar ▾» en curso (G7 · E3): la sesión queda ocupada hasta `ExportFinished` o `ExportFailed`."""
+
+    export_id: int
+    request: ExportRequest
+
+
+@dataclass(frozen=True)
+class ExportFinished:
+    export_id: int
+    report: ExportReport
+
+
+@dataclass(frozen=True)
+class ExportFailed:
+    export_id: int
+    code: ErrorCode
+    message: str
+    cancelled: bool
+
+
+@dataclass(frozen=True)
 class SpatialChecked:
     """Estado de `spatial` en la sesión, pedido por «Activar spatial…» (spatial-spec §10)."""
 
@@ -251,6 +274,9 @@ AppEvent = (
     | LoadProgressed
     | LoadFinished
     | LoadFailed
+    | ExportStarted
+    | ExportFinished
+    | ExportFailed
     | SpatialChecked
     | SpatialActivated
     | SpatialActivationFailed

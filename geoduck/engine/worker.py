@@ -51,6 +51,7 @@ from geoduck.domain.errors import (
     UnsupportedEngineError,
     WrongThreadError,
 )
+from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.i18n import tr
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
@@ -60,6 +61,7 @@ from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, p
 from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
+from geoduck.engine.export import export_query
 from geoduck.engine.spatial import activate_spatial, spatial_state
 from geoduck.engine.sql import StatementListener, run_in_database, run_script
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
@@ -402,6 +404,10 @@ class SessionWorker:
             ),
             database=database,
         )
+
+    def export_query(self, request: ExportRequest) -> OperationHandle[ExportReport]:
+        """«Exportar ▾» (G7 · E3): `COPY` de la consulta completa, en la base del resultado; cancelable."""
+        return self.submit(lambda h, t: export_query(h, t, request), database=request.database)
 
     def read_table(
         self, sql: str, *, priority: bool = True, database: str | None = None

@@ -12,7 +12,9 @@ caracteres), nunca con posiciones absolutas de QScintilla, que son bytes (F-41).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from qgis.core import QgsApplication
@@ -24,6 +26,7 @@ from qgis.PyQt.QtWidgets import (
     QApplication,
     QButtonGroup,
     QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -50,6 +53,8 @@ from geoduck.app.events import (
     AppEvent,
     CatalogChanged,
     ColumnsListed,
+    ExportFailed,
+    ExportFinished,
     PreviewsInvalidated,
     ScriptFinished,
     ScriptRejected,
@@ -59,6 +64,7 @@ from geoduck.app.events import (
 )
 from geoduck.app.notebook_runner import CellOutcome, NotebookRunner
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.export import ExportFormat, ExportRequest
 from geoduck.domain.load import LoadMode
 from geoduck.domain.notebook import Cell, Notebook
 from geoduck.domain.session import SessionState
@@ -107,6 +113,14 @@ def _free_keys(editor: Any, keys: tuple[str, ...]) -> None:
                 command.setKey(0)
             else:
                 command.setAlternateKey(0)
+
+
+def _file_name(title: str) -> str:
+    """Nombre de archivo sugerido a partir del título del resultado («Ventas del mes (3 filas)» → «Ventas del
+    mes»): sin la cuenta de filas ni caracteres que Windows no admite."""
+    base = re.sub(r"\s*\([^)]*\)\s*$", "", title).strip()
+    base = re.sub(r'[<>:"/\\|?*]', "_", base).strip(" .")
+    return base or tr("result")
 
 
 def card(*, name: str = "") -> QFrame:
@@ -493,6 +507,12 @@ class SqlPanel(QWidget):
         self.runner.on_start = self._cell_started
         self.runner.on_cell = self._cell_done
         self._editor_numbers = 0
+        #: Archivo de «Exportar ▾»: (formato, nombre sugerido) → ruta, o "" si se cancela. El diálogo del
+        #: sistema pide confirmación si el archivo ya existe (DuckDB sobrescribe sin avisar); las pruebas lo
+        #: sustituyen.
+        self.choose_export_path: Callable[[ExportFormat, str], str] = self._ask_export_path
+        self._export_dir = ""
+        self._exporting = False
         #: Pregunta al cerrar una pestaña con SQL (`nombre` → cerrar sí/no); las pruebas la sustituyen.
         self.confirm_close: Callable[[str], bool] = self._ask_close
 
@@ -676,6 +696,23 @@ class SqlPanel(QWidget):
         menu.aboutToShow.connect(lambda w=widget: self._fill_load_menu(self._cell_view(w), w.load_menu))
         widget.load_button, widget.load_menu = button, menu
         widget.load_slot.addWidget(button)
+        # «Exportar ▾» (G7 · E3): la consulta completa, nunca la vista previa
+        export = QToolButton()
+        export.setObjectName("geoduckExportButton")
+        export.setIcon(QgsApplication.getThemeIcon("mActionFileSaveAs.svg"))
+        export.setText(tr("Export"))
+        export.setToolTip(tr("Exports the full query to CSV or Parquet (not only the preview)"))
+        export.setAccessibleName(tr("Export the result"))
+        export.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        export.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        export_menu = QMenu(export)
+        for fmt, text in ((ExportFormat.CSV, tr("CSV…")), (ExportFormat.PARQUET, tr("Parquet…"))):
+            action = export_menu.addAction(text)
+            action.setObjectName(f"geoduckExport_{fmt.value}")
+            action.triggered.connect(lambda _c=False, w=widget, f=fmt: self.export_cell(w, f))
+        export.setMenu(export_menu)
+        widget.export_button = export
+        widget.load_slot.insertWidget(0, export)
         widget.copy_button.clicked.connect(lambda _c=False, w=widget: self._copy_result(w))
         widget.results.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
         # ▶ ▾, como la DuckDB UI: celda, selección, celda y avanzar
@@ -1042,6 +1079,8 @@ class SqlPanel(QWidget):
                     view.mark_stale()
         elif isinstance(event, ScriptFinished):
             self._on_script(event)
+        elif isinstance(event, (ExportFinished, ExportFailed)):
+            self._on_export_done(event)
         elif isinstance(event, ScriptRejected):
             self._running = False
             self._on_message(f"[{event.code.value}] {event.message}")
@@ -1249,6 +1288,47 @@ class SqlPanel(QWidget):
         if view is not None:
             self._load(view)
 
+    # -- «Exportar ▾» (G7 · E3, GD-NB-007) ------------------------------------------------------------------
+
+    def export_cell(self, cell: CellWidget, fmt: ExportFormat) -> None:
+        """Exporta la consulta completa del resultado de la celda (solo lectura repetible), en su base."""
+        view = self._cell_view(cell)
+        if view is None or not view.loadable or self._coordinator.state is not SessionState.READY:
+            return
+        path = self.choose_export_path(fmt, _file_name(view.title) + fmt.suffix)
+        if not path:
+            return
+        if not path.lower().endswith(fmt.suffix):
+            path += fmt.suffix
+        self._export_dir = str(Path(path).parent)
+        self._exporting = True  # antes: al pasar a BUSY, «Cancelar» ya debe estar activo
+        try:
+            self._coordinator.export(ExportRequest(view.statement.text, path, fmt, view.database))
+        except GeoDuckError as exc:
+            self._exporting = False
+            self._on_message(tr("Cannot export: ") + exc.message)
+            return
+        self._on_message(tr("Exporting the full query to {0}…").format(Path(path).name))
+
+    def _ask_export_path(self, fmt: ExportFormat, name: str) -> str:
+        folder = self._export_dir or str(Path.home())
+        pattern = tr("CSV files (*.csv)") if fmt is ExportFormat.CSV else tr("Parquet files (*.parquet)")
+        path, _filter = QFileDialog.getSaveFileName(
+            self, tr("Export the result"), str(Path(folder) / name), pattern
+        )
+        return str(path)
+
+    def _on_export_done(self, event: ExportFinished | ExportFailed) -> None:
+        self._exporting = False
+        if isinstance(event, ExportFinished):
+            report = event.report
+            text = tr("Exported {0} rows to {1}").format(report.rows, Path(report.path).name)
+            self._on_message(" ".join((text, *report.warnings)))
+        elif event.cancelled:
+            self._on_message(tr("Export cancelled: no file was written"))
+        else:
+            self._on_message(tr("Cannot export: ") + event.message)
+
     def _load_cell(self, cell: CellWidget) -> None:
         view = self._cell_view(cell)
         if view is not None:
@@ -1296,7 +1376,8 @@ class SqlPanel(QWidget):
         ready = state is SessionState.READY
         self.run_all_button.setEnabled(ready)
         loading = self._load_flow is not None and self._load_flow.loading
-        self.cancel_button.setEnabled(state is SessionState.BUSY and (self._running or loading))
+        busy_here = self._running or loading or self._exporting
+        self.cancel_button.setEnabled(state is SessionState.BUSY and busy_here)
         for cell in self.cell_widgets():
             self._render_cell(cell, state)
 
@@ -1313,4 +1394,6 @@ class SqlPanel(QWidget):
         else:
             cell.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
         cell.copy_button.setEnabled(view is not None)
+        if cell.export_button is not None:
+            cell.export_button.setEnabled(view is not None and view.loadable and ready)
         cell.run_button.setEnabled(ready)

@@ -10,6 +10,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 
+from geoduck.domain.export import ExportFormat
 from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
@@ -253,3 +254,72 @@ def test_a_cell_result_loads_from_its_own_base_after_another_cell_changed_it(rea
     assert [f["n"] for f in layer.getFeatures()] == [7]  # también Conectada, leyendo en `otra`
     rows = coordinator._engine.query("SELECT current_database()").future.result(10).rows
     assert rows == (("memory",),)  # la base en uso sigue siendo la de la última celda
+
+
+# -- AT-NB-011: «Exportar ▾» la consulta completa ---------------------------------------------------------
+
+
+def test_export_writes_the_whole_query_from_the_base_of_the_cell(ready, tmp_path):
+    _plugin, panel, coordinator = ready
+    coordinator.execute_sql(
+        f"ATTACH '{tmp_path / 'otra.duckdb'}' AS otra; "
+        "CREATE TABLE otra.t AS SELECT range AS n FROM range(1000)",
+        RunScope.ALL,
+    )
+    idle(panel, coordinator)
+    assert wait_for(lambda: coordinator.catalog.get("otra") is not None)
+    cell = panel.cell
+    cell.editor.setText("SELECT n FROM t ORDER BY n")
+    cell.cell.database = "otra"
+    panel.notebook_view.add_cell(1, "SELECT 1").cell.database = "memory"  # cambia la base en uso
+    panel.run_all_button.click()
+    idle(panel, coordinator)
+    assert len(panel._cell_view(cell).preview.rows) == 200  # la vista previa
+    asked = []
+    panel.choose_export_path = lambda fmt, name: (asked.append((fmt, name)), str(tmp_path / "salida"))[1]
+    messages = []
+    panel._on_message = messages.append
+    assert cell.export_button.isEnabled()
+    next(a for a in cell.export_button.menu().actions() if a.objectName() == "geoduckExport_csv").trigger()
+    idle(panel, coordinator)
+    assert wait_for((tmp_path / "salida.csv").exists)  # se añade la extensión
+    lines = (tmp_path / "salida.csv").read_text().splitlines()
+    assert lines[0] == "n" and len(lines) == 1001  # todas las filas, no las 200 de la vista previa
+    assert asked == [(ExportFormat.CSV, "T.csv")]  # el nombre del resultado, sin «(200+ filas)»
+    assert "1000" in messages[-1] and "salida.csv" in messages[-1]
+
+
+def test_write_results_cannot_be_exported_and_the_cell_script_is_not_repeated(ready, tmp_path):
+    _plugin, panel, coordinator = ready
+    cell = panel.cell
+    cell.editor.setText("CREATE TABLE c(x INT); INSERT INTO c VALUES (1) RETURNING x")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    assert not cell.export_button.isEnabled()  # un RETURNING no se repite (GD-SQL-006)
+    cell.editor.setText("INSERT INTO c VALUES (2); SELECT x FROM c ORDER BY x")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    panel.choose_export_path = lambda *_a: f"{tmp_path}/c.parquet"
+    panel.export_cell(cell, ExportFormat.PARQUET)
+    idle(panel, coordinator)
+    assert wait_for((tmp_path / "c.parquet").exists)
+    run = coordinator._engine.query("SELECT count(*) FROM c").future.result(10)
+    assert run.rows == ((2,),)  # se exportó la consulta, el INSERT no se repitió
+
+
+def test_cancel_an_export_leaves_no_file(ready, tmp_path):
+    _plugin, panel, coordinator = ready
+    cell = panel.cell
+    cell.editor.setText("SELECT a.range * b.range AS n FROM range(30000) a, range(30000) b")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    messages = []
+    panel._on_message = messages.append
+    panel.choose_export_path = lambda *_a: f"{tmp_path}/grande.parquet"
+    panel.export_cell(cell, ExportFormat.PARQUET)
+    assert coordinator.state is SessionState.BUSY and panel.cancel_button.isEnabled()
+    wait_for(lambda: False, 0.3)
+    panel.cancel_button.click()
+    idle(panel, coordinator)
+    assert "cancel" in messages[-1].lower()
+    assert list(tmp_path.iterdir()) == []  # ni el archivo ni el temporal

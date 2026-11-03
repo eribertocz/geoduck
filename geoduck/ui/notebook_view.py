@@ -97,6 +97,8 @@ class CellWidget(QFrame):
         self.sheet = False
         #: «Cargar en QGIS ▾» de la celda y su menú (los pone el panel, `SqlPanel._setup_cell`).
         self.load_button: Any = None
+        #: «Exportar ▾» de la celda (CSV o Parquet, la consulta completa; G7 · E3).
+        self.export_button: Any = None
         self.load_menu: Any = None
         outer = QHBoxLayout(self)
         outer.setContentsMargins(2, 4, 2, 4)

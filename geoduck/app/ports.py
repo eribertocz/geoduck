@@ -16,6 +16,7 @@ from geoduck.domain.catalog import (
 )
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import SessionInvalidatedError
+from geoduck.domain.export import ExportRequest
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.sql import RunScope, ScriptRun, SqlStatement, StatementResult
@@ -124,6 +125,10 @@ class SessionEngine(Protocol):
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:
         """`INSTALL` (si `install`) y `LOAD spatial` con consentimiento del usuario (spatial-spec §10)."""
+        ...
+
+    def export_query(self, request: ExportRequest) -> OperationHandle:
+        """«Exportar ▾» (G7 · E3): `COPY` de la consulta completa a CSV o Parquet (`ExportReport`)."""
         ...
 
     def prepare_load(
