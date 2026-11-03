@@ -2134,7 +2134,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/sql_panel.py" line="759" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1162" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1167" />
             <source>Loads the full result as a QGIS layer</source>
             <translation>Carga el resultado completo como capa de QGIS</translation>
         </message>
@@ -2144,12 +2144,12 @@
             <translation>Registro de ejecuciones</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1098" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1103" />
             <source>Open in the editor</source>
             <translation>Abrir en el editor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1099" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1104" />
             <source>Copies this SQL to a new tab, without running it</source>
             <translation>Copia este SQL a una pestaña nueva, sin ejecutarlo</translation>
         </message>
@@ -2201,7 +2201,7 @@
             <translation>Clic derecho: abrir su SQL en una pestaña nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1160" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1165" />
             <source>Only read queries can be loaded: this statement is not repeated</source>
             <translation>Solo se pueden cargar consultas de lectura: esta sentencia no se repite</translation>
         </message>
