@@ -6,13 +6,22 @@ supportsQt6=True
 description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
 about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica.
 
-    ESTADO: Alpha (0.4.0a2, QGIS Bridge). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
+    ESTADO: Alpha (0.6.0a1, Workspace UX). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
-    DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en el panel para comprobarlos. La extensión DuckDB «spatial» es opcional.
-version=0.4.0a2
+    DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en GeoDuck para comprobarlos. La extensión DuckDB «spatial» es opcional.
+version=0.6.0a1
 author=eribertocz
 email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
-changelog=0.4.0a2
+changelog=0.6.0a1 (G5 · Workspace UX, incluye G4 · Spatial Confidence)
+    - GeoDuck se abre en su propia ventana; «Acoplar a QGIS» lo pasa a un panel y vuelve, sin perder sesión, texto ni resultados.
+    - Explorador con búsqueda y grupos (tablas, vistas, temporales) y acceso de cada base.
+    - Resultados con el tipo de cada columna; NULL se distingue del texto vacío.
+    - «Cargar en QGIS ▾» con las tres modalidades; registro con filtros Todo/OK/Error; «Ver en el mapa».
+    - Diseño nuevo con tema claro y oscuro según QGIS; diálogos de bases, carga y «Acerca de» rediseñados.
+    - Corrección: «Cargar en QGIS» fallaba si la sentencia terminaba en «;» o en un comentario.
+    - G4: varias columnas de geometría (una capa por columna), WKB/WKT en BLOB o VARCHAR, SRC correcto y «Reproyectar a…» en las copias.
+    - G4: geometrías mixtas separadas por tipo, «Diagnosticar geometrías…» y «Reparar en una copia…».
+    0.4.0a2
     - Corrección: la capa conectada no abría en QGIS 3.34–3.38 (API de QGIS más nueva).
     - Corrección: en QGIS 3.34 la copia rápida recibía un CRS que los datos no tenían.
     - Capa conectada: Capa → Filtrar… funciona, con SQL de DuckDB sobre los campos de la capa.
