@@ -9,10 +9,9 @@ if str(ROOT) not in sys.path:
 
 def spanish_catalog() -> dict[str, str]:
     """Traducciones del catálogo español (`geoduck/i18n/geoduck_es.ts`), sin Qt."""
-    import xml.etree.ElementTree as ET
+    from geoduck.domain.i18n import load_catalog
 
-    root = ET.parse(ROOT / "geoduck" / "i18n" / "geoduck_es.ts").getroot()
-    return {m.findtext("source") or "": (m.findtext("translation") or "") for m in root.iter("message")}
+    return load_catalog(ROOT / "geoduck" / "i18n" / "geoduck_es.ts")
 
 
 # G6 · E4: las pruebas ven GeoDuck en español, como hasta G5 (los textos del código están en inglés). Las de

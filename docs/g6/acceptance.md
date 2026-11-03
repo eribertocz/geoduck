@@ -11,8 +11,7 @@ sql-editor-spec §7 («P1 en G6»), ui-ux-spec §5 y §9, `spec/qa/test-strategy
 La CI de GitHub ejecuta en cada PR la suite completa de `tests/qgis` en QGIS 3.34.6, 3.40.3, 3.44.14 (Qt 5)
 y 4.2.3 (Qt 6) × DuckDB 1.5.0 y 2.0.0; el motor y las unitarias en DuckDB 1.5.0, 1.5.6 y 2.0.0 (Python 3.12
 y 3.14, PyArrow 25.0.1 y 18.1.0); lint, tipos, arquitectura (ADR-0010), `spec_sync --check` e
-`i18n --check`. En los trabajos de QGIS, además, `i18n --check` comprueba que el `.qm` es el que produce el
-`lrelease` de ese Qt.
+`i18n --check` (catálogo completo, marcadores iguales).
 
 En local, antes de cada PR (una suite cada vez): QGIS 3.34.6 y 4.2.3 con DuckDB 2.0.0 → 279 pasan; motor
 178 con DuckDB 1.5.0 y 2.0.0; unitarias y arquitectura 549.
@@ -34,7 +33,7 @@ Archivos en `tests/`: `qgis/test_explorer_columns.py` (C), `qgis/test_completion
 | AT-SQL-008 | Varias pestañas, ejecutar en cada una, alternar ventana ↔ panel, cerrar con texto y con ejecución en curso | P `test_each_tab_keeps_its_text_and_only_the_active_one_runs`, `test_tabs_survive_toggling_window_and_panel_with_their_state`, `test_closing_a_tab_with_sql_asks_and_an_empty_one_does_not`, `test_a_tab_cannot_close_while_its_statement_runs`, `test_ctrl_t_and_ctrl_w_only_with_the_focus_in_geoduck`, `test_errors_are_shown_in_the_tab_that_ran` |
 | AT-SQL-009 | «Abrir en el editor» desde el registro | P `test_open_in_editor_copies_the_exact_sql_to_a_new_tab_without_running`, `test_the_log_menu_offers_open_in_editor`, `test_the_history_is_not_written_to_disk` |
 | AT-SQL-010 | «Explicar» sobre SELECT, DML y varias sentencias | m-S `test_explain_shows_the_plan_and_never_runs_the_statement` (SELECT, INSERT, UPDATE, DELETE), `test_explain_rejects_without_running_anything` (6), `test_explain_of_the_statement_at_the_cursor`; P `test_explain_shows_the_plan_and_the_table_does_not_change`, `test_explain_refuses_several_statements_or_other_types_without_running` (2) |
-| AT-I18N-001 | QGIS en inglés y en español; paquete ZIP | I `test_qgis_in_english_shows_geoduck_in_english`, `test_qgis_in_spanish_shows_geoduck_in_spanish`, `test_another_language_falls_back_to_english` (procesos aparte; el idioma de QGIS no cambia), `test_the_compiled_qm_translates_every_text_like_the_ts`; u-I `test_every_text_of_the_code_is_in_the_catalog_and_translated`, `test_translations_keep_the_placeholders_so_format_never_fails`, `test_source_texts_are_english`, `test_without_translator_the_texts_are_english_and_never_empty`, `test_the_zip_contains_the_compiled_translation`, `test_the_check_command_passes` |
+| AT-I18N-001 | QGIS en inglés y en español; paquete ZIP | I `test_qgis_in_english_shows_geoduck_in_english`, `test_qgis_in_spanish_shows_geoduck_in_spanish`, `test_another_language_falls_back_to_english` (procesos aparte; el idioma de QGIS no cambia), `test_translating_never_calls_qt_so_the_engine_thread_can_do_it`; u-I `test_every_text_of_the_code_is_in_the_catalog_and_translated`, `test_translations_keep_the_placeholders_so_format_never_fails`, `test_source_texts_are_english`, `test_without_translator_the_texts_are_english_and_never_empty`, `test_the_zip_contains_the_compiled_translation`, `test_the_check_command_passes` |
 | Regresión G0–G5 | Toda la suite | Pasa entera en cada celda, con QGIS en español (los textos de G5 no cambian). Pruebas anteriores adaptadas solo donde comparaban una constante con el texto mostrado (`tr(NO_EXTENT)`, `tr(READ_ONLY_HELP)`) |
 
 ## 3. Gate (`docs/g6/plan.md`)
@@ -53,7 +52,7 @@ Archivos en `tests/`: `qgis/test_explorer_columns.py` (C), `qgis/test_completion
 | `duckdb_columns()` y `duckdb_keywords()` en DuckDB 1.5.0 y 2.0.0 (E1) | Mismas columnas (`data_type` exacto, `is_nullable`); palabras clave por categoría |
 | `duckdb_functions()` en 1.5.0 y 2.0.0 (E2) | Nombres repetidos por sobrecarga; `pragma` y operadores se descartan |
 | `EXPLAIN` de INSERT/UPDATE/DELETE/CREATE/DROP/COPY/ALTER/SET/BEGIN (E3) | No los ejecuta en ninguna versión. Aun así «Explicar» se limita a lecturas y DML: `EXPLAIN INSTALL` no se pudo comprobar sin red (ADR-0011) |
-| `lrelease` de Qt 5 y Qt 6 (E4) | El mismo `.qm`, byte a byte |
+| Traducción desde el hilo del motor (E4) | Sin llamadas a Qt: diccionario leído del `.ts` (F-107) |
 
 ## 5. Hallazgos
 
@@ -62,8 +61,9 @@ Archivos en `tests/`: `qgis/test_explorer_columns.py` (C), `qgis/test_completion
 | F-102 | DuckDB 1.5 y 2.0 delimitan distinto el `;` y los comentarios entre sentencias (`extract_statements`) | El historial quita espacios de los extremos y el `;` final: mismo SQL en ambas (E3, #88) |
 | F-103 | `QgsCodeEditorSQL` trae su propio autocompletado de palabras (umbral 2) | Se desactiva en los editores de GeoDuck; el de GeoDuck incluye las palabras clave (E2, #87) |
 | F-104 | QScintilla usa Ctrl+T (intercambiar líneas) antes que los atajos del panel | Ctrl+T y Ctrl+W se liberan solo en los editores de GeoDuck (E3) |
-| F-105 | `QTranslator.translate` de PyQt6 solo admite ASCII | GeoDuck usa `QCoreApplication.translate`, que sí admite «», tildes y «…» (E4) |
-| F-106 | Instalar y quitar el traductor en cada carga y descarga envía «LanguageChange» a widgets que se están borrando; en la CI (QGIS 4.2.3 · DuckDB 2.0.0) terminó en un fallo de segmentación | El traductor de Qt se instala una vez y no se quita, como hace QGIS con sus complementos (E4, #89) |
+| F-105 | `QTranslator.translate` de PyQt6 solo admite ASCII | Ya no se usa: ver F-107 (E4) |
+| F-106 | Instalar y quitar el traductor en cada carga y descarga envía «LanguageChange» a widgets que se están borrando; en la CI (QGIS 4.2.3 · DuckDB 2.0.0) terminó en un fallo de segmentación | GeoDuck no instala `QTranslator` (F-107) |
+| F-107 | El motor traduce mensajes en su hilo, y `QCoreApplication.translate` llamado desde un hilo que Qt no creó terminaba a veces en un fallo de segmentación (QGIS 4.2.3 · DuckDB 2.0.0) | GeoDuck lee el `.ts` con la biblioteca estándar y traduce con un diccionario; sin `.qm` ni `lrelease` (E4, #89) |
 
 ## 6. Limitaciones conocidas
 

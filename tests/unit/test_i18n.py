@@ -71,4 +71,4 @@ def test_the_zip_contains_the_compiled_translation(tmp_path):
     )
     (archive,) = tmp_path.glob("geoduck-*.zip")
     with zipfile.ZipFile(archive) as zf:
-        assert "geoduck/i18n/geoduck_es.qm" in zf.namelist()
+        assert "geoduck/i18n/geoduck_es.ts" in zf.namelist()

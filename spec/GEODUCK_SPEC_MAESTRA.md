@@ -193,7 +193,7 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-UX-006 | P0 | Resultados con tipo por columna, `NULL` distinguible y «hay más»; registro filtrable Todo/OK/Error | AT-UX-007, AT-UX-009 |
 | GD-UX-007 | P0 | «Cargar en QGIS ▾», barra de estado y «Ver en el mapa» en ambos modos, sin cambiar G3/G4 | AT-UX-008 |
 | GD-UX-008 | P0 | Cerrar u ocultar la superficie no cierra la sesión ni invalida capas | AT-UX-011 |
-| GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (`.ts`/`.qm`) según el idioma de QGIS (issue #68) | AT-I18N-001 |
+| GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
 | GD-CFG-001 | P1 | Persistir preferencias, SQL guardado y conexiones recientes; no capas/datos | AT-CFG-001 |
 | GD-COMP-001 | P0 | Probar pares QGIS/Python/Qt/DUCKDB/PyArrow | AT-COMP-001 |
@@ -1044,7 +1044,7 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 
 ## 5. Accesibilidad e internacionalización
 - Teclado completo, foco visible, etiquetado accesible, contraste, tooltips y lectores de pantalla cuando Qt lo permita.
-- Español inicial; internacionalización por catálogos de traducción con idioma inglés listo para incorporar. **Desde G6 (GD-I18N-001, issue #68):** los textos del código están en inglés y el español llega por la traducción (`i18n/geoduck_es.ts` → `.qm`), según el idioma de QGIS, sin opción propia de GeoDuck ni cambio del idioma de QGIS. Sin traducción, se ve el texto en inglés, nunca un texto vacío. No se traducen el SQL, los nombres de objetos, los datos ni los mensajes de DuckDB. Se mantienen los términos de QGIS en cada idioma (SRC/CRS, entidades/features).
+- Español inicial; internacionalización por catálogos de traducción con idioma inglés listo para incorporar. **Desde G6 (GD-I18N-001, issue #68):** los textos del código están en inglés y el español llega por el catálogo `i18n/geoduck_es.ts` (formato de Qt Linguist), según el idioma de QGIS. GeoDuck lo lee y traduce con un diccionario, sin `QTranslator` ni `.qm`: el hilo del motor también traduce mensajes y llamar a Qt desde él no es seguro, sin opción propia de GeoDuck ni cambio del idioma de QGIS. Sin traducción, se ve el texto en inglés, nunca un texto vacío. No se traducen el SQL, los nombres de objetos, los datos ni los mensajes de DuckDB. Se mantienen los términos de QGIS en cada idioma (SRC/CRS, entidades/features).
 - Formatos numéricos locales en UI sin alterar sintaxis SQL ni precisión interna.
 
 ## 6. Estados obligatorios
