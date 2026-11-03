@@ -21,8 +21,11 @@ __all__ = ["CONTEXT", "N_", "install", "language", "tr", "uninstall"]
 TRANSLATIONS = ("es",)
 FOLDER = Path(__file__).resolve().parent.parent / "i18n"
 
-_installed: QTranslator | None = None
-#: Traductor que había antes de `install` (se restaura al descargar GeoDuck).
+#: Traductor de Qt instalado y su idioma. Se instala una vez y no se quita (como hace QGIS con los de sus
+#: complementos): instalar o quitar un traductor envía «LanguageChange» a todos los widgets, también a los
+#: que se están borrando al descargar GeoDuck, y en Qt 6 eso puede terminar en un fallo.
+_installed: tuple[str, QTranslator] | None = None
+#: Traductor de textos que había antes de `install` (se restaura al descargar GeoDuck).
 _previous: list[Callable[[str], str] | None] = []
 
 
@@ -33,28 +36,32 @@ def language() -> str:
 
 
 def install() -> str:
-    """Traduce GeoDuck al idioma de QGIS si hay catálogo; devuelve el idioma usado. Se llama una vez al cargar
-    el complemento, antes de importar la interfaz (los textos de los módulos se traducen al importarse)."""
-    uninstall()
+    """Traduce GeoDuck al idioma de QGIS si hay catálogo; devuelve el idioma usado. Se llama al cargar el
+    complemento, antes de importar la interfaz (los textos de los módulos se traducen al importarse)."""
+    global _installed  # noqa: PLW0603 - un único traductor de Qt para todo el complemento
     _previous.append(get_translator())
     lang = language()
     used = "en"
     if lang in TRANSLATIONS:
-        translator = QTranslator()
-        if translator.load(str(FOLDER / f"geoduck_{lang}.qm")):
-            QCoreApplication.installTranslator(translator)
-            global _installed  # noqa: PLW0603 - el traductor vive mientras GeoDuck esté cargado
-            _installed = translator
-            used = lang
+        if _installed is not None and _installed[0] == lang:
+            used = lang  # ya instalado (p. ej. el complemento se recargó): no se vuelve a instalar
+        else:
+            translator = QTranslator()
+            if translator.load(str(FOLDER / f"geoduck_{lang}.qm")):
+                if _installed is not None:
+                    QCoreApplication.removeTranslator(_installed[1])
+                QCoreApplication.installTranslator(translator)
+                _installed = (lang, translator)
+                used = lang
+    elif _installed is not None:  # QGIS cambió a un idioma sin catálogo sin reiniciarse: caso raro
+        QCoreApplication.removeTranslator(_installed[1])
+        _installed = None
     set_translator(lambda text: QCoreApplication.translate(CONTEXT, text))
     return used
 
 
 def uninstall() -> None:
-    """Quita el traductor de GeoDuck (al descargar el complemento). No toca los de QGIS."""
-    global _installed  # noqa: PLW0603
-    if _installed is not None:
-        QCoreApplication.removeTranslator(_installed)
-        _installed = None
+    """Al descargar GeoDuck: vuelve el traductor de textos anterior. El de Qt se queda instalado (ver
+    `_installed`); sin GeoDuck, nadie pide textos de su contexto."""
     if _previous:
         set_translator(_previous.pop())
