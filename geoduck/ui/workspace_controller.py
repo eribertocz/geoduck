@@ -8,8 +8,8 @@ cerrar un shell no toca la sesión. Si el traslado falla, el contenido vuelve al
 operativo, y se informa (AT-UX-014).
 
 Preferencias en `QgsSettings` bajo `geoduck/workspace/` (esquema 1): modo, geometría de la ventana, zona del
-panel, divisor editor/resultados/registro por modo, ancho del explorador (ventana), pestaña activa (panel) y
-límite de vista previa. Nunca filas,
+panel, divisor editor/resultados/registro por modo, ancho del explorador (ventana), pestaña activa (panel),
+filtro del registro y límite de vista previa. Nunca filas,
 SQL ni estado de DuckDB. Cada valor se valida al leerlo; uno ausente, corrupto o de un esquema más nuevo
 usa el valor seguro.
 """
@@ -26,6 +26,7 @@ from qgis.PyQt.QtGui import QGuiApplication
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, PREVIEW_LIMITS
 from geoduck.ui.i18n import tr
 from geoduck.ui.shells import WINDOW_SIZE, DockShell, WindowShell
+from geoduck.ui.sql_panel import LOG_FILTERS
 from geoduck.ui.workspace import WorkspaceContent
 
 PREFIX = "geoduck/workspace/"
@@ -155,6 +156,7 @@ class WorkspaceController(QObject):
         self.dock.dockLocationChanged.connect(self._save_dock_area)
         content.tabs.currentChanged.connect(self._save_tab)
         content.sql_panel.limit_combo.currentIndexChanged.connect(self._save_limit)
+        content.sql_panel.log_filter_changed.connect(lambda key: self._write("log_filter", key))
 
     def _shell(self, mode: WorkspaceMode) -> WindowShell | DockShell:
         return self.window if mode is WorkspaceMode.WINDOW else self.dock
@@ -261,6 +263,8 @@ class WorkspaceController(QObject):
         combo = self.content.sql_panel.limit_combo
         limit = read_int(self._settings, "preview_limit", list(PREVIEW_LIMITS), DEFAULT_PREVIEW_LIMIT)
         combo.setCurrentIndex(combo.findData(limit))
+        value = self._settings.value(PREFIX + "log_filter", None) if _schema_ok(self._settings) else None
+        self.content.sql_panel.set_log_filter(value if value in LOG_FILTERS else "all")
 
     def _apply_sizes(self, mode: WorkspaceMode) -> None:
         """Divisores y pestaña guardados para el modo (cada modo, los suyos)."""

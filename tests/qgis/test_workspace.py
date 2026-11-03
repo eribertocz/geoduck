@@ -30,6 +30,7 @@ pytestmark = pytest.mark.qgis
 def qgis_window(iface):
     """La ventana principal de QGIS está a la vista, como en QGIS real (si no, un panel acoplado nunca
     sería visible)."""
+    iface.mainWindow().resize(1200, 800)
     iface.mainWindow().show()
     return iface
 
@@ -240,6 +241,7 @@ def test_toggling_keeps_text_cursor_selection_scroll_results_and_tabs(plugin):
     assert content.side_splitter.widget(1) is panel  # ventana: explorador | SQL
     toggle(ws)  # al panel: pestañas Explorador / SQL, con los mismos widgets
     assert content.tabs.indexOf(panel) == 1 and content.tabs.indexOf(content.databases_card) == 0
+    assert content.tabs.currentIndex() == 0 and not panel.isVisible()  # solo la pestaña activa
     content.tabs.setCurrentWidget(panel)
     assert editor_state(editor)[:3] == before[:3]
     assert panel.results.count() == 2 and panel.results.currentIndex() == 0
@@ -343,7 +345,7 @@ def test_mode_window_dock_area_splitters_tab_and_limit_are_restored(iface):
     iface.mainWindow().addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, ws.dock)  # el usuario lo mueve
     content.tabs.setCurrentWidget(content.sql_panel)
     wait_for(lambda: False, 0.2)
-    splitter.setSizes([60, 60, 200])
+    splitter.setSizes([60, 240])  # en el panel, editor | resultados (el registro tiene su pestaña, E4)
     dock_sizes = splitter.sizes()
     content.sql_panel.limit_combo.setCurrentIndex(content.sql_panel.limit_combo.findData(1000))
     toggle(ws)
@@ -361,7 +363,8 @@ def test_mode_window_dock_area_splitters_tab_and_limit_are_restored(iface):
         wait_for(lambda: False, 0.2)
         assert second.content.tabs.currentWidget() is second.content.sql_panel
         assert second.content.sql_panel.limit_combo.currentData() == 1000
-        assert near(second.content.sql_panel.splitter.sizes(), dock_sizes, 10)
+        restored = second.content.sql_panel.splitter.sizes()  # otra altura: se compara la proporción
+        assert abs(restored[0] / sum(restored) - dock_sizes[0] / sum(dock_sizes)) < 0.05
         toggle(ws2)
         assert ws2.window.geometry() == saved
         assert near(second.content.side_splitter.sizes(), explorer_widths, 10)

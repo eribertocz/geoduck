@@ -22,6 +22,7 @@ from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
 from geoduck.infra.diagnostics import collect
 from geoduck.ui.dispatcher import QtDispatcher
 from geoduck.ui.i18n import tr
+from geoduck.ui.map_view import MapView
 from geoduck.ui.workspace import WorkspaceContent
 from geoduck.ui.workspace_controller import WorkspaceController
 
@@ -178,6 +179,7 @@ class GeoDuckPlugin:
         # Un solo workspace (contenido + controlador) con dos presentaciones (ADR-0013, ui-ux-spec §8)
         self.content = WorkspaceContent(self.coordinator, run_diagnostics)
         self.workspace = WorkspaceController(self.iface, self.content)
+        self.content.on_view_map = MapView(self.iface).show  # «Ver en el mapa» (ui-ux-spec §8)
 
         self.action = QAction(QIcon(ICON), tr("GeoDuck"), self.iface.mainWindow())
         self.action.setObjectName("geoduckToggleDock")  # nombre de G0–G4: conserva atajos del usuario

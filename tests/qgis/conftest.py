@@ -88,6 +88,18 @@ class FakeIface:
     def activeLayer(self):
         return self.active_layer
 
+    def setActiveLayer(self, layer):
+        self.active_layer = layer
+        return True
+
+    def mapCanvas(self):
+        if not hasattr(self, "canvas"):
+            from qgis.gui import QgsMapCanvas
+
+            self.canvas = QgsMapCanvas(self.window)
+            self.canvas.resize(400, 300)  # como el lienzo de QGIS: con tamaño, el zoom tiene extensión
+        return self.canvas
+
 
 def reset_workspace_settings():
     """Preferencias de presentación de G5 como en una instalación limpia (ui-ux-spec §8)."""
