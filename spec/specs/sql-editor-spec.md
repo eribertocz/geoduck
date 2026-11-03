@@ -61,6 +61,34 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 
 **P2 (evaluar):** diagnósticos en vivo, sugerencias sofisticadas y trazas de profiling; no son excusa para introducir editor web no justificado.
 
+**G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..006):** las pestañas de editor de
+G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa la sesión y el worker únicos.
+- **Celda** = editor SQL (con el autocompletado y «Explicar» de G6) + base de la celda + su resultado. Puede tener
+  varias sentencias: se ejecutan en orden, como un script (§2); el resultado que se muestra es el de la última que
+  devuelve filas, y todas quedan en el registro.
+- **Base de la celda.** Al ejecutar una celda, GeoDuck ejecuta `USE <base de la celda>` y después el SQL de la celda
+  en **la misma operación del worker** (nada se intercala). Los nombres calificados (`otra_base.esquema.tabla`) son
+  siempre válidos, y las tablas temporales se ven desde cualquier base. Verificado con DuckDB 1.5.0 y 2.0.0: `USE`
+  se admite dentro de una transacción y `ROLLBACK` no lo deshace; una transacción solo puede escribir en **una**
+  base (error de DuckDB, que se muestra tal cual). La base en uso de la sesión queda la de la última celda
+  ejecutada. Una celda nueva toma la base en uso. Si el SQL de la celda contiene su propio `USE`, gana el del SQL y
+  el selector de la celda lo refleja. Si la base de la celda se desadjunta, la celda lo indica y no se ejecuta hasta
+  elegir otra.
+- **Ejecutar todo** recorre las celdas en orden (cada una con su `USE`) y se detiene en la primera que falla; las
+  siguientes quedan sin ejecutar. Se cancela como un script.
+- **Exportar (GD-NB-007).** «Exportar ▾» → CSV o Parquet exporta la **consulta completa**, no la vista previa:
+  GeoDuck ejecuta `COPY (<consulta>) TO '<archivo>' (FORMAT csv, HEADER)` o `(FORMAT parquet)` en el worker, con la
+  base de la celda, cancelable y con la sesión ocupada. Solo para una consulta de lectura (la misma regla que
+  «Cargar en QGIS», GD-SQL-006: un DML nunca se repite); de una celda con varias sentencias se exporta la de su
+  resultado. El archivo se elige con el diálogo del sistema, que pide confirmación si ya existe (DuckDB lo
+  sobrescribe sin avisar; verificado en 1.5.0 y 2.0.0). Si se cancela o falla, no queda un archivo a medias.
+  Verificado en 1.5.0 y 2.0.0: Parquet está incluido (sin instalar nada, ADR-0011); en CSV la geometría sale como
+  WKT; en Parquet sale como geometría, pero al volver a leerla DuckDB le asigna `OGC:CRS84` aunque no tenga SRC
+  (por verificar en E3: avisar, o declarar el SRC conocido, sin inventarlo; spatial-spec §4).
+- Los cuadernos viven en memoria mientras dure el workspace; guardarlos en disco es GD-SQL-008 (sin fase).
+- Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
+  autocompletado.
+
 ## 8. Ejemplos de comportamiento esperado
 
 ```sql

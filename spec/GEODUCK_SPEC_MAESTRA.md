@@ -193,6 +193,13 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-UX-006 | P0 | Resultados con tipo por columna, `NULL` distinguible y «hay más»; registro filtrable Todo/OK/Error | AT-UX-007, AT-UX-009 |
 | GD-UX-007 | P0 | «Cargar en QGIS ▾», barra de estado y «Ver en el mapa» en ambos modos, sin cambiar G3/G4 | AT-UX-008 |
 | GD-UX-008 | P0 | Cerrar u ocultar la superficie no cierra la sesión ni invalida capas | AT-UX-011 |
+| GD-NB-001 | P1 | Cuadernos de celdas SQL en el workspace (sustituyen a las pestañas de editor): añadir, mover, borrar y plegar celdas; ejecutar una o todas en orden | AT-NB-001, AT-NB-002 |
+| GD-NB-002 | P1 | Base por celda: `USE` de la base de la celda antes de ejecutarla, en la misma operación; nombres calificados de otras bases siempre válidos | AT-NB-003, AT-NB-004 |
+| GD-NB-003 | P1 | Resultado debajo de cada celda (tipos, `NULL`, «hay más», filas y tiempo) con «Cargar en QGIS ▾» de G3–G5 | AT-NB-005 |
+| GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas | AT-NB-006 |
+| GD-NB-005 | P1 | Lista de cuadernos de la sesión; solo en memoria (guardar en disco: GD-SQL-008) | AT-NB-007 |
+| GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
+| GD-NB-006 | P0 | Sin regresión: autocompletado, «Explicar», historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
 | GD-CFG-001 | P1 | Persistir preferencias, SQL guardado y conexiones recientes; no capas/datos | AT-CFG-001 |
@@ -587,6 +594,34 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 **P1 sin fase (GD-SQL-008):** formato SQL, historial guardado en disco, búsqueda y reemplazo, snippets, guardado explícito de SQL y `EXPLAIN ANALYZE`.
 
 **P2 (evaluar):** diagnósticos en vivo, sugerencias sofisticadas y trazas de profiling; no son excusa para introducir editor web no justificado.
+
+**G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..006):** las pestañas de editor de
+G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa la sesión y el worker únicos.
+- **Celda** = editor SQL (con el autocompletado y «Explicar» de G6) + base de la celda + su resultado. Puede tener
+  varias sentencias: se ejecutan en orden, como un script (§2); el resultado que se muestra es el de la última que
+  devuelve filas, y todas quedan en el registro.
+- **Base de la celda.** Al ejecutar una celda, GeoDuck ejecuta `USE <base de la celda>` y después el SQL de la celda
+  en **la misma operación del worker** (nada se intercala). Los nombres calificados (`otra_base.esquema.tabla`) son
+  siempre válidos, y las tablas temporales se ven desde cualquier base. Verificado con DuckDB 1.5.0 y 2.0.0: `USE`
+  se admite dentro de una transacción y `ROLLBACK` no lo deshace; una transacción solo puede escribir en **una**
+  base (error de DuckDB, que se muestra tal cual). La base en uso de la sesión queda la de la última celda
+  ejecutada. Una celda nueva toma la base en uso. Si el SQL de la celda contiene su propio `USE`, gana el del SQL y
+  el selector de la celda lo refleja. Si la base de la celda se desadjunta, la celda lo indica y no se ejecuta hasta
+  elegir otra.
+- **Ejecutar todo** recorre las celdas en orden (cada una con su `USE`) y se detiene en la primera que falla; las
+  siguientes quedan sin ejecutar. Se cancela como un script.
+- **Exportar (GD-NB-007).** «Exportar ▾» → CSV o Parquet exporta la **consulta completa**, no la vista previa:
+  GeoDuck ejecuta `COPY (<consulta>) TO '<archivo>' (FORMAT csv, HEADER)` o `(FORMAT parquet)` en el worker, con la
+  base de la celda, cancelable y con la sesión ocupada. Solo para una consulta de lectura (la misma regla que
+  «Cargar en QGIS», GD-SQL-006: un DML nunca se repite); de una celda con varias sentencias se exporta la de su
+  resultado. El archivo se elige con el diálogo del sistema, que pide confirmación si ya existe (DuckDB lo
+  sobrescribe sin avisar; verificado en 1.5.0 y 2.0.0). Si se cancela o falla, no queda un archivo a medias.
+  Verificado en 1.5.0 y 2.0.0: Parquet está incluido (sin instalar nada, ADR-0011); en CSV la geometría sale como
+  WKT; en Parquet sale como geometría, pero al volver a leerla DuckDB le asigna `OGC:CRS84` aunque no tenga SRC
+  (por verificar en E3: avisar, o declarar el SRC conocido, sin inventarlo; spatial-spec §4).
+- Los cuadernos viven en memoria mientras dure el workspace; guardarlos en disco es GD-SQL-008 (sin fase).
+- Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
+  autocompletado.
 
 ## 8. Ejemplos de comportamiento esperado
 
@@ -1093,6 +1128,40 @@ Todo vive en el mismo `WorkspaceContent` de G5 y se ve igual en la ventana propi
 - **«Explicar».** Botón en la fila de «Ejecutar», con ayuda que explica que no ejecuta la sentencia; en una fila estrecha, solo su icono (no amplía el ancho mínimo de GeoDuck).
 - **Idioma.** §5.
 
+## 10. Notebook (G7 · `v0.8.0a1`; decisiones del propietario, 2026-11-03)
+
+Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin incrustarla** (roadmap, decisión
+2026-11-03). Maqueta en `docs/g7/maqueta/`. Todo en el mismo `WorkspaceContent` de G5, en ventana y en panel.
+
+- **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
+  explorador de G5–G6, sin cambios). En el panel, los cuadernos van en el selector de la pestaña SQL.
+- **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento (capturas del propietario de la
+  DuckDB UI, 2026-11-03). Cada celda:
+  - **Margen izquierdo:** asa «⠿» para **arrastrar** la celda a otra posición (se mueven con ella su texto, su base y
+    su resultado; no se ejecuta nada) y tres «˅» para **plegar** por separado la celda entera, el editor y el
+    resultado. Encima de cada celda, «+» al pasar el ratón inserta una celda ahí.
+  - **Cabecera:** botón ▶ con menú («Ejecutar celda», «Explicar») y, a la derecha, el selector de base
+    («memory ▾»).
+  - **Editor** y, debajo, «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB
+    UI) y el resultado con su «Cargar en QGIS ▾», «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
+    portapapeles, como texto separado por tabuladores).
+  - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
+    resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»:
+    subir, bajar, duplicar, plegar resultado, borrar (con confirmación si tiene SQL).
+  - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
+  - Teclado (además del ratón): Alt+Mayús+↑/↓ sube o baja la celda activa.
+- **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): celdas con ▶, base,
+  editor y resultado; el resumen, como ayuda (ⓘ) del rótulo del resultado; «Cargar en QGIS ▾» y «Exportar ▾» al pie.
+- **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
+  de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
+  muestra como ayuda del rótulo del resultado.
+- **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo», «Cancelar».
+- **Atajos** (solo con el foco en GeoDuck): Ctrl+Intro ejecuta la celda; Mayús+Intro ejecuta y pasa a la siguiente
+  (la crea si es la última); Ctrl+Mayús+Intro ejecuta todo; Alt+↑/↓ cambia de celda; Alt+Mayús+↑/↓ la mueve;
+  Ctrl+E vista de hoja.
+- Rendimiento: un resultado se crea al terminar su celda y su altura está acotada (desplazamiento propio); con muchas
+  celdas, solo las visibles mantienen su tabla.
+
 
 
 ---
@@ -1291,6 +1360,17 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-UX-014 | fallo inyectado durante el traslado | el shell anterior sigue operativo; nada se repite |
 | AT-UX-015 | regresión G0–G4 | todas pasan; otras herramientas de QGIS sin cambios |
 | AT-I18N-001 | QGIS en inglés y en español; paquete ZIP | textos en el idioma de QGIS; traducción completa de la interfaz; sin texto vacío; idioma de QGIS sin cambios; SQL y datos sin traducir; el ZIP incluye la traducción |
+| AT-NB-001 | añadir (al final y entre celdas), arrastrar, subir/bajar con el teclado, duplicar, borrar; plegar celda, editor y resultado por separado; vista de hoja (Ctrl+E) y vuelta; varios cuadernos | orden y contenido conservados (texto, base y resultado viajan con la celda; nada se ejecuta); borrar una celda con SQL pide confirmación |
+| AT-NB-002 | «Ejecutar todo» con una celda que falla | celdas en orden; se detiene en la que falla; las siguientes no se ejecutan |
+| AT-NB-003 | dos celdas con bases distintas, ejecutadas en cualquier orden | cada una lee su base; la base en uso queda la de la última ejecutada |
+| AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda (y al revés: celda en `db` que lee `memory.t`); `LOAD spatial; SELECT …` en una celda (resultado de la última, «2 sentencias»); `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |
+| AT-NB-005 | resultado y «Cargar en QGIS ▾» en cada celda (tres modalidades, geometría) | la capa sale del SQL de esa celda; nada se repite (GD-SQL-006) |
+| AT-NB-006 | resumen del resultado seleccionado | filas, columnas y tipos correctos; ninguna consulta nueva |
+| AT-NB-007 | lista de cuadernos; reinicio de QGIS | cambiar de cuaderno conserva su estado; nada en disco |
+| AT-NB-008 | autocompletado, «Explicar» e historial dentro de una celda | como en G6, en la celda activa |
+| AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
+| AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
+| AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
@@ -1412,10 +1492,11 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
 | G5 · `v0.6.0a1` Workspace UX | un workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado (ADR-0013, issue #49) | GD-UX-001..008 | AT-UX-001..015; las tres cargas de G3/G4 en ambos modos; alternar sin perder estado ni repetir operaciones |
 | G6 · `v0.7.0a1` SQL Professional | columnas en el explorador, autocompletado, pestañas de editor, historial de la sesión, «Explicar»; interfaz en inglés (#68) | GD-CAT-002, GD-SQL-007, GD-I18N-001 | AT-CAT-002, AT-SQL-007..010, AT-I18N-001; regresiones G0–G5; teclado, Qt 5 y Qt 6 |
-| G7 · `v0.8.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
-| G8 · `v0.9.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
-| G9 · `v0.10.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
-| G10+ · `v0.11.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
+| G7 · `v0.8.0a1` Notebook | cuadernos de celdas SQL en el mismo workspace: cada celda con su base, su resultado y «Cargar en QGIS ▾» (decisión del propietario, 2026-11-03) | GD-NB-001..006 | AT-NB-001..010; regresiones G0–G6 |
+| G8 · `v0.9.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
+| G9 · `v0.10.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
+| G10 · `v0.11.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
+| G11+ · `v0.12.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
 
 ## 3. Dependencias/gates críticos
 - **Decisión 2026-11-01:** ATTACH/DETACH escritos en SQL pasan de G1 a G2; G1 no incluye un editor SQL provisional.
@@ -1426,7 +1507,8 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 - **Spike G4-A** (reducido, decisión 2026-11-02): solo compatibilidades no demostradas — Z/M y colecciones por GeoArrow en QGIS 3.34/4.x, cabecera WKB y `ST_GeomFromWKB` sin `spatial` en DuckDB 1.5/2.0, `makeValid` en QGIS 3.34/4.x, coste de la muestra de tipos. CRS tipado y orden de ejes ya están demostrados (C4, F-10/F-14, AX).
 - **Decisión 2026-11-02:** G5 · Workspace UX (issue #49) entra antes de SQL Professional; las fases siguientes se desplazan un número (SQL Professional G6, Performance G7, Reliability & Distribution G8, Public Alpha G9). La issue #68 (inglés) pasa a `v0.7.0a1` con su mismo alcance. G6 parte del workspace de G5: el editor avanzado se integra en `WorkspaceContent`, sin volver a crear shells.
 - **Decisión 2026-11-02 (alcance de G6):** G6 incluye columnas en el explorador (GD-CAT-002, pedido del propietario), autocompletado, varias pestañas de editor, historial de la sesión dentro del registro, «Explicar» y la interfaz en inglés (#68). Formato SQL, historial en disco, búsqueda y reemplazo, snippets y `EXPLAIN ANALYZE` pasan a GD-SQL-008, sin fase asignada.
-- **Spike G7-A** (antes G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
+- **Decisión 2026-11-03:** G7 · Notebook entra antes de Performance; Performance pasa a G8, Reliability & Distribution a G9, Public Alpha a G10. Inspirado en la DuckDB UI (cuadernos de celdas), pero nativo en Qt y sobre la sesión única: no se incrusta la DuckDB UI (interfaz no libre, descargada de internet, servidor HTTP sin autenticación y fuera del worker; ADR-0006, ADR-0011).
+- **Spike G8-A** (antes G7-A y G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
 
 ## 4. Capacidad mínima de Alpha útil
 A partir de **v0.4.0a1**: abrir plugin → sesión DuckDB → ATTACH archivo → SELECT → seleccionar resultado → cargar tabla o geometría en QGIS → DETACH → capa permanece. Una demo de carga sin tests de integridad no aprueba el gate.
