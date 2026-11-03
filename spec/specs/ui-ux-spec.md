@@ -102,7 +102,8 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 - **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
   explorador de G5–G6, sin cambios). En el panel, los cuadernos van en el selector de la pestaña SQL.
 - **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento. Cada celda: botón ▶ (con menú:
-  «Ejecutar celda», «Explicar»), editor, selector de base a la derecha («memory ▾»), y debajo «N filas en X ms» y el
+  «Ejecutar celda», «Explicar»), editor, selector de base a la derecha («memory ▾»), y debajo «N filas en X ms» (con varias
+  sentencias, «N filas · K sentencias en X ms», como la DuckDB UI) y el
   resultado con su «Cargar en QGIS ▾». La celda activa tiene el borde de acento. Al final, «+ Añadir celda»; entre
   celdas, «+» al pasar el ratón. Menú «⋯» de la celda: subir, bajar, plegar resultado, borrar (con confirmación si
   tiene SQL).

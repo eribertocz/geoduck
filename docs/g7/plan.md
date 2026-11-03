@@ -14,7 +14,7 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 | Rumbo | Interfaz de cuadernos de celdas parecida a la DuckDB UI, **nativa en Qt**. No se incrusta la DuckDB UI: su interfaz no es libre y se descarga de `ui.duckdb.org`, abre un servidor HTTP local sin autenticación y ejecuta fuera del worker (ADR-0006, ADR-0011) |
 | Fase | G7 · Notebook antes de Performance (G8); las siguientes se desplazan un número |
 | Celdas | Sustituyen a las pestañas de editor de G6: un solo modo. Cada pestaña de G6 pasa a ser un cuaderno |
-| Base por celda | Selector en cada celda, como en la DuckDB UI; la celda también consulta otras bases con su nombre (`otra.esquema.tabla`) |
+| Base por celda | Selector en cada celda, como en la DuckDB UI; la celda también consulta otras bases con su nombre (`otra.esquema.tabla`). Referencia del propietario: celda en `memory` con `load spatial; select … from db.main.consumidores…` y celda en `db` con `select * from memory.tabla_memoria` |
 | Estadísticas por columna | Fuera de G7 (costosas en tablas grandes). Entra el resumen simple: filas, columnas y tipos |
 | Guardar cuadernos | Fuera de G7 (GD-SQL-008): solo en memoria |
 

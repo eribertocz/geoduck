@@ -74,7 +74,7 @@
 | AT-NB-001 | añadir, mover, borrar y plegar celdas; varios cuadernos | orden y contenido conservados; borrar una celda con SQL pide confirmación |
 | AT-NB-002 | «Ejecutar todo» con una celda que falla | celdas en orden; se detiene en la que falla; las siguientes no se ejecutan |
 | AT-NB-003 | dos celdas con bases distintas, ejecutadas en cualquier orden | cada una lee su base; la base en uso queda la de la última ejecutada |
-| AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda; `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |
+| AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda (y al revés: celda en `db` que lee `memory.t`); `LOAD spatial; SELECT …` en una celda (resultado de la última, «2 sentencias»); `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |
 | AT-NB-005 | resultado y «Cargar en QGIS ▾» en cada celda (tres modalidades, geometría) | la capa sale del SQL de esa celda; nada se repite (GD-SQL-006) |
 | AT-NB-006 | resumen del resultado seleccionado | filas, columnas y tipos correctos; ninguna consulta nueva |
 | AT-NB-007 | lista de cuadernos; reinicio de QGIS | cambiar de cuaderno conserva su estado; nada en disco |
