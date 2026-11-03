@@ -63,6 +63,7 @@ Archivos en `tests/`: `qgis/test_explorer_columns.py` (C), `qgis/test_completion
 | F-103 | `QgsCodeEditorSQL` trae su propio autocompletado de palabras (umbral 2) | Se desactiva en los editores de GeoDuck; el de GeoDuck incluye las palabras clave (E2, #87) |
 | F-104 | QScintilla usa Ctrl+T (intercambiar líneas) antes que los atajos del panel | Ctrl+T y Ctrl+W se liberan solo en los editores de GeoDuck (E3) |
 | F-105 | `QTranslator.translate` de PyQt6 solo admite ASCII | GeoDuck usa `QCoreApplication.translate`, que sí admite «», tildes y «…» (E4) |
+| F-106 | Instalar y quitar el traductor en cada carga y descarga envía «LanguageChange» a widgets que se están borrando; en la CI (QGIS 4.2.3 · DuckDB 2.0.0) terminó en un fallo de segmentación | El traductor de Qt se instala una vez y no se quita, como hace QGIS con sus complementos (E4, #89) |
 
 ## 6. Limitaciones conocidas
 
