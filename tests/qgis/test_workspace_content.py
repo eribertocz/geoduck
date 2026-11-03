@@ -201,3 +201,58 @@ def test_every_action_is_reachable_with_the_keyboard(plugin):  # noqa: F811
     unreachable = [b.text() or b.toolTip() for b in buttons if not b.focusPolicy() & Qt.FocusPolicy.TabFocus]
     assert unreachable == []
     assert content.search_edit.focusPolicy() & Qt.FocusPolicy.TabFocus
+
+
+# -- AT-UX-001: acciones visibles y accesibles; tema; dock; Qt 5 y 6 -----------------------------------------
+
+
+@pytest.mark.parametrize("where", ["ventana", "panel"])
+def test_every_visible_action_has_a_name_and_help(plugin, where):  # noqa: F811
+    start(plugin)
+    content, ws = plugin.content, plugin.workspace
+    plugin.action.trigger()
+    if where == "panel":
+        toggle(ws)
+    for index in range(max(1, content.tabs.count())):
+        if content.tabs.count():
+            content.tabs.setCurrentIndex(index)
+        buttons = [
+            b
+            for b in content.findChildren(QAbstractButton)
+            if b.isVisibleTo(content) and not isinstance(b.parent(), QLineEdit)
+        ]
+        nameless = [b for b in buttons if not (b.text() or b.accessibleName())]
+        helpless = [b.text() for b in buttons if not (b.toolTip() or b.text())]
+        assert nameless == [] and helpless == []
+    for menu_action in content.add_button.menu().actions() + content.explorer.database_actions:
+        assert menu_action.text() and menu_action.toolTip()
+    shell = ws.shell
+    assert shell.toggle_button.text() and shell.toggle_button.toolTip()  # «Acoplar» / «Abrir en ventana»
+
+
+def test_the_palette_follows_the_qgis_theme_and_stays_inside_geoduck(plugin):  # noqa: F811
+    from qgis.PyQt.QtGui import QColor, QPalette
+
+    from geoduck.ui import theme
+
+    content = plugin.content
+    assert theme.palette_for(content) is theme.LIGHT
+    assert theme.LIGHT.primary in content.styleSheet()  # la paleta corporativa, en GeoDuck
+    assert QApplication.instance().styleSheet() == ""  # nunca en QGIS entero (ADR-0011)
+    dark = QPalette()
+    dark.setColor(QPalette.ColorRole.Window, QColor("#1e1f22"))
+    probe = QLineEdit()
+    probe.setPalette(dark)
+    assert theme.palette_for(probe) is theme.DARK
+    for p in (theme.LIGHT, theme.DARK):  # contraste del texto principal sobre la tarjeta (WCAG AA ≥ 4,5)
+        assert _contrast(p.text, p.card) >= 4.5 and _contrast(p.muted, p.card) >= 4.5
+
+
+def _contrast(foreground: str, background: str) -> float:
+    def luminance(hex_color: str) -> float:
+        channels = [int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    hi, lo = sorted((luminance(foreground), luminance(background)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
