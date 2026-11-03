@@ -108,6 +108,7 @@ class SessionEngine(Protocol):
         batch_size: int = ...,
         on_plan: Callable[[Any], None],
         on_batch: Callable[[Any], None],
+        database: str | None = None,
     ) -> OperationHandle:
         """Lectura normalizada por lotes de una consulta repetible para cargarla en QGIS (ADR-0012).
 
@@ -126,9 +127,15 @@ class SessionEngine(Protocol):
         ...
 
     def prepare_load(
-        self, sql: str, geometry: str | None = None, formats: Mapping[str, Any] | None = None
+        self,
+        sql: str,
+        geometry: str | None = None,
+        formats: Mapping[str, Any] | None = None,
+        *,
+        database: str | None = None,
     ) -> Future[Any]:
-        """`LoadPlan` de la consulta sin leer datos (qgis-bridge-spec §2)."""
+        """`LoadPlan` de la consulta sin leer datos (qgis-bridge-spec §2). `database`: base donde se
+        ejecutó el resultado (G7)."""
         ...
 
     def invalidation(self) -> Future[SessionInvalidatedError | None]:

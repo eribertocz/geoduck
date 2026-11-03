@@ -393,7 +393,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             return False
         requested = size + self.ties
         try:
-            handle = engine.read_table(self.page_sql(size), priority=True)
+            handle = engine.read_table(self.page_sql(size), priority=True, database=self.p.use_database)
             batches = self._wait(engine, handle)
         except Exception as exc:
             self.p.note_error(str(exc).splitlines()[0] if str(exc) else type(exc).__name__)
@@ -525,6 +525,8 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         self.capture = False
         self.verdict: Any = None
         self.session, self.scope, self.database, self.source = "", "session", None, None
+        #: G7: base donde se ejecutó el resultado de una celda; cada lectura se hace en ella.
+        self.use_database: str | None = None
         self._fid_lock = threading.Lock()
         self._fid_of: dict[tuple[Any, ...], int] = {}
         self._key_of: list[tuple[Any, ...]] = []
@@ -542,6 +544,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self.session = params.get("session", "")
             self.scope = params.get("scope", "session")
             self.database = params.get("database") or None
+            self.use_database = params.get("usedb") or None
             self.source = params.get("source") or None
             self.inner: str = params["sql"]
             self.key: str | None = params.get("key") or None
@@ -637,7 +640,8 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         cols = ", ".join(quote_identifier(c) for c in ids)
         sql = f"SELECT {cols} FROM ({self.base}) AS __geoduck_u WHERE {quote_identifier(UNREADABLE)}"
         out: list[int] = []
-        for batch in engine.read_table(sql, priority=False).future.result(timeout):
+        reading = engine.read_table(sql, priority=False, database=self.use_database)
+        for batch in reading.future.result(timeout):
             names = batch.schema.names
             if self.fid_mode == "map":
                 columns = [batch.column(names.index(c)).to_pylist() for c in ids]
@@ -809,7 +813,9 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         count = -1
         engine = self.engine()
         if engine is not None:
-            handle = engine.query(f"SELECT count(*) FROM ({base}) AS __geoduck_n", max_rows=1)
+            handle = engine.query(
+                f"SELECT count(*) FROM ({base}) AS __geoduck_n", max_rows=1, database=self.use_database
+            )
             try:
                 count = int(handle.future.result(MAIN_WAIT).rows[0][0])
             except FutureTimeout:

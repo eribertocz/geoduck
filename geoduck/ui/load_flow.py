@@ -90,6 +90,7 @@ class LoadFlow:
         self._pending: dict[int, tuple[str, str, tuple[str, str, str] | None]] = {}
         self._modes: dict[int, LoadMode | None] = {}
         self._names: dict[int, str] = {}
+        self._databases: dict[int, str | None] = {}
         self._kinds: dict[int, str | None] = {}
         self._kind: str | None = None
         self.loading = False
@@ -101,15 +102,18 @@ class LoadFlow:
         title: str,
         source: tuple[str, str, str] | None = None,
         mode: LoadMode | None = None,
+        database: str | None = None,
     ) -> None:
         """Comienza el flujo para una consulta de lectura repetible (o una tabla/vista del explorador,
-        con su `source`). Con `mode` («Cargar en QGIS ▾»), el diálogo se abre con esa modalidad marcada."""
+        con su `source`). Con `mode` («Cargar en QGIS ▾»), el diálogo se abre con esa modalidad marcada.
+        `database` (G7): base donde se ejecutó el resultado de la celda; la consulta se repite en ella."""
         try:
-            token = self._coordinator.prepare_load(sql)
+            token = self._coordinator.prepare_load(sql, database=database)
         except GeoDuckError as exc:
             self._on_message(exc.message)
             return
         self._pending[token] = (sql, title, tuple(source) if source else None)  # type: ignore[arg-type]
+        self._databases[token] = database
         self._kinds[token] = source[3] if source and len(source) > 3 else None
         self._modes[token] = mode
 
@@ -121,12 +125,15 @@ class LoadFlow:
             sql, title, source = self._pending.pop(event.token)
             self._kind = self._kinds.pop(event.token, None)
             mode = self._modes.pop(event.token, None)
-            self._ask(sql, title, event.plan, tuple(source[:3]) if source else None, mode)  # type: ignore[arg-type]
+            database = self._databases.pop(event.token, None)
+            origin = tuple(source[:3]) if source else None
+            self._ask(sql, title, event.plan, origin, mode, database=database)  # type: ignore[arg-type]
         elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
             self._pending.pop(event.token)
             self._on_message(tr("Cannot load: ") + event.message)
             self._kinds.pop(event.token, None)
             self._modes.pop(event.token, None)
+            self._databases.pop(event.token, None)
         elif isinstance(event, LoadStarted):
             self.loading = True
             self._names[event.load_id] = event.request.layer_name
@@ -150,6 +157,8 @@ class LoadFlow:
         plan: LoadPlan,
         source: tuple[str, str, str] | None = None,
         mode: LoadMode | None = None,
+        *,
+        database: str | None = None,
     ) -> None:
         dialog = self._dialog_factory(sql, title, plan, self._coordinator.load_modes(), self._parent)
         if mode is not None:
@@ -157,6 +166,8 @@ class LoadFlow:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
-            self._coordinator.load(replace(dialog.request(), source=source, source_kind=self._kind))
+            self._coordinator.load(
+                replace(dialog.request(), source=source, source_kind=self._kind, database=database)
+            )
         except GeoDuckError as exc:
             self._on_message(tr("Cannot load: ") + exc.message)

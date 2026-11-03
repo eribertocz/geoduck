@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 140794,
-      "sha256": "24eb8e7e196f27e97e196d822c7158d67e31c7910c10d6834dfc44fcf0eeb7e7"
+      "bytes": 141063,
+      "sha256": "d93fddac7c41281f3ec56c7ea6ce4f74b4414f330723bae126d7c471af3fc34b"
     },
     {
       "path": "README.md",
@@ -156,8 +156,8 @@
     },
     {
       "path": "specs/sql-editor-spec.md",
-      "bytes": 11205,
-      "sha256": "6feda911788c36ef914552cfd73643a3659ab30a7cbd05f7bfa309877514f378"
+      "bytes": 11474,
+      "sha256": "b6fc9a8d3db56c6b8ce2c497d10a4b2fafc29f054ce196338a511719751cd638"
     },
     {
       "path": "specs/ui-ux-spec.md",

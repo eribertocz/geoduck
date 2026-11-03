@@ -16,9 +16,11 @@ cancelación. Hechos verificados (`docs/evidence/g2/README.md`):
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import duckdb
 
@@ -49,6 +51,8 @@ if TYPE_CHECKING:
 StatementListener = Callable[[StatementResult], None]
 
 _DML = frozenset({"INSERT", "UPDATE", "DELETE"})
+_log = logging.getLogger("geoduck.engine")
+T = TypeVar("T")
 
 
 def split_script(handle: ConnectionHandle, text: str, base: int = 0) -> tuple[SqlStatement, ...]:
@@ -122,6 +126,8 @@ def run_script(
         else:
             result = _execute_one(handle, st, preview_limit)
             stopped = result.status is not StatementStatus.OK
+            if result.preview is not None:
+                result = replace(result, database=_current_database(handle))
         results.append(result)
         if on_statement is not None:
             on_statement(result)
@@ -140,6 +146,25 @@ def use_database(handle: ConnectionHandle, database: str) -> None:
             tr("The database «{0}» of the cell is no longer attached: choose another one").format(database)
         )
     handle.execute("USE " + quote_identifier(database))
+
+
+def run_in_database(handle: ConnectionHandle, database: str | None, fn: Callable[[], T]) -> T:
+    """`fn()` con `database` en uso, y la base en uso vuelve a la de antes (G7: cargar el resultado de una
+    celda en la base donde se ejecutó). Con `database` None o ya en uso, solo `fn()`."""
+    if database is None:
+        return fn()
+    previous = _current_database(handle)
+    if previous == database:
+        return fn()
+    use_database(handle, database)
+    try:
+        return fn()
+    finally:
+        if previous is not None:
+            try:
+                handle.execute("USE " + quote_identifier(previous))
+            except (duckdb.Error, GeoDuckError):  # p. ej. se desadjuntó dentro de `fn`: queda la de la celda
+                _log.warning("No se pudo volver a la base en uso «%s»", previous)
 
 
 def _current_database(handle: ConnectionHandle) -> str | None:
