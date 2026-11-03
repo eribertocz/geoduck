@@ -198,6 +198,7 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-NB-003 | P1 | Resultado debajo de cada celda (tipos, `NULL`, «hay más», filas y tiempo) con «Cargar en QGIS ▾» de G3–G5 | AT-NB-005 |
 | GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas | AT-NB-006 |
 | GD-NB-005 | P1 | Lista de cuadernos de la sesión; solo en memoria (guardar en disco: GD-SQL-008) | AT-NB-007 |
+| GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, «Explicar», historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
@@ -609,6 +610,15 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   elegir otra.
 - **Ejecutar todo** recorre las celdas en orden (cada una con su `USE`) y se detiene en la primera que falla; las
   siguientes quedan sin ejecutar. Se cancela como un script.
+- **Exportar (GD-NB-007).** «Exportar ▾» → CSV o Parquet exporta la **consulta completa**, no la vista previa:
+  GeoDuck ejecuta `COPY (<consulta>) TO '<archivo>' (FORMAT csv, HEADER)` o `(FORMAT parquet)` en el worker, con la
+  base de la celda, cancelable y con la sesión ocupada. Solo para una consulta de lectura (la misma regla que
+  «Cargar en QGIS», GD-SQL-006: un DML nunca se repite); de una celda con varias sentencias se exporta la de su
+  resultado. El archivo se elige con el diálogo del sistema, que pide confirmación si ya existe (DuckDB lo
+  sobrescribe sin avisar; verificado en 1.5.0 y 2.0.0). Si se cancela o falla, no queda un archivo a medias.
+  Verificado en 1.5.0 y 2.0.0: Parquet está incluido (sin instalar nada, ADR-0011); en CSV la geometría sale como
+  WKT; en Parquet sale como geometría, pero al volver a leerla DuckDB le asigna `OGC:CRS84` aunque no tenga SRC
+  (por verificar en E3: avisar, o declarar el SRC conocido, sin inventarlo; spatial-spec §4).
 - Los cuadernos viven en memoria mientras dure el workspace; guardarlos en disco es GD-SQL-008 (sin fase).
 - Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
   autocompletado.
@@ -1133,13 +1143,15 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   - **Cabecera:** botón ▶ con menú («Ejecutar celda», «Explicar») y, a la derecha, el selector de base
     («memory ▾»).
   - **Editor** y, debajo, «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB
-    UI) y el resultado con su «Cargar en QGIS ▾» y «Copiar» (al portapapeles, como texto separado por
-    tabuladores).
+    UI) y el resultado con su «Cargar en QGIS ▾», «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
+    portapapeles, como texto separado por tabuladores).
   - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
     resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»:
     subir, bajar, duplicar, plegar resultado, borrar (con confirmación si tiene SQL).
   - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
   - Teclado (además del ratón): Alt+Mayús+↑/↓ sube o baja la celda activa.
+- **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): celdas con ▶, base,
+  editor y resultado; el resumen, como ayuda (ⓘ) del rótulo del resultado; «Cargar en QGIS ▾» y «Exportar ▾» al pie.
 - **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
@@ -1358,6 +1370,7 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-NB-008 | autocompletado, «Explicar» e historial dentro de una celda | como en G6, en la celda activa |
 | AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
+| AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |

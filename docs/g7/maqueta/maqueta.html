@@ -74,7 +74,7 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
           <div class="cellbar"><span class="run">▶ ▾</span><span class="chip">◫ db ▾</span></div>
           <div class="code"><span class="ln">1</span><span><span class="k">select</span> consumidor, medidor, geometry <span class="k">from</span> main.consumidores20261030 <span class="k">limit</span> 3</span></div>
           <div class="res">
-            <div class="resbar"><span class="muted">3 filas en 43 ms</span><span><span class="btn">⧉ Copiar</span> <span class="btn action">Cargar en QGIS ▾</span></span></div>
+            <div class="resbar"><span class="muted">3 filas en 43 ms</span><span><span class="btn">⧉ Copiar</span> <span class="btn">⤓ Exportar ▾</span> <span class="btn action">Cargar en QGIS ▾</span></span></div>
             <table><tr><th><span class="t">#</span>Consumidor</th><th><span class="t">#</span>Medidor</th><th><span class="t">◈</span>geometry</th></tr>
               <tr><td class="n">642958</td><td class="n">1546753</td><td>POINT · 21 B</td></tr>
               <tr><td class="n">297960</td><td class="n">1361448</td><td>POINT · 21 B</td></tr>
@@ -106,6 +106,7 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
 <ol style="margin:0 16px 0 40px;color:var(--muted);line-height:1.6">
 <li><b>Base de la celda</b> («db ▾», «memory ▾»): al ejecutar, GeoDuck hace <code>USE</code> de esa base y luego la celda, en una sola operación. Como en la DuckDB UI, la celda puede consultar <b>otras bases con su nombre</b> (celda 2: <code>db.main.tabla2</code> con «memory»).</li>
 <li><b>Resultado debajo de cada celda</b> con su «Cargar en QGIS ▾» (las tres modalidades de G3–G5). La geometría se ve como <code>POINT · 21 B</code>, no como bytes.</li>
+<li><b>Exportar ▾</b> (CSV o Parquet): exporta la <b>consulta completa</b> con <code>COPY (…) TO …</code>, no las filas de la vista previa.</li>
 <li><b>Resumen</b> a la derecha: filas, columnas y tipos del resultado de la celda activa, sin consultas nuevas; plegable.</li>
 <li><b>Margen de cada celda:</b> «⠿» para arrastrarla; tres «˅» para plegar la celda, el editor o el resultado; «＋» encima inserta una celda; a la derecha «⛶» vista de hoja (Ctrl+E) y «⋯» (subir, bajar, duplicar, plegar, borrar).</li>
 <li><b>Cuadernos</b> encima de «Bases de datos» (el explorador de G5–G6, sin cambios).</li>
@@ -123,7 +124,7 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
         <table><tr><th>Consumidor</th><th>Medidor</th><th>geometry</th></tr><tr><td class="n">642958</td><td class="n">1546753</td><td>POINT · 21 B</td></tr></table></div>
     </div>
     <div class="add">＋ Añadir celda</div>
-    <span class="btn action" style="justify-content:center">Cargar en QGIS ▾</span>
+    <div style="display:flex;gap:6px"><span class="btn" style="justify-content:center">⤓ Exportar ▾</span><span class="btn action" style="justify-content:center;flex:1">Cargar en QGIS ▾</span></div>
   </div>
 </div>
 
@@ -134,7 +135,7 @@ td.n{text-align:right}.null{color:var(--muted);font-style:italic}
     <div><div class="cellbar"><span class="run">▶ ▾</span><span><span class="chip">◫ memory ▾</span> <span class="muted" title="Volver a las celdas (Escape)">⛶ ⋯</span></span></div>
       <div class="code"><span class="ln">1</span><span><span class="k">load</span> spatial; <span class="k">select</span> consumidor, medidor, geometry <span class="k">from</span> db.main.consumidores20261030 <span class="k">limit</span> 3;</span></div></div>
     <div class="split">═══</div>
-    <div><div class="resbar"><span class="muted">3 filas · 2 sentencias en 55 ms</span><span><span class="btn">⧉ Copiar</span> <span class="btn action">Cargar en QGIS ▾</span></span></div>
+    <div><div class="resbar"><span class="muted">3 filas · 2 sentencias en 55 ms</span><span><span class="btn">⧉ Copiar</span> <span class="btn">⤓ Exportar ▾</span> <span class="btn action">Cargar en QGIS ▾</span></span></div>
       <table><tr><th><span class="t">#</span>Consumidor</th><th><span class="t">#</span>Medidor</th><th><span class="t">◈</span>geometry</th></tr>
       <tr><td class="n">642958</td><td class="n">1546753</td><td>POINT · 21 B</td></tr>
       <tr><td class="n">297960</td><td class="n">1361448</td><td>POINT · 21 B</td></tr>

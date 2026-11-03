@@ -109,13 +109,15 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   - **Cabecera:** botón ▶ con menú («Ejecutar celda», «Explicar») y, a la derecha, el selector de base
     («memory ▾»).
   - **Editor** y, debajo, «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB
-    UI) y el resultado con su «Cargar en QGIS ▾» y «Copiar» (al portapapeles, como texto separado por
-    tabuladores).
+    UI) y el resultado con su «Cargar en QGIS ▾», «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
+    portapapeles, como texto separado por tabuladores).
   - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
     resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»:
     subir, bajar, duplicar, plegar resultado, borrar (con confirmación si tiene SQL).
   - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
   - Teclado (además del ratón): Alt+Mayús+↑/↓ sube o baja la celda activa.
+- **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): celdas con ▶, base,
+  editor y resultado; el resumen, como ayuda (ⓘ) del rótulo del resultado; «Cargar en QGIS ▾» y «Exportar ▾» al pie.
 - **Columna derecha (ventana, plegable):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
   de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
   muestra como ayuda del rótulo del resultado.
