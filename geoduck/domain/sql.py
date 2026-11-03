@@ -122,6 +122,9 @@ class ScriptRun:
     #: Error de sintaxis que impidió ejecutar nada (F-38).
     parse_error: str = ""
     parse_error_offset: int | None = None
+    #: Base en uso al terminar (G7: la de la celda, o la que fije un `USE` escrito en ella); `None` si no
+    #: se pudo leer.
+    current_database: str | None = None
 
     @property
     def failed(self) -> bool:

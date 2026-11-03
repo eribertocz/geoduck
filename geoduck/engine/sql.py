@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 import duckdb
 
 from geoduck.domain.bridge_types import is_geometry_type
-from geoduck.domain.errors import ErrorCode, InvalidArgumentError, SessionStateError
+from geoduck.domain.errors import ErrorCode, GeoDuckError, InvalidArgumentError, SessionStateError
 from geoduck.domain.i18n import tr
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.sql import (
@@ -40,6 +40,7 @@ from geoduck.domain.sql import (
     error_offset_in,
     statement_at,
 )
+from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.engine.compat import is_interrupt_error
 from geoduck.engine.transactions import is_aborted_error, probe_transaction
 
@@ -89,6 +90,7 @@ def run_script(
     on_statement: StatementListener | None = None,
     guard: Callable[[SqlStatement], str | None] | None = None,
     explain: bool = False,
+    database: str | None = None,
 ) -> ScriptRun:
     """Ejecuta `text` según `scope`. Para `CURRENT`, `text` es el editor completo y `cursor` la posición;
     para `SELECTION`, `text` es la selección y `base` su posición en el editor.
@@ -118,6 +120,8 @@ def run_script(
             reason = guard(st)
             if reason:
                 raise SessionStateError(reason)
+    if database is not None:
+        use_database(handle, database)  # G7: la base de la celda, en esta misma operación
     results: list[StatementResult] = []
     stopped = False
     for st in statements:
@@ -129,7 +133,29 @@ def run_script(
         results.append(result)
         if on_statement is not None:
             on_statement(result)
-    return ScriptRun(run_id, scope, tuple(results))
+    return ScriptRun(run_id, scope, tuple(results), current_database=_current_database(handle))
+
+
+def use_database(handle: ConnectionHandle, database: str) -> None:
+    """`USE` de la base de una celda (sql-editor-spec §7 «G7 · Notebook»). Si ya no está adjunta, no se
+    ejecuta nada de la celda."""
+    attached = handle.execute(
+        "SELECT database_name FROM duckdb_databases() WHERE NOT internal AND database_name = "
+        + quote_string_literal(database)
+    ).rows
+    if not attached:
+        raise InvalidArgumentError(
+            tr("The database «{0}» of the cell is no longer attached: choose another one").format(database)
+        )
+    handle.execute("USE " + quote_identifier(database))
+
+
+def _current_database(handle: ConnectionHandle) -> str | None:
+    try:
+        rows = handle.execute("SELECT current_database()").rows
+    except (duckdb.Error, GeoDuckError):  # p. ej. transacción abortada o sesión invalidada: no se sabe
+        return None
+    return str(rows[0][0]) if rows else None
 
 
 def _as_explain(statements: tuple[SqlStatement, ...]) -> SqlStatement:

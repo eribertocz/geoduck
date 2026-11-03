@@ -55,6 +55,7 @@ from geoduck.domain.catalog import (
     CatalogSnapshot,
     ColumnInfo,
     DetachResult,
+    catalog_key,
 )
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
@@ -275,6 +276,7 @@ class SessionCoordinator:
         base: int = 0,
         preview_limit: int = DEFAULT_PREVIEW_LIMIT,
         explain: bool = False,
+        database: str | None = None,
     ) -> int:
         """GD-SQL-001/002/004: ejecuta la sentencia actual, la selección o todo. La sesión pasa por `BUSY`;
         se cancela con `cancel_current_operation`. Devuelve el `run_id`. `explain` («Explicar», G6 · E3):
@@ -298,7 +300,8 @@ class SessionCoordinator:
             base=base,
             preview_limit=preview_limit,
             on_statement=on_statement,
-            **({"explain": True} if explain else {}),
+            explain=explain,
+            database=database,
         )
         handle.future.add_done_callback(
             lambda fut: self._dispatcher.post(lambda: self._on_script(engine, fut))
@@ -338,7 +341,13 @@ class SessionCoordinator:
         changed = any(
             r.status is not StatementStatus.SKIPPED and r.statement.may_change_state for r in run.results
         )
-        if changed and self.state is SessionState.READY:
+        # G7: el `USE` de la base de una celda cambia la base en uso sin ser una sentencia del usuario
+        moved = (
+            run.current_database is not None
+            and self._catalog is not None
+            and catalog_key(run.current_database) != catalog_key(self._catalog.default)
+        )
+        if (changed or moved) and self.state is SessionState.READY:
             self.refresh_catalog()  # GD-SES-003 (SQL): ATTACH/DETACH/CREATE/DROP se reflejan en el panel
 
     def mark_data_changed(self) -> None:
