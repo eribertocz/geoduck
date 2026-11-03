@@ -88,15 +88,22 @@ class LoadFlow:
         self._parent = parent
         self._dialog_factory = dialog_factory or LoadDialog
         self._pending: dict[int, tuple[str, str, tuple[str, str, str] | None]] = {}
+        self._modes: dict[int, LoadMode | None] = {}
         self._names: dict[int, str] = {}
         self._kinds: dict[int, str | None] = {}
         self._kind: str | None = None
         self.loading = False
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
-    def start(self, sql: str, title: str, source: tuple[str, str, str] | None = None) -> None:
+    def start(
+        self,
+        sql: str,
+        title: str,
+        source: tuple[str, str, str] | None = None,
+        mode: LoadMode | None = None,
+    ) -> None:
         """Comienza el flujo para una consulta de lectura repetible (o una tabla/vista del explorador,
-        con su `source`)."""
+        con su `source`). Con `mode` («Cargar en QGIS ▾»), el diálogo se abre con esa modalidad marcada."""
         try:
             token = self._coordinator.prepare_load(sql)
         except GeoDuckError as exc:
@@ -104,6 +111,7 @@ class LoadFlow:
             return
         self._pending[token] = (sql, title, tuple(source) if source else None)  # type: ignore[arg-type]
         self._kinds[token] = source[3] if source and len(source) > 3 else None
+        self._modes[token] = mode
 
     def detach(self) -> None:
         self._unsubscribe()
@@ -112,11 +120,13 @@ class LoadFlow:
         if isinstance(event, LoadPrepared) and event.token in self._pending:
             sql, title, source = self._pending.pop(event.token)
             self._kind = self._kinds.pop(event.token, None)
-            self._ask(sql, title, event.plan, tuple(source[:3]) if source else None)  # type: ignore[arg-type]
+            mode = self._modes.pop(event.token, None)
+            self._ask(sql, title, event.plan, tuple(source[:3]) if source else None, mode)  # type: ignore[arg-type]
         elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
             self._pending.pop(event.token)
             self._on_message(tr("No se puede cargar: ") + event.message)
             self._kinds.pop(event.token, None)
+            self._modes.pop(event.token, None)
         elif isinstance(event, LoadStarted):
             self.loading = True
             self._names[event.load_id] = event.request.layer_name
@@ -133,8 +143,17 @@ class LoadFlow:
                 tr("Carga cancelada.") if event.cancelled else tr("Error al cargar: ") + event.message
             )
 
-    def _ask(self, sql: str, title: str, plan: LoadPlan, source: tuple[str, str, str] | None = None) -> None:
+    def _ask(
+        self,
+        sql: str,
+        title: str,
+        plan: LoadPlan,
+        source: tuple[str, str, str] | None = None,
+        mode: LoadMode | None = None,
+    ) -> None:
         dialog = self._dialog_factory(sql, title, plan, self._coordinator.load_modes(), self._parent)
+        if mode is not None:
+            dialog.select_mode(mode)  # el resto del diálogo de G4 no cambia
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:

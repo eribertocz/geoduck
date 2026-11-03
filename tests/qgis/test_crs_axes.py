@@ -327,7 +327,7 @@ def _loaded(session):
 
 def test_spatial_is_not_loaded_without_consent(session):
     dock, asked = _dock(session, [False])
-    dock.spatial_button.click()
+    dock.spatial_action.trigger()
     assert wait_for(lambda: bool(asked), TIMEOUT)
     assert asked == ["Activar spatial"]
     assert "No se cargó spatial" in dock.message_label.text()
@@ -338,7 +338,7 @@ def test_spatial_is_not_loaded_without_consent(session):
 @needs_spatial
 def test_spatial_loads_for_this_session_with_consent(session):
     dock, asked = _dock(session, [True])
-    dock.spatial_button.click()
+    dock.spatial_action.trigger()
     assert wait_for(lambda: any(isinstance(e, SpatialActivated) for e in session.events), TIMEOUT)
     assert asked == ["Activar spatial"]  # ya instalada: no se pregunta por INSTALL
     assert _loaded(session)

@@ -15,15 +15,17 @@ from typing import Any
 
 from qgis.core import QgsApplication
 from qgis.gui import QgsCodeEditorSQL
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QFont, QKeySequence, QResizeEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
     QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMenu,
     QShortcut,
     QSplitter,
     QStackedWidget,
@@ -45,6 +47,7 @@ from geoduck.app.events import (
     StatementFinished,
 )
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import (
     DEFAULT_PREVIEW_LIMIT,
@@ -57,6 +60,7 @@ from geoduck.domain.sql import (
     result_title,
 )
 from geoduck.ui.i18n import tr
+from geoduck.ui.load_dialog import OPTIONS
 from geoduck.ui.widgets import secondary, secondary_color
 
 _STATUS_TEXT = {
@@ -66,6 +70,9 @@ _STATUS_TEXT = {
     StatementStatus.SKIPPED: "No ejecutada",
 }
 _MAX_COLUMN_WIDTH = 260
+_STATUS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+#: Filtros del registro: todas las filas, solo OK, solo Error (ui-ux-spec §8).
+LOG_FILTERS = ("all", "ok", "error")
 
 
 def offset_from(text: str, line: int, index: int) -> int:
@@ -142,10 +149,15 @@ class ResultView(QWidget):
             )
         )
         self.stale_label.hide()
+        # «Cargar en QGIS ▾» (ui-ux-spec §8): clic = diálogo de G4; flecha = las tres modalidades
         self.load_button = _tool_button(
             "mActionAddLayer.svg", tr("Cargar en QGIS"), tr("Carga el resultado completo como capa de QGIS")
         )
         self.load_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.load_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.load_menu = QMenu(self.load_button)
+        self.load_menu.setToolTipsVisible(True)
+        self.load_button.setMenu(self.load_menu)
         self.loadable = self.statement.replayable
         if not self.loadable:
             self.load_button.setToolTip(
@@ -228,6 +240,11 @@ def _is_numeric(kind: str) -> bool:
 
 
 class SqlPanel(QWidget):
+    #: (todas, OK, Error) del registro, al cambiar.
+    log_counts_changed = pyqtSignal(int, int, int)
+    #: Filtro del registro elegido («all», «ok», «error»).
+    log_filter_changed = pyqtSignal(str)
+
     def __init__(
         self,
         coordinator: SessionCoordinator,
@@ -266,7 +283,8 @@ class SqlPanel(QWidget):
         self.splitter.setHandleWidth(8)
         self.splitter.addWidget(_section(tr("Editor"), self.editor))
         self.splitter.addWidget(_section(tr("Resultados"), self.results_stack))
-        self.splitter.addWidget(_section(tr("Registro"), self.log))
+        self.log_section = _section(tr("Registro"), self.log, self._build_log_filters())
+        self.splitter.addWidget(self.log_section)
         for index, stretch in enumerate((3, 5, 2)):
             self.splitter.setStretchFactor(index, stretch)
         self.splitter.setCollapsible(0, False)
@@ -361,6 +379,76 @@ class SqlPanel(QWidget):
         self.results_stack.addWidget(self.results)
         self.results_stack.setMinimumHeight(60)
 
+    def _build_log_filters(self) -> QWidget:
+        """Todo / OK / Error con su número (ui-ux-spec §8, AT-UX-009). Filtrar oculta filas, no las borra."""
+        box = QWidget()
+        row = QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        self.log_filter_group = QButtonGroup(box)
+        self.log_filter_group.setExclusive(True)
+        self.log_filter_buttons: dict[str, QToolButton] = {}
+        for key in LOG_FILTERS:
+            button = QToolButton()
+            button.setCheckable(True)
+            button.setAutoRaise(True)
+            button.setObjectName(f"geoduckLogFilter_{key}")
+            self.log_filter_group.addButton(button)
+            self.log_filter_buttons[key] = button
+            button.clicked.connect(lambda _c=False, k=key: self.set_log_filter(k))
+            row.addWidget(button)
+        self.log_filter = "all"
+        self.log_filter_buttons["all"].setChecked(True)
+        self._update_log_counts()
+        return box
+
+    def dock_log(self, tabs: QTabWidget | None) -> None:
+        """Dónde va el registro: con `tabs` (panel acoplado), en su propia pestaña; sin ellas (ventana), como
+        tercera zona del divisor, debajo del editor y los resultados (plegable). El mismo widget."""
+        if tabs is None:
+            self.splitter.addWidget(self.log_section)  # addWidget lo saca de la pestaña
+            self.splitter.setStretchFactor(2, 2)
+            self.splitter.setCollapsible(2, True)
+        else:
+            tabs.insertTab(2, self.log_section, tr("Registro"))
+
+    def log_counts(self) -> tuple[int, int, int]:
+        """(todas, OK, Error) del registro."""
+        statuses = [self._row_status(r) for r in range(self.log.rowCount())]
+        return len(statuses), statuses.count("ok"), statuses.count("error")
+
+    def _row_status(self, row: int) -> str:
+        item = self.log.item(row, 3)
+        if item is None:
+            return "other"
+        status = item.data(_STATUS_ROLE)
+        if status is StatementStatus.OK:
+            return "ok"
+        if status is StatementStatus.FAILED:
+            return "error"
+        return "other"  # cancelada o no ejecutada: solo en «Todo»
+
+    def set_log_filter(self, key: str) -> None:
+        if key not in LOG_FILTERS:
+            key = "all"
+        self.log_filter = key
+        self.log_filter_buttons[key].setChecked(True)
+        for row in range(self.log.rowCount()):
+            self.log.setRowHidden(row, key != "all" and self._row_status(row) != key)
+        self.log_filter_changed.emit(key)
+
+    def _update_log_counts(self) -> None:
+        total, ok, errors = self.log_counts()
+        for key, text, number in (
+            ("all", tr("Todo"), total),
+            ("ok", tr("OK"), ok),
+            ("error", tr("Error"), errors),
+        ):
+            button = self.log_filter_buttons[key]
+            button.setText(f"{text} ({number})")
+            button.setAccessibleName(f"{text}: {number}")
+        self.log_counts_changed.emit(total, ok, errors)
+
     def _build_log(self) -> None:
         self.log = QTableWidget(0, 6)
         self.log.setHorizontalHeaderLabels(
@@ -437,6 +525,7 @@ class SqlPanel(QWidget):
         if result.preview is not None:
             view = ResultView(event, title)
             view.load_button.clicked.connect(lambda _c=False, v=view: self._load(v))
+            view.load_menu.aboutToShow.connect(lambda v=view: self._fill_load_menu(v))
             view.load_button.setEnabled(view.loadable and self._coordinator.state is SessionState.READY)
             index = self.results.addTab(view, f"{result.statement.index + 1} · {title}")
             self.results.setTabToolTip(index, result.statement.text.strip()[:500])
@@ -474,8 +563,9 @@ class SqlPanel(QWidget):
         )
         for col, value in enumerate(values):
             item = QTableWidgetItem(value)
-            if col == 5:
+            if col == 5:  # mensaje completo: ayuda y nombre accesible (AT-UX-009)
                 item.setToolTip(value)
+                item.setData(Qt.ItemDataRole.AccessibleTextRole, value)
             if col in (0, 1, 4):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             if r.status is StatementStatus.FAILED:
@@ -483,7 +573,10 @@ class SqlPanel(QWidget):
                 font.setBold(True)
                 item.setFont(font)
             item.setData(Qt.ItemDataRole.UserRole, (event.run_id, r.statement.index))
+            item.setData(_STATUS_ROLE, r.status)
             self.log.setItem(row, col, item)
+        self.log.setRowHidden(row, self.log_filter != "all" and self._row_status(row) != self.log_filter)
+        self._update_log_counts()
         self.log.scrollToBottom()
 
     def _select_logged_statement(self, row: int, _column: int) -> None:
@@ -511,9 +604,24 @@ class SqlPanel(QWidget):
                 widget.deleteLater()
         self.results_stack.setCurrentWidget(self.empty_results)
 
-    def _load(self, view: ResultView) -> None:
+    def _load(self, view: ResultView, mode: LoadMode | None = None) -> None:
         if self._load_flow is not None and view.loadable:
-            self._load_flow.start(view.statement.text, view.title)
+            self._load_flow.start(view.statement.text, view.title, mode=mode)
+
+    def _fill_load_menu(self, view: ResultView) -> None:
+        """Las tres modalidades con su descripción; las no disponibles, desactivadas con el motivo."""
+        menu = view.load_menu
+        menu.clear()
+        reasons = self._coordinator.load_modes()
+        for mode, (label, help_text) in OPTIONS.items():
+            reason = reasons.get(mode)
+            action = menu.addAction(f"{label} — {help_text if reason is None else reason}")
+            action.setObjectName(f"geoduckLoad_{mode.value}")
+            action.setToolTip(help_text if reason is None else reason)
+            action.setEnabled(
+                reason is None and view.loadable and self._coordinator.state is SessionState.READY
+            )
+            action.triggered.connect(lambda _c=False, m=mode, v=view: self._load(v, m))
 
     def result_views(self) -> list[ResultView]:
         views = [self.results.widget(i) for i in range(self.results.count())]

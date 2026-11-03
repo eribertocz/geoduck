@@ -165,6 +165,14 @@ class LoadDialog(QDialog):
             button.toggled.connect(lambda _checked: self._refresh())
         self._refresh()
 
+    def select_mode(self, mode: LoadMode) -> bool:
+        """Marca la modalidad elegida en «Cargar en QGIS ▾» (ui-ux-spec §8). False si no está disponible."""
+        button = self.mode_buttons.get(mode)
+        if button is None or not button.isEnabled():
+            return False
+        button.setChecked(True)
+        return True
+
     # -- geometrías ----------------------------------------------------------------------------
 
     def _add_geometry(self, name: str, *, checked: bool, fmt: GeometryFormat | None = None) -> None:

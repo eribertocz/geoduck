@@ -10,7 +10,7 @@ bajo la base raíz, acceso de cada base y búsqueda sobre esa instantánea (nunc
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtWidgets import QMenu, QTreeWidget, QTreeWidgetItem, QWidget
+from qgis.PyQt.QtWidgets import QAction, QMenu, QTreeWidget, QTreeWidgetItem, QWidget
 
 from geoduck.domain.catalog import AccessMode, AttachedDatabase, CatalogObject, CatalogSnapshot, ObjectKind
 from geoduck.domain.sql_text import quote_identifier
@@ -38,6 +38,8 @@ class CatalogExplorer(QTreeWidget):
         self.setMinimumHeight(140)
         self._catalog: CatalogSnapshot | None = None
         self._filter = ""
+        #: Acciones del menú contextual de una base (las pone el workspace).
+        self.database_actions: list[QAction] = []
 
     def show_catalog(self, catalog: CatalogSnapshot | None) -> None:
         self._catalog = catalog
@@ -129,8 +131,21 @@ class CatalogExplorer(QTreeWidget):
             item.setExpanded(True)
         return visible
 
+    def database_menu(self, item: QTreeWidgetItem) -> QMenu | None:
+        """Menú de una base (ui-ux-spec §8): sus acciones, p. ej. «Desadjuntar» con las protecciones de G3.
+        Selecciona antes la base, para que las acciones se apliquen a ella."""
+        if item.parent() is not None or not item.data(0, _DATABASE_ROLE) or not self.database_actions:
+            return None
+        self.setCurrentItem(item)
+        menu = QMenu(self)
+        menu.addActions(self.database_actions)
+        return menu
+
     def _context_menu(self, pos: object) -> None:
         item = self.itemAt(pos)  # type: ignore[arg-type]
+        if item is not None and (menu := self.database_menu(item)) is not None:
+            menu.exec(self.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
+            return
         sql = item.data(0, _OBJECT_ROLE) if item is not None else None
         if not sql:
             return
