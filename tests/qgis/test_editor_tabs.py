@@ -120,15 +120,15 @@ def test_errors_are_shown_in_the_tab_that_ran(ready):
 
 def test_open_in_editor_copies_the_exact_sql_to_a_new_tab_without_running(ready):
     _plugin, panel, coordinator = ready
-    script = "CREATE TABLE h AS SELECT 1 AS x;\n-- comentario\nSELECT  x   FROM h  WHERE x = 1;"
+    # sin comentarios entre sentencias: DuckDB 1.5 los asigna a la siguiente y 2.0 a la anterior
+    script = "CREATE TABLE h AS SELECT 1 AS x;\nSELECT  x   FROM h  WHERE x = 1;"
     run(panel, coordinator, script)
     rows = panel.log.rowCount()
     assert rows == 2
     opened = panel.open_logged_sql(1)
     assert opened is panel.editor and names(panel)[-1] == "Consulta 2"
-    assert opened.text() == "SELECT  x   FROM h  WHERE x = 1;"  # tal cual, con su «;»
-    # la sentencia es la que delimita el parser de DuckDB (aquí incluye el comentario que la sigue)
-    assert panel.logged_sql(0).startswith("CREATE TABLE h AS SELECT 1 AS x;")
+    assert opened.text() == "SELECT  x   FROM h  WHERE x = 1"  # tal cual, sin el «;» final
+    assert panel.logged_sql(0) == "CREATE TABLE h AS SELECT 1 AS x"
     wait_for(lambda: False, 0.3)
     assert panel.log.rowCount() == rows  # no se ejecutó nada
 
