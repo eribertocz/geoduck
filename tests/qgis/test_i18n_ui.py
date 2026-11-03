@@ -41,7 +41,7 @@ plugin = geoduck.classFactory(iface); plugin.initGui()
 panel = plugin.content.sql_panel
 out = {
     "run": panel.run_all_button.accessibleName(),
-    "load": plugin.content.sql_panel.load_button.text(),
+    "load": plugin.content.sql_panel.load_button.accessibleName(),
     "state": plugin.content.state_label.text(),
     "tab": panel.editor_tabs.tabText(0),
     "after": [QgsApplication.locale(), QLocale().name()],
@@ -80,7 +80,7 @@ def run_qgis(locale: str, tmp_path: Path) -> dict:
 
 def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
     out = run_qgis("en_US", tmp_path)
-    assert (out["run"], out["tab"], out["state"]) == ("Run", "Query 1", "No session")
+    assert (out["run"], out["tab"], out["state"]) == ("Run all", "Query 1", "No session")
     assert "Load into QGIS" in out["load"]
     assert "cannot be empty" in out["error"]  # también los mensajes del motor
     assert out["after"] == out["before"]  # el idioma de QGIS no cambia
@@ -88,7 +88,7 @@ def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
 
 def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
     out = run_qgis("es_ES", tmp_path)
-    assert (out["run"], out["tab"], out["state"]) == ("Ejecutar", "Consulta 1", "Sin sesión")
+    assert (out["run"], out["tab"], out["state"]) == ("Ejecutar todo", "Consulta 1", "Sin sesión")
     assert "Cargar en QGIS" in out["load"]
     assert "no puede estar vacío" in out["error"]
     assert out["after"] == out["before"]
@@ -96,7 +96,7 @@ def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
 
 def test_another_language_falls_back_to_english(tmp_path):
     out = run_qgis("de_DE", tmp_path)
-    assert out["run"] == "Run" and out["after"] == out["before"]
+    assert out["run"] == "Run all" and out["after"] == out["before"]
 
 
 def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, monkeypatch):
@@ -115,6 +115,6 @@ def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, mon
         worker.start()
         worker.join(5)
         assert results == [spanish_catalog()["Operation cancelled"]]
-        assert i18n.tr("Run") == "Ejecutar"
+        assert i18n.tr("Run all") == "Ejecutar todo"
     finally:
         ui_i18n.uninstall()

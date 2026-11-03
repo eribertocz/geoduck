@@ -27,6 +27,8 @@ class CellOutcome:
     run: ScriptRun | None = None
     #: Motivo si la celda no llegó a ejecutarse (base desadjuntada, petición rechazada…).
     error: str | None = None
+    #: El motivo ya se publicó como evento (`ScriptRejected`): la interfaz no lo repite.
+    notified: bool = False
 
     @property
     def ok(self) -> bool:
@@ -49,6 +51,8 @@ class NotebookRunner:
         self._dispatcher = dispatcher
         self._batch: _Batch | None = None
         self._current: Cell | None = None
+        #: La celda y el `run_id` de su ejecución, recién pedida (sus eventos llevan ese `run_id`).
+        self.on_start: Callable[[Cell, int], None] = lambda _c, _r: None
         self.on_cell: Callable[[CellOutcome], None] = lambda _o: None
         self.on_done: Callable[[list[CellOutcome]], None] = lambda _o: None
         self._unsubscribe = coordinator.subscribe(self._on_event)
@@ -79,12 +83,14 @@ class NotebookRunner:
             return
         self._current = cell
         try:
-            self._coordinator.execute_sql(
+            run_id = self._coordinator.execute_sql(
                 cell.sql, RunScope.ALL, preview_limit=batch.preview_limit, database=cell.database
             )
         except GeoDuckError as exc:  # p. ej. sesión ocupada o DETACH con capas Conectadas sin guardar
             self._current = None
             self._record(CellOutcome(cell, error=exc.message))
+            return
+        self.on_start(cell, run_id)
 
     def _on_event(self, event: AppEvent) -> None:
         cell = self._current
@@ -96,7 +102,7 @@ class NotebookRunner:
             self._record(CellOutcome(cell, run=event.run))
         elif isinstance(event, ScriptRejected):
             self._current = None
-            self._record(CellOutcome(cell, error=event.message))
+            self._record(CellOutcome(cell, error=event.message, notified=True))
 
     def _record(self, outcome: CellOutcome) -> None:
         batch = self._batch

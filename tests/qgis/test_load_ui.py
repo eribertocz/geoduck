@@ -47,9 +47,8 @@ def plugin(iface):
 def run_sql(plugin, sql):
     panel = plugin.content.sql_panel
     panel.editor.setText(sql)
-    from geoduck.domain.sql import RunScope
 
-    panel.execute(RunScope.ALL)
+    panel.run_cell(panel.cell)
     assert wait_for(lambda: plugin.coordinator.state is SessionState.READY and panel.result_views(), TIMEOUT)
     return panel.result_views()[-1]
 

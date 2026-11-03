@@ -11,7 +11,6 @@ from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 
 from geoduck.domain.session import SessionState
-from geoduck.domain.sql import RunScope
 from tests.qgis.conftest import wait_for
 from tests.qgis.test_sql_panel import run
 from tests.qgis.test_workspace import editor_state, plugin, qgis_window, start, toggle  # noqa: F401
@@ -43,7 +42,7 @@ def test_each_tab_keeps_its_text_and_only_the_active_one_runs(ready):
     assert first.text() == "CREATE TABLE a AS SELECT 1 AS x"
     assert second.text() == "SELECT 42 AS respuesta"
     assert panel.current_view().preview.rows == ((42,),)
-    panel.editor_tabs.setCurrentWidget(first)
+    panel.editor_tabs.setCurrentIndex(0)  # cada pestaña es un cuaderno (G7)
     assert panel.editor is first and coordinator.state is SessionState.READY
 
 
@@ -82,7 +81,7 @@ def test_a_tab_cannot_close_while_its_statement_runs(ready):
     messages = []
     panel._on_message = messages.append
     panel.editor.setText("SELECT count(*) FROM range(3000000000)")
-    panel.execute(RunScope.ALL)
+    panel.run_cell(panel.cell)
     assert wait_for(lambda: coordinator.state is SessionState.BUSY)
     assert not panel.close_current_editor_tab() and panel.editor_tabs.count() == 1
     assert messages and "ejecutando" in messages[-1]
@@ -107,7 +106,7 @@ def test_errors_are_shown_in_the_tab_that_ran(ready):
     _plugin, panel, coordinator = ready
     first = panel.editor
     first.setText("SELECT * FROM no_existe")
-    panel.execute(RunScope.ALL)
+    panel.run_cell(panel.cell)
     panel.new_editor_tab("SELECT 1")  # el usuario cambia de pestaña mientras tanto
     assert wait_for(lambda: coordinator.state is not SessionState.BUSY and not panel._running)
     row = panel.log.rowCount() - 1
@@ -154,36 +153,15 @@ def test_the_history_is_not_written_to_disk(ready):
     assert not any("secreto-123" in v for v in stored.values())
 
 
-# -- AT-SQL-010: «Explicar» ---------------------------------------------------------------------------------
+# -- AT-SQL-010: el plan se pide escribiendo EXPLAIN (G7 retira el botón «Explicar») ----------------------
 
 
-def test_explain_shows_the_plan_and_the_table_does_not_change(ready):
+def test_explain_written_in_the_cell_shows_the_plan_and_the_table_does_not_change(ready):
     _plugin, panel, coordinator = ready
     run(panel, coordinator, "CREATE TABLE e AS SELECT 1 AS x")
-    panel.editor.setText("SELECT 1 AS antes;\nDELETE FROM e;")
-    panel.editor.setCursorPosition(1, 3)  # la sentencia bajo el cursor
-    panel.explain_button.click()
-    assert wait_for(lambda: coordinator.state is SessionState.READY and not panel._running)
+    run(panel, coordinator, "EXPLAIN DELETE FROM e")
     view = panel.current_view()
-    assert view is not None and view.statement.text == "EXPLAIN DELETE FROM e;"
-    assert view.preview is not None and view.preview.rows  # el plan
+    assert view is not None and view.preview is not None and view.preview.rows  # el plan
     assert not view.loadable  # un plan no se carga en QGIS
     run(panel, coordinator, "SELECT count(*) AS n FROM e")
     assert panel.current_view().preview.rows == ((1,),)  # nada se borró
-
-
-@pytest.mark.parametrize(
-    "text", ["CREATE TABLE nunca AS SELECT 1; SELECT 2", "CREATE TABLE nunca AS SELECT 1"]
-)
-def test_explain_refuses_several_statements_or_other_types_without_running(ready, text):
-    _plugin, panel, coordinator = ready
-    messages = []
-    panel._on_message = messages.append
-    rows = panel.log.rowCount()
-    panel.editor.setText(text)
-    panel.editor.selectAll()
-    panel.explain_button.click()
-    assert wait_for(lambda: coordinator.state is SessionState.READY and not panel._running)
-    assert messages and "Explicar" in messages[-1]
-    assert "nunca" not in str(coordinator.catalog)
-    assert panel.log.rowCount() == rows

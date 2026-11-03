@@ -9,7 +9,6 @@ from qgis.PyQt.QtWidgets import QLabel, QSplitter
 
 import geoduck
 from geoduck.domain.session import ErrorCause, SessionState
-from geoduck.domain.sql import RunScope
 from geoduck.ui import theme
 from geoduck.ui.sql_panel import LOG_MESSAGE, LOG_NAME, LOG_STATUS
 from tests.qgis.conftest import wait_for
@@ -28,9 +27,9 @@ def session(iface):
     plugin.unload()
 
 
-def run(panel, coordinator, text, scope=RunScope.ALL):
+def run(panel, coordinator, text):
     panel.editor.setText(text)
-    {RunScope.ALL: panel.run_all_button, RunScope.CURRENT: panel.run_current_button}[scope].click()
+    panel.run_all_button.click()
     assert wait_for(lambda: coordinator.state is not SessionState.BUSY and not panel._running)
 
 
@@ -95,11 +94,11 @@ def test_error_marks_the_line_and_stops(session):
     assert "nada" in plugin.content.message_label.text()
 
 
-def test_current_statement_only(session):
+def test_selection_only(session):
     _plugin, panel, coordinator = session
     panel.editor.setText("CREATE TABLE a(x INT);\nINSERT INTO a VALUES (1);")
-    panel.editor.setCursorPosition(0, 3)
-    panel.run_current_button.click()
+    panel.editor.setSelection(0, 0, 0, 22)
+    panel.run_selection(panel.cell)
     assert wait_for(lambda: coordinator.state is SessionState.READY and not panel._running)
     assert log(panel) == [("Crear a", "OK")]
 
@@ -137,20 +136,22 @@ def test_aborted_transaction_shows_rollback_and_recovers(session):
 
 
 def test_editor_results_and_log_are_in_a_resizable_splitter(session):
+    """G7: cada celda lleva su editor y su resultado; el divisor separa las celdas del registro."""
     plugin, panel, _coordinator = session
     splitter = panel.splitter
     assert isinstance(splitter, QSplitter) and splitter.orientation() == Qt.Orientation.Vertical
-    assert splitter.count() == 3  # editor | resultados | registro
+    assert splitter.count() == 2  # celdas (editor + resultado) | registro
     assert splitter.isAncestorOf(panel.editor)
     assert splitter.isAncestorOf(panel.results_stack) and splitter.isAncestorOf(panel.log)
-    assert not splitter.isCollapsible(0) and not splitter.isCollapsible(1)  # el registro sí se puede plegar
+    assert panel.cell.isAncestorOf(panel.editor) and panel.cell.isAncestorOf(panel.results_stack)
+    assert not splitter.isCollapsible(0) and splitter.isCollapsible(1)  # el registro sí se puede plegar
     plugin.content.resize(460, 900)
     plugin.content.show()
     plugin.content.tabs.setCurrentWidget(panel)
-    splitter.setSizes([500, 200, 100])
+    splitter.setSizes([500, 300])
     first = splitter.sizes()[0]
-    splitter.setSizes([150, 550, 100])
-    assert splitter.sizes()[0] < first  # el usuario ajusta la altura del editor
+    splitter.setSizes([300, 500])
+    assert splitter.sizes()[0] < first  # el usuario ajusta la altura de las celdas
 
 
 def test_explicit_names_from_comments_and_empty_state(session):

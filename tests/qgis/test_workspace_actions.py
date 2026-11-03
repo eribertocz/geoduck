@@ -214,7 +214,7 @@ def test_the_panel_log_tab_counts_errors_and_the_filter_is_remembered(iface):
     assert content.tabs.tabText(2) == "Registro (1)"
     panel.log_filter_buttons["error"].click()
     toggle(first.workspace)  # ventana: el registro vuelve debajo del editor y los resultados
-    assert panel.splitter.widget(2) is panel.log_section and content.tabs.count() == 0  # sin pestañas
+    assert panel.splitter.widget(1) is panel.log_section and content.tabs.count() == 0  # sin pestañas
     first.unload()
     iface.mainWindow().close()
     second_iface = qgis_window(FakeIface())
