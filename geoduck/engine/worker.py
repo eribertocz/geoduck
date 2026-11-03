@@ -437,6 +437,7 @@ class SessionWorker:
         preview_limit: int = DEFAULT_PREVIEW_LIMIT,
         on_statement: StatementListener | None = None,
         guard: Callable[[SqlStatement], str | None] | None = None,
+        explain: bool = False,
     ) -> OperationHandle[ScriptRun]:
         """Ejecuta SQL del usuario en una sola operación serial (`geoduck.engine.sql`). Se cancela con
         `cancel(handle.op_id)`."""
@@ -452,6 +453,7 @@ class SessionWorker:
                 preview_limit=preview_limit,
                 on_statement=on_statement,
                 guard=guard,
+                explain=explain,
             )
         )
 

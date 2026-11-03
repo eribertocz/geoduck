@@ -21,6 +21,10 @@ DEFAULT_PREVIEW_LIMIT = 200
 #: completo en QGIS (GD-SQL-006); todas las demás cambian, o pueden cambiar, estructura, datos o estado.
 _READ_TYPES = frozenset({"SELECT"})
 _PLAN_TYPES = frozenset({"EXPLAIN"})
+#: Lo que «Explicar» acepta (G6 · E3): lecturas y DML. Verificado con DuckDB 1.5.0 y 2.0.0: `EXPLAIN` de
+#: INSERT, UPDATE o DELETE no los ejecuta. Lo demás (configuración, transacciones, extensiones, ATTACH…) se
+#: rechaza aunque DuckDB lo admita, para no arriesgar efectos (ADR-0011).
+EXPLAINABLE_TYPES = frozenset({"SELECT", "INSERT", "UPDATE", "DELETE"})
 
 
 class OutputKind(str, Enum):

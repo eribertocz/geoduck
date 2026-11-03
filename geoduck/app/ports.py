@@ -91,9 +91,11 @@ class SessionEngine(Protocol):
         preview_limit: int = 200,
         on_statement: Callable[[StatementResult], None] | None = None,
         guard: Callable[[SqlStatement], str | None] | None = None,
+        explain: bool = False,
     ) -> ScriptHandle:
         """Ejecuta SQL del usuario en una operación serial; `on_statement` llega en el hilo del motor.
-        `guard` (hilo del motor) puede vetar el script entero antes de ejecutar nada: devuelve el motivo."""
+        `guard` (hilo del motor) puede vetar el script entero antes de ejecutar nada: devuelve el motivo.
+        `explain`: «Explicar» (una sentencia, como `EXPLAIN`; G6 · E3)."""
         ...
 
     def load_query(

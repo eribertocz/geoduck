@@ -34,8 +34,8 @@ Tag y release `v0.7.0a1` solo con autorización del propietario.
 
 ## 3. Por verificar (durante las entregas)
 
-- `duckdb_functions()` en DuckDB 1.5.0 y 2.0.0: columnas y funciones duplicadas por sobrecarga (E2).
-- `EXPLAIN` de una sentencia DML o DDL no la ejecuta (E3); si no se confirma, «Explicar» solo para lecturas.
+- ~~`duckdb_functions()` en DuckDB 1.5.0 y 2.0.0~~ Verificado en E2: nombres repetidos por sobrecarga, se toman sin repetir.
+- ~~`EXPLAIN` de una sentencia DML o DDL no la ejecuta (E3)~~ Verificado en E3 (ver fila E3).
 - Herramienta para compilar `.ts` → `.qm` disponible en la CI y en local; si el `.qm` se versiona o se genera
   al construir el ZIP (`tools/build_zip.py` rechaza archivos generados) (E4).
 
@@ -45,4 +45,5 @@ Tag y release `v0.7.0a1` solo con autorización del propietario.
 |---|---|---|
 | E0 SPEC y plan | En revisión | #85 |
 | E1 Columnas en el explorador | En revisión: `ListColumns` (worker, `duckdb_columns()` filtrado y citado), palabras clave de `duckdb_keywords()` para citar solo cuando hace falta, nodos perezosos («Cargando…», error en el nodo y reintento), icono de geometría por tipo, ayuda con tipo y nulos, doble clic y arrastre; tablas abiertas se reabren y releen tras DDL; respuestas de un catálogo anterior descartadas. AT-CAT-002 | #86 |
-| E2 Autocompletado | En revisión: `domain/completion.py` (sin Qt: comentarios y cadenas, sentencia del cursor, alias de FROM/JOIN/UPDATE, `x.`/`x.y.`, orden por grupos, máximo 200), vocabulario `duckdb_keywords()` + `duckdb_functions()` releído tras cambios de catálogo, columnas que faltan pedidas al worker; lista de QScintilla con iconos de QGIS, Ctrl+Espacio, Escape, Intro/Tab; autocompletado de `QgsCodeEditorSQL` desactivado. `duckdb_functions()` verificado en 1.5.0 y 2.0.0 (sin `pragma` ni operadores). AT-SQL-007 | — |
+| E2 Autocompletado | En revisión: `domain/completion.py` (sin Qt: comentarios y cadenas, sentencia del cursor, alias de FROM/JOIN/UPDATE, `x.`/`x.y.`, orden por grupos, máximo 200), vocabulario `duckdb_keywords()` + `duckdb_functions()` releído tras cambios de catálogo, columnas que faltan pedidas al worker; lista de QScintilla con iconos de QGIS, Ctrl+Espacio, Escape, Intro/Tab; autocompletado de `QgsCodeEditorSQL` desactivado. `duckdb_functions()` verificado en 1.5.0 y 2.0.0 (sin `pragma` ni operadores). AT-SQL-007 | #87 |
+| E3 Pestañas, historial y «Explicar» | En revisión: pestañas de editor en la misma sesión (cada ejecución ligada a su pestaña: errores y doble clic en el registro vuelven a ella; confirmación al cerrar con SQL; no se cierra la que se ejecuta; siempre queda una; Ctrl+T/Ctrl+W); «Abrir en el editor» en el registro (SQL exacto que delimitó DuckDB, solo en memoria); «Explicar» = `EXPLAIN` de una sentencia SELECT/INSERT/UPDATE/DELETE, rechazo sin ejecutar del resto. **Verificado** con DuckDB 1.5.0 y 2.0.0: `EXPLAIN` de INSERT/UPDATE/DELETE/CREATE/DROP/COPY/ALTER/SET/BEGIN no los ejecuta; aun así, solo lecturas y DML (ADR-0011: `EXPLAIN INSTALL` no se pudo comprobar sin red). AT-SQL-008, 009, 010 | — |
