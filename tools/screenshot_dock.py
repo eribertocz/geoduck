@@ -42,7 +42,7 @@ CREATE TABLE consumidores AS SELECT 838835 + i * 7919 % 99991 AS Consumidor,
    'SOPOCACHI, ECUADOR 2210'][i % 8 + 1]
    AS Direccion,
   CASE WHEN i % 3 = 0 THEN '0201' ELSE '0202' END AS CodigoMunicipio,
-  ('POINT(' || (-68.15 + i * 0.0001) || ' ' || (-16.5 + i * 0.0001) || ')')::GEOMETRY('OGC:CRS84') AS geometry
+  ('POINT(' || (-68.15 + i * 0.0001) || ' ' || (-16.5 + i * 0.0001) || ')')::GEOMETRY AS geometry
 FROM range(3000) t(i);
 CREATE TABLE medidores AS SELECT range AS id FROM range(10);
 CREATE TABLE zonas AS SELECT range AS id FROM range(4);

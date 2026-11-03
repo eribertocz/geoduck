@@ -25,6 +25,7 @@ from geoduck.app.events import (
     StatementFinished,
 )
 from geoduck.domain.load import LoadMode, LoadRequest
+from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
 from geoduck.engine.probe import probe_spatial
 from geoduck.infra.diagnostics import _check_spatial
@@ -89,6 +90,9 @@ def assert_lapaz_degrees(layer, authid):
 def activate(session):
     session.coordinator.activate_spatial(install=False)
     assert wait_for(lambda: any(isinstance(e, SpatialActivated) for e in session.events), TIMEOUT)
+    # El aviso llega antes de que la sesión vuelva a estar lista: sin esperar, el SQL siguiente
+    # chocaba con «estado BUSY» (carrera vista en la CI de E4b, QGIS 3.44 · DuckDB 2.0.0)
+    assert wait_for(lambda: session.coordinator.state is SessionState.READY, TIMEOUT)
 
 
 def run(session, sql):
