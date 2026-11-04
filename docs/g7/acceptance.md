@@ -1,10 +1,9 @@
 # G7 · `v0.8.0a1` Notebook — evidencia de aceptación (AT-NB-001..012)
 
-**Estado:** En revisión (E5). El cierre de G7 lo decide el propietario; no autoriza tag ni release `v0.8.0a1`.
+**Estado:** Aceptado (propietario, 2026-11-03). El tag y la release `v0.8.0a1` los hace el propietario.
 **Base verificada:** E4 (#97) sobre E0–E3 y sus correcciones (#91–#96). Las cifras de la CI de este PR se anotan
 en un comentario del PR. **Contrato:** `docs/g7/plan.md`, sql-editor-spec §4 y §7 («G7 · Notebook»), ui-ux-spec
-§10, `docs/g7/maqueta/`, `spec/qa/test-strategy.md`. Versión en `metadata.txt`: `0.6.0a1` (sin cambios; la sube
-el PR de versión, como en G5 y G6).
+§10, `docs/g7/maqueta/`, `spec/qa/test-strategy.md`. Versión en `metadata.txt`: `0.8.0a1` (PR de versión, como en G5).
 
 ## 1. Matriz
 

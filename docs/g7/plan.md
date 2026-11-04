@@ -1,6 +1,6 @@
 # G7 · `v0.8.0a1` Notebook — plan
 
-**Estado:** En aceptación (E0–E4 fusionados, #91–#97; decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..008.
+**Estado:** Cerrado (aceptado por el propietario, 2026-11-03; E0–E5 y ajustes fusionados, #91–#102; versión `0.8.0a1`). **Requisitos:** GD-NB-001..008.
 **Contrato:** sql-editor-spec §7 («G7 · Notebook»), ui-ux-spec §10, `docs/g7/maqueta/` (maqueta propuesta, a
 aprobar). Parte del workspace de G5 y del editor de G6: nada de G3/G4 cambia.
 
@@ -67,5 +67,7 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 | E4 Pulido, panel estrecho y accesibilidad | Fusionado: celda como tarjeta (borde de acento en la activa, márgenes fuera, base como etiqueta, editor desde una línea); resultado con fondo propio, sin pestaña si es uno solo y sin botones sin tabla (opción A); vista previa de 50 filas por defecto (10/50/200/1000); ventana: nombre del cuaderno arriba, resumen con «Celda N · base» y marcas de tipo; panel: selector y acciones en una fila, «Copiar», «Exportar ▾» y «Cargar» al pie para la celda activa; nombres accesibles, ayuda y foco de teclado en todas las acciones; inglés y español. AT-NB-010 | #97 |
 | E5 Aceptación | Fusionado: `docs/g7/acceptance.md` (AT-NB-001..011, decisiones, hallazgos F-108..F-113) y guía manual en Windows `docs/certification/notebook.md`; regresión completa en la CI | #98 |
 | Ajustes tras la prueba manual | Fusionado (propietario, 2026-11-03): selector de base como desplegable; barra lateral plegable (◫, Ctrl+B, recordada); sin columna «Resultado» (el resumen es la ayuda ⓘ); registro plegado en una línea (recordado); números de línea; vista previa fija de 20 filas, sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa»; grilla suave en la tabla del resultado. Se mantienen los tres pliegues | #99 |
-| Guardar cuadernos | En revisión: «Abrir cuaderno…» / «Guardar cuaderno» / «Guardar como…» (Ctrl+O, Ctrl+S) como `.sql` con marcas `-- %% cell · database: …`; autoguardado en su archivo; copia de recuperación en el perfil (activada por defecto, desactivable, `QLockFile` por sesión, borrada al cerrar bien) y «Recuperar / Descartar» tras un cierre inesperado. ADR-0014, GD-NB-008, AT-NB-012 | — |
-| Recordar cuadernos | En revisión: al iniciar QGIS vuelven los cuadernos guardados que estaban abiertos (solo sus rutas en `QgsSettings`, con el activo); la ayuda de cada cuaderno (lista, selector, nombre arriba) muestra su ruta o, sin archivo, su nombre | — |
+| Guardar cuadernos | Fusionado: «Abrir cuaderno…» / «Guardar cuaderno» / «Guardar como…» (Ctrl+O, Ctrl+S) como `.sql` con marcas `-- %% cell · database: …`; autoguardado en su archivo; copia de recuperación en el perfil (activada por defecto, desactivable, `QLockFile` por sesión, borrada al cerrar bien) y «Recuperar / Descartar» tras un cierre inesperado. ADR-0014, GD-NB-008, AT-NB-012 | #100 |
+| Recordar cuadernos | Fusionado: al iniciar QGIS vuelven los cuadernos guardados que estaban abiertos (solo sus rutas en `QgsSettings`, con el activo); la ayuda de cada cuaderno (lista, selector, nombre arriba) muestra su ruta o, sin archivo, su nombre | #101 |
+| Extensión con filtro | Fusionado: en la capa conectada, Capa → Filtrar… recalcula la extensión de lo filtrado (`ST_Extent_Agg` con `spatial` cargada; si no, recorrido de la geometría); si tarda más de la espera, se mantiene la de toda la capa con aviso | #102 |
+| Versión `0.8.0a1` | Este PR: `metadata.txt` y `__init__.py`; G7 cerrado. Tag y release: el propietario | — |
