@@ -99,7 +99,9 @@ Todo vive en el mismo `WorkspaceContent` de G5 y se ve igual en la ventana propi
 Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin incrustarla** (roadmap, decisión
 2026-11-03). Maqueta en `docs/g7/maqueta/`. Todo en el mismo `WorkspaceContent` de G5, en ventana y en panel.
 
-- **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
+- **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar; «⋯» con «Abrir cuaderno…»
+  (Ctrl+O), «Guardar cuaderno» (Ctrl+S), «Guardar cuaderno como…» y «Copia de recuperación si QGIS se cierra
+  inesperadamente», marcada; también en el panel, junto al selector; ADR-0014) encima de «Bases de datos» (el
   explorador de G5–G6, sin cambios). Es una barra lateral plegable, como la de la DuckDB UI: «◫» a la izquierda del
   nombre del cuaderno, o Ctrl+B, la oculta y la muestra; se recuerda (decisión del propietario, 2026-11-03). En el
   panel, los cuadernos van en el selector de la pestaña SQL.

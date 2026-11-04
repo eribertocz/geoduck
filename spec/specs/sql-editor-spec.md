@@ -61,7 +61,7 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 
 **P2 (evaluar):** diagnósticos en vivo, sugerencias sofisticadas y trazas de profiling; no son excusa para introducir editor web no justificado.
 
-**G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..006):** las pestañas de editor de
+**G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..008):** las pestañas de editor de
 G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa la sesión y el worker únicos.
 - **Celda** = editor SQL (con el autocompletado de G6; el plan, escribiendo `EXPLAIN`) + base de la celda + su resultado. Puede tener
   varias sentencias: se ejecutan en orden, como un script (§2); el resultado que se muestra es el de la última que
@@ -91,7 +91,12 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   (`GEOMETRY('EPSG:32719')`), la opción por defecto falla, así que exporta con `GEOPARQUET_VERSION 'V2'` y el SRC
   queda en el archivo (GDAL 3.13 lo lee como EPSG:32719). Nunca se inventa un SRC. El archivo se escribe primero
   como temporal oculto en la misma carpeta y se renombra al terminar.
-- Los cuadernos viven en memoria mientras dure el workspace; guardarlos en disco es GD-SQL-008 (sin fase).
+- **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
+  «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
+  (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda
+  solo tras cada cambio. La **copia de recuperación** (activada por defecto, desactivable) guarda el SQL y la base
+  de cada celda de todos los cuadernos en el perfil de QGIS y se borra al cerrar bien; si QGIS se cerró por un
+  fallo, al abrir GeoDuck se ofrece recuperarla. Nunca se guardan resultados ni el historial.
 - Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
   autocompletado.
 

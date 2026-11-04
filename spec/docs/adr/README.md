@@ -15,5 +15,6 @@
 | [ADR-0011](0011-coexistence-with-other-duckdb-plugins.md) | Aceptado (2026-11-01) | Convivencia con otros complementos DuckDB; sin modificaciones silenciosas |
 | [ADR-0012](0012-three-load-modes.md) | Aceptado (2026-11-02) | Tres modalidades de carga: Memoria, Instantánea (GeoPackage `/vsimem`) y Conectada (proveedor PyQGIS editable) |
 | [ADR-0013](0013-single-workspace-dual-presentation.md) | Aceptado (2026-11-02) | Un solo workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado |
+| [ADR-0014](0014-notebooks-on-disk.md) | Aceptado (2026-11-03) | Cuadernos en disco: archivo `.sql` elegido por el usuario (con autoguardado) y copia de recuperación en el perfil, activada por defecto |
 
 Los ADR registran decisiones y compensaciones. Cambios que afecten compatibilidad, propiedad de capa o seguridad necesitan uno nuevo, no edición silenciosa del historial.

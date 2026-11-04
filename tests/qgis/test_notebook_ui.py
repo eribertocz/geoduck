@@ -10,10 +10,14 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QTableWidgetSelectionRange
 
+import geoduck
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.load import LoadMode
+from geoduck.domain.notebook import Cell, Notebook
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
+from geoduck.ui.notebook_store import RecoveryStore
+from geoduck.ui.sql_panel import SqlPanel
 from tests.qgis.conftest import wait_for
 from tests.qgis.test_load_ui import AutoDialog
 from tests.qgis.test_workspace import plugin, qgis_window, start, toggle  # noqa: F401
@@ -324,7 +328,7 @@ def test_cancel_an_export_leaves_no_file(ready, tmp_path):
     panel.cancel_button.click()
     idle(panel, coordinator)
     assert "cancel" in messages[-1].lower()
-    assert list(tmp_path.iterdir()) == []  # ni el archivo ni el temporal
+    assert [p.name for p in tmp_path.iterdir() if p.name != "recuperacion"] == []  # ni archivo ni temporal
 
 
 # -- AT-NB-007: lista de cuadernos (solo en memoria) ------------------------------------------------------
@@ -531,3 +535,109 @@ def test_line_numbers_and_ctrl_c_copies_the_selected_cells(ready):
     assert QApplication.clipboard().text() == "1\t10\n2\t20"
     assert table.showGrid()  # grilla suave
     assert cell.database_combo.itemIcon(0).isNull() is False  # se ve como selector de base
+
+
+# -- cuadernos en disco: archivo .sql, autoguardado y copia de recuperación (ADR-0014) -------------------
+
+
+def short_autosave(panel):
+    panel._save_timer.setInterval(10)
+
+
+def test_save_and_open_a_notebook_as_an_sql_file(ready, tmp_path):
+    _plugin, panel, _coordinator = ready
+    view = panel.notebook_view
+    view.cell_widgets()[0].editor.setText("SELECT 1 AS uno;")
+    second = view.add_cell(1, "SELECT 2 AS dos;")
+    second.cell.database = "memory"
+    asked = []
+    panel.choose_save_path = lambda suggested: (asked.append(suggested), str(tmp_path / "ventas"))[1]
+    assert panel.save_notebook()
+    target = tmp_path / "ventas.sql"  # se añade la extensión
+    assert asked[0].endswith("Consulta 1.sql")
+    assert target.read_text(encoding="utf-8") == (
+        "-- %% cell · database: memory\nSELECT 1 AS uno;\n\n-- %% cell · database: memory\nSELECT 2 AS dos;\n"
+    )
+    assert panel.notebook_list.names() == ["ventas"]  # el cuaderno se llama como su archivo
+    panel.confirm_close = lambda _name: True
+    panel.close_current_editor_tab()
+    assert panel.open_notebook_file(str(target))
+    assert panel.notebook_list.names() == ["ventas"]  # sustituye al cuaderno vacío
+    assert [(w.editor.text(), w.cell.database) for w in panel.notebook_view.cell_widgets()] == [
+        ("SELECT 1 AS uno;", "memory"),
+        ("SELECT 2 AS dos;", "memory"),
+    ]
+    assert panel.open_notebook_file(str(target)) and len(panel.notebook_views()) == 1  # ya abierto
+
+
+def test_a_plain_sql_file_opens_as_one_cell_and_ctrl_o_asks_for_it(ready, tmp_path):
+    _plugin, panel, _coordinator = ready
+    script = tmp_path / "script.sql"
+    script.write_text("SELECT 1;\nSELECT 2;\n", encoding="utf-8")
+    panel.choose_open_path = lambda _folder: str(script)
+    next(s for s in panel.shortcuts if s.key().toString() == "Ctrl+O").activated.emit()
+    assert panel.notebook_list.names() == ["script"]
+    assert [w.editor.text() for w in panel.notebook_view.cell_widgets()] == ["SELECT 1;\nSELECT 2;"]
+
+
+def test_a_saved_notebook_saves_itself_after_each_change(ready, tmp_path):
+    _plugin, panel, _coordinator = ready
+    short_autosave(panel)
+    panel.cell.editor.setText("SELECT 1;")
+    panel.choose_save_path = lambda _s: str(tmp_path / "auto.sql")
+    panel.save_notebook()
+    panel.cell.editor.setText("SELECT 'cambiado';")
+    target = tmp_path / "auto.sql"
+    assert wait_for(lambda: "cambiado" in target.read_text(encoding="utf-8"))
+    panel.notebook_view.add_cell(1, "SELECT 3;")
+    assert wait_for(lambda: target.read_text(encoding="utf-8").count("-- %% cell") == 2)
+
+
+def test_the_recovery_copy_is_written_and_deleted_on_a_clean_close(ready):
+    _plugin, panel, _coordinator = ready
+    short_autosave(panel)
+    panel.cell.editor.setText("SELECT 'sin guardar';")
+    assert wait_for(lambda: panel.recovery.folder is not None and (panel.recovery.folder / "1.sql").exists())
+    copy = (panel.recovery.folder / "1.sql").read_text(encoding="utf-8")
+    assert "SELECT 'sin guardar';" in copy
+    folder = panel.recovery.folder
+    panel.detach()  # cierre normal de QGIS: se borra
+    assert not folder.exists()
+
+
+def test_after_a_crash_geoduck_offers_to_recover_the_notebooks(recovery_folder, iface):
+    """«Otro QGIS» se colgó: su copia queda sin dueño (candado libre). Al abrir GeoDuck se ofrece."""
+    crashed = RecoveryStore(recovery_folder)
+    crashed.save([Notebook("Cobranza", [Cell("SELECT 'perdido';", "memory")])])
+    orphan = crashed.folder
+    crashed._lock.unlock()  # como si su proceso hubiera muerto sin borrarla
+    crashed._lock = None
+    asked = []
+    original = SqlPanel._ask_recover
+    SqlPanel._ask_recover = lambda _self, count: (asked.append(count), True)[1]
+    gd = geoduck.classFactory(qgis_window(iface))
+    try:
+        gd.initGui()
+        panel = gd.content.sql_panel
+        assert wait_for(lambda: asked == [1])
+        assert panel.notebook_list.names() == ["Cobranza"] and panel.editor.text() == "SELECT 'perdido';"
+        assert not orphan.exists()  # recuperada: la copia vieja se borra
+    finally:
+        SqlPanel._ask_recover = original
+        gd.unload()
+
+
+def test_the_recovery_copy_can_be_turned_off(ready):
+    _plugin, panel, _coordinator = ready
+    short_autosave(panel)
+    panel.cell.editor.setText("SELECT 1;")
+    assert wait_for(lambda: panel.recovery.folder is not None)
+    assert panel.recovery_action.isChecked()  # activada por defecto
+    folder = panel.recovery.folder
+    panel.recovery_action.trigger()  # apagar: se borra y no se escribe más
+    assert not folder.exists() and QgsSettings().value("geoduck/notebooks/recovery", type=bool) is False
+    panel.cell.editor.setText("SELECT 2;")
+    wait_for(lambda: False, 0.2)
+    assert panel.recovery.folder is None
+    panel.recovery_action.trigger()
+    assert panel.recovery.folder is not None

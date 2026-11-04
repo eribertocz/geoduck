@@ -15,6 +15,15 @@ from qgis.PyQt.QtWidgets import QMainWindow  # noqa: E402
 _APP = None
 
 
+@pytest.fixture(autouse=True)
+def recovery_folder(tmp_path, monkeypatch):
+    """Cada prueba, su carpeta de copias de recuperación de cuadernos (ADR-0014): nunca la del perfil, y
+    ninguna copia de otra prueba aparece como «QGIS se cerró mal»."""
+    folder = tmp_path / "recuperacion"
+    monkeypatch.setenv("GEODUCK_RECOVERY_DIR", str(folder))
+    return folder
+
+
 @pytest.fixture(scope="session")
 def qgis_app():
     global _APP  # noqa: PLW0603

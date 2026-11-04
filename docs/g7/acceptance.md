@@ -1,4 +1,4 @@
-# G7 · `v0.8.0a1` Notebook — evidencia de aceptación (AT-NB-001..011)
+# G7 · `v0.8.0a1` Notebook — evidencia de aceptación (AT-NB-001..012)
 
 **Estado:** En revisión (E5). El cierre de G7 lo decide el propietario; no autoriza tag ni release `v0.8.0a1`.
 **Base verificada:** E4 (#97) sobre E0–E3 y sus correcciones (#91–#96). Las cifras de la CI de este PR se anotan
@@ -37,13 +37,14 @@ Archivos en `tests/`: `qgis/test_notebook_ui.py` (N), `qgis/test_editor_tabs.py`
 | AT-NB-009 | Ventana ↔ panel con varias celdas, resultados y una ejecución en curso | N `test_toggling_keeps_cells_results_and_a_running_cell`; P `test_tabs_survive_toggling_window_and_panel_with_their_state` |
 | AT-NB-010 | Teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | N `test_every_cell_action_has_a_name_help_and_keyboard_focus`, `test_one_result_has_no_tab_and_a_cell_without_table_has_no_buttons`, `test_side_bar_folds_with_its_button_and_ctrl_b_and_is_remembered`, `test_the_log_is_one_line_until_opened_and_always_open_in_the_panel`, `test_line_numbers_and_ctrl_c_copies_the_selected_cells`; W `test_a_narrow_panel_compacts_labels_but_keeps_every_action`, `test_every_action_is_reachable_with_the_keyboard`; I `test_qgis_in_english_shows_geoduck_in_english`, `test_qgis_in_spanish_shows_geoduck_in_spanish` (también textos de G7) |
 | AT-NB-011 | Exportar 1 millón de filas con geometría a CSV y Parquet; archivo existente; cancelar; DML | m-E (8: 1 millón de filas en CSV y Parquet, WKT, Parquet sin y con SRC, fallo a mitad, cancelar, base de la celda, el resto de la celda no se repite); u-E (6: opciones de `COPY`, avisos de SRC, sesión ocupada, cancelar y fallo); N `test_export_writes_the_whole_query_from_the_base_of_the_cell`, `test_write_results_cannot_be_exported_and_the_cell_script_is_not_repeated`, `test_cancel_an_export_leaves_no_file`. La confirmación al sobrescribir la da el diálogo de Windows: prueba manual |
+| AT-NB-012 | Guardar y abrir `.sql`; un `.sql` cualquiera; autoguardado; cierre normal; cierre por un fallo; copia apagada | u `tests/unit/test_notebook_file.py` (5: formato, ida y vuelta, `.sql` sin marcas, marcas en español, saltos de Windows, vacío); N `test_save_and_open_a_notebook_as_an_sql_file`, `test_a_plain_sql_file_opens_as_one_cell_and_ctrl_o_asks_for_it`, `test_a_saved_notebook_saves_itself_after_each_change`, `test_the_recovery_copy_is_written_and_deleted_on_a_clean_close`, `test_after_a_crash_geoduck_offers_to_recover_the_notebooks`, `test_the_recovery_copy_can_be_turned_off`. `QLockFile` con un proceso que muere sin soltarlo: verificado en Qt 5 y Qt 6 |
 | Regresión G0–G6 | Toda la suite | Pasa entera en cada celda. Pruebas de G2–G6 adaptadas solo donde dependían de la forma de G6: el divisor (cuaderno · registro), «Sentencia», «Selección» y «Explicar» retirados, 20 filas fijas, registro plegado |
 
 ## 3. Gate (`docs/g7/plan.md`)
 
 | Condición | Estado |
 |---|---|
-| AT-NB-001..011 en la matriz de CI | Cumplida (§2; cifras en el comentario del PR). Arrastrar con el ratón y el diálogo de sobrescribir: manual |
+| AT-NB-001..012 en la matriz de CI | Cumplida (§2; cifras en el comentario del PR). Arrastrar con el ratón y el diálogo de sobrescribir: manual |
 | Regresiones G0–G6 completas | Cumplida |
 | Nada de G3/G4 cambia de comportamiento | Cumplida: «Cargar en QGIS» y sus tres modalidades no cambian; ahora repiten la consulta en la base de la celda (#95) |
 | Teclado, Qt 5 y Qt 6 | Cumplida en CI; Windows: manual |
@@ -60,6 +61,7 @@ Archivos en `tests/`: `qgis/test_notebook_ui.py` (N), `qgis/test_editor_tabs.py`
 | 2026-11-03 | Todas las celdas conservan su tabla (medido: no hace falta liberar las que no se ven) |
 | 2026-11-03 | Resultado con fondo propio y botones arriba, sin pestaña si es uno solo (opción A) |
 | 2026-11-03 | Tras la prueba manual: selector de base como desplegable; barra lateral plegable (◫, Ctrl+B); sin columna «Resultado» (resumen como ayuda ⓘ); registro plegado en una línea; números de línea; vista previa fija de 20 filas sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa»; grilla suave en la tabla del resultado. Se mantienen los tres pliegues |
+| 2026-11-03 | Guardar y abrir cuadernos `.sql` (con autoguardado) y copia de recuperación activada por defecto, dentro de G7; cambia security.md §4 (ADR-0014) |
 
 ## 5. Verificaciones hechas durante G7
 
@@ -82,7 +84,7 @@ Archivos en `tests/`: `qgis/test_notebook_ui.py` (N), `qgis/test_editor_tabs.py`
 
 ## 7. Limitaciones conocidas
 
-- Los cuadernos no se guardan entre reinicios de QGIS (GD-SQL-008, sin fase).
+- Cuadernos en disco (ADR-0014): si el SQL lleva una clave, queda en el archivo `.sql` y en la copia de recuperación (borrada al cerrar bien); una línea del SQL que empiece por `-- %% cell` parte la celda al reabrir; si el mismo archivo se edita fuera de GeoDuck a la vez, gana el último que guarda.
 - Sin estadísticas por columna ni «Formatear sentencias» (fuera de G7).
 - Un `USE` escrito en mitad de una celda: cada resultado recuerda la base donde se ejecutó, pero el selector de
   la celda muestra la del último `USE`.

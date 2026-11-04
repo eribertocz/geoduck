@@ -197,7 +197,8 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-NB-002 | P1 | Base por celda: `USE` de la base de la celda antes de ejecutarla, en la misma operación; nombres calificados de otras bases siempre válidos | AT-NB-003, AT-NB-004 |
 | GD-NB-003 | P1 | Resultado debajo de cada celda (tipos, `NULL`, «hay más», filas y tiempo) con «Cargar en QGIS ▾» de G3–G5 | AT-NB-005 |
 | GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas (ayuda ⓘ del rótulo del resultado) | AT-NB-006 |
-| GD-NB-005 | P1 | Lista de cuadernos de la sesión; solo en memoria (guardar en disco: GD-SQL-008) | AT-NB-007 |
+| GD-NB-005 | P1 | Lista de cuadernos de la sesión | AT-NB-007 |
+| GD-NB-008 | P1 | Guardar y abrir cuadernos como `.sql` con marcas de celda, autoguardado en su archivo y copia de recuperación tras un cierre inesperado (ADR-0014) | AT-NB-012 |
 | GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
@@ -595,7 +596,7 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 
 **P2 (evaluar):** diagnósticos en vivo, sugerencias sofisticadas y trazas de profiling; no son excusa para introducir editor web no justificado.
 
-**G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..006):** las pestañas de editor de
+**G7 · Notebook (`v0.8.0a1`, decisiones del propietario 2026-11-03; GD-NB-001..008):** las pestañas de editor de
 G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa la sesión y el worker únicos.
 - **Celda** = editor SQL (con el autocompletado de G6; el plan, escribiendo `EXPLAIN`) + base de la celda + su resultado. Puede tener
   varias sentencias: se ejecutan en orden, como un script (§2); el resultado que se muestra es el de la última que
@@ -625,7 +626,12 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   (`GEOMETRY('EPSG:32719')`), la opción por defecto falla, así que exporta con `GEOPARQUET_VERSION 'V2'` y el SRC
   queda en el archivo (GDAL 3.13 lo lee como EPSG:32719). Nunca se inventa un SRC. El archivo se escribe primero
   como temporal oculto en la misma carpeta y se renombra al terminar.
-- Los cuadernos viven en memoria mientras dure el workspace; guardarlos en disco es GD-SQL-008 (sin fase).
+- **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
+  «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
+  (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda
+  solo tras cada cambio. La **copia de recuperación** (activada por defecto, desactivable) guarda el SQL y la base
+  de cada celda de todos los cuadernos en el perfil de QGIS y se borra al cerrar bien; si QGIS se cerró por un
+  fallo, al abrir GeoDuck se ofrece recuperarla. Nunca se guardan resultados ni el historial.
 - Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
   autocompletado.
 
@@ -1139,7 +1145,9 @@ Todo vive en el mismo `WorkspaceContent` de G5 y se ve igual en la ventana propi
 Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin incrustarla** (roadmap, decisión
 2026-11-03). Maqueta en `docs/g7/maqueta/`. Todo en el mismo `WorkspaceContent` de G5, en ventana y en panel.
 
-- **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
+- **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar; «⋯» con «Abrir cuaderno…»
+  (Ctrl+O), «Guardar cuaderno» (Ctrl+S), «Guardar cuaderno como…» y «Copia de recuperación si QGIS se cierra
+  inesperadamente», marcada; también en el panel, junto al selector; ADR-0014) encima de «Bases de datos» (el
   explorador de G5–G6, sin cambios). Es una barra lateral plegable, como la de la DuckDB UI: «◫» a la izquierda del
   nombre del cuaderno, o Ctrl+B, la oculta y la muestra; se recuerda (decisión del propietario, 2026-11-03). En el
   panel, los cuadernos van en el selector de la pestaña SQL.
@@ -1216,7 +1224,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 
 ## 4. Protección de datos
 - Por defecto, no persistir previews ni contenido de capas ni historiales completos que puedan contener datos sensibles.
-- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles.
+- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles. Cuadernos (ADR-0014): el SQL se escribe solo en el archivo `.sql` que el usuario eligió y en la copia de recuperación de su perfil de QGIS (activada por defecto, desactivable, borrada al cerrar bien). El historial del registro sigue sin escribirse en disco.
 - Configuración local con catálogo/alias, paths recientes y preferencias, con opción «borrar recientes». No almacenar passwords ni tokens en texto claro.
 - Los datos pueden estar en RAM de QGIS después de entrega; esto es parte del contrato de capas de memoria y depende de QGIS.
 - Cuando se considera un buffer temporal en disco, requiere ADR y controles de borrado/cifrado; no incluirlo en Alpha inicial.
@@ -1389,11 +1397,12 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda (y al revés: celda en `db` que lee `memory.t`); `LOAD spatial; SELECT …` en una celda (resultado de la última, «2 sentencias»); `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |
 | AT-NB-005 | resultado y «Cargar en QGIS ▾» en cada celda (tres modalidades, geometría) | la capa sale del SQL de esa celda; nada se repite (GD-SQL-006) |
 | AT-NB-006 | resumen del resultado seleccionado | filas, columnas y tipos correctos; ninguna consulta nueva |
-| AT-NB-007 | lista de cuadernos; reinicio de QGIS | cambiar de cuaderno conserva su estado; nada en disco |
+| AT-NB-007 | lista de cuadernos | cambiar de cuaderno conserva su estado; sin archivo ni copia, nada en disco |
 | AT-NB-008 | autocompletado, atajos (Ctrl+Intro celda, Ctrl+Mayús+Intro selección, Mayús+Intro celda y avanzar) e historial dentro de una celda | como en G6, en la celda activa |
 | AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
+| AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
@@ -1515,7 +1524,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G4 · `v0.5.0a1` Spatial Confidence | multi-geometría, CRS, geometrías mixtas/invalidas | GD-SPA-001..004 | selección explícita; CRS correcto; sin pérdidas |
 | G5 · `v0.6.0a1` Workspace UX | un workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado (ADR-0013, issue #49) | GD-UX-001..008 | AT-UX-001..015; las tres cargas de G3/G4 en ambos modos; alternar sin perder estado ni repetir operaciones |
 | G6 · `v0.7.0a1` SQL Professional | columnas en el explorador, autocompletado, pestañas de editor, historial de la sesión, «Explicar»; interfaz en inglés (#68) | GD-CAT-002, GD-SQL-007, GD-I18N-001 | AT-CAT-002, AT-SQL-007..010, AT-I18N-001; regresiones G0–G5; teclado, Qt 5 y Qt 6 |
-| G7 · `v0.8.0a1` Notebook | cuadernos de celdas SQL en el mismo workspace: cada celda con su base, su resultado y «Cargar en QGIS ▾» (decisión del propietario, 2026-11-03) | GD-NB-001..006 | AT-NB-001..010; regresiones G0–G6 |
+| G7 · `v0.8.0a1` Notebook | cuadernos de celdas SQL en el mismo workspace: cada celda con su base, su resultado y «Cargar en QGIS ▾» (decisión del propietario, 2026-11-03); exportar y guardar cuadernos `.sql` con copia de recuperación | GD-NB-001..008 | AT-NB-001..012; regresiones G0–G6 |
 | G8 · `v0.9.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
 | G9 · `v0.10.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
 | G10 · `v0.11.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |

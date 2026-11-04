@@ -1474,7 +1474,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/about_dialog.py" line="101" />
-            <location filename="../../geoduck/ui/notebook_list.py" line="131" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="156" />
             <source>Close</source>
             <translation>Cerrar</translation>
         </message>
@@ -1546,7 +1546,7 @@
         <message>
             <location filename="../../geoduck/ui/attach_dialog.py" line="125" />
             <location filename="../../geoduck/ui/load_dialog.py" line="215" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="867" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1062" />
             <source>Cancel</source>
             <translation>Cancelar</translation>
         </message>
@@ -1782,9 +1782,9 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/load_dialog.py" line="105" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="733" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="925" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="927" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="753" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1120" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1122" />
             <source>Load into QGIS</source>
             <translation>Cargar en QGIS</translation>
         </message>
@@ -1861,7 +1861,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/load_dialog.py" line="212" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="731" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="751" />
             <source>Load</source>
             <translation>Cargar</translation>
         </message>
@@ -1983,33 +1983,50 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/notebook_list.py" line="38" />
+            <source>Open, save and recovery of the notebooks</source>
+            <translation>Abrir, guardar y recuperación de los cuadernos</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/notebook_list.py" line="39" />
+            <source>Notebook menu</source>
+            <translation>Menú de cuadernos</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/notebook_list.py" line="49" />
             <source>New notebook (Ctrl+T)</source>
             <translation>Cuaderno nuevo (Ctrl+T)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_list.py" line="39" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="50" />
             <source>New notebook</source>
             <translation>Cuaderno nuevo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_list.py" line="67" />
-            <location filename="../../geoduck/ui/notebook_list.py" line="77" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="78" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="91" />
             <source>Notebooks</source>
             <translation>Cuadernos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_list.py" line="130" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="152" />
             <source>Rename</source>
             <translation>Renombrar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_list.py" line="149" />
-            <location filename="../../geoduck/ui/notebook_list.py" line="150" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="174" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="175" />
             <source>Notebook</source>
             <translation>Cuaderno</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_list.py" line="101" />
+            <location filename="../../geoduck/ui/notebook_list.py" line="155" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="960" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="976" />
+            <source>Save notebook</source>
+            <translation>Guardar cuaderno</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/notebook_list.py" line="123" />
             <source>Double-click or F2 to rename; Delete to close</source>
             <translation>Doble clic o F2 para renombrar; Supr para cerrar</translation>
         </message>
@@ -2024,115 +2041,115 @@
             <translation>Mover la celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="137" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="139" />
             <source>Fold the cell</source>
             <translation>Plegar la celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="138" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="140" />
             <source>Fold the editor</source>
             <translation>Plegar el editor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="139" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="141" />
             <source>Fold the result</source>
             <translation>Plegar el resultado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="154" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="156" />
             <source>Run the cell (Ctrl+Enter)</source>
             <translation>Ejecutar la celda (Ctrl+Intro)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="154" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="156" />
             <source>Run the cell</source>
             <translation>Ejecutar la celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="171" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="173" />
             <source>Database of the cell</source>
             <translation>Base de la celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="197" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="199" />
             <source>No results yet. Run the cell (Ctrl+Enter).</source>
             <translation>Aún no hay resultados. Ejecuta la celda (Ctrl+Intro).</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="212" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="214" />
             <source>Sheet view: the cell takes the whole area (Ctrl+E)</source>
             <translation>Vista de hoja: la celda ocupa toda el área (Ctrl+E)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="212" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="214" />
             <source>Sheet view</source>
             <translation>Vista de hoja</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="217" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="219" />
             <source>More actions</source>
             <translation>Más acciones</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="417" />
-            <location filename="../../geoduck/ui/notebook_view.py" line="414" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="423" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="420" />
             <source>Add cell</source>
             <translation>Añadir celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="418" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="424" />
             <source>Adds an empty cell at the end of the notebook</source>
             <translation>Añade una celda vacía al final del cuaderno</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="169" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="171" />
             <source>still available with their name (database.schema.table)</source>
             <translation>siguen disponibles con su nombre (base.esquema.tabla)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="222" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="224" />
             <source>Move cell up</source>
             <translation>Subir celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="223" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="225" />
             <source>Move cell down</source>
             <translation>Bajar celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="225" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="227" />
             <source>Duplicate cell</source>
             <translation>Duplicar celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="226" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="228" />
             <source>Delete</source>
             <translation>Eliminar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="466" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="473" />
             <source>Insert a cell here</source>
             <translation>Insertar una celda aquí</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="167" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="169" />
             <source>Database of the cell: names without a database are looked up here; other databases are</source>
             <translation>Base de la celda: los nombres sin base se buscan aquí; las demás bases</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/notebook_view.py" line="287" />
+            <location filename="../../geoduck/ui/notebook_view.py" line="290" />
             <source>{0} (not attached)</source>
             <translation>{0} (no adjunta)</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/result_summary.py" line="19" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1283" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1485" />
             <source>{0} row</source>
             <translation>{0} fila</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/result_summary.py" line="19" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1283" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1485" />
             <source>{0} rows</source>
             <translation>{0} filas</translation>
         </message>
@@ -2167,336 +2184,431 @@
             <translation>Ocultar el panel</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="90" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1079" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="93" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1274" />
             <source>OK</source>
             <translation>OK</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="91" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1080" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="440" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="440" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="94" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1275" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="449" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="449" />
             <source>Error</source>
             <translation>Error</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="92" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="95" />
             <source>Cancelled</source>
             <translation>Cancelada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="93" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="96" />
             <source>Not run</source>
             <translation>No ejecutada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="123" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="132" />
             <source>result</source>
             <translation>resultado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="291" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="300" />
             <source>Preview</source>
             <translation>Vista previa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="302" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="311" />
             <source>After this preview something ran that may have changed structure or data. GeoDuck does not detect changes made outside the session.</source>
             <translation>Después de esta vista previa se ejecutó algo que pudo cambiar estructura o datos. GeoDuck no detecta cambios hechos fuera de la sesión.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="328" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="337" />
             <source>row</source>
             <translation>fila</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="328" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="337" />
             <source>rows</source>
             <translation>filas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="424" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="433" />
             <source>Error message</source>
             <translation>Mensaje de error</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="425" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="434" />
             <source>Go to the statement</source>
             <translation>Ir a la sentencia</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="426" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="435" />
             <source>Selects in the editor the statement that failed</source>
             <translation>Selecciona en el editor la sentencia que falló</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="693" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="708" />
             <source>SQL editor</source>
             <translation>Editor SQL</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="732" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="926" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1529" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="752" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1121" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1731" />
             <source>Loads the full result as a QGIS layer</source>
             <translation>Carga el resultado completo como capa de QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="747" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="912" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="767" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1107" />
             <source>Export</source>
             <translation>Exportar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="748" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="913" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="768" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1108" />
             <source>Exports the full query to CSV or Parquet (not only the preview)</source>
             <translation>Exporta la consulta completa a CSV o Parquet (no solo la vista previa)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="749" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="914" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1455" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="769" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1109" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1657" />
             <source>Export the result</source>
             <translation>Exportar el resultado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="802" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="946" />
+            <source>Recover notebooks</source>
+            <translation>Recuperar cuadernos</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="948" />
+            <source>GeoDuck did not close properly. Recover its notebook?</source>
+            <translation>GeoDuck no se cerró bien. ¿Recuperar su cuaderno?</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="953" />
+            <source>Recover</source>
+            <translation>Recuperar</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="954" />
+            <source>Discard</source>
+            <translation>Descartar</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="960" />
+            <source>SQL notebooks (*.sql)</source>
+            <translation>Cuadernos SQL (*.sql)</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="966" />
+            <source>Open notebook</source>
+            <translation>Abrir cuaderno</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="966" />
+            <source>SQL notebooks (*.sql);;All files (*)</source>
+            <translation>Cuadernos SQL (*.sql);;Todos los archivos (*)</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="985" />
+            <source>Recovery copy if QGIS closes unexpectedly</source>
+            <translation>Copia de recuperación si QGIS se cierra inesperadamente</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="989" />
+            <source>Keeps a copy of the SQL of every notebook in the QGIS profile; deleted when QGIS closes</source>
+            <translation>Guarda una copia del SQL de cada cuaderno en el perfil de QGIS; se borra al cerrar QGIS</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="997" />
             <source>Close tab</source>
             <translation>Cerrar pestaña</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="865" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1060" />
             <source>Run all</source>
             <translation>Ejecutar todo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="866" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1061" />
             <source>Runs every cell of the notebook, in order</source>
             <translation>Ejecuta todas las celdas del cuaderno, en orden</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="868" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1063" />
             <source>Cancels the running execution</source>
             <translation>Cancela la ejecución en curso</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="883" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1078" />
             <source>Shows or hides the side bar: notebooks and databases (Ctrl+B)</source>
             <translation>Muestra u oculta la barra lateral: cuadernos y bases de datos (Ctrl+B)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="884" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1079" />
             <source>Side bar</source>
             <translation>Barra lateral</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="952" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="977" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1147" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1172" />
             <source>Show the log</source>
             <translation>Mostrar el registro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="953" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1148" />
             <source>Shows or hides the log of the session</source>
             <translation>Muestra u oculta el registro de la sesión</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1105" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1300" />
             <source>Execution log</source>
             <translation>Registro de ejecuciones</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1397" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1599" />
             <source>Open in the editor</source>
             <translation>Abrir en el editor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1398" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1600" />
             <source>Copies this SQL to a new tab, without running it</source>
             <translation>Copia este SQL a una pestaña nueva, sin ejecutarlo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1453" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1655" />
             <source>CSV files (*.csv)</source>
             <translation>Archivos CSV (*.csv)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1453" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1655" />
             <source>Parquet files (*.parquet)</source>
             <translation>Archivos Parquet (*.parquet)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="293" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="302" />
             <source>write result: not repeated when loading</source>
             <translation>resultado de escritura: no se repite al cargar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="297" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="306" />
             <source>Possibly outdated</source>
             <translation>Posiblemente obsoleta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="327" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="336" />
             <source>there is more</source>
             <translation>hay más</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="706" />
-            <source>Query {0}</source>
-            <translation>Consulta {0}</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="710" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="729" />
             <source>This cell</source>
             <translation>Esta celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="753" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="918" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="773" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1113" />
             <source>CSV…</source>
             <translation>CSV…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="753" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="918" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="773" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1113" />
             <source>Parquet…</source>
             <translation>Parquet…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="763" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="783" />
             <source>Run cell (Ctrl+Enter)</source>
             <translation>Ejecutar celda (Ctrl+Intro)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="764" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="784" />
             <source>Run selection (Ctrl+Shift+Enter)</source>
             <translation>Ejecutar selección (Ctrl+Mayús+Intro)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="765" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="785" />
             <source>Run cell and advance (Shift+Enter)</source>
             <translation>Ejecutar celda y avanzar (Mayús+Intro)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="956" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="999" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="975" />
+            <source>Open notebook…</source>
+            <translation>Abrir cuaderno…</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="977" />
+            <source>Save notebook as…</source>
+            <translation>Guardar cuaderno como…</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="1151" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1194" />
             <location filename="../../geoduck/ui/workspace.py" line="543" />
             <source>Log</source>
             <translation>Registro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="977" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1172" />
             <source>Hide the log</source>
             <translation>Ocultar el registro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1078" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1273" />
             <source>All</source>
             <translation>Todo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1103" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1298" />
             <source>Right-click: open its SQL in a new tab</source>
             <translation>Clic derecho: abrir su SQL en una pestaña nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1158" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1353" />
             <source>Select the SQL to run first</source>
             <translation>Selecciona primero el SQL que quieres ejecutar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1527" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1729" />
             <source>Only read queries can be loaded: this statement is not repeated</source>
             <translation>Solo se pueden cargar consultas de lectura: esta sentencia no se repite</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="295" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="304" />
             <source>execution plan</source>
             <translation>plan de ejecución</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="440" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="449" />
             <source>statement</source>
             <translation>sentencia</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="803" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="723" />
+            <source>Query {0}</source>
+            <translation>Consulta {0}</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="864" />
+            <source>Notebook saved in {0}; from now on it is saved by itself</source>
+            <translation>Cuaderno guardado en {0}; desde ahora se guarda solo</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="937" />
+            <source>Notebook recovered</source>
+            <translation>Cuaderno recuperado</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="950" />
+            <source>GeoDuck did not close properly. Recover its {0} notebooks?</source>
+            <translation>GeoDuck no se cerró bien. ¿Recuperar sus {0} cuadernos?</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="998" />
             <source>«{0}» has SQL that will be lost when closing it. Close it?</source>
             <translation>«{0}» tiene SQL que se perderá al cerrarla. ¿Cerrarla?</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1101" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1296" />
             <source>Double-click: select the statement in the editor</source>
             <translation>Doble clic: seleccionar la sentencia en el editor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1256" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1458" />
             <source>Syntax error: nothing was run.</source>
             <translation>Error de sintaxis: no se ejecutó nada.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1279" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1287" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1481" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1489" />
             <source>{0} ms</source>
             <translation>{0} ms</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1449" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1651" />
             <source>Exporting the full query to {0}…</source>
             <translation>Exportando la consulta completa a {0}…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1463" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1665" />
             <source>Exported {0} rows to {1}</source>
             <translation>Exportadas {0} filas a {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1466" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1668" />
             <source>Export cancelled: no file was written</source>
             <translation>Exportación cancelada: no se escribió ningún archivo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="383" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="392" />
             <source>NULL: no value</source>
             <translation>NULL: sin valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="384" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="393" />
             <source>NULL, no value</source>
             <translation>NULL, sin valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="783" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="803" />
             <source>«{0}» is running: wait for it to finish or cancel it.</source>
             <translation>«{0}» se está ejecutando: espere a que termine o cancélela.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1285" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1487" />
             <source>{0} statements</source>
             <translation>{0} sentencias</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1447" />
-            <location filename="../../geoduck/ui/sql_panel.py" line="1468" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1649" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="1670" />
             <source>Cannot export: </source>
             <translation>No se puede exportar: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="386" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="395" />
             <source>Empty string</source>
             <translation>Cadena vacía</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="387" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="396" />
             <source>empty string</source>
             <translation>cadena vacía</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/sql_panel.py" line="1311" />
+            <location filename="../../geoduck/ui/sql_panel.py" line="859" />
+            <source>Cannot save the notebook: {0}</source>
+            <translation>No se puede guardar el cuaderno: {0}</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="879" />
+            <source>Cannot open the notebook: {0}</source>
+            <translation>No se puede abrir el cuaderno: {0}</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="937" />
+            <source>{0} notebooks recovered</source>
+            <translation>{0} cuadernos recuperados</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="1513" />
             <source>Run {} · statement {}</source>
             <translation>Ejecución {} · sentencia {}</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="914" />
+            <source>Cannot write the recovery copy: {0}</source>
+            <translation>No se puede escribir la copia de recuperación: {0}</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/sql_panel.py" line="909" />
+            <source>Cannot save «{0}»: {1}</source>
+            <translation>No se puede guardar «{0}»: {1}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/validity_dialog.py" line="60" />
