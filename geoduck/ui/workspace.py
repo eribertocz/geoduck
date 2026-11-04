@@ -12,8 +12,8 @@ import os
 from collections.abc import Callable
 
 from qgis.core import QgsApplication, QgsProject
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont, QResizeEvent
+from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtGui import QFont, QKeySequence, QResizeEvent
 from qgis.PyQt.QtWidgets import (
     QAction,
     QFrame,
@@ -22,6 +22,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QShortcut,
     QSizePolicy,
     QSplitter,
     QTabWidget,
@@ -91,6 +92,9 @@ _CAN_CLOSE = {SessionState.CONNECTING, SessionState.READY, SessionState.BUSY, Se
 class WorkspaceContent(QWidget):
     """Explorador, editor SQL, resultados, mensajes y estado. Una sola instancia por GeoDuck (ADR-0013)."""
 
+    #: La barra lateral de la ventana se abrió o se plegó (se recuerda).
+    sidebar_changed = pyqtSignal(bool)
+
     def __init__(
         self,
         coordinator: SessionCoordinator,
@@ -139,6 +143,7 @@ class WorkspaceContent(QWidget):
         self.left_column.setObjectName("geoduckLeftColumn")
         self.left_column.setChildrenCollapsible(False)
         self.left_column.addWidget(self.sql_panel.notebook_list)
+        self._setup_sidebar_toggle()
         self._side_sized = False
         self._presented = False
         self.wide = False
@@ -311,6 +316,26 @@ class WorkspaceContent(QWidget):
         card_layout.addWidget(footer)
         return card
 
+    def _setup_sidebar_toggle(self) -> None:
+        self.sql_panel.sidebar_button.toggled.connect(self.set_sidebar_open)
+        self.sidebar_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        self.sidebar_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.sidebar_shortcut.activated.connect(self._toggle_sidebar)
+
+    def _toggle_sidebar(self) -> None:
+        if self.wide:
+            self.sql_panel.sidebar_button.toggle()
+
+    def set_sidebar_open(self, open_: bool) -> None:
+        """Ventana: muestra u oculta la barra lateral «Cuadernos + Bases de datos» (las celdas ocupan el
+        resto)."""
+        self.sql_panel.sidebar_button.blockSignals(True)
+        self.sql_panel.sidebar_button.setChecked(open_)
+        self.sql_panel.sidebar_button.blockSignals(False)
+        if self.wide:
+            self.left_column.setVisible(open_)
+        self.sidebar_changed.emit(open_)
+
     def set_presentation(self, *, wide: bool) -> None:
         """Ventana (`wide`): explorador lateral | SQL. Panel: pestañas Explorador / SQL. Los mismos widgets,
         trasladados (no se recrean: el texto, los resultados y la selección se conservan)."""
@@ -343,6 +368,7 @@ class WorkspaceContent(QWidget):
             self.side_splitter.hide()
             self.tabs.show()
         self.wide = wide
+        self.left_column.setVisible(not wide or self.sql_panel.sidebar_button.isChecked())
         self.dock_button.setVisible(wide)  # en el panel, «Abrir en ventana» va en su barra de título
         self._place_message(wide)
         self.set_compact(self.compact)
@@ -444,6 +470,7 @@ class WorkspaceContent(QWidget):
         footer.setSpacing(12)
         self.footer_row = footer
         self.map_button = QPushButton(tr("View on map"))
+        self.map_button.setIcon(QgsApplication.getThemeIcon("mLayoutItemMap.svg"))
         self.map_button.setProperty("geoduck", "link")
         self.map_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.map_button.setToolTip(

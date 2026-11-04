@@ -25,7 +25,6 @@ from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QButtonGroup,
-    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -70,7 +69,6 @@ from geoduck.domain.notebook import Cell, Notebook
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import (
     DEFAULT_PREVIEW_LIMIT,
-    PREVIEW_LIMITS,
     OutputKind,
     Preview,
     RunScope,
@@ -85,7 +83,7 @@ from geoduck.ui.i18n import N_, tr
 from geoduck.ui.load_dialog import OPTIONS
 from geoduck.ui.notebook_list import NotebookList, NotebookSelector
 from geoduck.ui.notebook_view import CellWidget, NotebookView
-from geoduck.ui.result_summary import ResultSummary, summary_text
+from geoduck.ui.result_summary import summary_text
 from geoduck.ui.widgets import line_index_from, offset_from
 
 _STATUS_TEXT = {
@@ -115,10 +113,6 @@ def _free_keys(editor: Any, keys: tuple[str, ...]) -> None:
                 command.setKey(0)
             else:
                 command.setAlternateKey(0)
-
-
-#: Ancho inicial del resumen del resultado en la ventana (columna derecha).
-SUMMARY_WIDTH = 180
 
 
 def _file_name(title: str) -> str:
@@ -289,6 +283,10 @@ class ResultView(QWidget):
         self.database = result.database
         self.loadable = self.statement.replayable
         self.table = self._build_table(preview)
+        # Ctrl+C copia las celdas seleccionadas, como una hoja de cálculo (sin botón «Copiar»: propietario)
+        self.copy_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Copy), self.table)
+        self.copy_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.copy_shortcut.activated.connect(self.copy_selection)
 
         parts = [tr("Preview")]
         if result.output is OutputKind.MUTATION_ROWS:
@@ -330,6 +328,26 @@ class ResultView(QWidget):
         rows = tr("row") if n == 1 else tr("rows")
         return f"{self.title} ({n} {rows}{more})"
 
+    def copy_selection(self) -> None:
+        """Las celdas seleccionadas al portapapeles, separadas por tabuladores (para pegar en una hoja). Con
+        toda la tabla seleccionada (Ctrl+A), con la fila de nombres."""
+        table = self.table
+        ranges = table.selectedRanges()
+        if not ranges:
+            return
+        rows = sorted({r for rng in ranges for r in range(rng.topRow(), rng.bottomRow() + 1)})
+        columns = sorted({c for rng in ranges for c in range(rng.leftColumn(), rng.rightColumn() + 1)})
+        lines = []
+        if len(rows) == table.rowCount() and len(columns) == table.columnCount():
+            lines.append("\t".join(self.preview.columns[c] for c in columns))
+        for r in rows:
+            cells = []
+            for c in columns:
+                item = table.item(r, c)
+                cells.append(item.text() if item is not None and item.isSelected() else "")
+            lines.append("\t".join(cells))
+        QApplication.clipboard().setText("\n".join(lines))
+
     def _build_table(self, preview: Preview) -> QTableWidget:
         palette = theme.palette_for(self)
         table = QTableWidget(len(preview.rows), len(preview.columns))
@@ -339,7 +357,7 @@ class ResultView(QWidget):
         header = TypedHeader(labels, palette.muted, table)
         table.setHorizontalHeader(header)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setShowGrid(False)
+        table.setShowGrid(True)  # grilla suave (`border_soft`, theme.py), como la maqueta (propietario)
         table.setWordWrap(False)
         table.setFrameShape(QFrame.Shape.NoFrame)
         rows = table.verticalHeader()
@@ -482,6 +500,8 @@ def _is_numeric(kind: str) -> bool:
 class SqlPanel(QWidget):
     #: (todas, OK, Error) del registro, al cambiar.
     log_counts_changed = pyqtSignal(int, int, int)
+    #: El registro de la ventana se abrió o se plegó (se recuerda).
+    log_open_changed = pyqtSignal(bool)
     #: Filtro del registro elegido («all», «ok», «error»).
     log_filter_changed = pyqtSignal(str)
 
@@ -531,7 +551,10 @@ class SqlPanel(QWidget):
         self.editor_card = self._build_editor_card()
         self._refresh_notebooks()  # el nombre del cuaderno en la barra superior
         self._build_log()
+        self._log_foldable = True
+        self._log_open_wide = False  # ventana: plegado por defecto
         self.log_section = self._build_log_card()
+        self.set_log_open(False)  # ya con su tarjeta: la altura de una línea
         # Divisor: celdas (cada una con su resultado, G7) | registro, redimensionable por el usuario.
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.splitter.setHandleWidth(12)
@@ -669,6 +692,7 @@ class SqlPanel(QWidget):
         editor = QgsCodeEditorSQL()
         editor.setAccessibleName(tr("SQL editor"))
         editor.setMinimumHeight(40)
+        editor.setLineNumbersVisible(True)  # números de línea, como la DuckDB UI (QGIS 3.34+ y 4.x)
         # Ctrl+T/W: cuadernos; Mayús+Intro: ejecutar la celda; Ctrl+E y Ctrl+↑/↓: celdas (G6, G7)
         _free_keys(editor, ("Ctrl+T", "Ctrl+W", "Shift+Return", "Ctrl+E", "Ctrl+Up", "Ctrl+Down"))
         self._completers[id(editor)] = SqlCompleter(editor, self._coordinator)  # G6 · E2
@@ -733,7 +757,6 @@ class SqlPanel(QWidget):
         export.setMenu(export_menu)
         widget.export_button = export
         widget.load_slot.insertWidget(0, export)
-        widget.copy_button.clicked.connect(lambda _c=False, w=widget: self._copy_result(w))
         widget.results.currentChanged.connect(lambda _i: self._render(self._coordinator.state))
         # ▶ ▾, como la DuckDB UI: celda, selección, celda y avanzar
         for text, slot in (
@@ -804,17 +827,9 @@ class SqlPanel(QWidget):
         self.actions_bar.setLayout(self._build_actions())
         self.actions_bar.layout().setContentsMargins(0, 0, 0, 0)
         box.addWidget(self.actions_bar)
-        # Cuaderno | resumen del resultado de la celda activa (ventana; plegable, G7 · E3)
-        self.summary = ResultSummary()
-        self.center = QSplitter(Qt.Orientation.Horizontal)
-        self.center.setObjectName("geoduckCenterSplitter")
-        self.center.addWidget(self.editor_tabs)
-        self.center.addWidget(self.summary)
-        self.center.setStretchFactor(0, 1)
-        self.center.setCollapsible(0, False)
-        self.center.setCollapsible(1, True)
-        self.center.setSizes([4 * SUMMARY_WIDTH, SUMMARY_WIDTH])
-        box.addWidget(self.center, 1)
+        # El resumen del resultado (GD-NB-004) es la ayuda ⓘ del rótulo de cada celda, en ventana y panel
+        # (decisión del propietario, 2026-11-03: sin columna derecha)
+        box.addWidget(self.editor_tabs, 1)
         box.addWidget(self._build_cell_foot())  # solo en el panel
         self._wide_width = self.actions_bar.sizeHint().width() + 24  # con los atajos visibles
         # La fila no impone su ancho con los atajos: su mínimo es el de los botones sin atajo (E3)
@@ -840,11 +855,10 @@ class SqlPanel(QWidget):
         editor.setFocus()
 
     def set_compact(self, compact: bool) -> None:
-        """Panel estrecho: se ocultan los atajos de los botones y la etiqueta «Filas»; ninguna acción se
+        """Panel estrecho: se ocultan los atajos de los botones; ninguna acción se
         quita (ui-ux-spec §8). El atajo sigue en la ayuda de cada botón."""
         for button in self.action_buttons:
             button.set_hint_visible(not compact)
-        self.limit_label.setVisible(not compact and not self.short_titles)
         self.compact = compact
 
     def _build_actions(self) -> QHBoxLayout:
@@ -852,12 +866,6 @@ class SqlPanel(QWidget):
         self.run_all_button.setToolTip(tr("Runs every cell of the notebook, in order"))
         self.cancel_button = HintButton(tr("Cancel"))
         self.cancel_button.setToolTip(tr("Cancels the running execution"))
-        self.limit_combo = QComboBox()
-        for limit in PREVIEW_LIMITS:
-            self.limit_combo.addItem(str(limit), limit)
-        self.limit_combo.setCurrentIndex(PREVIEW_LIMITS.index(DEFAULT_PREVIEW_LIMIT))
-        self.limit_combo.setToolTip(tr("Rows of each preview"))
-        self.limit_combo.setAccessibleName(tr("Rows of each preview"))
         self.action_buttons = (
             self.run_all_button,
             self.cancel_button,
@@ -865,6 +873,16 @@ class SqlPanel(QWidget):
         self.compact = False
         actions = QHBoxLayout()
         actions.setSpacing(8)
+        # Ventana: ◫ pliega la barra lateral «Cuadernos + Bases de datos» (Ctrl+B; propietario, 2026-11-03)
+        self.sidebar_button = QToolButton()
+        self.sidebar_button.setObjectName("geoduckSidebarButton")
+        self.sidebar_button.setText("◫")
+        self.sidebar_button.setCheckable(True)
+        self.sidebar_button.setChecked(True)
+        self.sidebar_button.setAutoRaise(True)
+        self.sidebar_button.setToolTip(tr("Shows or hides the side bar: notebooks and databases (Ctrl+B)"))
+        self.sidebar_button.setAccessibleName(tr("Side bar"))
+        actions.addWidget(self.sidebar_button)
         # Maqueta G7: a la izquierda, el nombre del cuaderno (ventana) o su selector (panel)
         self.notebook_title = QLabel("")
         self.notebook_title.setObjectName("geoduckNotebookTitle")
@@ -876,18 +894,6 @@ class SqlPanel(QWidget):
         actions.addStretch(1)
         for button in self.action_buttons:
             actions.addWidget(button)
-        self.limit_label = muted(QLabel(tr("Rows")))
-        actions.addWidget(self.limit_label)
-        actions.addWidget(self.limit_combo)
-        self.summary_button = QToolButton()
-        self.summary_button.setText("ⓘ")
-        self.summary_button.setCheckable(True)
-        self.summary_button.setChecked(True)
-        self.summary_button.setAutoRaise(True)
-        self.summary_button.setToolTip(tr("Show or hide the summary of the result (rows, columns and types)"))
-        self.summary_button.setAccessibleName(tr("Summary of the result"))
-        self.summary_button.toggled.connect(self._show_summary)
-        actions.addWidget(self.summary_button)
         return actions
 
     def _place_load_button(self, *, wide: bool) -> None:
@@ -901,11 +907,6 @@ class SqlPanel(QWidget):
         row = QHBoxLayout(self.cell_foot)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
-        self.foot_copy = QToolButton()
-        self.foot_copy.setIcon(QgsApplication.getThemeIcon("mActionEditCopy.svg"))
-        self.foot_copy.setToolTip(tr("Copies the shown rows as text separated by tabs"))
-        self.foot_copy.setAccessibleName(tr("Copy"))
-        self.foot_copy.clicked.connect(lambda _c=False: self._copy_result(self.cell))
         self.foot_export = QToolButton()
         self.foot_export.setIcon(QgsApplication.getThemeIcon("mActionFileSaveAs.svg"))
         self.foot_export.setText(tr("Export"))
@@ -931,7 +932,6 @@ class SqlPanel(QWidget):
         self.foot_load.setMenu(load_menu)
         self.foot_load.clicked.connect(lambda _c=False: self._load_cell(self.cell))
         load_menu.aboutToShow.connect(lambda: self._fill_load_menu(self.current_view(), load_menu))
-        row.addWidget(self.foot_copy)
         row.addWidget(self.foot_export)
         row.addWidget(self.foot_load, 1)
         self.cell_foot.hide()
@@ -944,13 +944,42 @@ class SqlPanel(QWidget):
         box.setSpacing(6)
         header = QHBoxLayout()
         header.setSpacing(8)
+        # Ventana: plegado por defecto, una línea con sus cifras (decisión del propietario, 2026-11-03)
+        self.log_toggle = QToolButton()
+        self.log_toggle.setObjectName("geoduckLogToggle")
+        self.log_toggle.setCheckable(True)
+        self.log_toggle.setAutoRaise(True)
+        self.log_toggle.setAccessibleName(tr("Show the log"))
+        self.log_toggle.setToolTip(tr("Shows or hides the log of the session"))
+        self.log_toggle.toggled.connect(self.set_log_open)
+        header.addWidget(self.log_toggle)
         self.log_title = bold(QLabel(tr("Log")))
         header.addWidget(self.log_title)
         header.addWidget(self._build_log_filters())
         header.addStretch(1)
         box.addLayout(header)
         box.addWidget(self.log, 1)
+        self.log_open = True
+        self.set_log_open(False)
         return frame
+
+    def set_log_open(self, open_: bool) -> None:
+        """Registro abierto (la tabla) o plegado (solo su línea con «Todo / OK / Error»). En el panel, el
+        registro va en su pestaña y siempre está abierto."""
+        open_ = open_ or not getattr(self, "_log_foldable", True)
+        changed = open_ != self.log_open
+        self.log_open = open_
+        self.log.setVisible(open_)
+        self.log_toggle.blockSignals(True)
+        self.log_toggle.setChecked(open_)
+        self.log_toggle.blockSignals(False)
+        self.log_toggle.setArrowType(Qt.ArrowType.DownArrow if open_ else Qt.ArrowType.RightArrow)
+        self.log_toggle.setAccessibleName(tr("Hide the log") if open_ else tr("Show the log"))
+        section = getattr(self, "log_section", None)
+        if section is not None:
+            section.setMaximumHeight(16777215 if open_ else section.minimumSizeHint().height())
+        if changed:
+            self.log_open_changed.emit(open_)
 
     def set_presentation(self, *, wide: bool, tabs: QTabWidget | None = None) -> None:
         """Ventana (`wide`): registro debajo (plegable) y «Cargar en QGIS ▾» junto a las pestañas. Panel: el
@@ -961,16 +990,22 @@ class SqlPanel(QWidget):
             self.splitter.setStretchFactor(1, 2)
             self.splitter.setCollapsible(1, True)
             self.log_title.show()
+            self._log_foldable = True
+            self.log_toggle.show()
+            self.set_log_open(self._log_open_wide)
         elif tabs is not None:
+            if self._log_foldable:
+                self._log_open_wide = self.log_open  # al volver a la ventana, como estaba
             tabs.insertTab(2, self.log_section, tr("Log"))
             self.log_title.hide()  # el título ya está en la pestaña
+            self._log_foldable = False
+            self.log_toggle.hide()
+            self.set_log_open(True)
         self.short_titles = not wide
         self.notebook_selector.setVisible(not wide)  # en la ventana, la lista «Cuadernos» (columna izquierda)
         self.notebook_title.setVisible(wide)
-        self.summary_button.setVisible(wide)  # en el panel, el resumen es la ayuda (ⓘ) del rótulo
-        self.summary.setVisible(wide and self.summary_button.isChecked())
+        self.sidebar_button.setVisible(wide)
         self._place_load_button(wide=wide)
-        self.limit_label.setVisible(wide and not self.compact)
         self._retitle()
         self._render(self._coordinator.state)  # p. ej. el «ⓘ» del rótulo del resultado en el panel
 
@@ -1005,6 +1040,7 @@ class SqlPanel(QWidget):
             self.log_filter_group.addButton(button)
             self.log_filter_buttons[key] = button
             button.clicked.connect(lambda _c=False, k=key: self.set_log_filter(k))
+            button.clicked.connect(lambda _c=False: self.set_log_open(True))  # filtrar abre el registro
             row.addWidget(button)
         self.log_filter = "all"
         self.log_filter_buttons["all"].setChecked(True)
@@ -1078,7 +1114,7 @@ class SqlPanel(QWidget):
         if self._coordinator.state is SessionState.READY:
             self.runner.run(
                 [w.cell for w in self.notebook_view.cell_widgets()],
-                preview_limit=int(self.limit_combo.currentData()),
+                preview_limit=DEFAULT_PREVIEW_LIMIT,
             )
 
     def run_cell(self, widget: CellWidget, *, advance: bool = False) -> None:
@@ -1088,7 +1124,7 @@ class SqlPanel(QWidget):
             return
         view = self.notebook_view
         view.set_active(widget)
-        self.runner.run([widget.cell], preview_limit=int(self.limit_combo.currentData()))
+        self.runner.run([widget.cell], preview_limit=DEFAULT_PREVIEW_LIMIT)
         if advance:
             cells = view.cell_widgets()
             index = cells.index(widget)
@@ -1143,7 +1179,7 @@ class SqlPanel(QWidget):
                 text,
                 RunScope.SELECTION,
                 base=base,
-                preview_limit=int(self.limit_combo.currentData()),
+                preview_limit=DEFAULT_PREVIEW_LIMIT,
                 database=widget.cell.database,
             )
             self._run_editors[run_id] = editor
@@ -1436,16 +1472,6 @@ class SqlPanel(QWidget):
         if view is not None:
             self._load(view)
 
-    def _copy_result(self, cell: CellWidget) -> None:
-        """«Copiar»: las filas mostradas, con cabecera, separadas por tabuladores (para pegar en una hoja)."""
-        view = self._cell_view(cell)
-        if view is None or view.preview is None:
-            return
-        preview = view.preview
-        lines = ["\t".join(preview.columns)]
-        lines += ["\t".join("" if v is None else str(v) for v in row) for row in preview.rows]
-        QApplication.clipboard().setText("\n".join(lines))
-
     def _load(self, view: ResultView, mode: LoadMode | None = None) -> None:
         if self._load_flow is not None and view.loadable:
             self._load_flow.start(view.statement.text, view.title, mode=mode, database=view.database)
@@ -1483,17 +1509,11 @@ class SqlPanel(QWidget):
             loadable = view is not None and view.loadable and ready
             self.foot_load.setEnabled(loadable and self._load_flow is not None)
             self.foot_export.setEnabled(loadable)
-            self.foot_copy.setEnabled(view is not None)
         loading = self._load_flow is not None and self._load_flow.loading
         busy_here = self._running or loading or self._exporting
         self.cancel_button.setEnabled(state is SessionState.BUSY and busy_here)
         for cell in self.cell_widgets():
             self._render_cell(cell, state)
-
-    def _show_summary(self, shown: bool) -> None:
-        self.summary.setVisible(shown and not self.short_titles)
-        if shown and self.center.sizes()[1] == 0:
-            self.center.setSizes([4 * SUMMARY_WIDTH, SUMMARY_WIDTH])
 
     def _render_cell(self, cell: CellWidget, state: SessionState) -> None:
         if cell.load_button is None:
@@ -1507,24 +1527,16 @@ class SqlPanel(QWidget):
             cell.load_button.setToolTip(tr("Only read queries can be loaded: this statement is not repeated"))
         else:
             cell.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
-        cell.copy_button.setEnabled(view is not None)
         # Opción A (propietario): los botones solo con una tabla; en el panel, al pie (celda activa)
         in_cell = view is not None and not self.short_titles
-        for button in (cell.copy_button, cell.export_button, cell.load_button):
+        for button in (cell.export_button, cell.load_button):
             if button is not None:
                 button.setVisible(in_cell)
         # Resumen (GD-NB-004): en la ayuda del rótulo; en el panel, con su «ⓘ»
         preview = view.preview if view is not None else None
         cell.status_label.setToolTip(summary_text(preview) if preview is not None else "")
         text = cell.status_label.text().removesuffix(" ⓘ")
-        cell.status_label.setText(text + " ⓘ" if preview is not None and self.short_titles and text else text)
-        notebook = self.editor_tabs.currentWidget()  # al crear el primer cuaderno aún no hay pestaña activa
-        summary = getattr(self, "summary", None)
-        if summary is not None and isinstance(notebook, NotebookView) and notebook.active is cell:
-            number = notebook.cell_widgets().index(cell) + 1
-            where = view.database if view is not None and view.database else cell.cell.database or ""
-            origin = tr("Cell {0}").format(number) + (f" · {where}" if where else "")
-            summary.show_preview(preview, origin)
+        cell.status_label.setText(text + " ⓘ" if preview is not None and text else text)
         if cell.export_button is not None:
             cell.export_button.setEnabled(view is not None and view.loadable and ready)
         cell.run_button.setEnabled(ready)

@@ -214,10 +214,13 @@ QToolButton[geoduck="run-cell"] {{
     color: {p.action}; border: 1px solid {p.border}; border-radius: 4px; padding: 1px 6px;
 }}
 QComboBox[geoduck="database"] {{
-    background: {p.chip}; color: {p.action}; border: none; border-radius: 4px; padding: 1px 8px;
+    background: {p.card}; color: {p.text}; border: 1px solid {p.border}; border-radius: 4px;
+    padding: 1px 6px;
 }}
-QComboBox[geoduck="database"][problem="true"] {{ background: {p.error_bg}; color: {p.error}; }}
-QComboBox[geoduck="database"]::drop-down {{ border: none; width: 14px; }}
+QComboBox[geoduck="database"]:hover, QComboBox[geoduck="database"]:focus {{ border: 1px solid {p.action}; }}
+QComboBox[geoduck="database"][problem="true"] {{
+    background: {p.error_bg}; color: {p.error}; border: 1px solid {p.error_border};
+}}
 QToolButton[geoduck="run-cell"]::menu-button {{ border: none; width: 12px; }}
 QToolButton[geoduck="add-cell"] {{
     background: {p.card}; color: {p.muted}; border: 1px dashed {p.border}; border-radius: 6px; padding: 6px;

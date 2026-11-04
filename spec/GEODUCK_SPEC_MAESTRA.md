@@ -196,7 +196,7 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-NB-001 | P1 | Cuadernos de celdas SQL en el workspace (sustituyen a las pestañas de editor): añadir, mover, borrar y plegar celdas; ejecutar una o todas en orden | AT-NB-001, AT-NB-002 |
 | GD-NB-002 | P1 | Base por celda: `USE` de la base de la celda antes de ejecutarla, en la misma operación; nombres calificados de otras bases siempre válidos | AT-NB-003, AT-NB-004 |
 | GD-NB-003 | P1 | Resultado debajo de cada celda (tipos, `NULL`, «hay más», filas y tiempo) con «Cargar en QGIS ▾» de G3–G5 | AT-NB-005 |
-| GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas | AT-NB-006 |
+| GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas (ayuda ⓘ del rótulo del resultado) | AT-NB-006 |
 | GD-NB-005 | P1 | Lista de cuadernos de la sesión; solo en memoria (guardar en disco: GD-SQL-008) | AT-NB-007 |
 | GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
@@ -557,7 +557,7 @@ El editor acepta el SQL disponible en DuckDB >=1.5 (DDL, DML, vistas, macros, tr
 Una sentencia no se clasifica solo por su primera palabra: `WITH` puede anteceder DML; el parser y el comportamiento del motor son la fuente de verdad.
 
 ## 4. Previsualización y paginación
-- Vista previa por defecto: 50 filas; opción 10/50/200/1000 (decisión del propietario, 2026-11-03; antes 200 y 50/200/500/1000); siempre visualmente etiquetada «Vista previa». La elección del usuario se recuerda; un valor guardado que ya no existe (500) vuelve a 50.
+- Vista previa: **20 filas fijas, sin selector** (decisión del propietario, 2026-11-03; antes 200 por defecto con 50/200/500/1000); siempre visualmente etiquetada «Vista previa». «Cargar» y «Exportar» usan la consulta completa.
 - Nunca materializar `fetchall()` en resultados sin límite conocido.
 - Para lecturas reejecutables, usar una consulta acotada, respetando semántica SQL y su ordenación; si no hay `ORDER BY` no garantizar que la paginación sea estable.
 - No calcular `COUNT(*)` completo automáticamente para todo SELECT.
@@ -1140,21 +1140,26 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 2026-11-03). Maqueta en `docs/g7/maqueta/`. Todo en el mismo `WorkspaceContent` de G5, en ventana y en panel.
 
 - **Columna izquierda (ventana):** «Cuadernos» (lista, «+» nuevo, renombrar, cerrar) encima de «Bases de datos» (el
-  explorador de G5–G6, sin cambios). En el panel, los cuadernos van en el selector de la pestaña SQL.
+  explorador de G5–G6, sin cambios). Es una barra lateral plegable, como la de la DuckDB UI: «◫» a la izquierda del
+  nombre del cuaderno, o Ctrl+B, la oculta y la muestra; se recuerda (decisión del propietario, 2026-11-03). En el
+  panel, los cuadernos van en el selector de la pestaña SQL.
 - **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento (capturas del propietario de la
   DuckDB UI, 2026-11-03). Cada celda:
   - **Margen izquierdo:** asa «⠿» para **arrastrar** la celda a otra posición (se mueven con ella su texto, su base y
     su resultado; no se ejecuta nada) y tres «˅» para **plegar** por separado la celda entera, el editor y el
     resultado. Encima de cada celda, «+» al pasar el ratón inserta una celda ahí.
   - **Cabecera:** botón ▶ (ejecuta la celda) con menú ▾ («Ejecutar celda», «Ejecutar selección», «Ejecutar celda
-    y avanzar», cada uno con su atajo, como la DuckDB UI) y, a la derecha, el selector de base («memory ▾»).
-  - **Editor** (crece con su texto, desde una línea) y, debajo, el **resultado** con fondo propio y una línea encima:
+    y avanzar», cada uno con su atajo, como la DuckDB UI) y, a la derecha, el selector de base: un desplegable con
+    el icono de base de datos, su nombre y «▾», con borde, para que no parezca un botón (propietario, 2026-11-03).
+  - **Editor** (crece con su texto, desde una línea; con números de línea) y, debajo, el **resultado** con fondo propio y una línea encima:
     arriba «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB UI) y sus botones;
-    debajo la tabla, con la altura que pidan sus filas. Con un solo resultado no se muestra su pestaña (el rótulo ya lo
+    debajo la tabla, con grilla suave y la altura que pidan sus filas. Con un solo resultado no se muestra su pestaña (el rótulo ya lo
     dice); con varias sentencias, una pestaña por cada una. Una celda sin tabla (`CREATE`) muestra solo el rótulo, sin
-    botones (decisión del propietario, 2026-11-03: opción A). Los botones: «Cargar ▾» (icono de capa y texto corto; la ayuda y el nombre accesible dicen «Cargar
-    en QGIS», decisión del propietario 2026-11-03), «Exportar ▾» (CSV o Parquet, la consulta completa) y «Copiar» (al
-    portapapeles, como texto separado por tabuladores).
+    botones (decisión del propietario, 2026-11-03: opción A). Los botones: «Cargar ▾» (icono de capa y texto corto;
+    la ayuda y el nombre accesible dicen «Cargar en QGIS») y «Exportar ▾» (CSV o Parquet, la consulta completa). Sin
+    botón «Copiar»: Ctrl+C copia las celdas seleccionadas de la tabla, separadas por tabuladores (con toda la tabla
+    seleccionada, también los nombres de las columnas). El rótulo «N filas en X ms ⓘ» tiene como ayuda el
+    **resumen** del resultado (GD-NB-004): «N filas · M columnas» y cada columna con su tipo, sin consultas nuevas.
   - **Margen derecho:** «⛶ Vista de hoja» (Ctrl+E): la celda ocupa todo el centro, con el editor arriba y el
     resultado abajo separados por un divisor; otra vez ⛶ (o Escape) vuelve a la lista de celdas. Debajo, menú «⋯»,
     como la DuckDB UI: «Subir celda» (Ctrl+↑), «Bajar celda» (Ctrl+↓), separador, «Duplicar celda» y «Eliminar»
@@ -1162,15 +1167,15 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   - La celda activa tiene el borde de acento. Al final, «+ Añadir celda».
   - Teclado (además del ratón): Ctrl+↑/↓ sube o baja la celda activa.
 - **Panel acoplado:** minimalista, solo lo esencial (decisión del propietario, 2026-11-03): en una fila, el selector
-  del cuaderno, «▶ Ejecutar todo», «Cancelar» y filas; celdas con ▶, base, editor y resultado; el resumen, como ayuda
-  (ⓘ) del rótulo del resultado; «Copiar», «Exportar ▾» y «Cargar en QGIS ▾» al pie, para la celda activa.
+  del cuaderno, «▶ Ejecutar todo» y «Cancelar»; celdas con ▶, base, editor y resultado; «Exportar ▾» y «Cargar en
+  QGIS ▾» al pie, para la celda activa.
 - **Celda como tarjeta:** borde redondeado; la activa, con el borde de acento; el margen izquierdo (⠿ ˅) y el derecho
-  (⛶ ⋯) quedan fuera de la tarjeta; la base, como etiqueta de color («memory ▾»; en rojo si se desadjuntó).
-- **Columna derecha (ventana, plegable con «ⓘ» en la barra superior):** resumen del resultado de la celda activa: «N filas · M columnas» y la lista
-  de columnas con su tipo (icono por tipo, `GEOMETRY` con el de geometría). Sin consultas nuevas. En el panel, se
-  muestra como ayuda del rótulo del resultado.
-- **Barra superior del cuaderno:** nombre del cuaderno, «▶ Ejecutar todo» (sin atajo), «Cancelar» y filas de la
-  vista previa. Sin «Sentencia», «Selección» ni «Explicar» (decisión del propietario, 2026-11-03): eso vive en el ▶
+  (⛶ ⋯) quedan fuera de la tarjeta; la base, como desplegable (en rojo si se desadjuntó).
+- **Sin columna derecha** (decisión del propietario, 2026-11-03): el resumen repetía la tabla; queda como ayuda ⓘ.
+- **Registro** (ventana): plegado por defecto en una línea, «▸ Registro · Todo (N) · OK (N) · Error (N)»; «▸», o
+  elegir un filtro, lo abre; se recuerda. En el panel va en su pestaña, siempre abierto.
+- **Barra superior del cuaderno:** «◫», nombre del cuaderno, «▶ Ejecutar todo» (sin atajo) y «Cancelar»; sin
+  selector de filas (vista previa fija de 20, sql-editor-spec §4). Sin «Sentencia», «Selección» ni «Explicar» (decisión del propietario, 2026-11-03): eso vive en el ▶
   de cada celda.
 - **Atajos** (solo con el foco en GeoDuck, como la DuckDB UI): Ctrl+Intro ejecuta la celda activa; Ctrl+Mayús+Intro,
   solo su selección; Mayús+Intro ejecuta la celda y pasa a la siguiente (la crea si es la última); Alt+↑/↓ cambia de

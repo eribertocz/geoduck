@@ -59,7 +59,7 @@
 | GD-NB-001 | P1 | Cuadernos de celdas SQL en el workspace (sustituyen a las pestañas de editor): añadir, mover, borrar y plegar celdas; ejecutar una o todas en orden | AT-NB-001, AT-NB-002 |
 | GD-NB-002 | P1 | Base por celda: `USE` de la base de la celda antes de ejecutarla, en la misma operación; nombres calificados de otras bases siempre válidos | AT-NB-003, AT-NB-004 |
 | GD-NB-003 | P1 | Resultado debajo de cada celda (tipos, `NULL`, «hay más», filas y tiempo) con «Cargar en QGIS ▾» de G3–G5 | AT-NB-005 |
-| GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas | AT-NB-006 |
+| GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas (ayuda ⓘ del rótulo del resultado) | AT-NB-006 |
 | GD-NB-005 | P1 | Lista de cuadernos de la sesión; solo en memoria (guardar en disco: GD-SQL-008) | AT-NB-007 |
 | GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |

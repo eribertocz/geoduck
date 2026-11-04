@@ -110,12 +110,13 @@ def test_previous_preview_is_marked_possibly_stale(session):
     assert view.stale and not view.stale_label.isHidden()
 
 
-def test_preview_is_bounded_by_the_selected_limit(session):
+def test_preview_is_bounded_to_twenty_rows(session):
+    """G7: 20 filas fijas, sin selector (decisión del propietario, 2026-11-03)."""
     _plugin, panel, coordinator = session
-    panel.limit_combo.setCurrentIndex(panel.limit_combo.findData(50))
+    assert not hasattr(panel, "limit_combo")
     run(panel, coordinator, "SELECT range FROM range(100000);")
     view = panel.results.widget(0)
-    assert view.table.rowCount() == 50 and "hay más" in tabs(panel)[0]
+    assert view.table.rowCount() == 20 and "hay más" in tabs(panel)[0]
     assert view.caption.text() == "Vista previa"  # siempre etiquetada (sql-editor-spec §1)
 
 
@@ -148,6 +149,7 @@ def test_editor_results_and_log_are_in_a_resizable_splitter(session):
     plugin.content.resize(460, 900)
     plugin.content.show()
     plugin.content.tabs.setCurrentWidget(panel)
+    panel.set_log_open(True)  # plegado, el registro es una línea fija (G7)
     splitter.setSizes([500, 300])
     first = splitter.sizes()[0]
     splitter.setSizes([300, 500])

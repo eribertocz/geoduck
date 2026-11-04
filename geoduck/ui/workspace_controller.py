@@ -23,7 +23,6 @@ from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import QByteArray, QObject, QRect, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication
 
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, PREVIEW_LIMITS
 from geoduck.ui import theme
 from geoduck.ui.i18n import tr
 from geoduck.ui.shells import WINDOW_SIZE, DockShell, WindowShell
@@ -147,7 +146,7 @@ class WorkspaceController(QObject):
         self._switching = False
         self.mode = read_mode(self._settings)
         self._restore_window_geometry()
-        self._restore_limit()
+        self._restore_log_filter()
         self._shell(self.mode).slot.put(content)
         content.set_presentation(wide=self.mode is WorkspaceMode.WINDOW)
         self._apply_sizes(self.mode)
@@ -160,8 +159,9 @@ class WorkspaceController(QObject):
         self.dock.shown_changed.connect(self._on_shell_shown)
         self.dock.dockLocationChanged.connect(self._save_dock_area)
         content.tabs.currentChanged.connect(self._save_tab)
-        content.sql_panel.limit_combo.currentIndexChanged.connect(self._save_limit)
         content.sql_panel.log_filter_changed.connect(lambda key: self._write("log_filter", key))
+        content.sql_panel.log_open_changed.connect(self._save_log_open)
+        content.sidebar_changed.connect(lambda open_: self._write("sidebar_open", 1 if open_ else 0))
 
     def _shell(self, mode: WorkspaceMode) -> WindowShell | DockShell:
         return self.window if mode is WorkspaceMode.WINDOW else self.dock
@@ -277,10 +277,16 @@ class WorkspaceController(QObject):
 
     # -- preferencias --------------------------------------------------------------------------------
 
-    def _restore_limit(self) -> None:
-        combo = self.content.sql_panel.limit_combo
-        limit = read_int(self._settings, "preview_limit", list(PREVIEW_LIMITS), DEFAULT_PREVIEW_LIMIT)
-        combo.setCurrentIndex(combo.findData(limit))
+    def _save_log_open(self, open_: bool) -> None:
+        if self.content.sql_panel._log_foldable:  # solo el de la ventana (en el panel siempre está abierto)
+            self._write("log_open", 1 if open_ else 0)
+
+    def _restore_log_filter(self) -> None:
+        self.content.set_sidebar_open(read_int(self._settings, "sidebar_open", [0, 1], 1) == 1)
+        panel = self.content.sql_panel
+        panel._log_open_wide = read_int(self._settings, "log_open", [0, 1], 0) == 1
+        if panel._log_foldable:
+            panel.set_log_open(panel._log_open_wide)
         value = self._settings.value(PREFIX + "log_filter", None) if _schema_ok(self._settings) else None
         self.content.sql_panel.set_log_filter(value if value in LOG_FILTERS else "all")
 
@@ -314,9 +320,6 @@ class WorkspaceController(QObject):
         # Solo la pestaña que elige el usuario en el panel; rehacer las pestañas al alternar no cuenta
         if not self._switching and self.mode is WorkspaceMode.DOCK and index >= 0:
             self._write("tab", index)
-
-    def _save_limit(self, _index: int) -> None:
-        self._write("preview_limit", int(self.content.sql_panel.limit_combo.currentData()))
 
     def _save_dock_area(self, area: Qt.DockWidgetArea) -> None:
         name = dock_area_name(area)

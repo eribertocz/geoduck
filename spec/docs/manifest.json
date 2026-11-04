@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 142715,
-      "sha256": "e831b7ef14edfb3228baccad5223e90d228b3fc92ee34e70457c0fdea752903f"
+      "bytes": 143289,
+      "sha256": "1deeeca136020bcb40d82b38c74463f9dfc5845a3f3882eda9091e947828a58c"
     },
     {
       "path": "README.md",
@@ -101,8 +101,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 11005,
-      "sha256": "572923e18797c6586a1fe9425417e86672de5a0091adb84123f7b111b80c22df"
+      "bytes": 11043,
+      "sha256": "a53d003a06b97af84370b8c8cda5a821fb6afacd470e2845b3bdf1818f7b7fca"
     },
     {
       "path": "docs/references.md",
@@ -156,13 +156,13 @@
     },
     {
       "path": "specs/sql-editor-spec.md",
-      "bytes": 12056,
-      "sha256": "e3642d8d085e466da1368d3d8f88cbd11fd6a93a7cc39f2838770cb86991f556"
+      "bytes": 12019,
+      "sha256": "e6e5717238a0f9c026889c52156868002546eddf612996643435744ec99934ce"
     },
     {
       "path": "specs/ui-ux-spec.md",
-      "bytes": 17667,
-      "sha256": "72efd79c6d9381366d18756daf3c4b4efe0085907b1a9686bf2d4cfcd81cc1c3"
+      "bytes": 18240,
+      "sha256": "dda1287560de58b2ee9afdba2313b48a5830db4c9b348d8872ebe0793c86e8bb"
     }
   ]
 }
