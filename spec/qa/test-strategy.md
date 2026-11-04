@@ -82,7 +82,7 @@
 | AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
-| AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
+| AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; reiniciar QGIS con cuadernos guardados abiertos; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; vuelven los guardados (solo sus rutas en las opciones) con el activo y la ruta en su ayuda; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |

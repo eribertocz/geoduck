@@ -96,7 +96,10 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda
   solo tras cada cambio. La **copia de recuperación** (activada por defecto, desactivable) guarda el SQL y la base
   de cada celda de todos los cuadernos en el perfil de QGIS y se borra al cerrar bien; si QGIS se cerró por un
-  fallo, al abrir GeoDuck se ofrece recuperarla. Nunca se guardan resultados ni el historial.
+  fallo, al abrir GeoDuck se ofrece recuperarla. Nunca se guardan resultados ni el historial. Los cuadernos
+  guardados que estaban abiertos al cerrar QGIS se vuelven a abrir al iniciar, con el activo igual (en las opciones
+  de QGIS solo se guardan sus rutas; uno que ya no existe se avisa y se omite). La ayuda de cada cuaderno (lista,
+  selector y su nombre arriba) dice dónde está guardado; sin archivo, solo su nombre (propietario, 2026-11-03).
 - Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
   autocompletado.
 

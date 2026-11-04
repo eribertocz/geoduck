@@ -123,7 +123,8 @@ class NotebookList(QFrame):
             for i in range(self._tabs.count()):
                 item = QListWidgetItem(self._tabs.tabText(i))
                 item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-                item.setToolTip(tr("Double-click or F2 to rename; Delete to close"))
+                # Ayuda: la ruta del archivo si se guardó; si no, solo el nombre (decisión del propietario)
+                item.setToolTip(self._tabs.tabToolTip(i))
                 self.list.addItem(item)
             self.list.setCurrentRow(self._tabs.currentIndex())
         finally:
@@ -194,6 +195,7 @@ class NotebookSelector(QWidget):
             self.combo.clear()
             for i in range(self._tabs.count()):
                 self.combo.addItem(self._tabs.tabText(i))
+                self.combo.setItemData(i, self._tabs.tabToolTip(i), Qt.ItemDataRole.ToolTipRole)
             self.combo.setCurrentIndex(self._tabs.currentIndex())
         finally:
             self._filling = False

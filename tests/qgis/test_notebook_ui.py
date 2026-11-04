@@ -697,3 +697,47 @@ def test_starting_in_the_panel_never_shows_the_side_bar_as_a_loose_window(iface)
     finally:
         gd.unload()
         QgsSettings().remove("geoduck/workspace/mode")
+
+
+def test_saved_notebooks_open_again_after_restarting_and_show_where_they_are(iface, tmp_path):
+    """Prueba del propietario: al cerrar y volver a abrir QGIS, los cuadernos guardados vuelven (solo sus
+    rutas se recuerdan, nunca su SQL), y la ayuda de cada cuaderno dice dónde está guardado."""
+    first = geoduck.classFactory(qgis_window(iface))
+    first.initGui()
+    panel = first.content.sql_panel
+    assert wait_for(lambda: getattr(panel, "_remembering", False))
+    assert panel.notebook_list.list.item(0).toolTip() == "Consulta 1"  # sin guardar: solo el nombre
+    panel.cell.editor.setText("SELECT 'ventas';")
+    panel.choose_save_path = lambda _s: str(tmp_path / "ventas.sql")
+    panel.save_notebook()
+    where = str(tmp_path / "ventas.sql")  # guardado: su ruta, solo en la ayuda
+    assert panel.notebook_list.list.item(0).toolTip() == where and panel.notebook_title.toolTip() == where
+    combo = panel.notebook_selector.combo
+    assert combo.itemData(0, Qt.ItemDataRole.ToolTipRole) == where
+    panel.new_editor_tab("SELECT 'sin guardar';")
+    second = tmp_path / "cobranza.sql"
+    second.write_text("-- %% cell · database: memory\nSELECT 'cobranza';\n", encoding="utf-8")
+    panel.open_notebook_file(str(second))  # el activo al cerrar
+    stored = str(QgsSettings().value("geoduck/notebooks/open"))
+    assert "ventas.sql" in stored and "SELECT" not in stored  # rutas, nunca SQL
+    first.unload()
+    (tmp_path / "ventas.sql").rename(tmp_path / "movido.sql")  # uno ya no está
+    (tmp_path / "movido.sql").rename(tmp_path / "ventas.sql")
+
+    again = geoduck.classFactory(qgis_window(iface))
+    messages = []
+    again.initGui()
+    try:
+        panel = again.content.sql_panel
+        assert wait_for(lambda: getattr(panel, "_remembering", False))
+        assert panel.notebook_list.names() == ["ventas", "cobranza"]  # el vacío sin guardar no vuelve
+        assert panel.notebook_list.list.currentRow() == 1  # el que estaba activo
+        assert panel.editor.text() == "SELECT 'cobranza';"
+        panel.editor_tabs.setCurrentIndex(0)
+        assert panel.editor.text() == "SELECT 'ventas';"
+        (tmp_path / "cobranza.sql").unlink()
+        panel._on_message = messages.append
+        panel.reopen_notebooks()  # un archivo que ya no existe: se avisa y se sigue
+        assert messages and "cobranza.sql" in messages[-1]
+    finally:
+        again.unload()

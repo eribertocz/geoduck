@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 145149,
-      "sha256": "ac5719329bd54c0c36c7479cc9bda67d3a0e5c6e1efbc852bb49be14ae19cec3"
+      "bytes": 145788,
+      "sha256": "b8161968396ac6c6bf00d821b43c8e0a57decaf1041768b0931e969620b5a80d"
     },
     {
       "path": "README.md",
@@ -81,8 +81,8 @@
     },
     {
       "path": "docs/adr/0014-notebooks-on-disk.md",
-      "bytes": 2596,
-      "sha256": "d86a2f697abfa093f2f093c5a178b984e0995ce35c8d86da75a5bd8f7f6d0d55"
+      "bytes": 2796,
+      "sha256": "0a9c81a83bb6a272326bbdf4a1766f1195f595c4500bc9d908fe2064fe005ab3"
     },
     {
       "path": "docs/adr/README.md",
@@ -106,8 +106,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 11176,
-      "sha256": "2d366dafab352246b837829da5888399f075364c5a4f9edf902c85f5fe1b3ba1"
+      "bytes": 11211,
+      "sha256": "cf8a1fcae06606f2e5a2eec4104acae668795c49841bc16488cc89f638d68851"
     },
     {
       "path": "docs/references.md",
@@ -121,8 +121,8 @@
     },
     {
       "path": "docs/security.md",
-      "bytes": 3972,
-      "sha256": "3e8909362aa028e6051e7e8fa6d7b02d0a7521efe3a52b53182bd2a3382f97cf"
+      "bytes": 4077,
+      "sha256": "e90c3fb001e920607e1514112e20f849a5db74fb738bf3d4bd5e8e09abe6ac30"
     },
     {
       "path": "docs/technology.md",
@@ -141,8 +141,8 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 13813,
-      "sha256": "70c7693d705501e9c797c206c1ef25ec188e9e0054d5c7634da6192819edff2e"
+      "bytes": 13954,
+      "sha256": "3a7b9d3a266226327e98b98b3994ada491cea6424cf82d6ac528017a4d91c3cb"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
@@ -161,8 +161,8 @@
     },
     {
       "path": "specs/sql-editor-spec.md",
-      "bytes": 12823,
-      "sha256": "751ab467601635d5f79018f894ebd0ca24b0cb26160c8893c9ea122b975f145b"
+      "bytes": 13181,
+      "sha256": "fda53c4ef3906b611a693df8fc98f88c29db53a3c283a3966ca5deaf081c9c81"
     },
     {
       "path": "specs/ui-ux-spec.md",

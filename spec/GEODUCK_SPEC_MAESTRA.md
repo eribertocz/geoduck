@@ -198,7 +198,7 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-NB-003 | P1 | Resultado debajo de cada celda (tipos, `NULL`, «hay más», filas y tiempo) con «Cargar en QGIS ▾» de G3–G5 | AT-NB-005 |
 | GD-NB-004 | P1 | Resumen del resultado seleccionado: filas, columnas y tipo de cada columna, sin consultas nuevas (ayuda ⓘ del rótulo del resultado) | AT-NB-006 |
 | GD-NB-005 | P1 | Lista de cuadernos de la sesión | AT-NB-007 |
-| GD-NB-008 | P1 | Guardar y abrir cuadernos como `.sql` con marcas de celda, autoguardado en su archivo y copia de recuperación tras un cierre inesperado (ADR-0014) | AT-NB-012 |
+| GD-NB-008 | P1 | Guardar y abrir cuadernos como `.sql` con marcas de celda, autoguardado en su archivo, volver a abrirlos al iniciar QGIS y copia de recuperación tras un cierre inesperado (ADR-0014) | AT-NB-012 |
 | GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
@@ -631,7 +631,10 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda
   solo tras cada cambio. La **copia de recuperación** (activada por defecto, desactivable) guarda el SQL y la base
   de cada celda de todos los cuadernos en el perfil de QGIS y se borra al cerrar bien; si QGIS se cerró por un
-  fallo, al abrir GeoDuck se ofrece recuperarla. Nunca se guardan resultados ni el historial.
+  fallo, al abrir GeoDuck se ofrece recuperarla. Nunca se guardan resultados ni el historial. Los cuadernos
+  guardados que estaban abiertos al cerrar QGIS se vuelven a abrir al iniciar, con el activo igual (en las opciones
+  de QGIS solo se guardan sus rutas; uno que ya no existe se avisa y se omite). La ayuda de cada cuaderno (lista,
+  selector y su nombre arriba) dice dónde está guardado; sin archivo, solo su nombre (propietario, 2026-11-03).
 - Fuera de G7: estadísticas por columna de una tabla (histogramas, distintos), firma de funciones en el
   autocompletado.
 
@@ -1224,7 +1227,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 
 ## 4. Protección de datos
 - Por defecto, no persistir previews ni contenido de capas ni historiales completos que puedan contener datos sensibles.
-- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles. Cuadernos (ADR-0014): el SQL se escribe solo en el archivo `.sql` que el usuario eligió y en la copia de recuperación de su perfil de QGIS (activada por defecto, desactivable, borrada al cerrar bien). El historial del registro sigue sin escribirse en disco.
+- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles. Cuadernos (ADR-0014): el SQL se escribe solo en el archivo `.sql` que el usuario eligió y en la copia de recuperación de su perfil de QGIS (activada por defecto, desactivable, borrada al cerrar bien). Las opciones de QGIS guardan solo las rutas de los cuadernos guardados abiertos, para volver a abrirlos. El historial del registro sigue sin escribirse en disco.
 - Configuración local con catálogo/alias, paths recientes y preferencias, con opción «borrar recientes». No almacenar passwords ni tokens en texto claro.
 - Los datos pueden estar en RAM de QGIS después de entrega; esto es parte del contrato de capas de memoria y depende de QGIS.
 - Cuando se considera un buffer temporal en disco, requiere ADR y controles de borrado/cifrado; no incluirlo en Alpha inicial.
@@ -1402,7 +1405,7 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
-| AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
+| AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; reiniciar QGIS con cuadernos guardados abiertos; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; vuelven los guardados (solo sus rutas en las opciones) con el activo y la ruta en su ayuda; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |

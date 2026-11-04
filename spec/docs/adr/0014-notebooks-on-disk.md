@@ -20,6 +20,8 @@ cuadernos y no perder el trabajo si QGIS se cierra por un fallo.
   se borra. Si al abrir GeoDuck queda una carpeta cuyo candado está libre (su QGIS ya no existe), se ofrece
   «Recuperar» o «Descartar»; en los dos casos se borra.
 - Toda escritura es atómica (temporal junto al destino y renombrado).
+- Al iniciar QGIS se vuelven a abrir los cuadernos guardados que estaban abiertos: en `QgsSettings` solo sus
+  rutas y la del activo (no su SQL); la ayuda de cada cuaderno dice dónde está guardado.
 
 ## Alternativas rechazadas
 - **Guardar solos los cuadernos al cerrar QGIS, sin archivo elegido** (como la DuckDB UI): escribe SQL del
