@@ -217,6 +217,7 @@ class CellWidget(QFrame):
         self.sheet_button.toggled.connect(lambda _on: self.action_requested.emit(self, "sheet"))
         side.addWidget(self.sheet_button)
         self.more_button = _tool("⋯", tr("More actions"))
+        self.more_button.setProperty("geoduck", "more")
         self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         # Como la DuckDB UI: mover (con su atajo a la vista), duplicar y eliminar
         menu = QMenu(self.more_button)

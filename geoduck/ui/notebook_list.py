@@ -18,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -34,6 +35,7 @@ from geoduck.domain.i18n import tr
 def _menu_button(menu: QMenu) -> QToolButton:
     button = QToolButton()
     button.setText("⋯")
+    button.setProperty("geoduck", "more")  # sin la flecha del menú pegada al «⋯»
     button.setAutoRaise(True)
     button.setToolTip(tr("Open, save and recovery of the notebooks"))
     button.setAccessibleName(tr("Notebook menu"))
@@ -72,6 +74,7 @@ class NotebookList(QFrame):
         self.setProperty("geoduck", "card")
         self.setObjectName("geoduckNotebooksCard")
         box = QVBoxLayout(self)
+        box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)  # nunca más estrecha que su título
         box.setContentsMargins(12, 12, 12, 8)
         box.setSpacing(6)
         title = QHBoxLayout()

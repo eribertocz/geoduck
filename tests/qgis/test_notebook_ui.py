@@ -8,7 +8,7 @@ import pytest
 from qgis.core import QgsProject, QgsSettings
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication, QTableWidgetSelectionRange
+from qgis.PyQt.QtWidgets import QApplication, QLabel, QTableWidgetSelectionRange
 
 import geoduck
 from geoduck.domain.export import ExportFormat
@@ -662,3 +662,18 @@ def test_a_new_cell_starts_in_memory_and_shows_it_at_once(ready, tmp_path):
     panel.editor_tabs.setCurrentIndex(0)
     panel.notebook_view._action(first, "duplicate")  # «Duplicar celda» sí copia su base
     assert panel.cell.cell.database == "db"
+
+
+def test_the_side_bar_is_never_narrower_than_its_titles(ready):
+    """Prueba del propietario: al estrechar la barra lateral, «Bases de datos» se cortaba con sus botones."""
+    gd, _panel, _coordinator = ready
+    content = gd.content
+    window = content.window()
+    window.resize(1200, 800)
+    window.show()
+    wait_for(lambda: False, 0.2)
+    content.side_splitter.setSizes([10, 1190])  # el usuario la estrecha todo lo que puede
+    wait_for(lambda: False, 0.2)
+    for label in content.left_column.findChildren(QLabel):
+        if label.text() and label.isVisible():
+            assert label.width() >= label.minimumSizeHint().width(), label.text()

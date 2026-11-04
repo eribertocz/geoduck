@@ -1149,7 +1149,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
   (Ctrl+O), «Guardar cuaderno» (Ctrl+S), «Guardar cuaderno como…» y «Copia de recuperación si QGIS se cierra
   inesperadamente», marcada; también en el panel, junto al selector; ADR-0014) encima de «Bases de datos» (el
   explorador de G5–G6, sin cambios). Es una barra lateral plegable, como la de la DuckDB UI: «◫» a la izquierda del
-  nombre del cuaderno, o Ctrl+B, la oculta y la muestra; se recuerda (decisión del propietario, 2026-11-03). En el
+  nombre del cuaderno, o Ctrl+B, la oculta y la muestra; se recuerda (decisión del propietario, 2026-11-03). Nunca es más estrecha que sus títulos y botones. En el
   panel, los cuadernos van en el selector de la pestaña SQL.
 - **Centro:** las celdas del cuaderno, una debajo de otra, con desplazamiento (capturas del propietario de la
   DuckDB UI, 2026-11-03). Cada celda:

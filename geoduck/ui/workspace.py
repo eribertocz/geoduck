@@ -19,6 +19,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QMenu,
     QPushButton,
@@ -282,6 +283,9 @@ class WorkspaceContent(QWidget):
         card.setProperty("geoduck", "card")
         card.setObjectName("geoduckExplorerCard")
         card_layout = QVBoxLayout(card)
+        # Nunca más estrecha que su contenido: «Bases de datos» se cortaba con «+» y «⟳» (Qt lo mantiene
+        # aunque cambien los botones de la sesión)
+        card_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         card_layout.setContentsMargins(12, 12, 12, 0)
         card_layout.setSpacing(10)
         self._build_catalog_actions()
