@@ -11,12 +11,10 @@ No se cargan extensiones ni se cambia la configuración de la sesión (ADR-0011)
 from __future__ import annotations
 
 import json
-import math
-import re
 from collections.abc import Callable
 from typing import Any
 
-from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsGeometry, QgsProject, QgsVectorLayer, QgsWkbTypes
+from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import (
@@ -37,6 +35,7 @@ from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_orig
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import crs_from_field
+from geoduck.qgis_bridge.extent import extent_from_stats, scan_extent
 from geoduck.qgis_bridge.families import family, target_type
 from geoduck.qgis_bridge.memory import LoadCancelledError
 from geoduck.qgis_bridge.provider import KEY, encode_uri
@@ -44,7 +43,6 @@ from geoduck.qgis_bridge.provider import KEY, encode_uri
 Done = Callable[[LoadReport | BaseException], None]
 
 _INTEGER_KEYS = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER"}
-_STATS_AXIS = re.compile(r"(?P<axis>[XY]): \[(?P<lo>[^,\]]+), (?P<hi>[^\]]+)\]")
 
 
 def _rows(handle: Any, sql: str, max_rows: int = 100) -> list[tuple[Any, ...]]:
@@ -101,42 +99,6 @@ def _edit_info(
     defaults = {str(c): str(d) for c, d in rows}
     expr = defaults.get(key) if key else None
     return None, expr if expr and expr.lower().startswith("nextval(") else None, sorted(defaults)
-
-
-def _extent_from_stats(value: Any) -> tuple[float, float, float, float] | None:
-    """Extensión desde `stats(geom)`: dict en DuckDB 2.x, texto en 1.5."""
-    try:
-        if isinstance(value, dict):
-            e = value.get("extent") or {}
-            box = (float(e["x_min"]), float(e["y_min"]), float(e["x_max"]), float(e["y_max"]))
-        else:
-            axes = {m["axis"]: (float(m["lo"]), float(m["hi"])) for m in _STATS_AXIS.finditer(str(value))}
-            box = (axes["X"][0], axes["Y"][0], axes["X"][1], axes["Y"][1])
-    except (KeyError, TypeError, ValueError):
-        return None
-    finite = all(math.isfinite(v) for v in box)
-    return box if finite and box[0] <= box[2] and box[1] <= box[3] else None
-
-
-def _scan_extent(handle: Any, token: Any, sql: str) -> tuple[float, float, float, float] | None:
-    """Extensión exacta recorriendo la geometría una vez, en el worker; ignora nulas y vacías."""
-    xmin = ymin = math.inf
-    xmax = ymax = -math.inf
-    with handle.arrow_batches(sql, batch_size=65_536) as reader:
-        for batch in reader:
-            token.raise_if_cancelled()
-            for wkb in batch.column(0).to_pylist():
-                if wkb is None:
-                    continue
-                g = QgsGeometry()
-                g.fromWkb(wkb)
-                if g.isNull() or g.isEmpty():
-                    continue
-                box = g.boundingBox()
-                xmin, ymin = min(xmin, box.xMinimum()), min(ymin, box.yMinimum())
-                xmax, ymax = max(xmax, box.xMaximum()), max(ymax, box.yMaximum())
-    finite = all(math.isfinite(v) for v in (xmin, ymin, xmax, ymax))
-    return (xmin, ymin, xmax, ymax) if finite else None
 
 
 def header_codes(headers: list[str]) -> set[int]:
@@ -275,10 +237,10 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         out["extent"] = tuple(float(v) for v in box) if None not in box else None
     else:
         stats = _rows(handle, f"SELECT stats({g}) FROM (\n{inner}\n) AS __geoduck_q LIMIT 1", 1)
-        out["extent"] = _extent_from_stats(stats[0][0]) if stats else None
+        out["extent"] = extent_from_stats(stats[0][0]) if stats else None
     if out["extent"] is None and count:
         # Estadísticas inservibles (p. ej. geometrías vacías dan -inf…inf): un recorrido de la geometría.
-        out["extent"] = _scan_extent(handle, token, f"SELECT {g} FROM (\n{inner}\n) AS __geoduck_q")
+        out["extent"] = scan_extent(handle, token, f"SELECT {g} FROM (\n{inner}\n) AS __geoduck_q")
     batches: list[Any] = []  # el campo GeoArrow (con su CRS) de una fila
     handle.read_arrow(
         f"SELECT {quote_identifier(plan.geometry.name)} FROM ({plan.sql}) AS __geoduck_c "

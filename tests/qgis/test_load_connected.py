@@ -6,6 +6,7 @@ Coordinador, worker DuckDB, proveedor `geoduck` y QGIS reales.
 
 from __future__ import annotations
 
+import duckdb
 import pytest
 from qgis.core import (
     Qgis,
@@ -17,7 +18,7 @@ from qgis.core import (
 )
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import LoadFailed, LoadFinished
+from geoduck.app.events import LoadFailed, LoadFinished, SpatialActivated
 from geoduck.domain.load import LoadMode, LoadRequest
 from geoduck.domain.session import SessionState
 from geoduck.engine.worker import SessionWorker
@@ -389,6 +390,51 @@ def test_layer_filter_like_any_qgis_layer(session):
     assert copy.subsetString() == "id < 10 AND nombre LIKE 'n ñ %'" and len(ids(copy)) == 10
     assert layer.setSubsetString("")
     assert layer.featureCount() == N and len(ids(layer)) == N
+
+
+def _spatial_available() -> bool:
+    con = duckdb.connect()
+    try:
+        con.execute("LOAD spatial")
+        return True
+    except duckdb.Error:
+        return False
+    finally:
+        con.close()
+
+
+def _box(layer):
+    e = layer.extent()
+    return (e.xMinimum(), e.yMinimum(), e.xMaximum(), e.yMaximum())
+
+
+def _check_filtered_extent(layer):
+    assert _box(layer) == pytest.approx((0, 0, 99, 49))
+    assert layer.setSubsetString("id IN (1010, 2025)")  # puntos (10 10) y (25 20)
+    layer.updateExtents()
+    assert _box(layer) == pytest.approx((10, 10, 25, 20))
+    assert layer.setSubsetString("id < 0")  # nada: extensión vacía
+    layer.updateExtents()
+    assert layer.extent().isEmpty() or layer.extent().isNull()
+    assert layer.setSubsetString("")  # sin filtro: vuelve la de toda la tabla
+    layer.updateExtents()
+    assert _box(layer) == pytest.approx((0, 0, 99, 49))
+
+
+def test_layer_filter_changes_the_extent(session):
+    """Capa → Filtrar…: «Zoom a la capa» se ajusta a lo filtrado (sin spatial: recorre la geometría)."""
+    _, layer = load_table(session)
+    _check_filtered_extent(layer)
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_layer_filter_changes_the_extent_with_spatial(session):
+    """Con spatial cargada por el usuario, la extensión filtrada sale de ST_Extent_Agg."""
+    session.coordinator.activate_spatial(install=False)
+    assert wait_for(lambda: any(isinstance(e, SpatialActivated) for e in session.events), TIMEOUT)
+    assert wait_for(lambda: session.coordinator.state is SessionState.READY, TIMEOUT)
+    _, layer = load_table(session)
+    _check_filtered_extent(layer)
 
 
 def test_extent_with_empty_geometries_is_computed(session):

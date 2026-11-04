@@ -1078,39 +1078,39 @@
             <translation>Reparación no completada: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="165" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="127" />
             <location filename="../../geoduck/qgis_bridge/snapshot.py" line="413" />
             <source>Mixed Z/M dimensions: geometries without them are shown with NaN</source>
             <translation>Dimensiones Z/M mixtas: las geometrías sin ellas se muestran con NaN</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="199" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="161" />
             <location filename="../../geoduck/ui/explorer.py" line="389" />
             <source>read only</source>
             <translation>solo lectura</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="94" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="92" />
             <source>read only (database in read-only mode)</source>
             <translation>solo lectura (base en modo lectura)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="160" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="122" />
             <source>No geometries: unknown geometry type</source>
             <translation>Sin geometrías: tipo de geometría desconocido</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="162" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="124" />
             <source>Mixed geometry types: per-type symbology not available</source>
             <translation>Tipos de geometría mixtos: simbología por tipo no disponible</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="201" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="163" />
             <source>read only. To edit, load the table from the explorer (right-click or double-click → Load into QGIS…)</source>
             <translation>solo lectura. Para editar, cargue la tabla desde el explorador (clic derecho o doble clic → Cargar en QGIS…)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="332" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="294" />
             <location filename="../../geoduck/qgis_bridge/memory.py" line="101" />
             <location filename="../../geoduck/qgis_bridge/memory.py" line="113" />
             <location filename="../../geoduck/qgis_bridge/multi.py" line="149" />
@@ -1120,33 +1120,33 @@
             <translation>Carga cancelada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="426" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="388" />
             <location filename="../../geoduck/ui/explorer.py" line="391" />
             <source>read-write</source>
             <translation>lectura y escritura</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="455" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="417" />
             <source>Mixed geometry types: {0} Connected layers, one per type</source>
             <translation>Tipos de geometría mixtos: {0} capas Conectadas, una por tipo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="398" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="360" />
             <source>Extent not available</source>
             <translation>Extensión no disponible</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="444" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="406" />
             <source>Mixed geometry types</source>
             <translation>Tipos de geometría mixtos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="458" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="420" />
             <source>{0} rows without geometry do not appear in the per-type layers</source>
             <translation>{0} filas sin geometría no aparecen en las capas por tipo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/connected.py" line="405" />
+            <location filename="../../geoduck/qgis_bridge/connected.py" line="367" />
             <source>QGIS could not create the connected layer: {0}</source>
             <translation>QGIS no pudo crear la capa conectada: {0}</translation>
         </message>
@@ -1296,52 +1296,57 @@
             <translation>La lectura falló: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="80" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="81" />
             <source>GeoDuck (connected DuckDB)</source>
             <translation>GeoDuck (DuckDB conectada)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="804" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="805" />
             <source>DuckDB SQL (WHERE clause)</source>
             <translation>SQL de DuckDB (cláusula WHERE)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="392" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="393" />
             <source>Session not available</source>
             <translation>Sesión no disponible</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="757" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="758" />
             <source>Saving without going through GeoDuck: rejected so as not to write outside a transaction</source>
             <translation>Guardado sin pasar por GeoDuck: rechazado para no escribir fuera de una transacción</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="381" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="826" />
+            <source>The extent of the filter takes too long: the whole layer's extent is kept</source>
+            <translation>La extensión del filtro tarda demasiado: se mantiene la de toda la capa</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="382" />
             <source>The session is busy; the layer will be completed when repainting</source>
             <translation>La sesión está ocupada; la capa se completará al repintar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="604" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="605" />
             <source>Invalid URI: {0}</source>
             <translation>URI no válida: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="701" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="702" />
             <source>Connected layer not available ({0}): {1}</source>
             <translation>Capa conectada no disponible ({0}): {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="701" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="702" />
             <source>query</source>
             <translation>consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="824" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="850" />
             <source>The session is busy: apply the filter when the running operation finishes</source>
             <translation>La sesión está ocupada: aplique el filtro cuando termine la operación en curso</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/provider.py" line="829" />
+            <location filename="../../geoduck/qgis_bridge/provider.py" line="855" />
             <source>Invalid filter for DuckDB: {0}</source>
             <translation>Filtro no válido para DuckDB: {0}</translation>
         </message>
