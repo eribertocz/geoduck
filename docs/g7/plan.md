@@ -1,6 +1,6 @@
 # G7 · `v0.8.0a1` Notebook — plan
 
-**Estado:** En curso (E0 fusionado, #91; decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..006.
+**Estado:** En aceptación (E0–E4 fusionados, #91–#97; decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..006.
 **Contrato:** sql-editor-spec §7 («G7 · Notebook»), ui-ux-spec §10, `docs/g7/maqueta/` (maqueta propuesta, a
 aprobar). Parte del workspace de G5 y del editor de G6: nada de G3/G4 cambia.
 
@@ -43,8 +43,8 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 
 ## 4. Por verificar durante las entregas
 
-- Mayús+Intro, Ctrl+E y Ctrl+↑/↓ frente a los comandos de QScintilla (como Ctrl+T en G6) (E2).
-- Arrastrar celdas con su editor QScintilla dentro, en Qt 5 y Qt 6 (E2).
+- ~~Atajos frente a QScintilla~~ Hecho en E2: Mayús+Intro, Ctrl+E y Ctrl+↑/↓ se liberan en los editores de GeoDuck (Ctrl+↑ probado con la tecla real); en Windows, guía §3.
+- Arrastrar celdas con el ratón: la CI prueba el modelo y la señal de soltar; el gesto real, en la guía de Windows §4.
 - ~~Parquet con geometría sin SRC~~ Decidido en E3 (propietario, 2026-11-03): sin SRC, GeoParquet 1.0 y aviso (`OGC:CRS84`); con SRC, `GEOPARQUET_VERSION 'V2'` (la opción por defecto falla). Verificado en DuckDB 1.5.0 y 2.0.0.
 - ~~Exportación cancelada o fallida~~ Hecho en E3: temporal oculto en la misma carpeta y renombrado al terminar; si se cancela o falla, se borra y el archivo previo no cambia.
 - ~~Coste de muchos `QgsCodeEditorSQL`~~ Medido en E3: 100 celdas en <1 s (antes ~15 s: añadir una celda rehacía todas); ejecutar las 100, 4–5 s; ~0,5 MB por resultado.
@@ -64,4 +64,5 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 | E2b Quitar «Explicar» del motor | Fusionado: sin parámetro `explain` en motor, worker, puertos y coordinador; el plan se pide con `EXPLAIN` escrito en la celda (AT-SQL-010) | #94 |
 | E2c Cargar con la base de la celda | Fusionado: cada resultado recuerda la base donde se ejecutó (`StatementResult.database`); «Cargar en QGIS» (Memoria, Copia rápida y Conectada, también sus lecturas posteriores) repite la consulta en ella y deja la base en uso como estaba (`SessionWorker.submit(database=…)`). Antes fallaba si otra celda había cambiado la base en uso | #95 |
 | E3 Exportar, cuadernos y resumen | Fusionado: «Exportar ▾» CSV/Parquet con `COPY` de la consulta completa (en la base del resultado, cancelable, temporal y renombrado, aviso de SRC); lista «Cuadernos» (ventana: nuevo, renombrar, cerrar) y selector en el panel; resumen del resultado (columna derecha plegable; en el panel, ayuda ⓘ); rendimiento: añadir una celda ya no rehace las demás. AT-NB-006, 007, 009, 011 | #96 |
-| E4 Pulido, panel estrecho y accesibilidad | En revisión: celda como tarjeta (borde de acento en la activa, márgenes fuera, base como etiqueta, editor desde una línea); resultado con fondo propio, sin pestaña si es uno solo y sin botones sin tabla (opción A); vista previa de 50 filas por defecto (10/50/200/1000); ventana: nombre del cuaderno arriba, resumen con «Celda N · base» y marcas de tipo; panel: selector y acciones en una fila, «Copiar», «Exportar ▾» y «Cargar» al pie para la celda activa; nombres accesibles, ayuda y foco de teclado en todas las acciones; inglés y español. AT-NB-010 | — |
+| E4 Pulido, panel estrecho y accesibilidad | Fusionado: celda como tarjeta (borde de acento en la activa, márgenes fuera, base como etiqueta, editor desde una línea); resultado con fondo propio, sin pestaña si es uno solo y sin botones sin tabla (opción A); vista previa de 50 filas por defecto (10/50/200/1000); ventana: nombre del cuaderno arriba, resumen con «Celda N · base» y marcas de tipo; panel: selector y acciones en una fila, «Copiar», «Exportar ▾» y «Cargar» al pie para la celda activa; nombres accesibles, ayuda y foco de teclado en todas las acciones; inglés y español. AT-NB-010 | #97 |
+| E5 Aceptación | En revisión: `docs/g7/acceptance.md` (AT-NB-001..011, decisiones, hallazgos F-108..F-113) y guía manual en Windows `docs/certification/notebook.md`; regresión completa en la CI | — |
