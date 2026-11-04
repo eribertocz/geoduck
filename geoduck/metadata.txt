@@ -6,13 +6,22 @@ supportsQt6=True
 description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
 about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica.
 
-    ESTADO: Alpha (0.6.0a1, Workspace UX). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
+    ESTADO: Alpha (0.8.0a1, Notebook). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
     DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en GeoDuck para comprobarlos. La extensión DuckDB «spatial» es opcional.
-version=0.6.0a1
+version=0.8.0a1
 author=eribertocz
 email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
-changelog=0.6.0a1 (G5 · Workspace UX, incluye G4 · Spatial Confidence)
+changelog=0.8.0a1 (G7 · Notebook, incluye G6 · SQL Professional)
+    - Cuadernos de celdas SQL: cada celda con su base, su resultado y «Cargar ▾»; Ctrl+Intro ejecuta la celda, Ctrl+Mayús+Intro la selección y Mayús+Intro la celda y avanza.
+    - «Exportar ▾» del resultado a CSV o Parquet (GeoParquet) con la consulta completa.
+    - Guardar y abrir cuadernos como .sql (Ctrl+S, Ctrl+O), con autoguardado y copia de recuperación tras un cierre inesperado (desactivable).
+    - Los cuadernos guardados vuelven al reiniciar QGIS; su ruta aparece en la ayuda.
+    - Barra lateral plegable (Ctrl+B), números de línea en los editores y Ctrl+C para copiar celdas de la tabla.
+    - Capa conectada: con Capa → Filtrar…, «Zoom a la capa» se ajusta a lo filtrado.
+    - Corrección: «Cargar» y «Exportar» usan la base donde se ejecutó la celda.
+    - G6: columnas en el explorador, autocompletado (bases, tablas, columnas y funciones), pestañas de editor y textos en inglés y español según el idioma de QGIS.
+    0.6.0a1 (G5 · Workspace UX, incluye G4 · Spatial Confidence)
     - GeoDuck se abre en su propia ventana; «Acoplar a QGIS» lo pasa a un panel y vuelve, sin perder sesión, texto ni resultados.
     - Explorador con búsqueda y grupos (tablas, vistas, temporales) y acceso de cada base.
     - Resultados con el tipo de cada columna; NULL se distingue del texto vacío.
