@@ -21,6 +21,9 @@ def recovery_folder(tmp_path, monkeypatch):
     ninguna copia de otra prueba aparece como «QGIS se cerró mal»."""
     folder = tmp_path / "recuperacion"
     monkeypatch.setenv("GEODUCK_RECOVERY_DIR", str(folder))
+    settings = qgis_core.QgsSettings()
+    settings.remove("geoduck/notebooks/open")  # ni cuadernos guardados de otra prueba al iniciar
+    settings.remove("geoduck/notebooks/active")
     return folder
 
 

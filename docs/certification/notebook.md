@@ -88,6 +88,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g7/windo
 | 6q | Cierre QGIS normalmente y vuelva a abrirlo | No hay aviso: la copia se borró |
 | 6r | «⋯» → desmarque «Copia de recuperación…» | Se borra la carpeta `geoduck\recuperacion\…` del perfil de QGIS y no se vuelve a escribir |
 | 6s | En una celda con base `db`, pulse «+ Añadir celda» | La celda nueva muestra ya `memory` en su selector (sin ejecutarla); «⋯» → «Duplicar celda» conserva `db` |
+| 6t | Con «ventas» guardado y otro cuaderno sin guardar, cierre QGIS normalmente y vuelva a abrirlo | Vuelve «ventas» (y queda activo el que lo estaba); el sin guardar no vuelve. Al pasar el ratón sobre «ventas», su ruta; sobre uno sin guardar, solo su nombre |
 
 ## 7. Idioma y aspecto
 

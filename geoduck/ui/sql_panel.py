@@ -13,6 +13,7 @@ caracteres), nunca con posiciones absolutas de QScintilla, que son bytes (F-41).
 from __future__ import annotations
 
 import contextlib
+import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -122,6 +123,9 @@ def _free_keys(editor: Any, keys: tuple[str, ...]) -> None:
 AUTOSAVE_MS = 1500
 #: Copia de recuperación de los cuadernos: activada por defecto (decisión del propietario, ADR-0014).
 RECOVERY_SETTING = "geoduck/notebooks/recovery"
+#: Cuadernos guardados abiertos (solo sus rutas, nunca su SQL) y el activo: se vuelven a abrir al iniciar.
+OPEN_SETTING = "geoduck/notebooks/open"
+ACTIVE_SETTING = "geoduck/notebooks/active"
 
 
 def _file_name(title: str) -> str:
@@ -563,7 +567,7 @@ class SqlPanel(QWidget):
         self._log_open_wide = False  # ventana: plegado por defecto
         self.log_section = self._build_log_card()
         self.set_log_open(False)  # ya con su tarjeta: la altura de una línea
-        QTimer.singleShot(0, self.check_recovery)  # ¿quedó una copia de un QGIS que se cerró mal?
+        QTimer.singleShot(0, self._reopen_at_start)  # recuperación y cuadernos guardados de la última vez
         # Divisor: celdas (cada una con su resultado, G7) | registro, redimensionable por el usuario.
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.splitter.setHandleWidth(12)
@@ -636,9 +640,13 @@ class SqlPanel(QWidget):
     def _refresh_notebooks(self) -> None:
         self.notebook_list.refresh()
         self.notebook_selector.refresh()
+        self._remember_notebooks()
         title = getattr(self, "notebook_title", None)
         if title is not None:
-            title.setText(self.editor_tabs.tabText(self.editor_tabs.currentIndex()))
+            index = self.editor_tabs.currentIndex()
+            title.setText(self.editor_tabs.tabText(index))
+            # Dónde está guardado, solo como ayuda; sin guardar, solo su nombre (decisión del propietario)
+            title.setToolTip(self.editor_tabs.tabToolTip(index))
 
     def rename_notebook(self, index: int, name: str) -> None:
         """Renombrar un cuaderno (lista «Cuadernos»): solo su nombre; nada se guarda en disco."""
@@ -871,10 +879,10 @@ class SqlPanel(QWidget):
         path = path or self.choose_open_path(self._notebook_dir or str(Path.home()))
         if not path:
             return False
-        for i, view in enumerate(self.notebook_views()):
-            if view.notebook.path and Path(view.notebook.path).resolve() == Path(path).resolve():
-                self.editor_tabs.setCurrentIndex(i)  # ya abierto: se muestra
-                return True
+        index = self._open_index(path)
+        if index >= 0:
+            self.editor_tabs.setCurrentIndex(index)  # ya abierto: se muestra
+            return True
         try:
             notebook = open_notebook(path)
         except (OSError, UnicodeDecodeError) as exc:
@@ -941,6 +949,51 @@ class SqlPanel(QWidget):
         for folder in orphans:
             RecoveryStore.discard(folder)
         self._schedule_save()
+
+    def _reopen_at_start(self) -> None:
+        """Al abrir GeoDuck: primero la copia de un QGIS que se cerró mal; después, los cuadernos guardados
+        que estaban abiertos (los que ya se recuperaron no se repiten)."""
+        self.check_recovery()
+        self.reopen_notebooks()
+        self._remembering = True
+
+    def reopen_notebooks(self) -> None:
+        """Vuelve a abrir los cuadernos guardados que estaban abiertos al cerrar QGIS (propietario)."""
+        settings = QgsSettings()
+        try:
+            paths = [str(p) for p in json.loads(str(settings.value(OPEN_SETTING, "[]")))]
+        except (TypeError, ValueError):
+            paths = []
+        active = str(settings.value(ACTIVE_SETTING, "") or "")
+        missing = []
+        for path in paths:
+            if not Path(path).is_file():
+                missing.append(Path(path).name)
+            elif self._open_index(path) < 0:
+                self.open_notebook_file(path)
+        if missing:
+            self._on_message(tr("Saved notebooks not found: {0}").format(", ".join(missing)))
+        index = self._open_index(active) if active else -1
+        if index >= 0:
+            self.editor_tabs.setCurrentIndex(index)
+
+    def _open_index(self, path: str) -> int:
+        """Pestaña del cuaderno guardado en `path`, o -1."""
+        for i, view in enumerate(self.notebook_views()):
+            if view.notebook.path and Path(view.notebook.path).resolve() == Path(path).resolve():
+                return i
+        return -1
+
+    def _remember_notebooks(self) -> None:
+        """Las rutas de los cuadernos guardados abiertos (y el activo), en las opciones de QGIS."""
+        if not getattr(self, "_remembering", False):
+            return  # al iniciar, hasta abrir los de la última vez
+        paths = [view.notebook.path for view in self.notebook_views() if view.notebook.path]
+        settings = QgsSettings()
+        settings.setValue(OPEN_SETTING, json.dumps(paths, ensure_ascii=False))
+        view = self.editor_tabs.currentWidget()
+        active = view.notebook.path if isinstance(view, NotebookView) else None
+        settings.setValue(ACTIVE_SETTING, active or "")
 
     def _ask_recover(self, count: int) -> bool:
         box = QMessageBox(self)
