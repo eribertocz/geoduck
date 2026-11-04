@@ -276,7 +276,10 @@ class CellWidget(QFrame):
         self.editor.setFixedHeight(height)
 
     def show_databases(self, catalog: CatalogSnapshot | None, in_use: str | None) -> None:
-        """Rellena el selector con las bases del catálogo; una celda sin base toma la base en uso."""
+        """Rellena el selector con las bases del catálogo; una celda sin base toma la base en uso. Nunca
+        muestra una base distinta de la que usará al ejecutarse."""
+        if in_use is None and catalog is not None:
+            in_use = catalog.default
         if self.cell.database is None and in_use is not None:
             self.cell.database = in_use
         self.database_combo.blockSignals(True)

@@ -786,6 +786,8 @@ class SqlPanel(QWidget):
         ):
             action = widget.run_menu.addAction(text)
             action.triggered.connect(lambda _c=False, s=slot: s())
+        catalog = self._coordinator.catalog  # el selector de base, ya al crear la celda (no al ejecutarla)
+        widget.show_databases(catalog, catalog.default if catalog is not None else None)
         self._render_cell(widget, self._coordinator.state)
 
     def close_current_editor_tab(self) -> bool:
@@ -1464,7 +1466,8 @@ class SqlPanel(QWidget):
             self._on_message(f"[{code}] {failed.message}")
         if cell.results.count():
             cell.results.setCurrentIndex(cell.results.count() - 1)
-        cell.show_databases(self._coordinator.catalog, None)
+        catalog = self._coordinator.catalog
+        cell.show_databases(catalog, catalog.default if catalog is not None else None)
         self._render_cell(cell, self._coordinator.state)  # resumen y su «ⓘ»
 
     def _cell_for(self, run_id: int) -> CellWidget:

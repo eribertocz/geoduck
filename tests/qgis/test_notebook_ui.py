@@ -641,3 +641,21 @@ def test_the_recovery_copy_can_be_turned_off(ready):
     assert panel.recovery.folder is None
     panel.recovery_action.trigger()
     assert panel.recovery.folder is not None
+
+
+def test_a_new_cell_shows_its_database_at_once_copied_from_the_active_cell(ready, tmp_path):
+    """Prueba del propietario: el selector de una celda nueva estaba vacío hasta ejecutarla."""
+    _plugin, panel, coordinator = ready
+    coordinator.execute_sql(f"ATTACH '{tmp_path / 'db.duckdb'}' AS db", RunScope.ALL)
+    idle(panel, coordinator)
+    assert wait_for(lambda: coordinator.catalog.get("db") is not None)
+    first = panel.cell
+    assert first.database_combo.currentData() == "memory"  # la base en uso
+    fresh = panel.notebook_view.add_cell(1)
+    names = [fresh.database_combo.itemData(i) for i in range(fresh.database_combo.count())]
+    assert names == ["memory", "db"] and fresh.database_combo.currentData() == fresh.cell.database == "memory"
+    panel.notebook_view.set_active(first)
+    first.database_combo.setCurrentIndex(first.database_combo.findData("db"))
+    first.database_combo.activated.emit(first.database_combo.currentIndex())  # el usuario elige `db`
+    copied = panel.notebook_view.add_cell(1)  # copia la base de la celda activa
+    assert copied.database_combo.currentData() == copied.cell.database == "db"

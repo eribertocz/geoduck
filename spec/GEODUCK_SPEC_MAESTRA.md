@@ -606,7 +606,7 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   siempre válidos, y las tablas temporales se ven desde cualquier base. Verificado con DuckDB 1.5.0 y 2.0.0: `USE`
   se admite dentro de una transacción y `ROLLBACK` no lo deshace; una transacción solo puede escribir en **una**
   base (error de DuckDB, que se muestra tal cual). La base en uso de la sesión queda la de la última celda
-  ejecutada. Una celda nueva toma la base en uso. Si el SQL de la celda contiene su propio `USE`, gana el del SQL y
+  ejecutada. Una celda nueva copia la base de la celda activa (sin celda activa, la base en uso) y la muestra en su selector desde que se crea. Si el SQL de la celda contiene su propio `USE`, gana el del SQL y
   el selector de la celda lo refleja. Si la base de la celda se desadjunta, la celda lo indica y no se ejecuta hasta
   elegir otra. Cada resultado recuerda la base donde se ejecutó: «Cargar en QGIS» (las tres modalidades, también
   cada lectura de una capa Conectada) y «Exportar» repiten la consulta en esa base y después dejan la base en uso
