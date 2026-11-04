@@ -130,14 +130,13 @@ def test_results_show_each_column_type_and_tell_null_from_empty(plugin):  # noqa
     assert texto.text() == "NULL" and not texto.font().italic() and texto.toolTip() == ""  # el texto 'NULL'
 
 
-@pytest.mark.parametrize(("rows", "more"), [(49, False), (50, False), (51, True)])
+@pytest.mark.parametrize(("rows", "more"), [(19, False), (20, False), (21, True)])
 def test_there_is_more_only_when_rows_exceed_the_limit(plugin, rows, more):  # noqa: F811
     coordinator = start(plugin)
     panel = plugin.content.sql_panel
-    panel.limit_combo.setCurrentIndex(panel.limit_combo.findData(50))
     run(panel, coordinator, f"SELECT range AS n FROM range({rows})")
     view = panel.results.widget(0)
-    assert view.table.rowCount() == min(rows, 50)
+    assert view.table.rowCount() == min(rows, 20)
     assert ("hay más" in panel.results.tabText(0)) is more
 
 
@@ -182,7 +181,6 @@ def test_a_narrow_panel_compacts_labels_but_keeps_every_action(plugin):  # noqa:
         assert button.text() and button.toolTip() and button.accessibleName()  # texto y acción, siempre
         right = button.mapTo(panel, button.rect().topRight()).x()
         assert 0 <= right <= panel.width()  # dentro del panel: alcanzable
-    assert panel.limit_combo.isVisibleTo(content)
     ws.dock.resize(1000, 700)
     assert wait_for(lambda: not panel.compact)  # con espacio, nunca compacta
 

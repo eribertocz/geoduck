@@ -24,7 +24,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g7/windo
 
 | # | Haga | Debe pasar |
 |---|---|---|
-| 2a | «+ Añadir celda»; en su selector de base elija `otra`; escriba `SELECT * FROM consumidores` y pulse **Ctrl+Intro** | Tabla debajo con «50+ filas · X ms»; sin pestaña (un solo resultado) |
+| 2a | «+ Añadir celda»; en su selector de base elija `otra`; escriba `SELECT * FROM consumidores` y pulse **Ctrl+Intro** | Tabla debajo con «20+ filas · X ms ⓘ» (20 filas de vista previa); números de línea en el editor; sin pestaña (un solo resultado) |
 | 2b | Añada otra celda en `memory` con `SELECT c.zona, t.precio FROM otra.consumidores c JOIN tarifas t USING (zona) LIMIT 5` | Funciona: se lee otra base por su nombre |
 | 2c | Vuelva a la celda 2a y pulse «Cargar ▾» → «Copia en memoria» | Capa de 100 000 puntos en QGIS, aunque la última celda ejecutada sea `memory` |
 | 2d | Repita 2c con «Conectada a DuckDB» y mueva el mapa | La capa se dibuja; ejecutar otra celda no la rompe |
@@ -71,11 +71,15 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g7/windo
 |---|---|---|
 | 6a | «Cuadernos» → «+»; doble clic en su nombre y escriba «Cobranza» | Cuaderno nuevo y renombrado; cambiar entre cuadernos conserva sus celdas |
 | 6b | Seleccione un cuaderno con SQL y pulse Supr | Pregunta antes de cerrarlo |
-| 6c | Columna derecha «Resultado» | «50+ filas · 3 columnas», «Celda N · base», cada columna con su tipo; «ⓘ» arriba la oculta y la muestra |
+| 6c | Pase el ratón sobre «20+ filas · X ms ⓘ» | Ayuda con «20+ filas · 3 columnas» y cada columna con su tipo (no hay columna derecha) |
 | 6d | Ejecute una celda larga y, mientras corre, «Acoplar a QGIS» y «Abrir en ventana» | Mismas celdas y resultados; la ejecución sigue y se puede cancelar |
-| 6e | En el panel acoplado, estréchelo al mínimo | Selector del cuaderno y «Ejecutar todo» arriba; «Copiar», «Exportar» y «Cargar en QGIS» al pie (de la celda activa); ninguna acción desaparece; «3 filas · X ms ⓘ» muestra el resumen al pasar el ratón |
+| 6e | En el panel acoplado, estréchelo al mínimo | Selector del cuaderno y «Ejecutar todo» arriba; «Exportar» y «Cargar en QGIS» al pie (de la celda activa); ninguna acción desaparece; «3 filas · X ms ⓘ» muestra el resumen al pasar el ratón |
 | 6f | Recorra el panel con Tab | Cada botón recibe el foco y tiene ayuda |
-| 6g | «Filas» arriba | 10 / 50 / 200 / 1000; por defecto 50; se recuerda al reiniciar QGIS |
+| 6g | Ventana: «◫» (o Ctrl+B) | Se oculta y se muestra la barra «Cuadernos + Bases de datos»; se recuerda al reiniciar |
+| 6i | Ventana: «▸ Registro · Todo (N) · …» abajo | Plegado por defecto en una línea; «▸» lo abre; se recuerda al reiniciar |
+| 6j | En una tabla de resultado, seleccione unas celdas y pulse Ctrl+C; pegue en Excel | Se pegan esas celdas en columnas; con Ctrl+A antes, también los nombres |
+| 6k | El selector de base de una celda | Se ve como desplegable (icono de base, nombre y «▾»), no como botón |
+| 6l | Pie de la ventana: «Ver en el mapa» | Con icono de mapa |
 | 6h | Reinicie QGIS | Los cuadernos no se guardan (como en G6) |
 
 ## 7. Idioma y aspecto

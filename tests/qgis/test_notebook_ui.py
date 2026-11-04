@@ -8,7 +8,7 @@ import pytest
 from qgis.core import QgsProject, QgsSettings
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication
+from qgis.PyQt.QtWidgets import QApplication, QTableWidgetSelectionRange
 
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.load import LoadMode
@@ -149,8 +149,10 @@ def test_each_cell_runs_on_its_database_and_keeps_its_result(ready, tmp_path):
     _plugin.content.load_flow._dialog_factory = AutoDialog
     first.load_button.click()
     assert wait_for(lambda: len(QgsProject.instance().mapLayers()) == before + 1)
-    first.copy_button.click()
-    assert QApplication.clipboard().text() == "cinco\n5"
+    view = panel._cell_view(first)  # Ctrl+C copia lo seleccionado (sin botón «Copiar»)
+    view.table.selectAll()
+    view.copy_selection()
+    assert QApplication.clipboard().text() == "cinco\n5"  # todo: con los nombres
 
 
 def test_a_failing_cell_stops_the_notebook_and_a_detached_database_is_flagged(ready, tmp_path):
@@ -274,7 +276,7 @@ def test_export_writes_the_whole_query_from_the_base_of_the_cell(ready, tmp_path
     panel.notebook_view.add_cell(1, "SELECT 1").cell.database = "memory"  # cambia la base en uso
     panel.run_all_button.click()
     idle(panel, coordinator)
-    assert len(panel._cell_view(cell).preview.rows) == 50  # la vista previa
+    assert len(panel._cell_view(cell).preview.rows) == 20  # la vista previa
     asked = []
     panel.choose_export_path = lambda fmt, name: (asked.append((fmt, name)), str(tmp_path / "salida"))[1]
     messages = []
@@ -285,7 +287,7 @@ def test_export_writes_the_whole_query_from_the_base_of_the_cell(ready, tmp_path
     assert wait_for((tmp_path / "salida.csv").exists)  # se añade la extensión
     lines = (tmp_path / "salida.csv").read_text().splitlines()
     assert lines[0] == "n" and len(lines) == 1001  # todas las filas, no las 200 de la vista previa
-    assert asked == [(ExportFormat.CSV, "T.csv")]  # el nombre del resultado, sin «(50+ filas)»
+    assert asked == [(ExportFormat.CSV, "T.csv")]  # el nombre del resultado, sin «(20+ filas)»
     assert "1000" in messages[-1] and "salida.csv" in messages[-1]
 
 
@@ -362,7 +364,7 @@ def test_in_the_panel_the_selector_shows_the_same_notebooks(ready):
     panel.new_editor_tab("SELECT 2")
     toggle(gd.workspace)  # panel acoplado
     selector = panel.notebook_selector
-    assert selector.isVisibleTo(panel) and not panel.summary.isVisibleTo(panel)
+    assert selector.isVisibleTo(panel)
     combo = selector.combo
     assert [combo.itemText(i) for i in range(combo.count())] == ["Consulta 1", "Consulta 2"]
     combo.setCurrentIndex(0)
@@ -376,33 +378,33 @@ def test_in_the_panel_the_selector_shows_the_same_notebooks(ready):
 # -- AT-NB-006: resumen del resultado, sin consultas nuevas -----------------------------------------------
 
 
-def test_the_summary_shows_rows_columns_and_types_without_querying(ready):
+def test_the_summary_is_the_help_of_the_result_without_querying(ready):
+    """Sin columna derecha (decisión del propietario): el resumen es la ayuda ⓘ del rótulo, en ventana y
+    panel."""
     gd, panel, coordinator = ready
     cell = panel.cell
     cell.editor.setText("SELECT range AS id, 'x' AS nombre FROM range(500)")
     panel.run_cell(cell)
     idle(panel, coordinator)
-    summary = panel.summary
-    assert summary.isVisibleTo(panel) and summary.line.text() == "50+ filas · 2 columnas"
-    assert summary.items() == [("# id", "BIGINT"), ("Aa nombre", "VARCHAR")]
-    assert summary.origin.text() == "Celda 1 · memory"
+    assert not hasattr(panel, "summary")
     asked = []
     engine = coordinator._engine
     original = engine.submit
     engine.submit = lambda *a, **k: (asked.append(a), original(*a, **k))[1]
     try:
-        other = panel.notebook_view.add_cell(1)  # la celda activa cambia: resumen vacío
-        assert summary.columns.topLevelItemCount() == 0
-        panel.notebook_view.set_active(cell)
-        assert summary.columns.topLevelItemCount() == 2
-        toggle(gd.workspace)  # panel: el resumen es la ayuda (ⓘ) del rótulo
-        assert cell.status_label.text().endswith(" ⓘ")
-        assert cell.status_label.toolTip().splitlines()[:2] == ["50+ filas · 2 columnas", "id · BIGINT"]
-        assert other.status_label.toolTip() == ""
+        other = panel.notebook_view.add_cell(1)
+        for _mode in ("ventana", "panel"):
+            assert cell.status_label.text().endswith(" ⓘ")
+            assert cell.status_label.toolTip().splitlines() == [
+                "20+ filas · 2 columnas",
+                "id · BIGINT",
+                "nombre · VARCHAR",
+            ]
+            assert other.status_label.toolTip() == ""
+            toggle(gd.workspace)
     finally:
         engine.submit = original
     assert asked == []  # ninguna consulta nueva
-    panel.summary_button.setChecked(False)
 
 
 # -- AT-NB-009: ventana ↔ panel con varias celdas, resultados y una ejecución en curso ------------------
@@ -440,15 +442,16 @@ def test_every_cell_action_has_a_name_help_and_keyboard_focus(ready):
     panel.run_cell(cell)
     idle(panel, coordinator)
     widgets = [cell.run_button, cell.database_combo, cell.fold_cell, cell.fold_editor, cell.fold_result]
-    widgets += [cell.sheet_button, cell.more_button, cell.copy_button, cell.export_button, cell.load_button]
-    widgets += [panel.notebook_view.add_button, panel.notebook_list.new_button, panel.summary_button]
+    widgets += [cell.sheet_button, cell.more_button, cell.export_button, cell.load_button]
+    widgets += [panel.notebook_view.add_button, panel.notebook_list.new_button, panel.sidebar_button]
+    widgets += [panel.log_toggle]
     for widget in widgets:
         name = widget.accessibleName() or (widget.text() if hasattr(widget, "text") else "")
         assert name, widget.objectName() or widget.toolTip()
         assert widget.toolTip(), name
         assert widget.focusPolicy() & Qt.FocusPolicy.TabFocus, name  # se alcanza con el teclado
     toggle(gd.workspace)  # panel: el pie, también accesible
-    for widget in (panel.foot_copy, panel.foot_export, panel.foot_load, panel.notebook_selector.combo):
+    for widget in (panel.foot_export, panel.foot_load, panel.notebook_selector.combo):
         assert widget.accessibleName() and widget.toolTip()
         assert widget.focusPolicy() & Qt.FocusPolicy.TabFocus
     assert panel.foot_load.isEnabled() and panel.foot_export.isEnabled()
@@ -471,3 +474,59 @@ def test_one_result_has_no_tab_and_a_cell_without_table_has_no_buttons(ready):
     panel.run_cell(cell)
     idle(panel, coordinator)
     assert cell.results.tabBar().isVisibleTo(cell)  # con varias sentencias, sus pestañas
+
+
+# -- ajustes tras la prueba manual (propietario, 2026-11-03) ---------------------------------------------
+
+
+def test_side_bar_folds_with_its_button_and_ctrl_b_and_is_remembered(ready):
+    gd, panel, _coordinator = ready
+    column = gd.content.left_column
+    assert column.isVisible() and panel.sidebar_button.isChecked()
+    panel.sidebar_button.click()
+    assert not column.isVisible()
+    gd.content._toggle_sidebar()  # Ctrl+B
+    assert column.isVisible()
+    gd.content._toggle_sidebar()
+    assert not column.isVisible() and QgsSettings().value("geoduck/workspace/sidebar_open") in (0, "0")
+    toggle(gd.workspace)  # en el panel no hay barra lateral: el botón no se ve
+    assert not panel.sidebar_button.isVisibleTo(panel)
+    toggle(gd.workspace)
+    assert not column.isVisible()  # vuelve como estaba
+    panel.sidebar_button.click()
+    assert column.isVisible()
+
+
+def test_the_log_is_one_line_until_opened_and_always_open_in_the_panel(ready):
+    gd, panel, coordinator = ready
+    assert not panel.log_open and not panel.log.isVisibleTo(panel)  # ventana: plegado por defecto
+    assert panel.log_filter_buttons["all"].isVisibleTo(panel)  # su línea con las cifras
+    panel.cell.editor.setText("SELECT 1")
+    panel.run_cell(panel.cell)
+    idle(panel, coordinator)
+    assert panel.log_filter_buttons["all"].text() == "Todo (1)"
+    panel.log_toggle.click()
+    assert panel.log_open and panel.log.isVisibleTo(panel)
+    panel.log_toggle.click()
+    panel.log_filter_buttons["error"].click()  # filtrar lo abre
+    assert panel.log_open
+    toggle(gd.workspace)  # panel: pestaña «Registro», siempre abierto
+    assert panel.log_open and not panel.log_toggle.isVisibleTo(panel)
+    toggle(gd.workspace)
+    assert panel.log_open  # como lo dejó en la ventana
+    panel.log_filter_buttons["all"].click()
+
+
+def test_line_numbers_and_ctrl_c_copies_the_selected_cells(ready):
+    _plugin, panel, coordinator = ready
+    cell = panel.cell
+    assert cell.editor.lineNumbersVisible()
+    cell.editor.setText("SELECT range AS n, range * 10 AS m FROM range(3)")
+    panel.run_cell(cell)
+    idle(panel, coordinator)
+    view = panel._cell_view(cell)
+    table = view.table
+    table.setRangeSelected(QTableWidgetSelectionRange(1, 0, 2, 1), True)  # dos filas, dos columnas
+    view.copy_shortcut.activated.emit()  # Ctrl+C
+    assert QApplication.clipboard().text() == "1\t10\n2\t20"
+    assert cell.database_combo.itemIcon(0).isNull() is False  # se ve como selector de base

@@ -185,10 +185,6 @@ class CellWidget(QFrame):
         self.status_label = QLabel("")
         self.status_label.setProperty("geoduck", "muted")
         row.addWidget(self.status_label, 1)
-        self.copy_button = _tool(tr("Copy"), tr("Copies the shown rows as text separated by tabs"))
-        self.copy_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.copy_button.setIcon(QgsApplication.getThemeIcon("mActionEditCopy.svg"))
-        row.addWidget(self.copy_button)
         self.load_slot = QHBoxLayout()  # «Cargar en QGIS ▾» de la celda (lo pone el panel)
         row.addLayout(self.load_slot)
         box.addLayout(row)
@@ -283,11 +279,12 @@ class CellWidget(QFrame):
         self.database_combo.blockSignals(True)
         self.database_combo.clear()
         names = [db.name for db in catalog.databases] if catalog is not None else []
+        icon = QgsApplication.getThemeIcon("dbmanager.svg")  # se ve que es un selector de base, no un botón
         for name in names:
-            self.database_combo.addItem(name, name)
+            self.database_combo.addItem(icon, name, name)
         current = self.cell.database
         if current is not None and current not in names:  # desadjuntada: se ve, y avisa
-            self.database_combo.addItem(tr("{0} (not attached)").format(current), current)
+            self.database_combo.addItem(icon, tr("{0} (not attached)").format(current), current)
         if current is not None:
             self.database_combo.setCurrentIndex(self.database_combo.findData(current))
         self.database_combo.blockSignals(False)

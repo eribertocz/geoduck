@@ -18,7 +18,6 @@ from geoduck.app.events import LoadFailed, LoadFinished, LoadProgressed, ScriptF
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
 from geoduck.domain.load import LoadMode, LoadRequest
 from geoduck.domain.session import SessionState
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT
 from geoduck.ui.workspace import WorkspaceContent
 from geoduck.ui.workspace_controller import PREFIX, WorkspaceMode, on_some_screen, read_mode
 from tests.qgis.conftest import FakeIface, wait_for
@@ -347,7 +346,6 @@ def test_mode_window_dock_area_splitters_tab_and_limit_are_restored(iface):
     wait_for(lambda: False, 0.2)
     splitter.setSizes([60, 240])  # en el panel, editor | resultados (el registro tiene su pestaña, E4)
     dock_sizes = splitter.sizes()
-    content.sql_panel.limit_combo.setCurrentIndex(content.sql_panel.limit_combo.findData(1000))
     toggle(ws)
     assert near(splitter.sizes(), window_sizes)  # cada modo, su divisor
     assert near(content.side_splitter.sizes(), explorer_widths)  # ancho del explorador
@@ -362,7 +360,6 @@ def test_mode_window_dock_area_splitters_tab_and_limit_are_restored(iface):
         second.action.trigger()
         wait_for(lambda: False, 0.2)
         assert second.content.tabs.currentWidget() is second.content.sql_panel
-        assert second.content.sql_panel.limit_combo.currentData() == 1000
         restored = second.content.sql_panel.splitter.sizes()  # otra altura: se compara la proporción
         assert abs(restored[0] / sum(restored) - dock_sizes[0] / sum(dock_sizes)) < 0.05
         toggle(ws2)
@@ -406,7 +403,6 @@ def test_corrupt_settings_give_safe_values(iface):
         ws = plugin.workspace
         assert ws.mode is WorkspaceMode.DOCK
         assert iface.mainWindow().dockWidgetArea(ws.dock) == Qt.DockWidgetArea.RightDockWidgetArea
-        assert plugin.content.sql_panel.limit_combo.currentData() == DEFAULT_PREVIEW_LIMIT
         assert plugin.content.tabs.currentIndex() == 0
         toggle(ws)
         assert on_some_screen(ws.window.frameGeometry())
