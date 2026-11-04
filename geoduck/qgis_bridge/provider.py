@@ -66,6 +66,7 @@ from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
+from geoduck.qgis_bridge.extent import filtered_extent
 from geoduck.qgis_bridge.families import fit_to
 from geoduck.qgis_bridge.qgis_compat import (
     FilterType,
@@ -803,6 +804,31 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
     def subsetStringDialect(self) -> str:
         return tr("DuckDB SQL (WHERE clause)")
 
+    def _full_extent(self) -> QgsRectangle:
+        ext = [float(v) for v in self._params.get("extent", "").split(",") if v]
+        return QgsRectangle(*ext) if len(ext) == 4 else QgsRectangle()
+
+    def _filtered_extent(self, engine: Any, base: str, count: int) -> QgsRectangle:
+        """Extensión de lo filtrado, para que «Zoom a la capa» se ajuste al filtro (prueba del propietario:
+        se quedaba con la de toda la tabla). Si tarda, la de toda la capa, con un aviso."""
+        if self.plan.geometry is None or engine is None:
+            return self._full_extent()
+        if count == 0:
+            return QgsRectangle()
+        column = quote_identifier(self.plan.geometry.name)
+        handle = engine.submit(
+            lambda h, t: filtered_extent(h, t, base, column), priority=True, database=self.use_database
+        )
+        try:
+            box = handle.future.result(MAIN_WAIT)
+        except FutureTimeout:
+            engine.cancel(handle.op_id)
+            self.pushError(tr("The extent of the filter takes too long: the whole layer's extent is kept"))
+            return self._full_extent()
+        except Exception:
+            return self._full_extent()
+        return QgsRectangle(*box) if box is not None else QgsRectangle()
+
     def subsetStringHelpUrl(self) -> str:
         return "https://duckdb.org/docs/stable/sql/query_syntax/where"
 
@@ -834,6 +860,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         if not subset:
             count = int(self._params.get("count", "-1")) if count < 0 else count
         self._count = count
+        self._extent = self._filtered_extent(engine, base, count) if subset else self._full_extent()
         params = dict(self._params)
         params["subset"] = subset or None
         self._uri = encode_uri(params)
