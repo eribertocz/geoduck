@@ -721,7 +721,7 @@ class SqlPanel(QWidget):
         if notebook is None:
             self._editor_numbers += 1
             name = tr("Query {0}").format(self._editor_numbers)
-            database = catalog.default if catalog is not None else None
+            database = catalog.root if catalog is not None else None  # la raíz de la sesión
             notebook = Notebook(name, [Cell(sql=text, database=database)])
         name = notebook.name
         view = NotebookView(notebook, self._make_editor)
@@ -732,7 +732,7 @@ class SqlPanel(QWidget):
         view.cell_created.connect(self._setup_cell)
         for widget in view.cell_widgets():
             self._setup_cell(widget)
-        view.show_databases(catalog, catalog.default if catalog is not None else None)
+        view.show_databases(catalog)
         index = self.editor_tabs.addTab(view, name)
         self.editor_tabs.setTabToolTip(index, notebook.path or name)
         self.editor_tabs.setCurrentIndex(index)
@@ -787,7 +787,7 @@ class SqlPanel(QWidget):
             action = widget.run_menu.addAction(text)
             action.triggered.connect(lambda _c=False, s=slot: s())
         catalog = self._coordinator.catalog  # el selector de base, ya al crear la celda (no al ejecutarla)
-        widget.show_databases(catalog, catalog.default if catalog is not None else None)
+        widget.show_databases(catalog)
         self._render_cell(widget, self._coordinator.state)
 
     def close_current_editor_tab(self) -> bool:
@@ -1402,9 +1402,8 @@ class SqlPanel(QWidget):
             self.completer.refresh()
         elif isinstance(event, CatalogChanged):
             self._coordinator.vocabulary()  # se pide ya, para que el autocompletado lo tenga a tiempo
-            in_use = event.catalog.default if event.catalog is not None else None
             for view in self.notebook_views():
-                view.show_databases(event.catalog, in_use)
+                view.show_databases(event.catalog)
         elif isinstance(event, SessionStateChanged):
             if event.current is not SessionState.BUSY:
                 self._running = False
@@ -1467,7 +1466,7 @@ class SqlPanel(QWidget):
         if cell.results.count():
             cell.results.setCurrentIndex(cell.results.count() - 1)
         catalog = self._coordinator.catalog
-        cell.show_databases(catalog, catalog.default if catalog is not None else None)
+        cell.show_databases(catalog)
         self._render_cell(cell, self._coordinator.state)  # resumen y su «ⓘ»
 
     def _cell_for(self, run_id: int) -> CellWidget:

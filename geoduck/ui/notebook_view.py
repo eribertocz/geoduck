@@ -275,13 +275,11 @@ class CellWidget(QFrame):
         height = lines * max(14, self.editor.textHeight(0)) + 12 + bar
         self.editor.setFixedHeight(height)
 
-    def show_databases(self, catalog: CatalogSnapshot | None, in_use: str | None) -> None:
-        """Rellena el selector con las bases del catálogo; una celda sin base toma la base en uso. Nunca
-        muestra una base distinta de la que usará al ejecutarse."""
-        if in_use is None and catalog is not None:
-            in_use = catalog.default
-        if self.cell.database is None and in_use is not None:
-            self.cell.database = in_use
+    def show_databases(self, catalog: CatalogSnapshot | None) -> None:
+        """Rellena el selector con las bases del catálogo. Una celda sin base toma `memory`, la raíz de la
+        sesión (decisión del propietario, 2026-11-03). Nunca muestra una base distinta de la que usará."""
+        if self.cell.database is None and catalog is not None:
+            self.cell.database = catalog.root
         self.database_combo.blockSignals(True)
         self.database_combo.clear()
         names = [db.name for db in catalog.databases] if catalog is not None else []
@@ -501,7 +499,7 @@ class NotebookView(QScrollArea):
         self.changed.emit()  # añadir, mover, duplicar o borrar celdas
 
     def add_cell(self, index: int, sql: str = "") -> CellWidget:
-        database = self.active.cell.database if self.active is not None else None
+        database = None  # `memory`, la raíz de la sesión, al mostrarse (propietario, 2026-11-03)
         cell = self.notebook.insert(index, database, sql)
         self._widgets[cell.id] = self._new_widget(cell)
         self._relayout()
@@ -590,6 +588,6 @@ class NotebookView(QScrollArea):
         self.ensureWidgetVisible(widget)
         self.active_changed.emit(widget)
 
-    def show_databases(self, catalog: CatalogSnapshot | None, in_use: str | None) -> None:
+    def show_databases(self, catalog: CatalogSnapshot | None) -> None:
         for widget in self._widgets.values():
-            widget.show_databases(catalog, in_use)
+            widget.show_databases(catalog)

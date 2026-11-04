@@ -62,6 +62,7 @@ Archivos en `tests/`: `qgis/test_notebook_ui.py` (N), `qgis/test_editor_tabs.py`
 | 2026-11-03 | Resultado con fondo propio y botones arriba, sin pestaña si es uno solo (opción A) |
 | 2026-11-03 | Tras la prueba manual: selector de base como desplegable; barra lateral plegable (◫, Ctrl+B); sin columna «Resultado» (resumen como ayuda ⓘ); registro plegado en una línea; números de línea; vista previa fija de 20 filas sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa»; grilla suave en la tabla del resultado. Se mantienen los tres pliegues |
 | 2026-11-03 | Guardar y abrir cuadernos `.sql` (con autoguardado) y copia de recuperación activada por defecto, dentro de G7; cambia security.md §4 (ADR-0014) |
+| 2026-11-03 | Una celda nueva empieza en `memory` (la raíz de la sesión), visible en su selector desde que se crea; «Duplicar celda» copia su base |
 
 ## 5. Verificaciones hechas durante G7
 

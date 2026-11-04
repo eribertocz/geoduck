@@ -131,7 +131,7 @@ def test_each_cell_runs_on_its_database_and_keeps_its_result(ready, tmp_path):
     first.editor.setText("CREATE TABLE memoria AS SELECT 1 AS m")
     second = view.add_cell(1, "SELECT n, (SELECT m FROM memory.memoria) AS m FROM t")
     second.cell.database = "otra"
-    view.show_databases(coordinator.catalog, None)
+    view.show_databases(coordinator.catalog)
     assert second.database_combo.currentData() == "otra" and first.cell.database == "memory"
     panel.run_all_button.click()  # «Ejecutar»: todas las celdas, en orden
     idle(panel, coordinator)
@@ -224,7 +224,7 @@ def test_use_in_a_cell_changes_only_that_cell(ready, tmp_path):
     idle(panel, coordinator)
     assert cell.cell.database == "usada" and cell.database_combo.currentData() == "usada"
     other = panel.notebook_view.add_cell(1, "SELECT current_database() AS db")
-    assert other.cell.database == "usada"  # una celda nueva hereda la base de la activa
+    assert other.cell.database == "memory"  # una celda nueva empieza en `memory` (propietario)
 
 
 @pytest.mark.parametrize("mode", [LoadMode.MEMORY, LoadMode.SNAPSHOT, LoadMode.CONNECTED])
@@ -643,19 +643,22 @@ def test_the_recovery_copy_can_be_turned_off(ready):
     assert panel.recovery.folder is not None
 
 
-def test_a_new_cell_shows_its_database_at_once_copied_from_the_active_cell(ready, tmp_path):
-    """Prueba del propietario: el selector de una celda nueva estaba vacío hasta ejecutarla."""
+def test_a_new_cell_starts_in_memory_and_shows_it_at_once(ready, tmp_path):
+    """Prueba del propietario: el selector de una celda nueva estaba vacío hasta ejecutarla, y copiaba la
+    base de la celda activa. Ahora empieza en `memory` (la raíz de la sesión) y lo muestra desde el inicio."""
     _plugin, panel, coordinator = ready
     coordinator.execute_sql(f"ATTACH '{tmp_path / 'db.duckdb'}' AS db", RunScope.ALL)
     idle(panel, coordinator)
     assert wait_for(lambda: coordinator.catalog.get("db") is not None)
     first = panel.cell
-    assert first.database_combo.currentData() == "memory"  # la base en uso
-    fresh = panel.notebook_view.add_cell(1)
-    names = [fresh.database_combo.itemData(i) for i in range(fresh.database_combo.count())]
-    assert names == ["memory", "db"] and fresh.database_combo.currentData() == fresh.cell.database == "memory"
-    panel.notebook_view.set_active(first)
     first.database_combo.setCurrentIndex(first.database_combo.findData("db"))
     first.database_combo.activated.emit(first.database_combo.currentIndex())  # el usuario elige `db`
-    copied = panel.notebook_view.add_cell(1)  # copia la base de la celda activa
-    assert copied.database_combo.currentData() == copied.cell.database == "db"
+    assert first.cell.database == "db"
+    fresh = panel.notebook_view.add_cell(1)  # estando en la celda de `db`
+    names = [fresh.database_combo.itemData(i) for i in range(fresh.database_combo.count())]
+    assert names == ["memory", "db"] and fresh.database_combo.currentData() == fresh.cell.database == "memory"
+    panel.new_editor_tab()  # también la primera celda de un cuaderno nuevo
+    assert panel.cell.cell.database == "memory"
+    panel.editor_tabs.setCurrentIndex(0)
+    panel.notebook_view._action(first, "duplicate")  # «Duplicar celda» sí copia su base
+    assert panel.cell.cell.database == "db"

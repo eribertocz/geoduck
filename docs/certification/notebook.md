@@ -87,6 +87,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g7/windo
 | 6p | Escriba SQL en un cuaderno sin guardar; cierre QGIS a la fuerza (Administrador de tareas → Finalizar tarea); abra QGIS y GeoDuck | Aviso «GeoDuck no se cerró bien. ¿Recuperar su cuaderno?»; «Recuperar» devuelve el SQL |
 | 6q | Cierre QGIS normalmente y vuelva a abrirlo | No hay aviso: la copia se borró |
 | 6r | «⋯» → desmarque «Copia de recuperación…» | Se borra la carpeta `geoduck\recuperacion\…` del perfil de QGIS y no se vuelve a escribir |
+| 6s | En una celda con base `db`, pulse «+ Añadir celda» | La celda nueva muestra ya `memory` en su selector (sin ejecutarla); «⋯» → «Duplicar celda» conserva `db` |
 
 ## 7. Idioma y aspecto
 
