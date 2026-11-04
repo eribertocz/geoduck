@@ -357,7 +357,7 @@ class ResultView(QWidget):
         header = TypedHeader(labels, palette.muted, table)
         table.setHorizontalHeader(header)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setShowGrid(False)
+        table.setShowGrid(True)  # grilla suave (`border_soft`, theme.py), como la maqueta (propietario)
         table.setWordWrap(False)
         table.setFrameShape(QFrame.Shape.NoFrame)
         rows = table.verticalHeader()

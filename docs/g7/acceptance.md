@@ -59,7 +59,7 @@ Archivos en `tests/`: `qgis/test_notebook_ui.py` (N), `qgis/test_editor_tabs.py`
 | 2026-11-03 | Geometría en Parquet: sin SRC, GeoParquet 1.0 y aviso; con SRC, `GEOPARQUET_VERSION 'V2'` |
 | 2026-11-03 | Todas las celdas conservan su tabla (medido: no hace falta liberar las que no se ven) |
 | 2026-11-03 | Resultado con fondo propio y botones arriba, sin pestaña si es uno solo (opción A) |
-| 2026-11-03 | Tras la prueba manual: selector de base como desplegable; barra lateral plegable (◫, Ctrl+B); sin columna «Resultado» (resumen como ayuda ⓘ); registro plegado en una línea; números de línea; vista previa fija de 20 filas sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa». Se mantienen los tres pliegues |
+| 2026-11-03 | Tras la prueba manual: selector de base como desplegable; barra lateral plegable (◫, Ctrl+B); sin columna «Resultado» (resumen como ayuda ⓘ); registro plegado en una línea; números de línea; vista previa fija de 20 filas sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa»; grilla suave en la tabla del resultado. Se mantienen los tres pliegues |
 
 ## 5. Verificaciones hechas durante G7
 

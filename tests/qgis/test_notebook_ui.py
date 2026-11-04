@@ -529,4 +529,5 @@ def test_line_numbers_and_ctrl_c_copies_the_selected_cells(ready):
     table.setRangeSelected(QTableWidgetSelectionRange(1, 0, 2, 1), True)  # dos filas, dos columnas
     view.copy_shortcut.activated.emit()  # Ctrl+C
     assert QApplication.clipboard().text() == "1\t10\n2\t20"
+    assert table.showGrid()  # grilla suave
     assert cell.database_combo.itemIcon(0).isNull() is False  # se ve como selector de base

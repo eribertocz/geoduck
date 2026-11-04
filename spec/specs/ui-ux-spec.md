@@ -113,7 +113,7 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
     el icono de base de datos, su nombre y «▾», con borde, para que no parezca un botón (propietario, 2026-11-03).
   - **Editor** (crece con su texto, desde una línea; con números de línea) y, debajo, el **resultado** con fondo propio y una línea encima:
     arriba «N filas en X ms» (con varias sentencias, «N filas · K sentencias en X ms», como la DuckDB UI) y sus botones;
-    debajo la tabla, con la altura que pidan sus filas. Con un solo resultado no se muestra su pestaña (el rótulo ya lo
+    debajo la tabla, con grilla suave y la altura que pidan sus filas. Con un solo resultado no se muestra su pestaña (el rótulo ya lo
     dice); con varias sentencias, una pestaña por cada una. Una celda sin tabla (`CREATE`) muestra solo el rótulo, sin
     botones (decisión del propietario, 2026-11-03: opción A). Los botones: «Cargar ▾» (icono de capa y texto corto;
     la ayuda y el nombre accesible dicen «Cargar en QGIS») y «Exportar ▾» (CSV o Parquet, la consulta completa). Sin
