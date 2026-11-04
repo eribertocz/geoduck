@@ -677,3 +677,23 @@ def test_the_side_bar_is_never_narrower_than_its_titles(ready):
     for label in content.left_column.findChildren(QLabel):
         if label.text() and label.isVisible():
             assert label.width() >= label.minimumSizeHint().width(), label.text()
+
+
+def test_starting_in_the_panel_never_shows_the_side_bar_as_a_loose_window(iface):
+    """Prueba del propietario: al abrir QGIS con GeoDuck en el panel, la barra lateral salía como ventana."""
+    QgsSettings().setValue("geoduck/workspace/schema", 1)
+    QgsSettings().setValue("geoduck/workspace/mode", "dock")
+    gd = geoduck.classFactory(qgis_window(iface))
+    gd.initGui()
+    try:
+        gd.action.trigger()
+        wait_for(lambda: False, 0.2)
+        column = gd.content.left_column
+        assert not column.isWindow() and not column.isVisible()
+        toggle(gd.workspace)  # a la ventana: aparece en su sitio
+        assert not column.isWindow() and column.isVisible()
+        toggle(gd.workspace)
+        assert not column.isVisible()
+    finally:
+        gd.unload()
+        QgsSettings().remove("geoduck/workspace/mode")

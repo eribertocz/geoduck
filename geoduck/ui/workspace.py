@@ -140,7 +140,9 @@ class WorkspaceContent(QWidget):
         self.side_splitter.setObjectName("geoduckSideSplitter")
         self.side_splitter.hide()
         # Columna izquierda de la ventana (G7 · E3): «Cuadernos» encima de «Bases de datos»
-        self.left_column = QSplitter(Qt.Orientation.Vertical)
+        # Siempre con padre: sin él, al arrancar en el panel salía como ventana suelta (propietario)
+        self.left_column = QSplitter(Qt.Orientation.Vertical, self)
+        self.left_column.hide()
         self.left_column.setObjectName("geoduckLeftColumn")
         self.left_column.setChildrenCollapsible(False)
         self.left_column.addWidget(self.sql_panel.notebook_list)
@@ -372,7 +374,8 @@ class WorkspaceContent(QWidget):
             self.side_splitter.hide()
             self.tabs.show()
         self.wide = wide
-        self.left_column.setVisible(not wide or self.sql_panel.sidebar_button.isChecked())
+        # En el panel no hay barra lateral: sus cuadernos van en el selector y sus bases, en «Explorador»
+        self.left_column.setVisible(wide and self.sql_panel.sidebar_button.isChecked())
         self.dock_button.setVisible(wide)  # en el panel, «Abrir en ventana» va en su barra de título
         self._place_message(wide)
         self.set_compact(self.compact)
