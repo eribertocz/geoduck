@@ -51,6 +51,8 @@ class Notebook:
 
     name: str
     cells: list[Cell] = field(default_factory=list)
+    #: Archivo `.sql` del cuaderno («Guardar cuaderno…», ADR-0014); `None` si nunca se guardó.
+    path: str | None = None
 
     def __post_init__(self) -> None:
         if not self.cells:

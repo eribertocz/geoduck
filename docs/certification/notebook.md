@@ -80,7 +80,14 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g7/windo
 | 6j | En una tabla de resultado, seleccione unas celdas y pulse Ctrl+C; pegue en Excel | Se pegan esas celdas en columnas; con Ctrl+A antes, también los nombres |
 | 6k | El selector de base de una celda | Se ve como desplegable (icono de base, nombre y «▾»), no como botón |
 | 6l | Pie de la ventana: «Ver en el mapa» | Con icono de mapa |
-| 6h | Reinicie QGIS | Los cuadernos no se guardan (como en G6) |
+| 6h | «⋯» de «Cuadernos» → «Guardar cuaderno» (o Ctrl+S); elija `C:\geoduck-g7\ventas` | Se crea `ventas.sql`; el cuaderno pasa a llamarse «ventas». Ábralo en el Bloc de notas: una marca `-- %% cell · database: …` por celda |
+| 6m | Cambie el SQL de una celda de «ventas» y espere 2 s; vuelva a abrir `ventas.sql` en el Bloc de notas | El cambio ya está (se guarda solo) |
+| 6n | Cierre «ventas»; «⋯» → «Abrir cuaderno…» (o Ctrl+O) → `ventas.sql` | Vuelven sus celdas, con su base |
+| 6o | Abra un `.sql` cualquiera (sin marcas) | Se abre como una sola celda |
+| 6p | Escriba SQL en un cuaderno sin guardar; cierre QGIS a la fuerza (Administrador de tareas → Finalizar tarea); abra QGIS y GeoDuck | Aviso «GeoDuck no se cerró bien. ¿Recuperar su cuaderno?»; «Recuperar» devuelve el SQL |
+| 6q | Cierre QGIS normalmente y vuelva a abrirlo | No hay aviso: la copia se borró |
+| 6r | «⋯» → desmarque «Copia de recuperación…» | Se borra la carpeta `geoduck\recuperacion\…` del perfil de QGIS y no se vuelve a escribir |
+| 6s | En una celda con base `db`, pulse «+ Añadir celda» | La celda nueva muestra ya `memory` en su selector (sin ejecutarla); «⋯» → «Duplicar celda» conserva `db` |
 
 ## 7. Idioma y aspecto
 

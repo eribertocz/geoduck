@@ -1,6 +1,6 @@
 # G7 · `v0.8.0a1` Notebook — plan
 
-**Estado:** En aceptación (E0–E4 fusionados, #91–#97; decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..006.
+**Estado:** En aceptación (E0–E4 fusionados, #91–#97; decisiones del propietario, 2026-11-03). **Requisitos:** GD-NB-001..008.
 **Contrato:** sql-editor-spec §7 («G7 · Notebook»), ui-ux-spec §10, `docs/g7/maqueta/` (maqueta propuesta, a
 aprobar). Parte del workspace de G5 y del editor de G6: nada de G3/G4 cambia.
 
@@ -16,7 +16,7 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 | Celdas | Sustituyen a las pestañas de editor de G6: un solo modo. Cada pestaña de G6 pasa a ser un cuaderno |
 | Base por celda | Selector en cada celda, como en la DuckDB UI; la celda también consulta otras bases con su nombre (`otra.esquema.tabla`). Referencia del propietario: celda en `memory` con `load spatial; select … from db.main.consumidores…` y celda en `db` con `select * from memory.tabla_memoria` |
 | Estadísticas por columna | Fuera de G7 (costosas en tablas grandes). Entra el resumen simple: filas, columnas y tipos |
-| Guardar cuadernos | Fuera de G7 (GD-SQL-008): solo en memoria |
+| Guardar cuadernos | Fuera de G7 al principio (GD-SQL-008). Tras la prueba manual (2026-11-03), dentro de G7: archivo `.sql` con autoguardado y copia de recuperación (ADR-0014, GD-NB-008) |
 | Exportar | Sí: CSV y Parquet de la **consulta completa** con `COPY (…) TO …`, no de la vista previa (la DuckDB UI exporta solo lo mostrado) |
 | Panel acoplado | Minimalista: solo lo esencial; el resumen como ayuda (ⓘ) |
 
@@ -65,5 +65,6 @@ regresiones G0–G6 completas. Tag y release `v0.8.0a1` solo con autorización d
 | E2c Cargar con la base de la celda | Fusionado: cada resultado recuerda la base donde se ejecutó (`StatementResult.database`); «Cargar en QGIS» (Memoria, Copia rápida y Conectada, también sus lecturas posteriores) repite la consulta en ella y deja la base en uso como estaba (`SessionWorker.submit(database=…)`). Antes fallaba si otra celda había cambiado la base en uso | #95 |
 | E3 Exportar, cuadernos y resumen | Fusionado: «Exportar ▾» CSV/Parquet con `COPY` de la consulta completa (en la base del resultado, cancelable, temporal y renombrado, aviso de SRC); lista «Cuadernos» (ventana: nuevo, renombrar, cerrar) y selector en el panel; resumen del resultado (columna derecha plegable; en el panel, ayuda ⓘ); rendimiento: añadir una celda ya no rehace las demás. AT-NB-006, 007, 009, 011 | #96 |
 | E4 Pulido, panel estrecho y accesibilidad | Fusionado: celda como tarjeta (borde de acento en la activa, márgenes fuera, base como etiqueta, editor desde una línea); resultado con fondo propio, sin pestaña si es uno solo y sin botones sin tabla (opción A); vista previa de 50 filas por defecto (10/50/200/1000); ventana: nombre del cuaderno arriba, resumen con «Celda N · base» y marcas de tipo; panel: selector y acciones en una fila, «Copiar», «Exportar ▾» y «Cargar» al pie para la celda activa; nombres accesibles, ayuda y foco de teclado en todas las acciones; inglés y español. AT-NB-010 | #97 |
-| E5 Aceptación | En revisión: `docs/g7/acceptance.md` (AT-NB-001..011, decisiones, hallazgos F-108..F-113) y guía manual en Windows `docs/certification/notebook.md`; regresión completa en la CI | — |
-| Ajustes tras la prueba manual | En revisión (propietario, 2026-11-03): selector de base como desplegable; barra lateral plegable (◫, Ctrl+B, recordada); sin columna «Resultado» (el resumen es la ayuda ⓘ); registro plegado en una línea (recordado); números de línea; vista previa fija de 20 filas, sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa»; grilla suave en la tabla del resultado. Se mantienen los tres pliegues | — |
+| E5 Aceptación | Fusionado: `docs/g7/acceptance.md` (AT-NB-001..011, decisiones, hallazgos F-108..F-113) y guía manual en Windows `docs/certification/notebook.md`; regresión completa en la CI | #98 |
+| Ajustes tras la prueba manual | Fusionado (propietario, 2026-11-03): selector de base como desplegable; barra lateral plegable (◫, Ctrl+B, recordada); sin columna «Resultado» (el resumen es la ayuda ⓘ); registro plegado en una línea (recordado); números de línea; vista previa fija de 20 filas, sin selector; sin «Copiar» (Ctrl+C sobre lo seleccionado); icono en «Ver en el mapa»; grilla suave en la tabla del resultado. Se mantienen los tres pliegues | #99 |
+| Guardar cuadernos | En revisión: «Abrir cuaderno…» / «Guardar cuaderno» / «Guardar como…» (Ctrl+O, Ctrl+S) como `.sql` con marcas `-- %% cell · database: …`; autoguardado en su archivo; copia de recuperación en el perfil (activada por defecto, desactivable, `QLockFile` por sesión, borrada al cerrar bien) y «Recuperar / Descartar» tras un cierre inesperado. ADR-0014, GD-NB-008, AT-NB-012 | — |

@@ -226,6 +226,7 @@ QToolButton[geoduck="add-cell"] {{
     background: {p.card}; color: {p.muted}; border: 1px dashed {p.border}; border-radius: 6px; padding: 6px;
 }}
 QToolButton[geoduck="add-cell"]:hover {{ color: {p.text}; }}
+QToolButton[geoduck="more"]::menu-indicator {{ image: none; width: 0px; }}
 QTabWidget[geoduck="panel-tabs"] > QTabBar::tab {{
     background: transparent; color: {p.muted}; border: none; padding: 8px 12px;
     border-bottom: 2px solid transparent;

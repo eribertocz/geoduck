@@ -8,12 +8,16 @@ import pytest
 from qgis.core import QgsProject, QgsSettings
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication, QTableWidgetSelectionRange
+from qgis.PyQt.QtWidgets import QApplication, QLabel, QTableWidgetSelectionRange
 
+import geoduck
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.load import LoadMode
+from geoduck.domain.notebook import Cell, Notebook
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
+from geoduck.ui.notebook_store import RecoveryStore
+from geoduck.ui.sql_panel import SqlPanel
 from tests.qgis.conftest import wait_for
 from tests.qgis.test_load_ui import AutoDialog
 from tests.qgis.test_workspace import plugin, qgis_window, start, toggle  # noqa: F401
@@ -127,7 +131,7 @@ def test_each_cell_runs_on_its_database_and_keeps_its_result(ready, tmp_path):
     first.editor.setText("CREATE TABLE memoria AS SELECT 1 AS m")
     second = view.add_cell(1, "SELECT n, (SELECT m FROM memory.memoria) AS m FROM t")
     second.cell.database = "otra"
-    view.show_databases(coordinator.catalog, None)
+    view.show_databases(coordinator.catalog)
     assert second.database_combo.currentData() == "otra" and first.cell.database == "memory"
     panel.run_all_button.click()  # «Ejecutar»: todas las celdas, en orden
     idle(panel, coordinator)
@@ -220,7 +224,7 @@ def test_use_in_a_cell_changes_only_that_cell(ready, tmp_path):
     idle(panel, coordinator)
     assert cell.cell.database == "usada" and cell.database_combo.currentData() == "usada"
     other = panel.notebook_view.add_cell(1, "SELECT current_database() AS db")
-    assert other.cell.database == "usada"  # una celda nueva hereda la base de la activa
+    assert other.cell.database == "memory"  # una celda nueva empieza en `memory` (propietario)
 
 
 @pytest.mark.parametrize("mode", [LoadMode.MEMORY, LoadMode.SNAPSHOT, LoadMode.CONNECTED])
@@ -324,7 +328,7 @@ def test_cancel_an_export_leaves_no_file(ready, tmp_path):
     panel.cancel_button.click()
     idle(panel, coordinator)
     assert "cancel" in messages[-1].lower()
-    assert list(tmp_path.iterdir()) == []  # ni el archivo ni el temporal
+    assert [p.name for p in tmp_path.iterdir() if p.name != "recuperacion"] == []  # ni archivo ni temporal
 
 
 # -- AT-NB-007: lista de cuadernos (solo en memoria) ------------------------------------------------------
@@ -531,3 +535,165 @@ def test_line_numbers_and_ctrl_c_copies_the_selected_cells(ready):
     assert QApplication.clipboard().text() == "1\t10\n2\t20"
     assert table.showGrid()  # grilla suave
     assert cell.database_combo.itemIcon(0).isNull() is False  # se ve como selector de base
+
+
+# -- cuadernos en disco: archivo .sql, autoguardado y copia de recuperación (ADR-0014) -------------------
+
+
+def short_autosave(panel):
+    panel._save_timer.setInterval(10)
+
+
+def test_save_and_open_a_notebook_as_an_sql_file(ready, tmp_path):
+    _plugin, panel, _coordinator = ready
+    view = panel.notebook_view
+    view.cell_widgets()[0].editor.setText("SELECT 1 AS uno;")
+    second = view.add_cell(1, "SELECT 2 AS dos;")
+    second.cell.database = "memory"
+    asked = []
+    panel.choose_save_path = lambda suggested: (asked.append(suggested), str(tmp_path / "ventas"))[1]
+    assert panel.save_notebook()
+    target = tmp_path / "ventas.sql"  # se añade la extensión
+    assert asked[0].endswith("Consulta 1.sql")
+    assert target.read_text(encoding="utf-8") == (
+        "-- %% cell · database: memory\nSELECT 1 AS uno;\n\n-- %% cell · database: memory\nSELECT 2 AS dos;\n"
+    )
+    assert panel.notebook_list.names() == ["ventas"]  # el cuaderno se llama como su archivo
+    panel.confirm_close = lambda _name: True
+    panel.close_current_editor_tab()
+    assert panel.open_notebook_file(str(target))
+    assert panel.notebook_list.names() == ["ventas"]  # sustituye al cuaderno vacío
+    assert [(w.editor.text(), w.cell.database) for w in panel.notebook_view.cell_widgets()] == [
+        ("SELECT 1 AS uno;", "memory"),
+        ("SELECT 2 AS dos;", "memory"),
+    ]
+    assert panel.open_notebook_file(str(target)) and len(panel.notebook_views()) == 1  # ya abierto
+
+
+def test_a_plain_sql_file_opens_as_one_cell_and_ctrl_o_asks_for_it(ready, tmp_path):
+    _plugin, panel, _coordinator = ready
+    script = tmp_path / "script.sql"
+    script.write_text("SELECT 1;\nSELECT 2;\n", encoding="utf-8")
+    panel.choose_open_path = lambda _folder: str(script)
+    next(s for s in panel.shortcuts if s.key().toString() == "Ctrl+O").activated.emit()
+    assert panel.notebook_list.names() == ["script"]
+    assert [w.editor.text() for w in panel.notebook_view.cell_widgets()] == ["SELECT 1;\nSELECT 2;"]
+
+
+def test_a_saved_notebook_saves_itself_after_each_change(ready, tmp_path):
+    _plugin, panel, _coordinator = ready
+    short_autosave(panel)
+    panel.cell.editor.setText("SELECT 1;")
+    panel.choose_save_path = lambda _s: str(tmp_path / "auto.sql")
+    panel.save_notebook()
+    panel.cell.editor.setText("SELECT 'cambiado';")
+    target = tmp_path / "auto.sql"
+    assert wait_for(lambda: "cambiado" in target.read_text(encoding="utf-8"))
+    panel.notebook_view.add_cell(1, "SELECT 3;")
+    assert wait_for(lambda: target.read_text(encoding="utf-8").count("-- %% cell") == 2)
+
+
+def test_the_recovery_copy_is_written_and_deleted_on_a_clean_close(ready):
+    _plugin, panel, _coordinator = ready
+    short_autosave(panel)
+    panel.cell.editor.setText("SELECT 'sin guardar';")
+    assert wait_for(lambda: panel.recovery.folder is not None and (panel.recovery.folder / "1.sql").exists())
+    copy = (panel.recovery.folder / "1.sql").read_text(encoding="utf-8")
+    assert "SELECT 'sin guardar';" in copy
+    folder = panel.recovery.folder
+    panel.detach()  # cierre normal de QGIS: se borra
+    assert not folder.exists()
+
+
+def test_after_a_crash_geoduck_offers_to_recover_the_notebooks(recovery_folder, iface):
+    """«Otro QGIS» se colgó: su copia queda sin dueño (candado libre). Al abrir GeoDuck se ofrece."""
+    crashed = RecoveryStore(recovery_folder)
+    crashed.save([Notebook("Cobranza", [Cell("SELECT 'perdido';", "memory")])])
+    orphan = crashed.folder
+    crashed._lock.unlock()  # como si su proceso hubiera muerto sin borrarla
+    crashed._lock = None
+    asked = []
+    original = SqlPanel._ask_recover
+    SqlPanel._ask_recover = lambda _self, count: (asked.append(count), True)[1]
+    gd = geoduck.classFactory(qgis_window(iface))
+    try:
+        gd.initGui()
+        panel = gd.content.sql_panel
+        assert wait_for(lambda: asked == [1])
+        assert panel.notebook_list.names() == ["Cobranza"] and panel.editor.text() == "SELECT 'perdido';"
+        assert not orphan.exists()  # recuperada: la copia vieja se borra
+    finally:
+        SqlPanel._ask_recover = original
+        gd.unload()
+
+
+def test_the_recovery_copy_can_be_turned_off(ready):
+    _plugin, panel, _coordinator = ready
+    short_autosave(panel)
+    panel.cell.editor.setText("SELECT 1;")
+    assert wait_for(lambda: panel.recovery.folder is not None)
+    assert panel.recovery_action.isChecked()  # activada por defecto
+    folder = panel.recovery.folder
+    panel.recovery_action.trigger()  # apagar: se borra y no se escribe más
+    assert not folder.exists() and QgsSettings().value("geoduck/notebooks/recovery", type=bool) is False
+    panel.cell.editor.setText("SELECT 2;")
+    wait_for(lambda: False, 0.2)
+    assert panel.recovery.folder is None
+    panel.recovery_action.trigger()
+    assert panel.recovery.folder is not None
+
+
+def test_a_new_cell_starts_in_memory_and_shows_it_at_once(ready, tmp_path):
+    """Prueba del propietario: el selector de una celda nueva estaba vacío hasta ejecutarla, y copiaba la
+    base de la celda activa. Ahora empieza en `memory` (la raíz de la sesión) y lo muestra desde el inicio."""
+    _plugin, panel, coordinator = ready
+    coordinator.execute_sql(f"ATTACH '{tmp_path / 'db.duckdb'}' AS db", RunScope.ALL)
+    idle(panel, coordinator)
+    assert wait_for(lambda: coordinator.catalog.get("db") is not None)
+    first = panel.cell
+    first.database_combo.setCurrentIndex(first.database_combo.findData("db"))
+    first.database_combo.activated.emit(first.database_combo.currentIndex())  # el usuario elige `db`
+    assert first.cell.database == "db"
+    fresh = panel.notebook_view.add_cell(1)  # estando en la celda de `db`
+    names = [fresh.database_combo.itemData(i) for i in range(fresh.database_combo.count())]
+    assert names == ["memory", "db"] and fresh.database_combo.currentData() == fresh.cell.database == "memory"
+    panel.new_editor_tab()  # también la primera celda de un cuaderno nuevo
+    assert panel.cell.cell.database == "memory"
+    panel.editor_tabs.setCurrentIndex(0)
+    panel.notebook_view._action(first, "duplicate")  # «Duplicar celda» sí copia su base
+    assert panel.cell.cell.database == "db"
+
+
+def test_the_side_bar_is_never_narrower_than_its_titles(ready):
+    """Prueba del propietario: al estrechar la barra lateral, «Bases de datos» se cortaba con sus botones."""
+    gd, _panel, _coordinator = ready
+    content = gd.content
+    window = content.window()
+    window.resize(1200, 800)
+    window.show()
+    wait_for(lambda: False, 0.2)
+    content.side_splitter.setSizes([10, 1190])  # el usuario la estrecha todo lo que puede
+    wait_for(lambda: False, 0.2)
+    for label in content.left_column.findChildren(QLabel):
+        if label.text() and label.isVisible():
+            assert label.width() >= label.minimumSizeHint().width(), label.text()
+
+
+def test_starting_in_the_panel_never_shows_the_side_bar_as_a_loose_window(iface):
+    """Prueba del propietario: al abrir QGIS con GeoDuck en el panel, la barra lateral salía como ventana."""
+    QgsSettings().setValue("geoduck/workspace/schema", 1)
+    QgsSettings().setValue("geoduck/workspace/mode", "dock")
+    gd = geoduck.classFactory(qgis_window(iface))
+    gd.initGui()
+    try:
+        gd.action.trigger()
+        wait_for(lambda: False, 0.2)
+        column = gd.content.left_column
+        assert not column.isWindow() and not column.isVisible()
+        toggle(gd.workspace)  # a la ventana: aparece en su sitio
+        assert not column.isWindow() and column.isVisible()
+        toggle(gd.workspace)
+        assert not column.isVisible()
+    finally:
+        gd.unload()
+        QgsSettings().remove("geoduck/workspace/mode")

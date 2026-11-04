@@ -89,6 +89,8 @@ class CellWidget(QFrame):
     run_requested = pyqtSignal(object)  # CellWidget
     activated = pyqtSignal(object)
     action_requested = pyqtSignal(object, str)  # CellWidget, «up», «down», «duplicate», «delete», «sheet»
+    #: Cambió lo que se guarda de la celda: su SQL o su base (autoguardado, ADR-0014).
+    changed = pyqtSignal()
 
     def __init__(self, cell: Cell, make_editor: Callable[[], Any], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -215,6 +217,7 @@ class CellWidget(QFrame):
         self.sheet_button.toggled.connect(lambda _on: self.action_requested.emit(self, "sheet"))
         side.addWidget(self.sheet_button)
         self.more_button = _tool("⋯", tr("More actions"))
+        self.more_button.setProperty("geoduck", "more")
         self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         # Como la DuckDB UI: mover (con su atajo a la vista), duplicar y eliminar
         menu = QMenu(self.more_button)
@@ -260,6 +263,7 @@ class CellWidget(QFrame):
     def _text_changed(self) -> None:
         self.cell.sql = self.editor.text()
         self._fit_editor()
+        self.changed.emit()
 
     def _fit_editor(self) -> None:
         if self.sheet:
@@ -272,10 +276,11 @@ class CellWidget(QFrame):
         height = lines * max(14, self.editor.textHeight(0)) + 12 + bar
         self.editor.setFixedHeight(height)
 
-    def show_databases(self, catalog: CatalogSnapshot | None, in_use: str | None) -> None:
-        """Rellena el selector con las bases del catálogo; una celda sin base toma la base en uso."""
-        if self.cell.database is None and in_use is not None:
-            self.cell.database = in_use
+    def show_databases(self, catalog: CatalogSnapshot | None) -> None:
+        """Rellena el selector con las bases del catálogo. Una celda sin base toma `memory`, la raíz de la
+        sesión (decisión del propietario, 2026-11-03). Nunca muestra una base distinta de la que usará."""
+        if self.cell.database is None and catalog is not None:
+            self.cell.database = catalog.root
         self.database_combo.blockSignals(True)
         self.database_combo.clear()
         names = [db.name for db in catalog.databases] if catalog is not None else []
@@ -298,6 +303,7 @@ class CellWidget(QFrame):
         value = self.database_combo.itemData(index)
         if value:
             self.cell.database = str(value)
+            self.changed.emit()
 
     def fold(self, part: str, folded: bool) -> None:
         """Plegar la celda entera, el editor o el resultado (ui-ux-spec §10)."""
@@ -398,6 +404,8 @@ class NotebookView(QScrollArea):
     active_changed = pyqtSignal(object)  # CellWidget
     #: Celda nueva (añadida o duplicada), para que el panel le ponga sus botones.
     cell_created = pyqtSignal(object)  # CellWidget
+    #: Cambió lo que se guarda del cuaderno: celdas, su orden, su SQL o su base (autoguardado, ADR-0014).
+    changed = pyqtSignal()
 
     def __init__(
         self, notebook: Notebook, make_editor: Callable[[], Any], parent: QWidget | None = None
@@ -450,6 +458,7 @@ class NotebookView(QScrollArea):
         widget.run_requested.connect(self.run_requested)
         widget.activated.connect(self.set_active)
         widget.action_requested.connect(self._action)
+        widget.changed.connect(self.changed)
         self.cell_created.emit(widget)
         return widget
 
@@ -488,9 +497,10 @@ class NotebookView(QScrollArea):
         _show(self.add_button, self.sheet is None)
         if self.sheet is None:
             column.addStretch(1)
+        self.changed.emit()  # añadir, mover, duplicar o borrar celdas
 
     def add_cell(self, index: int, sql: str = "") -> CellWidget:
-        database = self.active.cell.database if self.active is not None else None
+        database = None  # `memory`, la raíz de la sesión, al mostrarse (propietario, 2026-11-03)
         cell = self.notebook.insert(index, database, sql)
         self._widgets[cell.id] = self._new_widget(cell)
         self._relayout()
@@ -579,6 +589,6 @@ class NotebookView(QScrollArea):
         self.ensureWidgetVisible(widget)
         self.active_changed.emit(widget)
 
-    def show_databases(self, catalog: CatalogSnapshot | None, in_use: str | None) -> None:
+    def show_databases(self, catalog: CatalogSnapshot | None) -> None:
         for widget in self._widgets.values():
-            widget.show_databases(catalog, in_use)
+            widget.show_databases(catalog)

@@ -77,11 +77,12 @@
 | AT-NB-004 | `SELECT * FROM otra.tabla` con otra base en la celda (y al revés: celda en `db` que lee `memory.t`); `LOAD spatial; SELECT …` en una celda (resultado de la última, «2 sentencias»); `USE` escrito en la celda; base de la celda desadjuntada | nombres calificados funcionan; el selector sigue al `USE`; la celda sin base no se ejecuta y lo dice |
 | AT-NB-005 | resultado y «Cargar en QGIS ▾» en cada celda (tres modalidades, geometría) | la capa sale del SQL de esa celda; nada se repite (GD-SQL-006) |
 | AT-NB-006 | resumen del resultado seleccionado | filas, columnas y tipos correctos; ninguna consulta nueva |
-| AT-NB-007 | lista de cuadernos; reinicio de QGIS | cambiar de cuaderno conserva su estado; nada en disco |
+| AT-NB-007 | lista de cuadernos | cambiar de cuaderno conserva su estado; sin archivo ni copia, nada en disco |
 | AT-NB-008 | autocompletado, atajos (Ctrl+Intro celda, Ctrl+Mayús+Intro selección, Mayús+Intro celda y avanzar) e historial dentro de una celda | como en G6, en la celda activa |
 | AT-NB-009 | alternar ventana ↔ panel con varias celdas, resultados y una ejecución en curso | mismo estado, un solo resultado (AT-UX-004/005) |
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
+| AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |

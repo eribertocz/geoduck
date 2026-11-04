@@ -21,7 +21,7 @@
 
 ## 4. Protección de datos
 - Por defecto, no persistir previews ni contenido de capas ni historiales completos que puedan contener datos sensibles.
-- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles.
+- Guardar SQL/historial solo mediante preferencia explícita o política configurable; sanitizar logging de rutas y literales sensibles. Cuadernos (ADR-0014): el SQL se escribe solo en el archivo `.sql` que el usuario eligió y en la copia de recuperación de su perfil de QGIS (activada por defecto, desactivable, borrada al cerrar bien). El historial del registro sigue sin escribirse en disco.
 - Configuración local con catálogo/alias, paths recientes y preferencias, con opción «borrar recientes». No almacenar passwords ni tokens en texto claro.
 - Los datos pueden estar en RAM de QGIS después de entrega; esto es parte del contrato de capas de memoria y depende de QGIS.
 - Cuando se considera un buffer temporal en disco, requiere ADR y controles de borrado/cifrado; no incluirlo en Alpha inicial.

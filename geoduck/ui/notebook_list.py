@@ -18,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -29,6 +30,18 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from geoduck.domain.i18n import tr
+
+
+def _menu_button(menu: QMenu) -> QToolButton:
+    button = QToolButton()
+    button.setText("⋯")
+    button.setProperty("geoduck", "more")  # sin la flecha del menú pegada al «⋯»
+    button.setAutoRaise(True)
+    button.setToolTip(tr("Open, save and recovery of the notebooks"))
+    button.setAccessibleName(tr("Notebook menu"))
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    button.setMenu(menu)
+    return button
 
 
 def _new_button(on_new: Callable[[], None]) -> QToolButton:
@@ -61,6 +74,7 @@ class NotebookList(QFrame):
         self.setProperty("geoduck", "card")
         self.setObjectName("geoduckNotebooksCard")
         box = QVBoxLayout(self)
+        box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)  # nunca más estrecha que su título
         box.setContentsMargins(12, 12, 12, 8)
         box.setSpacing(6)
         title = QHBoxLayout()
@@ -71,6 +85,9 @@ class NotebookList(QFrame):
         title.addWidget(label, 1)
         self.new_button = _new_button(on_new)
         title.addWidget(self.new_button)
+        self._title = title
+        self.menu_button: QToolButton | None = None
+        self._on_save: Callable[[int], object] | None = None
         box.addLayout(title)
         self.list = QListWidget()
         self.list.setObjectName("geoduckNotebookList")
@@ -84,11 +101,19 @@ class NotebookList(QFrame):
         self.list.customContextMenuRequested.connect(self._menu)
         close = QShortcut(QKeySequence(QKeySequence.StandardKey.Delete), self.list)
         close.setContext(Qt.ShortcutContext.WidgetShortcut)
-        close.activated.connect(
-            lambda: self.list.currentRow() >= 0 and self._on_close(self.list.currentRow())
-        )
+        close.activated.connect(self._close_current)
         box.addWidget(self.list, 1)
         tabs.currentChanged.connect(lambda _i: self.refresh())
+
+    def set_menu(self, menu: QMenu, *, on_save: Callable[[int], object]) -> None:
+        """«⋯» con Abrir, Guardar, Guardar como y la copia de recuperación (ADR-0014)."""
+        self.menu_button = _menu_button(menu)
+        self._title.addWidget(self.menu_button)
+        self._on_save = on_save
+
+    def _close_current(self) -> None:
+        if self.list.currentRow() >= 0:
+            self._on_close(self.list.currentRow())
 
     def refresh(self) -> None:
         """Vuelve a mostrar los cuadernos (nombres y el activo) desde las pestañas."""
@@ -128,6 +153,9 @@ class NotebookList(QFrame):
         row = self.list.row(item)
         menu = QMenu(self.list)
         menu.addAction(tr("Rename"), lambda: self.list.editItem(item))
+        if self._on_save is not None:
+            on_save = self._on_save
+            menu.addAction(tr("Save notebook"), lambda: on_save(row))
         menu.addAction(tr("Close"), lambda: self._on_close(row))
         menu.exec(self.list.viewport().mapToGlobal(pos))  # type: ignore[arg-type]
 
@@ -152,7 +180,13 @@ class NotebookSelector(QWidget):
         row.addWidget(self.combo, 1)
         self.new_button = _new_button(on_new)
         row.addWidget(self.new_button)
+        self._row = row
+        self.menu_button: QToolButton | None = None
         tabs.currentChanged.connect(lambda _i: self.refresh())
+
+    def set_menu(self, menu: QMenu) -> None:
+        self.menu_button = _menu_button(menu)
+        self._row.addWidget(self.menu_button)
 
     def refresh(self) -> None:
         self._filling = True
