@@ -11,7 +11,7 @@ import datetime as dt
 import json
 
 import pytest
-from osgeo import gdal, ogr, osr
+from osgeo import ogr, osr
 from qgis.core import (
     QgsApplication,
     QgsCoordinateReferenceSystem,
@@ -332,7 +332,6 @@ def make_parquet(path):
 
 
 def test_geoparquet_copy_and_view(session, tmp_path):
-    gdal.UseExceptions()
     make_parquet(tmp_path / "rios.parquet")
     layer = QgsVectorLayer(str(tmp_path / "rios.parquet"), "rios", "ogr")
     assert layer.isValid()
