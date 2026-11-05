@@ -116,7 +116,7 @@ def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
     if not crs.isValid():
         return None
     authid = str(crs.authid())
-    if authid.split(":")[0].upper() in _AUTHORITIES:
+    if authid.split(":", maxsplit=1)[0].upper() in _AUTHORITIES:
         return authid
     if hasattr(crs, "toJsonString"):  # QGIS 4.x
         text = crs.toJsonString()
