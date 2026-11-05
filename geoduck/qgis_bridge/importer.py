@@ -115,7 +115,7 @@ def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
     1.5.0 pierde un WKT2). None si la capa no tiene SRC o no se puede expresar."""
     if not crs.isValid():
         return None
-    authid = crs.authid()
+    authid = str(crs.authid())
     if authid.split(":")[0].upper() in _AUTHORITIES:
         return authid
     if hasattr(crs, "toJsonString"):  # QGIS 4.x
