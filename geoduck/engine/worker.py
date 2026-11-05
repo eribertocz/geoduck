@@ -58,6 +58,7 @@ from geoduck.domain.importing import ImportJob, ImportReport
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
 from geoduck.domain.transaction import TransactionState
+from geoduck.engine.arrow_plain import plain_batch
 from geoduck.engine.attach import attach_database
 from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, prepare_load
 from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
@@ -179,7 +180,8 @@ class ConnectionHandle:
         reader = relation.to_arrow_reader(batch_size=batch_size)
         self._reader_open = True
         try:
-            yield reader
+            # Sin tipos de extensión que otro componente registró en Arrow (F-121: GDAL y `geoarrow.wkb`)
+            yield (plain_batch(batch) for batch in reader)
         finally:
             try:
                 reader.close()
