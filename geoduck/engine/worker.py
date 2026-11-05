@@ -58,6 +58,7 @@ from geoduck.domain.importing import ImportJob, ImportReport
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
 from geoduck.domain.transaction import TransactionState
+from geoduck.engine.arrow_plain import plain_batch
 from geoduck.engine.attach import attach_database
 from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, prepare_load
 from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
@@ -220,7 +221,8 @@ class ConnectionHandle:
                 for batch in reader:
                     if token.cancelled:
                         return ReadSummary(rows, batches, ReadOutcome.CANCELLED)
-                    on_batch(batch)
+                    # Sin tipos de extensión que otro componente registró en Arrow (F-121)
+                    on_batch(plain_batch(batch))
                     rows += batch.num_rows
                     batches += 1
         except Exception as exc:
