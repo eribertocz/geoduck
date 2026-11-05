@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>GeoDuck · tabla</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#2f5fd0}a:hover{color:#234aa6}</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; font-family: Inter, system-ui, sans-serif; font-size: 13px; color: #1d2026; background: #ffffff">
+
+<aside style="width: 264px; background: #f6f7f9; border-right: 1px solid #e4e6ea; display: flex; flex-direction: column">
+<div style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #e4e6ea">
+<span style="width: 8px; height: 8px; border-radius: 50%; background: #1f9d55"></span>
+<div style="display: flex; flex-direction: column; line-height: 1.25">
+<span style="font-weight: 600">Sesión DuckDB</span>
+<span style="color: #6b7280; font-size: 12px">2.0.0 · en memoria</span>
+</div>
+<div style="flex: 1"></div>
+<button aria-label="Más acciones de sesión" style="width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #6b7280; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+<div style="padding: 10px 12px 6px">
+<label style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: #ffffff; border: 1px solid #e4e6ea; border-radius: 7px; color: #6b7280">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+<input aria-label="Buscar" placeholder="Buscar tablas…" style="border: 0; outline: 0; background: transparent; font: inherit; flex: 1">
+<span style="font-size: 11px; border: 1px solid #e4e6ea; border-radius: 4px; padding: 0 4px">Ctrl K</span>
+</label>
+</div>
+<div style="flex: 1; overflow: hidden; padding: 4px 8px; display: flex; flex-direction: column; gap: 1px">
+<div style="padding: 8px 6px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: #6b7280">RECIENTES</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px"><span style="color: #e0a100" aria-label="Favorita">★</span><span style="flex: 1">consumidores</span><span style="color: #9aa1ab; font-size: 11px">db</span></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px"><span style="color: #c4c9cf">☆</span><span style="flex: 1">Consumo por municipio</span><span style="color: #9aa1ab; font-size: 11px">SQL</span></div>
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 6px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: #6b7280">BASES<button aria-label="Adjuntar base" style="border: 0; background: transparent; color: #6b7280; font-size: 16px; line-height: 1">+</button></div>
+<div style="padding: 5px 6px; font-weight: 600">▾ db <span style="font-weight: 400; color: #6b7280; font-size: 12px">· lectura y escritura</span></div>
+<sc-for list="{{tables}}" as="t" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 22px; border-radius: 6px; background: {{t.bg}}; font-weight: {{t.weight}}">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a919c" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M9 10v10"></path></svg>
+<span style="flex: 1">{{t.name}}</span>
+<span style="color: #9aa1ab; font-size: 11px">{{t.rows}}</span>
+</div>
+</sc-for>
+<div style="padding: 5px 6px 5px 22px; color: #6b7280">▸ Vistas (2)</div>
+<div style="padding: 5px 6px; font-weight: 600; margin-top: 6px">▸ memory <span style="font-weight: 400; color: #6b7280; font-size: 12px">· en uso</span></div>
+<div style="padding: 5px 6px; font-weight: 600">▸ ventas <span style="font-weight: 400; color: #6b7280; font-size: 12px">· solo lectura</span></div>
+</div>
+<div style="display: flex; gap: 14px; padding: 10px 14px; border-top: 1px solid #e4e6ea; font-size: 12px">
+<a href="#">Diagnóstico</a><a href="#">Acerca de</a>
+<span style="flex: 1"></span><span style="color: #9aa1ab">vX.Y.Z</span>
+</div>
+</aside>
+
+<main style="flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative">
+<div role="status" style="position: absolute; right: 330px; bottom: 64px; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; background: #1d2026; color: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(17,24,39,.25); z-index: 2"><span style="width: 8px; height: 8px; border-radius: 50%; background: #4ade80"></span><span>Tabla <span style="font-family: 'JetBrains Mono', monospace">zonas</span> creada en db.main · 412 filas</span><a href="#" style="color: #a8c1ff">Abrir</a><a href="#" style="color: #a8c1ff">Deshacer</a></div>
+<div style="height: 52px; display: flex; align-items: flex-end; gap: 2px; padding: 0 12px; border-bottom: 1px solid #e4e6ea">
+<sc-for list="{{tabs}}" as="tab" hint-placeholder-count="3">
+<div style="height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 8px 8px 0 0; background: {{tab.bg}}; border: 1px solid {{tab.border}}; border-bottom: 0; margin-bottom: -1px; color: {{tab.color}}; font-weight: {{tab.weight}}">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8a919c">{{tab.kind}}</span>{{tab.name}}<span aria-hidden="true" style="color: #b0b6bf">×</span>
+</div>
+</sc-for>
+<button aria-label="Nueva consulta" style="height: 30px; width: 30px; margin: 0 0 4px 4px; border: 0; background: transparent; color: #6b7280; font-size: 18px">+</button>
+<div style="flex: 1"></div>
+<button style="height: 32px; margin-bottom: 9px; padding: 0 12px; border: 1px solid #e4e6ea; border-radius: 7px; background: #fff; font: inherit; display: flex; align-items: center; gap: 6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg>Acoplar a QGIS</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #eef0f3">
+<div style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 10px; border: 1px solid #c9d6f5; border-radius: 999px; background: #f3f6fe"><span style="color: #6b7280">CodigoMunicipio</span><span>=</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">0201</span><button aria-label="Quitar filtro" style="border: 0; background: transparent; color: #6b7280">×</button></div>
+<div style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 10px; border: 1px solid #c9d6f5; border-radius: 999px; background: #f3f6fe"><span style="color: #6b7280">ConsumoKwh</span><span>&gt;</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">50</span><button aria-label="Quitar filtro" style="border: 0; background: transparent; color: #6b7280">×</button></div>
+<button style="height: 30px; padding: 0 10px; border: 1px dashed #c4c9cf; border-radius: 999px; background: transparent; color: #6b7280; font: inherit">+ Filtro</button>
+<label style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid #e4e6ea; border-radius: 7px; color: #6b7280; margin-left: 8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><input aria-label="Buscar en la tabla" placeholder="Buscar en todas las columnas…" style="border: 0; outline: 0; background: transparent; font: inherit; width: 200px"></label>
+<div style="flex: 1"></div>
+<button style="height: 30px; padding: 0 10px; border: 0; background: transparent; color: #6b7280; font: inherit">Ver SQL</button><span style="color: #6b7280">48 312 filas</span>
+</div>
+
+<div style="flex: 1; min-height: 0; display: flex">
+<div style="flex: 1; min-width: 0; overflow: hidden">
+<div style="display: grid; grid-template-columns: 56px 110px 1fr 1fr 130px 140px">
+<div style="height: 34px; border-bottom: 1px solid #e4e6ea; background: #fbfbfc"></div>
+<sc-for list="{{cols}}" as="c" hint-placeholder-count="5">
+<div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid #e4e6ea; border-left: 1px solid #f0f1f4; background: #fbfbfc; font-weight: 600; justify-content: {{c.align}}">{{c.name}}<span style="font-weight: 400; font-size: 11px; color: #9aa1ab; font-family: 'JetBrains Mono', monospace">{{c.type}}</span></div>
+</sc-for>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+<div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; color: #9aa1ab; font-size: 12px; background: {{r.bg}}; border-bottom: 1px solid #f0f1f4">{{r.n}}</div>
+<div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: {{r.bg}}; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4">{{r.id}}</div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px; background: {{r.bg}}; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4; white-space: nowrap; overflow: hidden">{{r.name}}</div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px; background: {{r.bg}}; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4; white-space: nowrap; overflow: hidden; color: {{r.addrColor}}; font-style: {{r.addrStyle}}">{{r.addr}}</div>
+<div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: {{r.bg}}; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4">{{r.kwh}}</div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px; color: #6b7280; font-size: 12px; background: {{r.bg}}; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4">POINT</div>
+</sc-for>
+</div>
+</div>
+
+<aside style="width: 300px; border-left: 1px solid #e4e6ea; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid #eef0f3"><span style="font-weight: 600">Fila 3</span><span style="flex: 1"></span><button aria-label="Cerrar detalle" style="border: 0; background: transparent; color: #9aa1ab; font-size: 16px">×</button></div>
+<div style="padding: 6px 14px; display: flex; flex-direction: column">
+<sc-for list="{{detail}}" as="d" hint-placeholder-count="6">
+<div style="padding: 9px 0; border-bottom: 1px solid #f0f1f4">
+<div style="font-size: 11px; color: #6b7280; margin-bottom: 3px">{{d.k}} <span style="font-family: 'JetBrains Mono', monospace; color: #9aa1ab">{{d.t}}</span></div>
+<div style="font-family: {{d.font}}; color: {{d.color}}; font-style: {{d.style}}">{{d.v}}</div>
+</div>
+</sc-for>
+</div>
+</aside>
+</div>
+
+<div style="height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-top: 1px solid #e4e6ea; background: #fbfbfc">
+<div role="group" aria-label="Vista" style="display: flex; padding: 2px; background: #eef0f3; border-radius: 7px">
+<button style="height: 26px; padding: 0 12px; border: 0; border-radius: 5px; background: #fff; font: inherit; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08)">Datos</button>
+<button style="height: 26px; padding: 0 12px; border: 0; border-radius: 5px; background: transparent; font: inherit; color: #6b7280">Estructura</button>
+</div>
+<span style="color: #6b7280">1–100 de 48 312</span>
+<button aria-label="Página anterior" style="width: 28px; height: 28px; border: 1px solid #e4e6ea; border-radius: 6px; background: #fff">‹</button>
+<button aria-label="Página siguiente" style="width: 28px; height: 28px; border: 1px solid #e4e6ea; border-radius: 6px; background: #fff">›</button>
+<span style="flex: 1"></span>
+<span style="color: #6b7280">Capa «consumidores» cargada · Conectada · <a href="#">Ver en el mapa</a></span>
+<button style="height: 32px; padding: 0 14px; border: 0; border-radius: 7px; background: {{accent}}; color: #fff; font: inherit; font-weight: 500; display: flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>Cargar en QGIS ▾</button>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2f5fd0","options":["#2f5fd0","#1f7a4d","#7c3aed","#1d2026"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#2f5fd0';
+    const tables = [['consumidores','1,1 M',true],['lecturas','68 M',false],['medidores','1,2 M',false],['municipios','339',false],['tarifas','24',false],['zonas','412',false]]
+      .map(([name, rows, on]) => ({ name, rows, bg: on ? '#e7ecfa' : 'transparent', weight: on ? 600 : 400 }));
+    const tabs = [['T','consumidores',true],['SQL','Consulta 1',false],['T','lecturas',false]]
+      .map(([kind, name, on]) => ({ kind, name, bg: on ? '#ffffff' : 'transparent', border: on ? '#e4e6ea' : 'transparent', color: on ? '#1d2026' : '#6b7280', weight: on ? 500 : 400 }));
+    const cols = [['Consumidor','bigint','flex-start'],['RazonSocial','varchar','flex-start'],['Direccion','varchar','flex-start'],['ConsumoKwh','double','flex-start'],['geom','geometry','flex-start']]
+      .map(([name, type, align]) => ({ name, type, align }));
+    const names = ['QUEA CONDORI RENE','SUAZNABAR VENEGAS SERGIO','SUPO HUAQUI FRANCISCA','KULJIS MERUVIA IVANKO','VASQUEZ CORRO PATRICIA','MAMANI QUISPE JUAN','FLORES ROJAS ANA','CHOQUE LIMACHI LUIS','GUTIERREZ PAZ MARIA','TORREZ VARGAS JOSE','APAZA TICONA ROSA','CRUZ ALANOCA PEDRO','LIMA QUISBERT ELENA','ROJAS PAREDES HUGO'];
+    const addrs = ['URB. 31 DE ENERO, AV. 23 DE MARZO','V. EL CARMEN, LIBERTAD 58',null,'J. SANJINES, PSJ. KULJIS 7','ACHUMANI, CLL. 8 #471','AV. BUENOS AIRES 1203','CALLE COMERCIO 455','VILLA FATIMA, CALLE 3','MIRAFLORES, AV. BUSCH 900','SOPOCACHI, ECUADOR 2210','ALTO OBRAJES, CLL. 5','SAN PEDRO, PSJ. 12','CALACOTO, CLL. 21','IRPAVI, AV. PRINCIPAL 88'];
+    const ids = [838835,483684,768240,189119,337261,552310,610442,731905,298114,401276,512093,677410,702334,415520];
+    const kwh = ['142,50','87,20','211,00','64,75','98,10','305,40','120,00','76,90','188,30','54,60','132,00','99,80','143,25','61,40'];
+    const rows = names.map((name, i) => ({ n: i + 1, id: ids[i], name, kwh: kwh[i], addr: addrs[i] ?? 'NULL', addrColor: addrs[i] ? '#1d2026' : '#b0b6bf', addrStyle: addrs[i] ? 'normal' : 'italic', bg: i === 2 ? '#eef2fd' : '#ffffff' }));
+    const mono = "'JetBrains Mono', monospace";
+    const detail = [['Consumidor','bigint','768240',mono],['RazonSocial','varchar','SUPO HUAQUI FRANCISCA','inherit'],['Direccion','varchar',null,'inherit'],['CodigoMunicipio','varchar','0201',mono],['ConsumoKwh','double','211,00',mono],['geom','geometry','POINT (-68.1193 -16.5021)',mono]]
+      .map(([k, t, v, font]) => ({ k, t, v: v ?? 'NULL', font, color: v ? '#1d2026' : '#b0b6bf', style: v ? 'normal' : 'italic' }));
+    return { accent, tables, tabs, cols, rows, detail };
+  }
+}
+</script>
+</body>
+</html>

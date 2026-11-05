@@ -6,13 +6,13 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 146090,
-      "sha256": "950c52e92609c71fe4caa4763d89f003631e30368e7bfe608ef3c43c15ecb837"
+      "bytes": 157660,
+      "sha256": "7cf5ff25b2b3c4bd3b9f187f2b212b12b046e9fde08e71ee51f54d79717e1702"
     },
     {
       "path": "README.md",
-      "bytes": 4287,
-      "sha256": "74ab41c6486c62a35fac680339213c5794bbc024438dce903f94ba37cb88c047"
+      "bytes": 4299,
+      "sha256": "bd63c044ae2b641c4d53853702f2730764b9e1ca07618013f9bea7f33c526483"
     },
     {
       "path": "docs/adr/0001-session-root-memory.md",
@@ -66,8 +66,8 @@
     },
     {
       "path": "docs/adr/0011-coexistence-with-other-duckdb-plugins.md",
-      "bytes": 4529,
-      "sha256": "af32122e50d96785068c57faae74e8ecc09ab3992ce918f2611f58534013aab9"
+      "bytes": 4545,
+      "sha256": "ba3ccea3adc1f00d920703ac893debc4b023d1e37c8329d3508dafa0c0ee67bf"
     },
     {
       "path": "docs/adr/0012-three-load-modes.md",
@@ -85,9 +85,14 @@
       "sha256": "0a9c81a83bb6a272326bbdf4a1766f1195f595c4500bc9d908fe2064fe005ab3"
     },
     {
+      "path": "docs/adr/0015-qgis-to-duckdb.md",
+      "bytes": 2262,
+      "sha256": "16d14f43e72709380e1a256afc3520ef1b29c0f84fd12491a85e4d4aa2b53d31"
+    },
+    {
       "path": "docs/adr/README.md",
-      "bytes": 2476,
-      "sha256": "4085dfffa6d0cea62e6ba85c519288a23e81e2163f1c8832f19bbab9c6ad1a43"
+      "bytes": 2618,
+      "sha256": "1fbcb0a0d9b65c87491cb0e48f71de654a3375e62cb5e49ffae4ba2dd9e21073"
     },
     {
       "path": "docs/architecture.md",
@@ -106,8 +111,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 11211,
-      "sha256": "cf8a1fcae06606f2e5a2eec4104acae668795c49841bc16488cc89f638d68851"
+      "bytes": 12267,
+      "sha256": "8f24a3829f85f61d18cd0d525d454b05943a5113da8d355b86b91b46c9a8ce3c"
     },
     {
       "path": "docs/references.md",
@@ -116,8 +121,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 7022,
-      "sha256": "e7e2f29592481b0410e3739c91377ed37d025ac2ea54b96a66215698f9cbb24c"
+      "bytes": 8905,
+      "sha256": "f0e5e977ede7d30c5a0c6ce6559029fea397fc4a419fc4896c26ff9ec883c020"
     },
     {
       "path": "docs/security.md",
@@ -141,13 +146,18 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 13954,
-      "sha256": "3a7b9d3a266226327e98b98b3994ada491cea6424cf82d6ac528017a4d91c3cb"
+      "bytes": 15341,
+      "sha256": "092bd131014be0dfca2a524c62866aac20e76e76ed5eb606504b3cefff230af8"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
       "bytes": 16890,
       "sha256": "f7e936d9f603a16c6ba7c44ea9c6656c75cb6a4706d6da25a858a06b9e0b30ac"
+    },
+    {
+      "path": "specs/qgis-import-spec.md",
+      "bytes": 7101,
+      "sha256": "2c3fd7cf0fd9410602e84c294380929041cf795459942fc2cb825a1df3a75c20"
     },
     {
       "path": "specs/session-spec.md",

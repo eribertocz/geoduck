@@ -42,7 +42,7 @@ GeoDuck es una **extensión de escritorio para QGIS, en Python**, que ofrece una
 
 ## Alcance v0.x
 - Incluye: conexión y exploración DuckDB, SQL completo local, scripts multi-sentencia, resultados, carga de tablas sin geometría y capas geográficas en memoria, resolución de CRS, gestión explícita de conexiones, pruebas y UX.
-- Excluye por ahora: proveedor dinámico DuckDB↔QGIS, sincronización de capas, servidores, URLs, dashboards, importación bidireccional QGIS→DuckDB, colaboración y servicios web. Su inclusión requiere ADR y decisión del propietario.
+- Excluye por ahora: sincronización de capas, servidores, URLs, dashboards, colaboración y servicios web. Su inclusión requiere ADR y decisión del propietario. (La capa Conectada entró con ADR-0012; la copia puntual QGIS → DuckDB, con ADR-0015.)
 
 ## Instrucciones de uso de este paquete
 - Leer primero `docs/vision.md`, `docs/product-spec.md`, `docs/architecture.md`, luego las cuatro SPEC.

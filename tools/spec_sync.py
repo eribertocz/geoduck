@@ -35,6 +35,7 @@ CHAPTERS = (
     "specs/qgis-bridge-spec.md",
     "specs/spatial-spec.md",
     "specs/ui-ux-spec.md",
+    "specs/qgis-import-spec.md",
     "docs/security.md",
     "docs/compatibility-distribution.md",
     "qa/test-strategy.md",

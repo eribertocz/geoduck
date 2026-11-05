@@ -13,13 +13,14 @@
 - [08. specs/qgis-bridge-spec.md](#capitulo-8)
 - [09. specs/spatial-spec.md](#capitulo-9)
 - [10. specs/ui-ux-spec.md](#capitulo-10)
-- [11. docs/security.md](#capitulo-11)
-- [12. docs/compatibility-distribution.md](#capitulo-12)
-- [13. qa/test-strategy.md](#capitulo-13)
-- [14. qa/benchmarks.md](#capitulo-14)
-- [15. docs/roadmap.md](#capitulo-15)
-- [16. docs/implementation-handoff.md](#capitulo-16)
-- [17. docs/references.md](#capitulo-17)
+- [11. specs/qgis-import-spec.md](#capitulo-11)
+- [12. docs/security.md](#capitulo-12)
+- [13. docs/compatibility-distribution.md](#capitulo-13)
+- [14. qa/test-strategy.md](#capitulo-14)
+- [15. qa/benchmarks.md](#capitulo-15)
+- [16. docs/roadmap.md](#capitulo-16)
+- [17. docs/implementation-handoff.md](#capitulo-17)
+- [18. docs/references.md](#capitulo-18)
 
 
 ---
@@ -72,7 +73,7 @@ GeoDuck es una **extensión de escritorio para QGIS, en Python**, que ofrece una
 
 ## Alcance v0.x
 - Incluye: conexión y exploración DuckDB, SQL completo local, scripts multi-sentencia, resultados, carga de tablas sin geometría y capas geográficas en memoria, resolución de CRS, gestión explícita de conexiones, pruebas y UX.
-- Excluye por ahora: proveedor dinámico DuckDB↔QGIS, sincronización de capas, servidores, URLs, dashboards, importación bidireccional QGIS→DuckDB, colaboración y servicios web. Su inclusión requiere ADR y decisión del propietario.
+- Excluye por ahora: sincronización de capas, servidores, URLs, dashboards, colaboración y servicios web. Su inclusión requiere ADR y decisión del propietario. (La capa Conectada entró con ADR-0012; la copia puntual QGIS → DuckDB, con ADR-0015.)
 
 ## Instrucciones de uso de este paquete
 - Leer primero `docs/vision.md`, `docs/product-spec.md`, `docs/architecture.md`, luego las cuatro SPEC.
@@ -200,6 +201,13 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-NB-005 | P1 | Lista de cuadernos de la sesión | AT-NB-007 |
 | GD-NB-008 | P1 | Guardar y abrir cuadernos como `.sql` con marcas de celda, autoguardado en su archivo, volver a abrirlos al iniciar QGIS y copia de recuperación tras un cierre inesperado (ADR-0014) | AT-NB-012 |
 | GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
+| GD-IMP-001 | P0 | «Enviar a DuckDB…» desde el menú de capa de QGIS y desde el workspace; una o varias capas vectoriales | AT-IMP-001 |
+| GD-IMP-002 | P0 | Diálogo: destino en escritura, tabla por capa, «qué pasará» en vivo, si existe (por defecto no enviar), solo seleccionadas, reproyectar, vista sobre Parquet | AT-IMP-002, AT-IMP-003 |
+| GD-IMP-003 | P0 | Todo o nada en una transacción, progreso, cancelación, conteo final; la capa de QGIS no cambia | AT-IMP-004 |
+| GD-IMP-004 | P0 | Tres caminos: Conectada dentro de DuckDB, Parquet con `read_parquet`, el resto por lotes Arrow | AT-IMP-005 |
+| GD-IMP-005 | P0 | Conversión de tipos explícita; nombres que chocan sin distinguir mayúsculas se renombran con aviso; «Añadir filas» solo con columnas compatibles | AT-IMP-006 |
+| GD-IMP-006 | P0 | Geometría con su SRC (`ST_SetCRS`, sin `spatial`), Z/M, colecciones y `NULL`; nunca un SRC inventado | AT-IMP-007 |
+| GD-IMP-007 | P0 | Sin regresión G0–G7 | AT-IMP-008 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
@@ -245,7 +253,7 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 Los criterios `AT-*` aparecen en `qa/test-strategy.md`. Los detalles de diseño son normativos en `specs/*` y ADR. En caso de contradicción, una decisión explícita posterior del propietario resuelve el conflicto; Claude Code solicita la aclaración mediante issue/ADR y no improvisa el contrato.
 
 ## 6. No objetivos v0.x y entrada al backlog
-Dashboards, mapa por URL, servidor GeoDuck, capas dinámicas, live refresh, reverse sync QGIS→DuckDB, múltiples motores de consulta, editor visual drag-and-drop y conectores no DuckDB propios. Registrar ideas, no implementarlas por iniciativa del implementador.
+Dashboards, mapa por URL, servidor GeoDuck, capas dinámicas, live refresh, sincronización QGIS ↔ DuckDB (la copia puntual QGIS → DuckDB entra en G8, ADR-0015), múltiples motores de consulta, editor visual drag-and-drop y conectores no DuckDB propios. Registrar ideas, no implementarlas por iniciativa del implementador.
 
 
 
@@ -1202,7 +1210,116 @@ Referencia visual: la DuckDB UI (capturas del propietario, 2026-11-03), **sin in
 
 <a id="capitulo-11"></a>
 
-## CAPÍTULO 11 — `docs/security.md`
+## CAPÍTULO 11 — `specs/qgis-import-spec.md`
+
+# SPEC GD-IMP — Enviar capas de QGIS a DuckDB
+
+**Estado:** Alpha · G8 · `v0.9.0a1` (decisión del propietario, 2026-11-05; ADR-0015) · **IDs:** GD-IMP-001..007
+
+## 1. Meta
+Cerrar el ciclo QGIS ↔ DuckDB: copiar una o varias capas vectoriales de QGIS (o solo su selección) a tablas
+de una base DuckDB de la sesión, con su geometría y su SRC, para analizarlas con SQL. Es una **copia
+puntual**: no hay sincronización ni vínculo vivo (la sincronización sigue fuera de alcance, product-spec §6).
+La capa de QGIS nunca cambia.
+
+## 2. Puntos de entrada (GD-IMP-001)
+- Menú de una capa vectorial en el panel de capas de QGIS: «Enviar a DuckDB…» (con varias capas
+  seleccionadas, las envía todas).
+- Workspace de GeoDuck: «+» de la barra lateral → «Importar capas de QGIS…».
+- Con la interfaz de G9 (Workspace Pro): arrastrar capas del panel de capas a una base de la barra lateral
+  y Ctrl+K → «Enviar capa de QGIS a DuckDB…».
+
+Las capas ráster, de malla o de nube de puntos aparecen desactivadas con el motivo. Sin sesión lista, la
+acción explica que hay que iniciar una.
+
+## 3. Diálogo (GD-IMP-002; maqueta en `docs/g8/maqueta/`)
+- **Destino:** una base de la sesión **en escritura** y un esquema (por defecto, la base en uso y `main`).
+  Las bases de solo lectura no se ofrecen.
+- **Una fila por capa:** casilla, nombre, origen (proveedor), número de entidades, tipo de geometría y SRC;
+  nombre de la tabla destino editable. El nombre propuesto sale del nombre de la capa en minúsculas, sin
+  acentos ni espacios (`_`), sin chocar con otra fila.
+- **Qué pasará**, por fila y en vivo: «Tabla nueva», «Ya existe», «No se puede» (con el motivo).
+- **Si la tabla ya existe** (decisión del propietario: por defecto **no enviar**): «No enviar», «Reemplazar»,
+  «Añadir filas» u «Otro nombre», elegido por cada tabla que choca. Nada se sobrescribe sin elegirlo.
+- **Opciones:** «Solo seleccionadas» (visible si alguna capa tiene selección; indica cuántas); «Reproyectar
+  a…» (QGIS/PROJ, como spatial-spec §4); «Vista en vez de copia» (solo §5.2). El filtro de cada capa
+  (Capa → Filtrar…) **siempre** se respeta y se indica: se envía lo que la capa muestra.
+- **Columnas:** desplegable por capa con la conversión de cada campo (§6) y sus avisos.
+- **Resumen** antes de enviar: tablas que se crean, reemplazan o amplían, filas y camino (§5).
+- «Abrir la tabla al terminar» (recordado). Ctrl+Intro envía; Esc cancela.
+
+## 4. Garantías (GD-IMP-003)
+- **Todo o nada:** todas las capas del envío en **una transacción** de DuckDB en la base destino; si una
+  falla o se cancela, `ROLLBACK` y no queda ninguna tabla nueva, reemplazada ni ampliada.
+- **Progreso y cancelación** por capa y en total; la interfaz de QGIS sigue respondiendo.
+- **Conteo:** al terminar, filas en DuckDB = entidades leídas de cada capa; si no, `ROLLBACK` y error.
+- **Sin pérdidas silenciosas:** un campo que no se puede convertir, una geometría ilegible o un SRC que no se
+  puede expresar detienen el envío con su motivo, o se avisan antes de enviar si el diálogo ya lo sabe.
+- La capa de QGIS, su selección y su filtro no cambian.
+- Al terminar: aviso con «Abrir» (abre la tabla) y, solo si se creó una tabla nueva, «Deshacer» (`DROP` de
+  esa tabla). Reemplazar o añadir no se pueden deshacer desde GeoDuck y el diálogo lo dice antes.
+- Una base que es origen de capas Conectadas con cambios sin guardar sigue las protecciones de G3.
+
+## 5. Caminos (GD-IMP-004), elegidos solos y mostrados en el resumen
+1. **Capa Conectada de GeoDuck** de la misma sesión: `CREATE TABLE … AS SELECT` dentro de DuckDB a partir de la
+   consulta de la capa (con su filtro y, si se pide, la selección como lista de identificadores), sin pasar
+   las entidades por QGIS.
+2. **Archivo que DuckDB lee directo** (Parquet/GeoParquet en G8): `read_parquet` en la base destino. Solo
+   aquí existe «Vista en vez de copia»: `CREATE VIEW … AS SELECT * FROM read_parquet('…')`, que no copia
+   datos y depende de que el archivo siga en su sitio (se avisa). Con selección o filtro, se copia.
+3. **Cualquier otra capa vectorial** (GeoPackage, Shapefile, PostGIS, memoria, CSV…): una `QgsTask` lee las
+   entidades desde `QgsVectorLayerFeatureSource`, arma lotes Arrow (atributos + geometría WKB) y el worker
+   los inserta con `INSERT … SELECT` dentro de la transacción. Contrapresión con el mismo canal acotado que
+   las cargas (qgis-bridge-spec §2).
+
+## 6. Columnas y tipos (GD-IMP-005)
+| QGIS (`QMetaType`) | DuckDB |
+|---|---|
+| Int / UInt | `INTEGER` / `UINTEGER` |
+| LongLong / ULongLong | `BIGINT` / `UBIGINT` |
+| Double | `DOUBLE` |
+| Bool | `BOOLEAN` |
+| String | `VARCHAR` |
+| Date / Time / DateTime | `DATE` / `TIME` / `TIMESTAMP` (con zona horaria: `TIMESTAMPTZ`) |
+| ByteArray | `BLOB` |
+| StringList / List de números | `VARCHAR[]` / `DOUBLE[]` o `BIGINT[]` |
+| Map u otro | `JSON` como texto, con aviso |
+
+- Nombres de campo tal cual, entre comillas. DuckDB no distingue mayúsculas: dos campos que solo difieren en
+  ellas (`ID` e `id`) se renombran (`id_2`) con aviso.
+- El identificador interno de QGIS (FID) no se copia salvo que sea un campo de la capa.
+- **«Añadir filas»:** cada campo debe existir en la tabla con un tipo al que DuckDB convierta sin pérdida, y la
+  geometría con el mismo SRC (o «Reproyectar a…» ese SRC). Si no, el diálogo lo marca «No se puede» y explica
+  qué columna falla.
+
+## 7. Geometría y SRC (GD-IMP-006; spike G8-A)
+- Una columna `geom` (o el nombre de la geometría de la capa si tiene uno) de tipo `GEOMETRY('<SRC>')`.
+- El WKB pasa por Arrow y se convierte con `ST_GeomFromWKB`; el SRC se fija con `ST_SetCRS(geom, '<authid>')`,
+  que funciona **sin `spatial`** en DuckDB 1.5.0 y 2.0.0 y vuelve a QGIS al cargar la tabla (verificado
+  2026-11-05). DuckDB ignora el SRC de los metadatos GeoArrow al importar: por eso se fija explícitamente.
+- SRC sin código de autoridad (personalizado): PROJJSON o WKT2 si DuckDB lo acepta sin `spatial`; si no, el
+  diálogo avisa y ofrece «Reproyectar a…» o continuar **sin SRC** de forma explícita. Nunca se inventa (C4).
+- Capa sin SRC: la tabla queda sin SRC, con aviso.
+- Z/M y colecciones se conservan (WKB). Las geometrías inválidas se copian tal cual (no es una reparación;
+  para eso, «Diagnosticar geometrías…»). Las `NULL` siguen `NULL`.
+- Varias familias en la misma capa: se copian todas en la misma columna `GEOMETRY`.
+- `spatial` no se necesita ni se carga (ADR-0011).
+
+## 8. Fuera de alcance de G8
+Sincronización o capas vinculadas; enviar estilos, uniones o campos virtuales calculados como expresión
+(se envía su valor); capas ráster; GeoPackage/Shapefile leídos directo por DuckDB (necesitan extensiones:
+ADR-0011); editar la tabla desde el diálogo.
+
+## 9. Sin regresión (GD-IMP-007)
+Las cargas DuckDB → QGIS (G3–G4), el workspace, el SQL, los cuadernos y las protecciones de sesión siguen igual; un envío en curso bloquea `DETACH` y el cierre de la base destino igual que una operación propia.
+
+
+
+---
+
+<a id="capitulo-12"></a>
+
+## CAPÍTULO 12 — `docs/security.md`
 
 # GeoDuck — Modelo de seguridad y efectos de SQL
 
@@ -1255,9 +1372,9 @@ No publicar Alpha externa si carga extensiones no firmadas por defecto, si ignor
 
 ---
 
-<a id="capitulo-12"></a>
+<a id="capitulo-13"></a>
 
-## CAPÍTULO 12 — `docs/compatibility-distribution.md`
+## CAPÍTULO 13 — `docs/compatibility-distribution.md`
 
 # GeoDuck — Compatibilidad y distribución Windows
 
@@ -1317,9 +1434,9 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 
 ---
 
-<a id="capitulo-13"></a>
+<a id="capitulo-14"></a>
 
-## CAPÍTULO 13 — `qa/test-strategy.md`
+## CAPÍTULO 14 — `qa/test-strategy.md`
 
 # GeoDuck — Estrategia de pruebas y CI
 
@@ -1406,6 +1523,14 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
 | AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; reiniciar QGIS con cuadernos guardados abiertos; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; vuelven los guardados (solo sus rutas en las opciones) con el activo y la ruta en su ayuda; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
+| AT-IMP-001 | menú de capa con una y varias capas; workspace «+»; capa ráster; sin sesión | envía las vectoriales; ráster desactivada con motivo; sin sesión, explica qué hacer |
+| AT-IMP-002 | tabla que no existe, que existe y nombre repetido entre filas | «Tabla nueva» / «Ya existe» / aviso; por defecto no se envía la que existe; reemplazar, añadir y otro nombre hacen lo indicado |
+| AT-IMP-003 | solo seleccionadas; capa con filtro; reproyectar; vista sobre Parquet | se envía lo seleccionado y filtrado; coordenadas transformadas (tolerancias de spatial-spec §8); la vista no copia datos |
+| AT-IMP-004 | fallo en la segunda capa; cancelar a mitad; conteo distinto forzado | ninguna tabla creada, reemplazada ni ampliada; la UI responde; la capa de QGIS igual |
+| AT-IMP-005 | capa Conectada, Parquet, GeoPackage, Shapefile, memoria y CSV | camino esperado en el resumen; mismas filas y valores que en QGIS |
+| AT-IMP-006 | todos los tipos de §6; `ID` e `id`; añadir con columnas incompatibles | tipos de la tabla; renombrado con aviso; «No se puede» con la columna que falla |
+| AT-IMP-007 | EPSG:4326, EPSG:32719, SRC personalizado, sin SRC; Z/M, colección, `NULL`, inválida | `GEOMETRY('<SRC>')` que vuelve a QGIS con el mismo SRC y coordenadas; personalizado: aviso y decisión; sin `spatial` cargada |
+| AT-IMP-008 | regresión G0–G7 | todas pasan |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
@@ -1443,9 +1568,9 @@ A cada plataforma/versión declarar: `certificado`, `conocido con limitaciones`,
 
 ---
 
-<a id="capitulo-14"></a>
+<a id="capitulo-15"></a>
 
-## CAPÍTULO 14 — `qa/benchmarks.md`
+## CAPÍTULO 15 — `qa/benchmarks.md`
 
 # GeoDuck — Protocolo de benchmarks y perfiles
 
@@ -1502,9 +1627,9 @@ Guardar `json`/`csv` de métricas, commit, archivos de fixture, entorno, gráfic
 
 ---
 
-<a id="capitulo-15"></a>
+<a id="capitulo-16"></a>
 
-## CAPÍTULO 15 — `docs/roadmap.md`
+## CAPÍTULO 16 — `docs/roadmap.md`
 
 # GeoDuck — Roadmap Alpha por fases y versiones tentativas
 
@@ -1528,10 +1653,12 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G5 · `v0.6.0a1` Workspace UX | un workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado (ADR-0013, issue #49) | GD-UX-001..008 | AT-UX-001..015; las tres cargas de G3/G4 en ambos modos; alternar sin perder estado ni repetir operaciones |
 | G6 · `v0.7.0a1` SQL Professional | columnas en el explorador, autocompletado, pestañas de editor, historial de la sesión, «Explicar»; interfaz en inglés (#68) | GD-CAT-002, GD-SQL-007, GD-I18N-001 | AT-CAT-002, AT-SQL-007..010, AT-I18N-001; regresiones G0–G5; teclado, Qt 5 y Qt 6 |
 | G7 · `v0.8.0a1` Notebook | cuadernos de celdas SQL en el mismo workspace: cada celda con su base, su resultado y «Cargar en QGIS ▾» (decisión del propietario, 2026-11-03); exportar y guardar cuadernos `.sql` con copia de recuperación | GD-NB-001..008 | AT-NB-001..012; regresiones G0–G6 |
-| G8 · `v0.9.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
-| G9 · `v0.10.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
-| G10 · `v0.11.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
-| G11+ · `v0.12.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
+| G8 · `v0.9.0a1` QGIS → DuckDB | enviar capas de QGIS (o su selección) a tablas DuckDB con geometría y SRC; todo o nada (ADR-0015) | GD-IMP-001..007 | AT-IMP-001..008; velocidad medida y publicada; regresiones G0–G7 |
+| G9 · `v0.10.0a1` Workspace Pro | interfaz de administrador de base de datos tipo TablePlus: pestañas de tabla y de consulta, sin cuadernos (decisión del propietario, 2026-11-05) | por definir en su E0 | AT por definir; regresiones G0–G8 |
+| G10 · `v0.11.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
+| G11 · `v0.12.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
+| G12 · `v0.13.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
+| G13+ · `v0.14.0a1` ... | Alpha evolutiva | por decisión | sin fecha beta o stable |
 
 ## 3. Dependencias/gates críticos
 - **Decisión 2026-11-01:** ATTACH/DETACH escritos en SQL pasan de G1 a G2; G1 no incluye un editor SQL provisional.
@@ -1543,7 +1670,10 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 - **Decisión 2026-11-02:** G5 · Workspace UX (issue #49) entra antes de SQL Professional; las fases siguientes se desplazan un número (SQL Professional G6, Performance G7, Reliability & Distribution G8, Public Alpha G9). La issue #68 (inglés) pasa a `v0.7.0a1` con su mismo alcance. G6 parte del workspace de G5: el editor avanzado se integra en `WorkspaceContent`, sin volver a crear shells.
 - **Decisión 2026-11-02 (alcance de G6):** G6 incluye columnas en el explorador (GD-CAT-002, pedido del propietario), autocompletado, varias pestañas de editor, historial de la sesión dentro del registro, «Explicar» y la interfaz en inglés (#68). Formato SQL, historial en disco, búsqueda y reemplazo, snippets y `EXPLAIN ANALYZE` pasan a GD-SQL-008, sin fase asignada.
 - **Decisión 2026-11-03:** G7 · Notebook entra antes de Performance; Performance pasa a G8, Reliability & Distribution a G9, Public Alpha a G10. Inspirado en la DuckDB UI (cuadernos de celdas), pero nativo en Qt y sobre la sesión única: no se incrusta la DuckDB UI (interfaz no libre, descargada de internet, servidor HTTP sin autenticación y fuera del worker; ADR-0006, ADR-0011).
-- **Spike G8-A** (antes G7-A y G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
+- **Decisión 2026-11-05:** G8 · QGIS → DuckDB (ADR-0015) y G9 · Workspace Pro entran antes de Performance; Performance pasa a G10, Reliability & Distribution a G11, Public Alpha a G12. Orden A (propietario): primero QGIS → DuckDB, que no depende de la interfaz nueva; arrastrar capas a la barra lateral llega con G9.
+- **Decisión 2026-11-05 (rumbo de G9):** interfaz de administrador de base de datos, moderna y minimalista, tipo TablePlus: barra lateral con recientes, favoritos y bases; pestañas de tabla (datos con filtros en chips, orden, paginación, búsqueda, «Estructura», detalle de fila) y de consulta (editor y resultado); Ctrl+K para abrir tablas y acciones; aviso con «Abrir»/«Deshacer». Los cuadernos de G7 se retiran (los `.sql` guardados se abren como consulta). Doble clic en una tabla abre su pestaña de datos. Editar celdas en la grilla queda para después. Maqueta en `docs/g8/maqueta/` (pantallas 1–3); su SPEC se escribe en el E0 de G9.
+- **Spike G8-A:** velocidad del camino general (QGIS → Arrow → DuckDB) con 100 mil y 1 millón de entidades en QGIS 3.34 y 4.2; `ST_SetCRS` con SRC personalizados (PROJJSON/WKT2) sin `spatial`; GeoParquet con `read_parquet` sin `spatial`; selección de una capa Conectada como lista de identificadores; lectura de `QgsVectorLayerFeatureSource` en una `QgsTask` con los proveedores ogr, postgres, memory y delimitedtext.
+- **Spike G10-A** (antes G8-A, G7-A y G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
 
 ## 4. Capacidad mínima de Alpha útil
 A partir de **v0.4.0a1**: abrir plugin → sesión DuckDB → ATTACH archivo → SELECT → seleccionar resultado → cargar tabla o geometría en QGIS → DETACH → capa permanece. Una demo de carga sin tests de integridad no aprueba el gate.
@@ -1565,9 +1695,9 @@ Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.0+**,
 
 ---
 
-<a id="capitulo-16"></a>
+<a id="capitulo-17"></a>
 
-## CAPÍTULO 16 — `docs/implementation-handoff.md`
+## CAPÍTULO 17 — `docs/implementation-handoff.md`
 
 # GeoDuck — Contrato de trabajo para Claude Code (implementador)
 
@@ -1626,9 +1756,9 @@ Claude Code debe implementar soporte mínimo de **DuckDB 1.5.0** y mantener comp
 
 ---
 
-<a id="capitulo-17"></a>
+<a id="capitulo-18"></a>
 
-## CAPÍTULO 17 — `docs/references.md`
+## CAPÍTULO 18 — `docs/references.md`
 
 # GeoDuck — Fuentes técnicas oficiales consultadas
 

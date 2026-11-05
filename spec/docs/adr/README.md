@@ -14,6 +14,7 @@
 | [ADR-0010](0010-package-boundaries.md) | Aceptado (2026-11-01) | Paquetes y fronteras de importación verificadas por test |
 | [ADR-0011](0011-coexistence-with-other-duckdb-plugins.md) | Aceptado (2026-11-01) | Convivencia con otros complementos DuckDB; sin modificaciones silenciosas |
 | [ADR-0012](0012-three-load-modes.md) | Aceptado (2026-11-02) | Tres modalidades de carga: Memoria, Instantánea (GeoPackage `/vsimem`) y Conectada (proveedor PyQGIS editable) |
+| [ADR-0015](0015-qgis-to-duckdb.md) | Aceptado (2026-11-05) | Enviar capas de QGIS a DuckDB como copia puntual, todo o nada, sin `spatial` |
 | [ADR-0013](0013-single-workspace-dual-presentation.md) | Aceptado (2026-11-02) | Un solo workspace con dos presentaciones: ventana propia (por defecto) y panel acoplado |
 | [ADR-0014](0014-notebooks-on-disk.md) | Aceptado (2026-11-03) | Cuadernos en disco: archivo `.sql` elegido por el usuario (con autoguardado) y copia de recuperación en el perfil, activada por defecto |
 

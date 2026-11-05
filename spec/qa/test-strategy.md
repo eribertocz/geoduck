@@ -83,6 +83,14 @@
 | AT-NB-010 | teclado, panel estrecho, Qt 5 y Qt 6, inglés y español | todas las acciones accesibles; textos traducidos |
 | AT-NB-011 | exportar a CSV y Parquet una consulta de 1 millón de filas con geometría; archivo existente; cancelar; celda con DML o con `load spatial; select …` | el archivo tiene todas las filas, no las de la vista previa; nada se sobrescribe sin confirmar; cancelar no deja archivo a medias; DML no se exporta (no se repite) y de la celda se exporta solo la consulta de lectura |
 | AT-NB-012 | guardar y abrir un cuaderno `.sql`; un `.sql` cualquiera; cambiar un cuaderno guardado; reiniciar QGIS con cuadernos guardados abiertos; cerrar bien; QGIS que se cierra por un fallo; copia apagada | marcas y bases de vuelta; una celda; el archivo se actualiza solo; vuelven los guardados (solo sus rutas en las opciones) con el activo y la ruta en su ayuda; la copia se borra; se ofrece recuperar y se recupera; apagada, nada se escribe |
+| AT-IMP-001 | menú de capa con una y varias capas; workspace «+»; capa ráster; sin sesión | envía las vectoriales; ráster desactivada con motivo; sin sesión, explica qué hacer |
+| AT-IMP-002 | tabla que no existe, que existe y nombre repetido entre filas | «Tabla nueva» / «Ya existe» / aviso; por defecto no se envía la que existe; reemplazar, añadir y otro nombre hacen lo indicado |
+| AT-IMP-003 | solo seleccionadas; capa con filtro; reproyectar; vista sobre Parquet | se envía lo seleccionado y filtrado; coordenadas transformadas (tolerancias de spatial-spec §8); la vista no copia datos |
+| AT-IMP-004 | fallo en la segunda capa; cancelar a mitad; conteo distinto forzado | ninguna tabla creada, reemplazada ni ampliada; la UI responde; la capa de QGIS igual |
+| AT-IMP-005 | capa Conectada, Parquet, GeoPackage, Shapefile, memoria y CSV | camino esperado en el resumen; mismas filas y valores que en QGIS |
+| AT-IMP-006 | todos los tipos de §6; `ID` e `id`; añadir con columnas incompatibles | tipos de la tabla; renombrado con aviso; «No se puede» con la columna que falla |
+| AT-IMP-007 | EPSG:4326, EPSG:32719, SRC personalizado, sin SRC; Z/M, colección, `NULL`, inválida | `GEOMETRY('<SRC>')` que vuelve a QGIS con el mismo SRC y coordenadas; personalizado: aviso y decisión; sin `spatial` cargada |
+| AT-IMP-008 | regresión G0–G7 | todas pasan |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
