@@ -17,6 +17,7 @@ from geoduck.domain.catalog import (
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import SessionInvalidatedError
 from geoduck.domain.export import ExportRequest
+from geoduck.domain.importing import ImportedTable, ImportReport, ImportTarget, SendCandidate, SendRequest
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.sql import RunScope, ScriptRun, SqlStatement, StatementResult
@@ -131,6 +132,14 @@ class SessionEngine(Protocol):
         """«Exportar ▾» (G7 · E3): `COPY` de la consulta completa a CSV o Parquet (`ExportReport`)."""
         ...
 
+    def import_target(self, database: str, schema: str) -> Future[ImportTarget]:
+        """Destino de «Enviar a DuckDB» (G8): si guarda el SRC y qué tablas y vistas existen."""
+        ...
+
+    def drop_imported(self, tables: list[ImportedTable]) -> Future[None]:
+        """«Deshacer» un envío: `DROP` de las tablas nuevas que creó."""
+        ...
+
     def prepare_load(
         self,
         sql: str,
@@ -187,6 +196,26 @@ class LayerLoader(Protocol):
         *,
         on_progress: Callable[[int], None],
         on_done: Callable[[LoadReport | BaseException], None],
+    ) -> LoadTask: ...
+
+
+class LayerSender(Protocol):
+    """«Enviar a DuckDB» (G8, qgis-import-spec): lee capas de QGIS. Implementación: `qgis_bridge.importer`.
+
+    `on_progress` y `on_done` se llaman en el hilo principal.
+    """
+
+    def describe(self, layer_ids: list[str] | None) -> list[SendCandidate]:
+        """Las capas para el diálogo (todas las del proyecto si `layer_ids` es None), sin leer entidades."""
+        ...
+
+    def start(
+        self,
+        engine: SessionEngine,
+        request: SendRequest,
+        *,
+        on_progress: Callable[[int], None],
+        on_done: Callable[[ImportReport | BaseException], None],
     ) -> LoadTask: ...
 
 

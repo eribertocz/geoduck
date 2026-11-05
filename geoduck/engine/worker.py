@@ -54,7 +54,7 @@ from geoduck.domain.errors import (
 )
 from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.i18n import tr
-from geoduck.domain.importing import ImportJob, ImportReport
+from geoduck.domain.importing import ImportedTable, ImportJob, ImportReport, ImportTarget
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
 from geoduck.domain.transaction import TransactionState
@@ -65,7 +65,7 @@ from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
 from geoduck.engine.export import export_query
-from geoduck.engine.importing import import_batches
+from geoduck.engine.importing import drop_imported, import_batches, import_target
 from geoduck.engine.spatial import activate_spatial, spatial_state
 from geoduck.engine.sql import StatementListener, run_in_database, run_script
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
@@ -420,6 +420,14 @@ class SessionWorker:
         """«Enviar a DuckDB» (G8): escribe los lotes del canal en una transacción
         (`geoduck.engine.importing`). Se cancela con `cancel(handle.op_id)`: `ROLLBACK` y nada cambia."""
         return self.submit(lambda h, t: import_batches(h, t, jobs, channel))
+
+    def import_target(self, database: str, schema: str) -> Future[ImportTarget]:
+        """Destino de «Enviar a DuckDB»: si guarda el SRC y qué tablas y vistas existen (solo metadatos)."""
+        return self.submit(lambda h, _t: import_target(h, database, schema)).future
+
+    def drop_imported(self, tables: list[ImportedTable]) -> Future[None]:
+        """«Deshacer» un envío: `DROP` de las tablas nuevas que creó."""
+        return self.submit(lambda h, _t: drop_imported(h, tables)).future
 
     def read_table(
         self, sql: str, *, priority: bool = True, database: str | None = None

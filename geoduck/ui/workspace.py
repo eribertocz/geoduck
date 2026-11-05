@@ -179,6 +179,8 @@ class WorkspaceContent(QWidget):
         self.map_button.clicked.connect(self._view_map)
         #: Capas de la última carga (ids) y quién las lleva al mapa (lo conecta el complemento).
         self.last_layers: list[str] = []
+        #: Tabla que «Abrir» seleccionará cuando llegue al catálogo (base, esquema, nombre).
+        self._pending_open: tuple[str, str, str] | None = None
         self.on_view_map: Callable[[list[str]], str | None] | None = None
         QgsProject.instance().layersRemoved.connect(self._layers_removed)
         self.sql_panel.log_counts_changed.connect(self._update_log_tab)
@@ -259,18 +261,24 @@ class WorkspaceContent(QWidget):
         self.open_action.setToolTip(tr("Attaches an existing DuckDB file; never creates one"))
         self.create_action = QAction(tr("Create new…"), self)
         self.create_action.setToolTip(tr("Creates a new DuckDB file; never overwrites an existing one"))
+        #: «Importar capas de QGIS…» (G8, qgis-import-spec §2): lo conecta el complemento.
+        self.import_layers_action = QAction(tr("Import QGIS layers…"), self)
+        self.import_layers_action.setObjectName("geoduckImportLayers")
+        self.import_layers_action.setToolTip(tr("Copies layers of the QGIS project into DuckDB tables"))
         self.detach_action = QAction(tr("Detach"), self)
         self.detach_action.setToolTip(tr("Detaches the selected database and releases the file"))
         self.add_button = QToolButton()
         self.add_button.setProperty("geoduck", "square")
         self.add_button.setText("+")
-        self.add_button.setToolTip(tr("Open or create a DuckDB database"))
-        self.add_button.setAccessibleName(tr("Open or create a DuckDB database"))
+        self.add_button.setToolTip(tr("Open or create a DuckDB database, or import QGIS layers"))
+        self.add_button.setAccessibleName(tr("Open or create a DuckDB database, or import QGIS layers"))
         self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         add_menu = QMenu(self.add_button)
         add_menu.setToolTipsVisible(True)
         add_menu.addAction(self.open_action)
         add_menu.addAction(self.create_action)
+        add_menu.addSeparator()
+        add_menu.addAction(self.import_layers_action)
         self.add_button.setMenu(add_menu)
         self.refresh_button = QToolButton()
         self.refresh_button.setProperty("geoduck", "square")
@@ -602,7 +610,7 @@ class WorkspaceContent(QWidget):
             self.tabs.setCurrentWidget(self.sql_panel)
         self.sql_panel.insert_text(text)
 
-    def _on_event(self, event: AppEvent) -> None:  # noqa: PLR0912 - un despacho por evento
+    def _on_event(self, event: AppEvent) -> None:  # noqa: PLR0912, PLR0915 - un despacho por evento
         if isinstance(event, LoadFinished):
             report = event.report
             self.last_layers = [i for i, _ in report.layers] or [report.layer_id]
@@ -629,6 +637,8 @@ class WorkspaceContent(QWidget):
             self._update_engine_label()
         elif isinstance(event, CatalogChanged):
             self.explorer.show_catalog(event.catalog)
+            if self._pending_open is not None and self.explorer.select_object(*self._pending_open):
+                self._pending_open = None
             self._update_engine_label()
             self._render(self._coordinator.state)
         elif isinstance(event, ColumnsListed):
@@ -667,6 +677,13 @@ class WorkspaceContent(QWidget):
                 tr("The operation could not be completed.") + f" [{event.code.value}] {event.message}"
             )
             self.message_label.show()
+
+    def open_table(self, database: str, schema: str, name: str) -> None:
+        """«Abrir» tras enviar capas (G8): la tabla, seleccionada en el explorador. Si el catálogo aún no la
+        tiene (se está releyendo), se selecciona en cuanto llegue."""
+        self._pending_open = None
+        if not self.explorer.select_object(database, schema, name):
+            self._pending_open = (database, schema, name)
 
     def show_text(self, text: str) -> None:
         """Mensaje para el usuario desde fuera del panel (p. ej. el diagnóstico de geometrías)."""

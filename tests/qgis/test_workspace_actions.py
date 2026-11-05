@@ -237,7 +237,8 @@ def test_existing_actions_are_where_section_8_puts_them(plugin):  # noqa: F811
     # Sin sesión: «Iniciar sesión» al pie de «Bases de datos» (decisión del propietario, 2026-11-02)
     assert card.isAncestorOf(content.start_button) and content.start_button.isVisibleTo(content)
     assert not content.close_button.isVisibleTo(content)
-    assert content.add_button.menu().actions() == [content.open_action, content.create_action]
+    actions = [a for a in content.add_button.menu().actions() if not a.isSeparator()]
+    assert actions == [content.open_action, content.create_action, content.import_layers_action]  # G8
     assert not hasattr(content, "spatial_action") and not hasattr(
         content, "more_button"
     )  # sin «Activar spatial…»

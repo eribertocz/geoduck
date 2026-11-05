@@ -9,6 +9,7 @@ from geoduck.domain.bridge_types import LoadPlan
 from geoduck.domain.catalog import AttachedDatabase, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import ErrorCode
 from geoduck.domain.export import ExportReport, ExportRequest
+from geoduck.domain.importing import ImportedTable, ImportReport, SendRequest
 from geoduck.domain.load import LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import SessionState
@@ -247,6 +248,48 @@ class SpatialActivationFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class SendStarted:
+    """«Enviar a DuckDB» en curso (G8): la sesión queda ocupada hasta `SendFinished` o `SendFailed`."""
+
+    send_id: int
+    request: SendRequest
+
+
+@dataclass(frozen=True)
+class SendProgressed:
+    send_id: int
+    #: Entidades leídas de QGIS (las capas que DuckDB copia por SQL no cuentan aquí).
+    rows: int
+
+
+@dataclass(frozen=True)
+class SendFinished:
+    send_id: int
+    report: ImportReport
+
+
+@dataclass(frozen=True)
+class SendFailed:
+    send_id: int
+    code: ErrorCode
+    message: str
+    cancelled: bool
+
+
+@dataclass(frozen=True)
+class SendUndone:
+    """«Deshacer»: las tablas nuevas del envío se borraron."""
+
+    tables: tuple[ImportedTable, ...]
+
+
+@dataclass(frozen=True)
+class SendUndoFailed:
+    code: ErrorCode
+    message: str
+
+
 AppEvent = (
     SessionStateChanged
     | SessionStarted
@@ -280,4 +323,10 @@ AppEvent = (
     | SpatialChecked
     | SpatialActivated
     | SpatialActivationFailed
+    | SendStarted
+    | SendProgressed
+    | SendFinished
+    | SendFailed
+    | SendUndone
+    | SendUndoFailed
 )

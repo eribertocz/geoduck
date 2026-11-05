@@ -35,6 +35,7 @@ from geoduck.domain.importing import (
     ImportJob,
     ImportMode,
     ImportReport,
+    ImportTarget,
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.engine.sql import run_in_database
@@ -145,7 +146,19 @@ def import_batches(
                         job.display, expected, got
                     )
                 )
-            tables.append(ImportedTable(job.display, job.qualified, job.mode, sent[i]))
+            database = "temp" if job.temporary else job.database
+            tables.append(
+                ImportedTable(
+                    job.display,
+                    job.qualified,
+                    job.mode,
+                    sent[i],
+                    job.as_view,
+                    database,
+                    job.schema,
+                    job.table,
+                )
+            )
         crs_lost = _geometry_without_crs(handle, jobs)
         handle.execute("COMMIT")
     except BaseException:
@@ -167,3 +180,41 @@ def _geometry_without_crs(handle: ConnectionHandle, jobs: list[ImportJob]) -> li
         if rows and is_geometry_type(str(rows[0][1])) and "(" not in str(rows[0][1]):
             out.append(tr("{0}: the geometry has no CRS (the layer had none)").format(job.display))
     return out
+
+
+def import_target(handle: ConnectionHandle, database: str, schema: str) -> ImportTarget:
+    """Lo que el diálogo necesita del destino (qgis-import-spec §3): si guarda el SRC (F-120), las tablas que
+    ya existen con sus columnas y las vistas. Solo metadatos."""
+    db = quote_string_literal(database)
+    sch = quote_string_literal(schema)
+    rows = handle.execute(
+        "SELECT table_name, column_name, data_type FROM duckdb_columns() "
+        f"WHERE database_name = {db} AND schema_name = {sch} ORDER BY table_name, column_index",
+        max_rows=1_000_000,
+    ).rows
+    views = handle.execute(
+        f"SELECT view_name FROM duckdb_views() WHERE database_name = {db} AND schema_name = {sch}",
+        max_rows=1_000_000,
+    ).rows
+    view_names = frozenset(str(r[0]).lower() for r in views)
+    tables: dict[str, list[tuple[str, str]]] = {}
+    for table, column, duck in rows:
+        if str(table).lower() not in view_names:
+            tables.setdefault(str(table).lower(), []).append((str(column), str(duck)))
+    stores = database == "temp" or stores_geometry_crs(handle, database)
+    return ImportTarget(stores, {k: tuple(v) for k, v in tables.items()}, view_names)
+
+
+def drop_imported(handle: ConnectionHandle, tables: list[ImportedTable]) -> None:
+    """«Deshacer» (§4): `DROP` de las tablas (o vistas) que el envío creó; nunca de una reemplazada.
+    Rechaza una transacción del usuario abierta, como el envío."""
+    if probe_transaction(handle).is_open:
+        raise TransactionError(
+            tr("The session has an open transaction: commit or roll it back before undoing the send")
+        )
+    for table in tables:
+        if not table.can_undo:
+            raise InvalidArgumentError(tr("Only a new table can be undone: {0}").format(table.display))
+    for table in tables:
+        kind = "VIEW" if table.view else "TABLE"
+        handle.execute(f"DROP {kind} IF EXISTS {table.qualified}", max_rows=1)
