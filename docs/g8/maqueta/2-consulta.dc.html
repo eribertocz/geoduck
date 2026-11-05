@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>GeoDuck · consulta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#2f5fd0}a:hover{color:#234aa6}</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; font-family: Inter, system-ui, sans-serif; font-size: 13px; color: #1d2026; background: #ffffff; position: relative">
+
+<aside style="width: 264px; background: #f6f7f9; border-right: 1px solid #e4e6ea; display: flex; flex-direction: column">
+<div style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #e4e6ea">
+<span style="width: 8px; height: 8px; border-radius: 50%; background: #1f9d55"></span>
+<div style="display: flex; flex-direction: column; line-height: 1.25"><span style="font-weight: 600">Sesión DuckDB</span><span style="color: #6b7280; font-size: 12px">2.0.0 · en memoria</span></div>
+</div>
+<div style="padding: 10px 12px 6px"><label style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: #fff; border: 1px solid #e4e6ea; border-radius: 7px; color: #6b7280"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><input aria-label="Buscar" placeholder="Buscar tablas…" style="border: 0; outline: 0; background: transparent; font: inherit; flex: 1"></label></div>
+<div style="padding: 4px 8px; display: flex; flex-direction: column; gap: 1px">
+<div style="padding: 8px 6px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: #6b7280">BASES</div>
+<div style="padding: 5px 6px; font-weight: 600">▾ db <span style="font-weight: 400; color: #6b7280; font-size: 12px">· lectura y escritura</span></div>
+<sc-for list="{{tables}}" as="t" hint-placeholder-count="6"><div style="padding: 5px 6px 5px 22px; color: #3b4048">{{t}}</div></sc-for>
+<div style="padding: 5px 6px; font-weight: 600; margin-top: 6px">▸ memory</div>
+</div>
+</aside>
+
+<main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<div style="height: 52px; display: flex; align-items: flex-end; gap: 2px; padding: 0 12px; border-bottom: 1px solid #e4e6ea">
+<div style="height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; color: #6b7280"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8a919c">T</span>consumidores</div>
+<div style="height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 8px 8px 0 0; background: #fff; border: 1px solid #e4e6ea; border-bottom: 0; margin-bottom: -1px; font-weight: 500"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8a919c">SQL</span>Consumo por municipio<span style="width: 6px; height: 6px; border-radius: 50%; background: #9aa1ab" aria-label="Sin guardar"></span></div>
+<div style="flex: 1"></div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #eef0f3">
+<button style="height: 32px; padding: 0 14px; border: 0; border-radius: 7px; background: {{accent}}; color: #fff; font: inherit; font-weight: 500; display: flex; align-items: center; gap: 8px"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"></path></svg>Ejecutar <span style="opacity: .8; font-size: 12px">Ctrl+Intro</span></button>
+<button style="height: 32px; padding: 0 12px; border: 1px solid #e4e6ea; border-radius: 7px; background: #fff; font: inherit">Todo <span style="color: #9aa1ab; font-size: 12px">Ctrl+Mayús+Intro</span></button>
+<button disabled style="height: 32px; padding: 0 12px; border: 1px solid #eef0f3; border-radius: 7px; background: #fbfbfc; font: inherit; color: #b0b6bf">Cancelar</button>
+<div style="flex: 1"></div>
+<label style="display: flex; align-items: center; gap: 6px; color: #6b7280">Base <select aria-label="Base de la consulta" style="height: 30px; border: 1px solid #e4e6ea; border-radius: 6px; font: inherit; background: #fff; padding: 0 6px"><option>db</option></select></label>
+</div>
+
+<div style="height: 250px; display: flex; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 23px; padding: 12px 0; border-bottom: 1px solid #e4e6ea">
+<div style="width: 48px; text-align: right; padding-right: 14px; color: #b0b6bf; white-space: pre-line">1
+2
+3
+4
+5
+6
+7
+8</div>
+<div style="flex: 1; white-space: pre-line"><span style="color: #8a919c">-- Consumo medio por municipio, últimos 12 meses</span>
+<span style="color: #7c3aed">SELECT</span> m.nombre, <span style="color: #2f5fd0">count</span>(*) <span style="color: #7c3aed">AS</span> suministros,
+       <span style="color: #2f5fd0">avg</span>(l.kwh) <span style="color: #7c3aed">AS</span> kwh_medio
+<span style="color: #7c3aed">FROM</span> lecturas l
+<span style="color: #7c3aed">JOIN</span> municipios m <span style="color: #7c3aed">USING</span> (codigo)
+<span style="color: #7c3aed">WHERE</span> l.mes &gt;= <span style="color: #1f7a4d">'2025-11-01'</span>
+<span style="color: #7c3aed">GROUP BY</span> <span style="color: #b45309">1</span> <span style="color: #7c3aed">ORDER BY</span> <span style="color: #b45309">3</span> <span style="color: #7c3aed">DESC</span>;
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 4px; padding: 0 16px; border-bottom: 1px solid #eef0f3; height: 40px">
+<div style="height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 2px solid {{accent}}; font-weight: 500">Resultado <span style="color: #6b7280; font-weight: 400">339 filas · 412 ms</span></div>
+<div style="height: 40px; display: flex; align-items: center; padding: 0 10px; color: #6b7280">Mensajes</div>
+<div style="flex: 1"></div>
+<button style="height: 30px; padding: 0 10px; border: 1px solid #e4e6ea; border-radius: 6px; background: #fff; font: inherit">Exportar ▾</button>
+<button style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: {{accent}}; color: #fff; font: inherit; font-weight: 500">Cargar en QGIS ▾</button>
+</div>
+
+<div style="flex: 1; min-height: 0; overflow: hidden">
+<div style="display: grid; grid-template-columns: 56px 1fr 160px 160px">
+<div style="height: 34px; border-bottom: 1px solid #e4e6ea; background: #fbfbfc"></div>
+<div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid #e4e6ea; border-left: 1px solid #f0f1f4; background: #fbfbfc; font-weight: 600">nombre <span style="font-weight: 400; font-size: 11px; color: #9aa1ab; font-family: 'JetBrains Mono', monospace">varchar</span></div>
+<div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid #e4e6ea; border-left: 1px solid #f0f1f4; background: #fbfbfc; font-weight: 600">suministros <span style="font-weight: 400; font-size: 11px; color: #9aa1ab; font-family: 'JetBrains Mono', monospace">bigint</span></div>
+<div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid #e4e6ea; border-left: 1px solid #f0f1f4; background: #fbfbfc; font-weight: 600">kwh_medio <span style="font-weight: 400; font-size: 11px; color: #9aa1ab; font-family: 'JetBrains Mono', monospace">double</span></div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; color: #9aa1ab; font-size: 12px; border-bottom: 1px solid #f0f1f4">{{r.n}}</div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4">{{r.name}}</div>
+<div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4">{{r.count}}</div>
+<div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; border-bottom: 1px solid #f0f1f4; border-left: 1px solid #f0f1f4">{{r.kwh}}</div>
+</sc-for>
+</div>
+</div>
+
+<div style="height: 30px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-top: 1px solid #e4e6ea; background: #fbfbfc; font-size: 12px; color: #6b7280">
+<span>Registro: 3 OK · <span style="color: #b42318">1 error</span></span><span style="flex: 1"></span><span>Línea 8, col 31</span><span>db</span>
+</div>
+</main>
+
+<div role="dialog" aria-label="Abrir rápido" style="position: absolute; left: 50%; top: 120px; transform: translateX(-30%); width: 520px; background: #fff; border: 1px solid #e4e6ea; border-radius: 12px; box-shadow: 0 18px 50px rgba(17,24,39,.18); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #eef0f3"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><input aria-label="Abrir tabla, consulta o acción" value="lec" style="border: 0; outline: 0; font: inherit; font-size: 15px; flex: 1"><span style="font-size: 11px; color: #9aa1ab; border: 1px solid #e4e6ea; border-radius: 4px; padding: 0 5px">Esc</span></div>
+<div style="padding: 6px">
+<sc-for list="{{quick}}" as="q" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; background: {{q.bg}}"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8a919c; width: 26px">{{q.kind}}</span><span style="flex: 1">{{q.name}}</span><span style="color: #9aa1ab; font-size: 12px">{{q.where}}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2f5fd0","options":["#2f5fd0","#1f7a4d","#7c3aed","#1d2026"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#2f5fd0';
+    const tables = ['consumidores', 'lecturas', 'medidores', 'municipios', 'tarifas', 'zonas'];
+    const data = [['El Alto','312 450','118,40'],['La Paz','287 112','131,05'],['Viacha','41 230','96,72'],['Achocalla','12 904','88,10'],['Palca','6 115','74,33'],['Mecapaca','5 870','71,90'],['Laja','4 402','69,45'],['Pucarani','3 998','66,20']];
+    const rows = data.map(([name, count, kwh], i) => ({ n: i + 1, name, count, kwh }));
+    const quick = [['T','lecturas','db.main',true],['T','lecturas_2024','db.historico',false],['V','v_lecturas_mes','db.main',false],['SQL','Lecturas por zona','consulta guardada',false],['›','Enviar capa de QGIS a DuckDB…','acción',false],['›','Nueva consulta','Ctrl+T',false]]
+      .map(([kind, name, where, on]) => ({ kind, name, where, bg: on ? '#eef2fd' : 'transparent' }));
+    return { accent, tables, rows, quick };
+  }
+}
+</script>
+</body>
+</html>

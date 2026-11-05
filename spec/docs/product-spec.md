@@ -63,6 +63,13 @@
 | GD-NB-005 | P1 | Lista de cuadernos de la sesión | AT-NB-007 |
 | GD-NB-008 | P1 | Guardar y abrir cuadernos como `.sql` con marcas de celda, autoguardado en su archivo, volver a abrirlos al iniciar QGIS y copia de recuperación tras un cierre inesperado (ADR-0014) | AT-NB-012 |
 | GD-NB-007 | P1 | «Exportar ▾» del resultado de una celda a CSV o Parquet con la consulta **completa** (`COPY (<consulta>) TO … (FORMAT …)`), nunca la vista previa; solo consultas de lectura | AT-NB-011 |
+| GD-IMP-001 | P0 | «Enviar a DuckDB…» desde el menú de capa de QGIS y desde el workspace; una o varias capas vectoriales | AT-IMP-001 |
+| GD-IMP-002 | P0 | Diálogo: destino en escritura, tabla por capa, «qué pasará» en vivo, si existe (por defecto no enviar), solo seleccionadas, reproyectar, vista sobre Parquet | AT-IMP-002, AT-IMP-003 |
+| GD-IMP-003 | P0 | Todo o nada en una transacción, progreso, cancelación, conteo final; la capa de QGIS no cambia | AT-IMP-004 |
+| GD-IMP-004 | P0 | Tres caminos: Conectada dentro de DuckDB, Parquet con `read_parquet`, el resto por lotes Arrow | AT-IMP-005 |
+| GD-IMP-005 | P0 | Conversión de tipos explícita; nombres que chocan sin distinguir mayúsculas se renombran con aviso; «Añadir filas» solo con columnas compatibles | AT-IMP-006 |
+| GD-IMP-006 | P0 | Geometría con su SRC (`ST_SetCRS`, sin `spatial`), Z/M, colecciones y `NULL`; nunca un SRC inventado | AT-IMP-007 |
+| GD-IMP-007 | P0 | Sin regresión G0–G7 | AT-IMP-008 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
@@ -108,4 +115,4 @@
 Los criterios `AT-*` aparecen en `qa/test-strategy.md`. Los detalles de diseño son normativos en `specs/*` y ADR. En caso de contradicción, una decisión explícita posterior del propietario resuelve el conflicto; Claude Code solicita la aclaración mediante issue/ADR y no improvisa el contrato.
 
 ## 6. No objetivos v0.x y entrada al backlog
-Dashboards, mapa por URL, servidor GeoDuck, capas dinámicas, live refresh, reverse sync QGIS→DuckDB, múltiples motores de consulta, editor visual drag-and-drop y conectores no DuckDB propios. Registrar ideas, no implementarlas por iniciativa del implementador.
+Dashboards, mapa por URL, servidor GeoDuck, capas dinámicas, live refresh, sincronización QGIS ↔ DuckDB (la copia puntual QGIS → DuckDB entra en G8, ADR-0015), múltiples motores de consulta, editor visual drag-and-drop y conectores no DuckDB propios. Registrar ideas, no implementarlas por iniciativa del implementador.
