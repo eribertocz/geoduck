@@ -1,6 +1,6 @@
 # G8 · `v0.9.0a1` QGIS → DuckDB — plan
 
-**Estado:** E0 en revisión. **ADR-0015.** **Requisitos:** GD-IMP-001..007. **Contrato:**
+**Estado:** En curso. **ADR-0015.** **Requisitos:** GD-IMP-001..007. **Contrato:**
 `spec/specs/qgis-import-spec.md`; maqueta `docs/g8/maqueta/4-enviar-a-duckdb.dc.html`.
 
 **Gate:** AT-IMP-001..008 en la matriz de CI (QGIS 3.34, 3.40, 3.44, 4.2 × DuckDB 1.5.0, 2.0.0); velocidad del
@@ -36,18 +36,15 @@ G0–G7. Tag y release `v0.9.0a1` solo con autorización del propietario.
 | **E4** | Reproyectar, SRC personalizados, mensajes, idioma, accesibilidad, panel estrecho | AT-IMP-003, 007 |
 | **E5** | Aceptación: `docs/g8/acceptance.md`, velocidad publicada, guía de Windows, regresión | Gate |
 
-## 4. Preguntas abiertas para el propietario
+## 4. Decisiones del propietario sobre las preguntas del E0 (2026-11-05)
 
-1. **Tablas temporales:** ¿ofrecer «Tabla temporal (solo esta sesión)» como destino? Recomendación: sí, es
-   útil para análisis rápidos y no deja nada en disco.
-2. **Nombre de la columna de geometría:** ¿siempre `geom`, o el de la capa cuando lo tiene (p. ej. `geometry`
-   en un GeoPackage)? Recomendación: el de la capa; `geom` si no tiene.
-3. **Límite del camino general:** con capas muy grandes (millones de entidades desde un Shapefile o PostGIS),
-   ¿avisar antes de enviar si la medición del spike indica más de, por ejemplo, un minuto? Recomendación: sí,
-   con la estimación del spike, nunca bloquear.
+Las tres, «sí» (qgis-import-spec §3 y §7): destino «Tabla temporal (solo esta sesión)»; la columna de
+geometría con el nombre que trae la capa, o `geom`; aviso de capa grande si se estima más de un minuto,
+sin bloquear.
 
 ## 5. Avance
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, ADR-0015, roadmap, maqueta y plan | En revisión | — |
+| E0 SPEC, ADR-0015, roadmap, maqueta y plan | Fusionado | #104 |
+| E0b Spike G8-A y decisiones del E0 | En revisión: F-114..F-119 (`docs/evidence/g8/spike/`); 1 millón de puntos en 5–7 s; SRC personalizado como PROJJSON | — |
