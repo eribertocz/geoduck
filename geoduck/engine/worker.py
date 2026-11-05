@@ -180,8 +180,7 @@ class ConnectionHandle:
         reader = relation.to_arrow_reader(batch_size=batch_size)
         self._reader_open = True
         try:
-            # Sin tipos de extensión que otro componente registró en Arrow (F-121: GDAL y `geoarrow.wkb`)
-            yield (plain_batch(batch) for batch in reader)
+            yield reader
         finally:
             try:
                 reader.close()
@@ -222,7 +221,8 @@ class ConnectionHandle:
                 for batch in reader:
                     if token.cancelled:
                         return ReadSummary(rows, batches, ReadOutcome.CANCELLED)
-                    on_batch(batch)
+                    # Sin tipos de extensión que otro componente registró en Arrow (F-121)
+                    on_batch(plain_batch(batch))
                     rows += batch.num_rows
                     batches += 1
         except Exception as exc:
