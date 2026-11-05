@@ -1,0 +1,16 @@
+DuckDB 1.5.0
+
+1. ST_SetCRS sin spatial
+  EPSG:32719               OK  tipo=GEOMETRY('EPSG:32719')                           geoarrow=b'{"crs_type":"authority_code","crs":"EPSG:32719"}'
+  ESRI:102033              OK  tipo=GEOMETRY('ESRI:102033')                          geoarrow=b'{"crs_type":"authority_code","crs":"ESRI:102033"}'
+  OGC:CRS84                OK  tipo=GEOMETRY('OGC:CRS84')                            geoarrow=b'{"crs_type":"projjson","crs":{"$schema":"https://proj.org/schemas/v0.7'
+  WKT2 personalizado       OK  tipo=GEOMETRY('PROJCRS["Local TM",BASEGEOGCRS["WGS    geoarrow=b'{}'
+  PROJJSON personalizado   OK  tipo=GEOMETRY('{"type":"GeographicCRS","name":"WGS    geoarrow=b'{"crs_type":"projjson","crs":{"type":"GeographicCRS","name":"WGS 84 pe'
+
+2. GeoParquet escrito por DuckDB y leído con read_parquet (sin spatial)
+  V1: ERROR Invalid Input Error: Cannot write GeoParquet V1 metadata for column 'geom': GeoParquet V1 only suppo
+  V2: [('id', 'BIGINT'), ('geom', 'GEOMETRY')]
+
+3. Selección como lista de identificadores (Conectada)
+     1203 ids: IN (lista)     11 ms · JOIN con tabla Arrow    194 ms · filas 1203
+   100000 ids: IN (lista)    441 ms · JOIN con tabla Arrow     14 ms · filas 100000

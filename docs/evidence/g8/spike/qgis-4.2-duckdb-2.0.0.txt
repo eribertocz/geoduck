@@ -1,0 +1,13 @@
+1. Camino general (GeoPackage → hilo → Arrow → DuckDB), lotes de 50000
+  puntos      100,000: total    0.5 s · leer+armar    0.5 s · insertar   0.0 s ·   197,412 ent/s · filas 100,000 geom 100,000 · GEOMETRY('EPSG:4326')
+  puntos    1,000,000: total    4.9 s · leer+armar    4.4 s · insertar   0.4 s ·   204,665 ent/s · filas 1,000,000 geom 1,000,000 · GEOMETRY('EPSG:4326')
+  poligonos   100,000: total    0.7 s · leer+armar    0.6 s · insertar   0.1 s ·   137,281 ent/s · filas 100,000 geom 100,000 · GEOMETRY('EPSG:4326')
+2. Lectura en otro hilo por proveedor (QgsVectorLayerFeatureSource)
+  ogr (GeoPackage)       válida=True leídas en hilo: 10000 de 10000
+  memory                 válida=True leídas en hilo: 10000 de 10000
+  delimitedtext (CSV)    válida=True leídas en hilo: 10000 de 10000
+3. SRC personalizado de QGIS hacia DuckDB
+  authid: '' · isValid: True
+  toJsonString disponible: True
+  WKT2: DuckDB guarda SRC · QGIS lo reconoce: True · mismo SRC: True
+  PROJJSON: DuckDB guarda SRC · QGIS lo reconoce: True · mismo SRC: True

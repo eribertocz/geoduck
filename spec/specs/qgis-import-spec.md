@@ -19,7 +19,8 @@ Las capas ráster, de malla o de nube de puntos aparecen desactivadas con el mot
 acción explica que hay que iniciar una.
 
 ## 3. Diálogo (GD-IMP-002; maqueta en `docs/g8/maqueta/`)
-- **Destino:** una base de la sesión **en escritura** y un esquema (por defecto, la base en uso y `main`).
+- **Destino:** una base de la sesión **en escritura** y un esquema (por defecto, la base en uso y `main`),
+  o **«Tabla temporal (solo esta sesión)»** (`CREATE TEMP TABLE`; decisión del propietario, 2026-11-05).
   Las bases de solo lectura no se ofrecen.
 - **Una fila por capa:** casilla, nombre, origen (proveedor), número de entidades, tipo de geometría y SRC;
   nombre de la tabla destino editable. El nombre propuesto sale del nombre de la capa en minúsculas, sin
@@ -32,6 +33,9 @@ acción explica que hay que iniciar una.
   (Capa → Filtrar…) **siempre** se respeta y se indica: se envía lo que la capa muestra.
 - **Columnas:** desplegable por capa con la conversión de cada campo (§6) y sus avisos.
 - **Resumen** antes de enviar: tablas que se crean, reemplazan o amplían, filas y camino (§5).
+- **Capa grande** (decisión del propietario): si el camino general (§5.3) se estima en más de un minuto
+  —entidades a enviar / 100 000 por segundo, cifra prudente del spike G8-A (F-114)—, el resumen lo avisa
+  con la estimación. Nunca bloquea.
 - «Abrir la tabla al terminar» (recordado). Ctrl+Intro envía; Esc cancela.
 
 ## 4. Garantías (GD-IMP-003)
@@ -48,14 +52,17 @@ acción explica que hay que iniciar una.
 
 ## 5. Caminos (GD-IMP-004), elegidos solos y mostrados en el resumen
 1. **Capa Conectada de GeoDuck** de la misma sesión: `CREATE TABLE … AS SELECT` dentro de DuckDB a partir de la
-   consulta de la capa (con su filtro y, si se pide, la selección como lista de identificadores), sin pasar
-   las entidades por QGIS.
-2. **Archivo que DuckDB lee directo** (Parquet/GeoParquet en G8): `read_parquet` en la base destino. Solo
+   consulta de la capa (con su filtro y, si se pide, la selección como tabla Arrow de identificadores unida
+   con `JOIN`: F-119), sin pasar las entidades por QGIS.
+2. **Archivo que DuckDB lee directo** (Parquet/GeoParquet en G8): `read_parquet` en la base destino. Sin
+   `spatial`, el SRC del GeoParquet no se lee (F-118): se fija con `ST_SetCRS` y el SRC de la capa de QGIS. Solo
    aquí existe «Vista en vez de copia»: `CREATE VIEW … AS SELECT * FROM read_parquet('…')`, que no copia
    datos y depende de que el archivo siga en su sitio (se avisa). Con selección o filtro, se copia.
 3. **Cualquier otra capa vectorial** (GeoPackage, Shapefile, PostGIS, memoria, CSV…): una `QgsTask` lee las
    entidades desde `QgsVectorLayerFeatureSource`, arma lotes Arrow (atributos + geometría WKB) y el worker
-   los inserta con `INSERT … SELECT` dentro de la transacción. Contrapresión con el mismo canal acotado que
+   los inserta dentro de la transacción: el primer lote crea la tabla con `CREATE TABLE … AS SELECT` y los
+   demás usan `INSERT … SELECT` (sin `spatial` no se puede declarar `GEOMETRY('EPSG:…')`: F-115).
+   Medido: 1 millón de puntos en 5–7 s (F-114). Contrapresión con el mismo canal acotado que
    las cargas (qgis-bridge-spec §2).
 
 ## 6. Columnas y tipos (GD-IMP-005)
@@ -79,12 +86,15 @@ acción explica que hay que iniciar una.
   qué columna falla.
 
 ## 7. Geometría y SRC (GD-IMP-006; spike G8-A)
-- Una columna `geom` (o el nombre de la geometría de la capa si tiene uno) de tipo `GEOMETRY('<SRC>')`.
+- La columna de geometría lleva el nombre que trae la capa (p. ej. `geom` o `geometry` en un GeoPackage,
+  `shape` en una geodatabase); si no trae ninguno, `geom` (decisión del propietario, 2026-11-05). Tipo
+  `GEOMETRY('<SRC>')`. Si choca con un campo, se renombra con aviso (§6).
 - El WKB pasa por Arrow y se convierte con `ST_GeomFromWKB`; el SRC se fija con `ST_SetCRS(geom, '<authid>')`,
   que funciona **sin `spatial`** en DuckDB 1.5.0 y 2.0.0 y vuelve a QGIS al cargar la tabla (verificado
   2026-11-05). DuckDB ignora el SRC de los metadatos GeoArrow al importar: por eso se fija explícitamente.
-- SRC sin código de autoridad (personalizado): PROJJSON o WKT2 si DuckDB lo acepta sin `spatial`; si no, el
-  diálogo avisa y ofrece «Reproyectar a…» o continuar **sin SRC** de forma explícita. Nunca se inventa (C4).
+- SRC sin código de autoridad (personalizado): se envía como **PROJJSON** (QGIS 4.x `toJsonString()`; 3.x
+  GDAL `osr` desde su WKT2). WKT2 no sirve: DuckDB 1.5.0 lo pierde al leer (F-116). Si no se puede expresar,
+  el diálogo ofrece «Reproyectar a…» o continuar **sin SRC** de forma explícita. Nunca se inventa (C4).
 - Capa sin SRC: la tabla queda sin SRC, con aviso.
 - Z/M y colecciones se conservan (WKB). Las geometrías inválidas se copian tal cual (no es una reparación;
   para eso, «Diagnosticar geometrías…»). Las `NULL` siguen `NULL`.
