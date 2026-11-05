@@ -222,7 +222,8 @@ def test_every_visible_action_has_a_name_and_help(plugin, where):  # noqa: F811
         helpless = [b.text() for b in buttons if not (b.toolTip() or b.text())]
         assert nameless == [] and helpless == []
     for menu_action in content.add_button.menu().actions() + content.explorer.database_actions:
-        assert menu_action.text() and menu_action.toolTip()
+        if not menu_action.isSeparator():
+            assert menu_action.text() and menu_action.toolTip()
     shell = ws.shell
     assert shell.toggle_button.text() and shell.toggle_button.toolTip()  # «Acoplar» / «Abrir en ventana»
 
