@@ -280,22 +280,22 @@
             <translation>La geometría «{0}» no tiene SRC: quien abra el archivo supondrá grados (OGC:CRS84). Si tus datos usan otro sistema, indícalo con ST_SetCRS en la consulta antes de exportar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="212" />
+            <location filename="../../geoduck/domain/importing.py" line="240" />
             <source>type «{0}» sent as JSON text</source>
             <translation>tipo «{0}» enviado como texto JSON</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="78" />
+            <location filename="../../geoduck/domain/importing.py" line="94" />
             <source>{0} (temporary)</source>
             <translation>{0} (temporal)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="211" />
+            <location filename="../../geoduck/domain/importing.py" line="239" />
             <source>list of «{0}» sent as text</source>
             <translation>lista de «{0}» enviada como texto</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="159" />
+            <location filename="../../geoduck/domain/importing.py" line="187" />
             <source>Field «{0}» renamed to «{1}»: DuckDB does not tell upper and lower case apart</source>
             <translation>Campo «{0}» renombrado a «{1}»: DuckDB no distingue mayúsculas de minúsculas</translation>
         </message>
@@ -689,27 +689,27 @@
             <translation>No hay ninguna base «{0}» adjunta.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/importing.py" line="70" />
+            <location filename="../../geoduck/engine/importing.py" line="95" />
             <source>The session has an open transaction: commit or roll it back before sending layers</source>
             <translation>La sesión tiene una transacción abierta: confírmela o reviértala antes de enviar capas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/importing.py" line="78" />
+            <location filename="../../geoduck/engine/importing.py" line="103" />
             <source>The database «{0}» uses an older file format that cannot store the CRS of a geometry: send the layer without CRS or choose another database</source>
             <translation>La base «{0}» usa un formato de archivo antiguo que no guarda el SRC de una geometría: envíe la capa sin SRC o elija otra base</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/importing.py" line="107" />
+            <location filename="../../geoduck/engine/importing.py" line="137" />
             <source>No data arrived for: {0}</source>
             <translation>No llegaron datos de: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/importing.py" line="138" />
+            <location filename="../../geoduck/engine/importing.py" line="168" />
             <source>{0}: the geometry has no CRS (the layer had none)</source>
             <translation>{0}: la geometría no tiene SRC (la capa no tenía)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/importing.py" line="114" />
+            <location filename="../../geoduck/engine/importing.py" line="144" />
             <source>Row count mismatch in {0}: {1} expected, {2} found</source>
             <translation>Conteo distinto en {0}: se esperaban {1}, hay {2}</translation>
         </message>
@@ -1312,6 +1312,26 @@
             <location filename="../../geoduck/qgis_bridge/families.py" line="177" />
             <source>M added with NaN value to {0} geometries without M</source>
             <translation>M añadida con valor NaN a {0} geometrías sin M</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="232" />
+            <source>A view is only possible for a GeoParquet layer without selection or filter</source>
+            <translation>Una vista solo es posible para una capa GeoParquet sin selección ni filtro</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="326" />
+            <source>GeoDuck: send layers to DuckDB</source>
+            <translation>GeoDuck: enviar capas a DuckDB</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="360" />
+            <source>Sending cancelled</source>
+            <translation>Envío cancelado</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="189" />
+            <source>The CRS of «{0}» cannot be expressed: reproject the layer or send it without CRS</source>
+            <translation>El SRC de «{0}» no se puede expresar: reproyecta la capa o envíala sin SRC</translation>
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/loader.py" line="135" />

@@ -277,3 +277,52 @@ def test_a_layer_that_sent_nothing_is_an_error(worker):
     result, _, _ = send(worker, [job("a"), job("b")], [(0, batch(0, 3))])
     assert isinstance(result, EngineError) and "b" in result.message
     assert not {"a", "b"} & {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}
+
+
+# -- camino SQL (E2: capas Conectadas y GeoParquet, qgis-import-spec §5.1 y §5.2) ------------------------
+
+
+def sql_job(table, source, **kw):
+    return ImportJob(table, table, kw.pop("mode", ImportMode.CREATE), (), None, source_sql=source, **kw)
+
+
+def test_sql_path_copies_inside_duckdb_with_the_crs(worker):
+    sql(worker, "CREATE TABLE origen AS SELECT range AS id, 'POINT(1 2)'::GEOMETRY AS g FROM range(10)")
+    source = "SELECT id, ST_SetCRS(g, 'EPSG:4326') AS geom FROM origen WHERE id < 7"
+    geometry = ImportGeometry("geom", "EPSG:4326")
+    jobs = [ImportJob("c", "copia", ImportMode.CREATE, (), geometry, source_sql=source)]
+    report, _, _ = send(worker, jobs, [])
+    assert not isinstance(report, BaseException), report
+    assert report.tables[0].rows == 7
+    types = sql(worker, "SELECT typeof(geom), count(*) FROM copia GROUP BY 1")
+    assert types == (("GEOMETRY('EPSG:4326')", 7),)
+
+
+def test_sql_path_selection_is_an_arrow_table_joined(worker):
+    sql(worker, "CREATE TABLE origen AS SELECT range AS __geoduck_fid, range * 10 AS v FROM range(1000)")
+    selection = pa.table({"__geoduck_fid": pa.array([3, 5, 999], pa.int64())})
+    source = "SELECT v FROM origen SEMI JOIN __geoduck_import_selection USING (__geoduck_fid)"
+    report, _, _ = send(worker, [sql_job("sel", source, selection=selection)], [])
+    assert not isinstance(report, BaseException), report
+    assert sql(worker, "SELECT list(v ORDER BY v) FROM sel") == (([30, 50, 9990],),)
+    assert "__geoduck_import_selection" not in {r[0] for r in sql(worker, "SHOW ALL TABLES")}
+
+
+def test_sql_path_view_and_append(worker):
+    sql(worker, "CREATE TABLE origen AS SELECT range AS id FROM range(4)")
+    report, _, _ = send(worker, [sql_job("vista", "SELECT id FROM origen", as_view=True)], [])
+    assert not isinstance(report, BaseException), report
+    assert sql(worker, "SELECT count(*) FROM duckdb_views() WHERE view_name = 'vista'") == ((1,),)
+    sql(worker, "CREATE TABLE destino AS SELECT 100 AS id")
+    report, _, _ = send(worker, [sql_job("destino", "SELECT id FROM origen", mode=ImportMode.APPEND)], [])
+    assert not isinstance(report, BaseException), report
+    assert report.tables[0].rows == 4
+    assert sql(worker, "SELECT count(*) FROM destino") == ((5,),)
+
+
+def test_sql_and_arrow_paths_share_the_transaction(worker):
+    sql(worker, "CREATE TABLE origen AS SELECT range AS id FROM range(4)")
+    jobs = [sql_job("de_sql", "SELECT id FROM origen"), job("de_qgis")]
+    result, _, _ = send(worker, jobs, [(1, batch(0, 5)), (1, batch(5, 5))], fail_at=1)
+    assert isinstance(result, BaseException)
+    assert not {"de_sql", "de_qgis"} & {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}
