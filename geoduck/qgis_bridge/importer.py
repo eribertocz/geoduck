@@ -24,10 +24,12 @@ from qgis.core import (
     QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsFeatureRequest,
+    QgsProject,
     QgsProviderRegistry,
     QgsTask,
     QgsVectorLayer,
     QgsVectorLayerFeatureSource,
+    QgsWkbTypes,
 )
 from qgis.PyQt.QtCore import QMetaType, QTimer, QVariant
 
@@ -35,6 +37,9 @@ from geoduck.domain.channel import BatchChannel, ConsumerGoneError
 from geoduck.domain.errors import InvalidArgumentError, OperationCancelledError
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import (
+    PATH_CONNECTED,
+    PATH_PARQUET,
+    PATH_QGIS,
     SELECTION_VIEW,
     WKB_COLUMN,
     ImportColumn,
@@ -42,8 +47,12 @@ from geoduck.domain.importing import (
     ImportJob,
     ImportMode,
     ImportReport,
+    SendCandidate,
+    SendRequest,
     column_names,
     duck_type_for,
+    table_name_for,
+    unique_name,
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
@@ -74,12 +83,6 @@ _ARROW: dict[str, pa.DataType] = {
     "JSON": pa.string(),
 }
 
-#: Camino elegido, para el resumen del diálogo (§5).
-PATH_CONNECTED = "connected"
-PATH_PARQUET = "parquet"
-PATH_QGIS = "qgis"
-
-
 # -- plan de una capa ---------------------------------------------------------------------------------
 
 
@@ -95,6 +98,8 @@ class LayerPlan:
     #: Entidades que se enviarán (progreso y aviso de capa grande); -1 si QGIS no lo sabe.
     features: int = 0
     warnings: list[str] = field(default_factory=list)
+    #: Columnas con su tipo en DuckDB, también en el camino SQL: para el diálogo y «Añadir filas».
+    columns: tuple[ImportColumn, ...] = ()
 
 
 def type_name(type_id: Any) -> str:
@@ -222,14 +227,19 @@ def plan_layer(
             selection=selection,
             **common,
         )
-        return LayerPlan(layer, job, PATH_CONNECTED, fids, features, warnings)
+        # Las columnas de la capa Conectada conservan su tipo de DuckDB (no pasan por QGIS)
+        kept = tuple(
+            ImportColumn(c.name, c.source, f.source_type)
+            for f, c in zip(provider.plan.fields, columns, strict=True)
+        )
+        return LayerPlan(layer, job, PATH_CONNECTED, fids, features, warnings, kept)
 
     # Camino 2: GeoParquet sin selección ni filtro → read_parquet (§5.2)
     parquet = geoparquet_path(layer)
     if parquet is not None and fids is None and not layer.subsetString():
         sql = _parquet_sql(parquet, geometry)
         job = ImportJob(layer.name(), table, mode, (), geometry, source_sql=sql, as_view=as_view, **common)
-        return LayerPlan(layer, job, PATH_PARQUET, None, features, warnings)
+        return LayerPlan(layer, job, PATH_PARQUET, None, features, warnings, tuple(columns))
     if as_view:
         raise InvalidArgumentError(
             tr("A view is only possible for a GeoParquet layer without selection or filter")
@@ -237,7 +247,7 @@ def plan_layer(
 
     # Camino 3: lectura de QGIS por lotes Arrow (§5.3)
     job = ImportJob(layer.name(), table, mode, tuple(columns), geometry, **common)
-    return LayerPlan(layer, job, PATH_QGIS, fids, features, warnings)
+    return LayerPlan(layer, job, PATH_QGIS, fids, features, warnings, tuple(columns))
 
 
 def _connected_sql(
@@ -454,3 +464,151 @@ class LayerImport:
         report: ImportReport = self._handle.future.result()
         warnings = tuple(w for p in self._plans for w in p.warnings)
         self._on_done(ImportReport(report.tables, warnings + report.warnings))
+
+
+# -- el diálogo y el envío (G8 · E3) -------------------------------------------------------------------
+
+
+def _source_label(layer: Any) -> str:
+    provider = str(layer.providerType())
+    if provider == KEY:
+        return tr("Connected (GeoDuck)")
+    if provider == "memory":
+        return tr("Memory")
+    if provider == "delimitedtext":
+        return "CSV"
+    if provider == "postgres":
+        return "PostGIS"
+    if provider == "ogr":
+        storage = str(layer.dataProvider().storageType() or "OGR")
+        return "GeoPackage" if storage == "GPKG" else storage
+    return provider
+
+
+def _crs_label(layer: QgsVectorLayer) -> str | None:
+    crs = layer.crs()
+    if not layer.isSpatial() or not crs.isValid():
+        return None
+    return crs.authid() or tr("custom")
+
+
+def _vector_layer(layer: Any) -> bool:
+    return isinstance(layer, QgsVectorLayer)
+
+
+def describe_layer(layer: Any, table: str) -> SendCandidate:
+    """La capa para el diálogo: sin leer entidades. Una capa que no se puede enviar lleva su motivo."""
+    name = layer.name()
+    if not _vector_layer(layer):
+        return SendCandidate(
+            layer.id(),
+            name,
+            "",
+            -1,
+            0,
+            None,
+            None,
+            False,
+            PATH_QGIS,
+            (),
+            None,
+            (),
+            table,
+            problem=tr("only vector layers can be sent"),
+        )
+    if not layer.isValid():
+        return SendCandidate(
+            layer.id(),
+            name,
+            _source_label(layer),
+            -1,
+            0,
+            None,
+            None,
+            False,
+            PATH_QGIS,
+            (),
+            None,
+            (),
+            table,
+            problem=tr("the layer is not valid"),
+        )
+    crs_problem = False
+    try:
+        plan = plan_layer(layer, table=table)
+    except InvalidArgumentError:  # SRC que no se puede expresar (§7): solo «sin SRC»
+        plan = plan_layer(layer, table=table, without_crs=True)
+        crs_problem = True
+    geometry_type = QgsWkbTypes.displayString(layer.wkbType()) if layer.isSpatial() else None
+    return SendCandidate(
+        layer.id(),
+        name,
+        _source_label(layer),
+        layer.featureCount(),
+        layer.selectedFeatureCount(),
+        geometry_type,
+        _crs_label(layer),
+        bool(layer.subsetString()),
+        plan.path,
+        plan.columns,
+        plan.job.geometry,
+        tuple(plan.warnings),
+        table,
+        crs_problem=crs_problem,
+    )
+
+
+class LayerSender:
+    """Puerto `LayerSender` (app): describe las capas para el diálogo y envía lo que el usuario confirmó."""
+
+    def __init__(self, project: QgsProject | None = None) -> None:
+        self._project = project or QgsProject.instance()
+
+    def describe(self, layer_ids: list[str] | None) -> list[SendCandidate]:
+        if layer_ids is None:
+            layers = [n.layer() for n in self._project.layerTreeRoot().findLayers()]
+        else:
+            layers = [self._project.mapLayer(i) for i in layer_ids]
+        out: list[SendCandidate] = []
+        taken: list[str] = []
+        for layer in layers:
+            if layer is None:
+                continue
+            table = unique_name(table_name_for(layer.name()), taken)
+            taken.append(table)
+            out.append(describe_layer(layer, table))
+        return out
+
+    def start(
+        self,
+        engine: Any,
+        request: SendRequest,
+        *,
+        on_progress: Callable[[int], None],
+        on_done: Callable[[ImportReport | BaseException], None],
+    ) -> LayerImport:
+        plans = []
+        for item in request.items:
+            layer = self._project.mapLayer(item.layer_id)
+            if not _vector_layer(layer):
+                raise InvalidArgumentError(tr("The layer is no longer in the project"))
+            parquet = geoparquet_path(layer) is not None
+            plans.append(
+                plan_layer(
+                    layer,
+                    table=item.table,
+                    mode=item.mode,
+                    database=request.database,
+                    schema=request.schema,
+                    temporary=request.temporary,
+                    only_selected=request.only_selected and layer.selectedFeatureCount() > 0,
+                    as_view=request.as_view
+                    and parquet
+                    and not layer.subsetString()
+                    and not (request.only_selected and layer.selectedFeatureCount() > 0),
+                    without_crs=request.without_crs,
+                )
+            )
+        job = LayerImport(engine, plans, on_progress=on_progress, on_done=on_done)
+        job.start()
+        return job

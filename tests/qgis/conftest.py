@@ -107,6 +107,26 @@ class FakeIface:
     def activeLayer(self):
         return self.active_layer
 
+    def messageBar(self):
+        """Barra de mensajes real de QGIS (G8: progreso y aviso de «Enviar a DuckDB»)."""
+        if not hasattr(self, "bar"):
+            from qgis.gui import QgsMessageBar
+
+            self.bar = QgsMessageBar(self.window)
+        return self.bar
+
+    #: Capas elegidas en el panel de capas (lo que devolvería `layerTreeView().selectedLayers()`).
+    selected_layers: tuple = ()
+
+    def layerTreeView(self):
+        iface = self
+
+        class _View:
+            def selectedLayers(self):
+                return list(iface.selected_layers)
+
+        return _View()
+
     def setActiveLayer(self, layer):
         self.active_layer = layer
         return True

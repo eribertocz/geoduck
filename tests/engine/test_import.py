@@ -326,3 +326,44 @@ def test_sql_and_arrow_paths_share_the_transaction(worker):
     result, _, _ = send(worker, jobs, [(1, batch(0, 5)), (1, batch(5, 5))], fail_at=1)
     assert isinstance(result, BaseException)
     assert not {"de_sql", "de_qgis"} & {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}
+
+
+# -- destino y «Deshacer» (E3) ------------------------------------------------------------------------
+
+
+def test_import_target_lists_tables_views_and_crs_support(worker, tmp_path):
+    from geoduck.domain.importing import ImportTarget
+
+    sql(worker, "CREATE TABLE Zonas AS SELECT 1 AS id, 'POINT(1 2)'::GEOMETRY AS geom")
+    sql(worker, "CREATE VIEW v AS SELECT 1 AS x")
+    target = worker.import_target("memory", "main").result(TIMEOUT)
+    assert isinstance(target, ImportTarget) and target.stores_crs
+    assert target.tables == {"zonas": (("id", "INTEGER"), ("geom", "GEOMETRY"))}
+    assert target.views == frozenset({"v"})
+    sql(worker, f"ATTACH '{tmp_path / 'viejo.duckdb'}' AS viejo (STORAGE_VERSION 'v1.0.0')")
+    assert not worker.import_target("viejo", "main").result(TIMEOUT).stores_crs  # F-120
+    assert worker.import_target("temp", "main").result(TIMEOUT).stores_crs
+
+
+def test_undo_drops_only_new_tables_and_views(worker):
+    sql(worker, "CREATE TABLE origen AS SELECT range AS id FROM range(3)")
+    report, _, _ = send(
+        worker,
+        [sql_job("nueva", "SELECT id FROM origen"), sql_job("vista", "SELECT id FROM origen", as_view=True)],
+        [],
+    )
+    assert not isinstance(report, BaseException), report
+    worker.drop_imported(list(report.tables)).result(TIMEOUT)
+    names = {
+        r[0]
+        for r in sql(
+            worker,
+            "SELECT table_name FROM duckdb_tables() "
+            "UNION ALL SELECT view_name FROM duckdb_views() WHERE NOT internal",
+        )
+    }
+    assert not {"nueva", "vista"} & names and "origen" in names
+    replaced, _, _ = send(worker, [sql_job("origen", "SELECT 1 AS id", mode=ImportMode.REPLACE)], [])
+    with pytest.raises(GeoDuckError):
+        worker.drop_imported(list(replaced.tables)).result(TIMEOUT)
+    assert "origen" in {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}

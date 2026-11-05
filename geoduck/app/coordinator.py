@@ -39,6 +39,12 @@ from geoduck.app.events import (
     PreviewsInvalidated,
     ScriptFinished,
     ScriptRejected,
+    SendFailed,
+    SendFinished,
+    SendProgressed,
+    SendStarted,
+    SendUndoFailed,
+    SendUndone,
     SessionFailed,
     SessionInvalidated,
     SessionStarted,
@@ -51,7 +57,7 @@ from geoduck.app.events import (
     TransactionStateChanged,
     VocabularyChanged,
 )
-from geoduck.app.ports import Dispatcher, EngineFactory, LayerLoader, LoadTask, SessionEngine
+from geoduck.app.ports import Dispatcher, EngineFactory, LayerLoader, LayerSender, LoadTask, SessionEngine
 from geoduck.domain.catalog import (
     AttachRequest,
     AttachResult,
@@ -64,6 +70,7 @@ from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import ErrorCode, GeoDuckError, SessionInvalidatedError, SessionStateError
 from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.i18n import tr
+from geoduck.domain.importing import ImportedTable, ImportReport, ImportTarget, SendCandidate, SendRequest
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.session import ErrorCause, SessionState, SessionStateMachine
@@ -86,10 +93,17 @@ Listener = Callable[[AppEvent], None]
 
 class SessionCoordinator:
     def __init__(
-        self, engine_factory: EngineFactory, dispatcher: Dispatcher, loader: LayerLoader | None = None
+        self,
+        engine_factory: EngineFactory,
+        dispatcher: Dispatcher,
+        loader: LayerLoader | None = None,
+        sender: LayerSender | None = None,
     ) -> None:
         self._factory = engine_factory
         self._loader = loader
+        #: «Enviar a DuckDB» (G8); None si QGIS no está disponible.
+        self._sender = sender
+        self._send_ids = 0
         #: Carga en QGIS en curso (Memoria o Instantánea); la sesión está en BUSY mientras dura.
         self._load: LoadTask | None = None
         self._load_ids = 0
@@ -745,6 +759,84 @@ class SessionCoordinator:
             return
         self._sm.transition(SessionState.READY)
         self._emit(ExportFinished(export_id, fut.result()))
+
+    # -- «Enviar a DuckDB» (G8, qgis-import-spec) ------------------------------------------------------
+
+    def send_candidates(self, layer_ids: list[str] | None) -> list[SendCandidate]:
+        """Las capas para el diálogo (todas las del proyecto si `layer_ids` es None)."""
+        if self._sender is None:
+            raise SessionStateError(tr("Sending layers to DuckDB is not available"))
+        return self._sender.describe(layer_ids)
+
+    def read_import_target(
+        self, database: str, schema: str, on_done: Callable[[ImportTarget | BaseException], None]
+    ) -> None:
+        """Destino para el diálogo (F-120, tablas existentes); `on_done` en el hilo principal."""
+        engine = self._require_ready(tr("read the destination"))
+        fut = engine.import_target(database, schema)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result())))
+
+    def send_layers(self, request: SendRequest) -> int:
+        """Envía capas de QGIS a DuckDB en una transacción (qgis-import-spec §4). La sesión pasa por `BUSY`
+        (bloquea `DETACH` y el cierre, §9); se cancela con `cancel_current_operation`. Devuelve el id."""
+        engine = self._require_ready(tr("send layers to DuckDB"))
+        if self._sender is None:
+            raise SessionStateError(tr("Sending layers to DuckDB is not available"))
+        self._send_ids += 1
+        send_id = self._send_ids
+        self._sm.transition(SessionState.BUSY)
+        self._emit(SendStarted(send_id, request))
+        try:
+            self._load = self._sender.start(
+                engine,
+                request,
+                on_progress=lambda rows: self._emit(SendProgressed(send_id, rows)),
+                on_done=lambda result: self._on_sent(engine, send_id, result),
+            )
+        except BaseException as exc:
+            self._load = None
+            if self._sm.state is SessionState.BUSY:
+                self._sm.transition(SessionState.READY)
+            code, message = _describe(exc)
+            self._emit(SendFailed(send_id, code, message, cancelled=False))
+            raise
+        return send_id
+
+    def _on_sent(self, engine: SessionEngine, send_id: int, result: ImportReport | BaseException) -> None:
+        self._load = None
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return
+        if isinstance(result, BaseException):
+            if isinstance(result, SessionInvalidatedError):
+                return
+            self._end_failed_operation(result)
+            code, message = _describe(result)
+            self._emit(SendFailed(send_id, code, message, cancelled=code is ErrorCode.CANCELLED))
+            return
+        self._sm.transition(SessionState.READY)
+        self._emit(SendFinished(send_id, result))
+        self._bump_epoch()  # tablas nuevas o con más filas: vistas previas y capas Conectadas se releen
+        self.refresh_catalog()
+
+    def undo_send(self, tables: list[ImportedTable]) -> None:
+        """«Deshacer» (§4): `DROP` de las tablas nuevas del envío (`SendUndone` o `SendUndoFailed`)."""
+        engine = self._require_ready(tr("undo the send"))
+        fut = engine.drop_imported(tables)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_undone(engine, tables, f)))
+
+    def _on_undone(self, engine: SessionEngine, tables: list[ImportedTable], fut: Future[None]) -> None:
+        if engine is not self._engine:
+            return
+        exc = fut.exception()
+        if exc is not None:
+            self._record_transaction(exc)
+            code, message = _describe(exc)
+            self._emit(SendUndoFailed(code, message))
+            return
+        self._emit(SendUndone(tuple(tables)))
+        self._bump_epoch()
+        if self._sm.state is SessionState.READY:
+            self.refresh_catalog()
 
     def shutdown(self, timeout: float = 10.0) -> bool:
         """Cierre bloqueante para la descarga del complemento. Devuelve False si venció el plazo."""

@@ -369,6 +369,21 @@ class CatalogExplorer(QTreeWidget):
         value = items[0].data(0, _DATABASE_ROLE)
         return str(value) if value else None
 
+    def select_object(self, database: str, schema: str, name: str) -> bool:
+        """Selecciona y muestra una tabla o vista (p. ej. la recién enviada desde QGIS). False si no está."""
+        wanted = (database.lower(), schema.lower(), name.lower())
+        for item in self._object_items():
+            source = item.data(0, _SOURCE_ROLE)
+            if tuple(str(v).lower() for v in source[:3]) == wanted:
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                self.setCurrentItem(item)
+                self.scrollToItem(item)
+                return True
+        return False
+
     def select_database(self, name: str) -> None:
         for i in range(self.topLevelItemCount()):
             item = self.topLevelItem(i)

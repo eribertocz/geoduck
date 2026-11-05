@@ -140,6 +140,17 @@ class ImportedTable:
     qualified: str
     mode: ImportMode
     rows: int
+    #: Vista sobre un Parquet (§5.2), no tabla.
+    view: bool = False
+    #: Base, esquema y nombre, para abrirla en el explorador.
+    database: str = ""
+    schema: str = ""
+    name: str = ""
+
+    @property
+    def can_undo(self) -> bool:
+        """Solo una tabla (o vista) nueva se deshace, con `DROP` (§4); reemplazar o añadir, no."""
+        return self.mode is ImportMode.CREATE
 
 
 @dataclass(frozen=True)
@@ -250,3 +261,153 @@ def estimated_seconds(features: int) -> float:
 
 def is_large(features: int) -> bool:
     return estimated_seconds(features) > LARGE_SECONDS
+
+
+# -- diálogo «Enviar a DuckDB» (G8 · E3; qgis-import-spec §3) --------------------------------------------
+
+#: Camino de cada capa (§5), para el resumen.
+PATH_CONNECTED = "connected"
+PATH_PARQUET = "parquet"
+PATH_QGIS = "qgis"
+
+
+def path_label(path: str) -> str:
+    if path == PATH_CONNECTED:
+        return tr("inside DuckDB (Connected layer)")
+    if path == PATH_PARQUET:
+        return tr("read directly by DuckDB (GeoParquet)")
+    return tr("read by QGIS in the background")
+
+
+@dataclass(frozen=True)
+class SendCandidate:
+    """Una capa del proyecto, tal como la muestra el diálogo (sin Qt). La prepara `qgis_bridge`."""
+
+    layer_id: str
+    name: str
+    #: Origen legible: «GeoPackage», «Shapefile», «Conectada (GeoDuck)», «Memoria»…
+    source: str
+    #: Entidades que muestra la capa (con su filtro); -1 si QGIS no lo sabe.
+    features: int
+    #: Entidades seleccionadas.
+    selected: int
+    #: «MultiPolygon», «Point»…; None si no tiene geometría.
+    geometry_type: str | None
+    #: `EPSG:32719`, «personalizado» o None (sin SRC).
+    crs_label: str | None
+    #: La capa tiene un filtro (Capa → Filtrar…): se envía lo que muestra.
+    filtered: bool
+    #: Camino sin selección (§5); con selección, una capa GeoParquet se lee por QGIS.
+    path: str
+    columns: tuple[ImportColumn, ...]
+    geometry: ImportGeometry | None
+    warnings: tuple[str, ...]
+    #: Nombre de tabla propuesto (sin chocar con otra capa del diálogo).
+    table: str
+    #: Motivo por el que no se puede enviar (ráster, capa no válida…); None si se puede.
+    problem: str | None = None
+    #: El SRC de la capa no se puede expresar (§7): solo se envía «sin SRC».
+    crs_problem: bool = False
+
+    @property
+    def can_view(self) -> bool:
+        """«Vista en vez de copia»: solo un GeoParquet sin filtro (y sin selección, que decide el envío)."""
+        return self.path == PATH_PARQUET and not self.filtered
+
+    def path_for(self, only_selected: bool) -> str:
+        if self.path == PATH_PARQUET and only_selected and self.selected:
+            return PATH_QGIS
+        return self.path
+
+    def rows_for(self, only_selected: bool) -> int:
+        return self.selected if only_selected and self.selected else max(self.features, 0)
+
+
+@dataclass(frozen=True)
+class SendItem:
+    layer_id: str
+    table: str
+    mode: ImportMode
+
+
+@dataclass(frozen=True)
+class SendRequest:
+    """Lo que el usuario confirmó en el diálogo."""
+
+    items: tuple[SendItem, ...]
+    database: str
+    schema: str
+    temporary: bool
+    only_selected: bool = False
+    as_view: bool = False
+    #: Geometría sin SRC, elegido por el usuario (base que no lo guarda, F-120, o SRC no expresable).
+    without_crs: bool = False
+
+
+@dataclass(frozen=True)
+class ImportTarget:
+    """Lo que el diálogo necesita saber del destino: si guarda el SRC (F-120) y qué ya existe."""
+
+    stores_crs: bool
+    #: Nombre en minúsculas → columnas (nombre, tipo de DuckDB) de cada tabla existente.
+    tables: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
+    #: Nombres en minúsculas de las vistas existentes.
+    views: frozenset[str] = frozenset()
+
+
+class Conflict(str, Enum):
+    """Qué hacer si la tabla ya existe (§3): por defecto, no enviar (decisión del propietario)."""
+
+    SKIP = "skip"
+    REPLACE = "replace"
+    APPEND = "append"
+    RENAME = "rename"
+
+
+#: Conversiones sin pérdida para «Añadir filas» (§6): tipo de la capa → tipos de la tabla que lo admiten.
+_LOSSLESS = {
+    "INTEGER": {"INTEGER", "BIGINT", "HUGEINT", "DOUBLE"},
+    "UINTEGER": {"UINTEGER", "BIGINT", "UBIGINT", "HUGEINT", "DOUBLE"},
+    "BIGINT": {"BIGINT", "HUGEINT"},
+    "UBIGINT": {"UBIGINT", "HUGEINT"},
+    "DOUBLE": {"DOUBLE"},
+    "BOOLEAN": {"BOOLEAN"},
+    "VARCHAR": {"VARCHAR", "JSON"},
+    "JSON": {"JSON", "VARCHAR"},
+    "DATE": {"DATE", "TIMESTAMP"},
+    "TIME": {"TIME"},
+    "TIMESTAMP": {"TIMESTAMP"},
+    "TIMESTAMPTZ": {"TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE"},
+    "BLOB": {"BLOB"},
+    "VARCHAR[]": {"VARCHAR[]"},
+    "BIGINT[]": {"BIGINT[]"},
+    "DOUBLE[]": {"DOUBLE[]"},
+}
+
+
+def append_problem(
+    columns: Iterable[ImportColumn],
+    geometry: ImportGeometry | None,
+    target: Iterable[tuple[str, str]],
+) -> str | None:
+    """Por qué no se pueden añadir las filas de la capa a la tabla (§6), o None si se puede.
+
+    Cada campo debe existir en la tabla con un tipo que lo admita sin pérdida, y la geometría con el mismo
+    SRC. Las columnas de la tabla que la capa no trae quedan `NULL`."""
+    types = {name.lower(): duck.upper() for name, duck in target}
+    for column in columns:
+        duck = types.get(column.name.lower())
+        if duck is None:
+            return tr("the table has no column «{0}»").format(column.name)
+        if duck not in _LOSSLESS.get(column.duck_type.upper(), {column.duck_type.upper()}):
+            return tr("column «{0}» is {1} in the table and {2} in the layer").format(
+                column.name, duck, column.duck_type
+            )
+    if geometry is not None:
+        duck = types.get(geometry.name.lower())
+        if duck is None:
+            return tr("the table has no geometry column «{0}»").format(geometry.name)
+        expected = f"GEOMETRY('{geometry.crs}')".upper() if geometry.crs else "GEOMETRY"
+        if duck != expected:
+            return tr("the geometry «{0}» has another CRS in the table ({1})").format(geometry.name, duck)
+    return None

@@ -19,10 +19,12 @@ from geoduck.app.coordinator import SessionCoordinator
 from geoduck.app.events import LoadFinished, PreviewsInvalidated
 from geoduck.app.ports import SessionEngine
 from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
+from geoduck.domain.importing import ImportedTable
 from geoduck.infra.diagnostics import collect
 from geoduck.ui.dispatcher import QtDispatcher
 from geoduck.ui.i18n import tr
 from geoduck.ui.map_view import MapView
+from geoduck.ui.send_flow import SendFlow
 from geoduck.ui.workspace import WorkspaceContent
 from geoduck.ui.workspace_controller import WorkspaceController
 
@@ -156,6 +158,36 @@ class GeometryValidity:
         self.action.deleteLater()
 
 
+def selected_layer_ids(iface: Any) -> list[str]:
+    """Capas elegidas en el panel de capas de QGIS (varias con Ctrl o Mayús); si no hay, la activa."""
+    view = iface.layerTreeView() if hasattr(iface, "layerTreeView") else None
+    layers = list(view.selectedLayers()) if view is not None else []
+    if not layers:
+        active = iface.activeLayer() if hasattr(iface, "activeLayer") else None
+        layers = [active] if active is not None else []
+    return [layer.id() for layer in layers]
+
+
+class SendToDuckDB:
+    """«Enviar a DuckDB…» en el menú de las capas vectoriales del panel de capas (qgis-import-spec §2)."""
+
+    def __init__(self, iface: Any, flow: Any) -> None:
+        self.iface = iface
+        self.flow = flow
+        self.action = QAction(tr("Send to DuckDB…"), iface.mainWindow())
+        self.action.setObjectName("geoduckSendToDuckDB")
+        self.action.setToolTip(tr("Copies the selected layers into DuckDB tables"))
+        self.action.triggered.connect(lambda: self.flow.run(selected_layer_ids(self.iface)))
+        self._layer_api = hasattr(iface, "addCustomActionForLayerType")
+        if self._layer_api:  # en todas las capas vectoriales (allLayers=True)
+            iface.addCustomActionForLayerType(self.action, tr("GeoDuck"), _vector_layer_type(), True)
+
+    def unload(self) -> None:
+        if self._layer_api:
+            self.iface.removeCustomActionForLayerType(self.action)
+        self.action.deleteLater()
+
+
 class GeoDuckPlugin:
     def __init__(self, iface: Any) -> None:
         self.iface = iface
@@ -167,13 +199,16 @@ class GeoDuckPlugin:
         self.coordinator: SessionCoordinator | None = None
         self.loader: Any = None
         self.validity: GeometryValidity | None = None
+        self.send_flow: SendFlow | None = None
+        self.send_action: SendToDuckDB | None = None
 
     def initGui(self) -> None:  # noqa: N802 - nombre exigido por QGIS
         self.dispatcher = QtDispatcher()
+        from geoduck.qgis_bridge.importer import LayerSender  # noqa: PLC0415 - importa qgis y pyarrow
         from geoduck.qgis_bridge.loader import BridgeLoader  # noqa: PLC0415 - importa qgis y pyarrow
 
         self.loader = BridgeLoader()
-        self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, self.loader)
+        self.coordinator = SessionCoordinator(make_memory_engine, self.dispatcher, self.loader, LayerSender())
         self.loader.on_data_changed = self.coordinator.mark_data_changed
         self.coordinator.subscribe(self._on_app_event)
         # Un solo workspace (contenido + controlador) con dos presentaciones (ADR-0013, ui-ux-spec §8)
@@ -201,6 +236,24 @@ class GeoDuckPlugin:
         self.about_action.triggered.connect(self.content.show_about)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.about_action)
         self.validity = GeometryValidity(self.iface, self.content.show_text)
+        # «Enviar a DuckDB» (G8): menú de capa y «+» del workspace; avisos en la barra de mensajes de QGIS
+        self.send_flow = SendFlow(
+            self.coordinator,
+            self.iface.messageBar(),
+            self.iface.mainWindow(),
+            open_table=self._open_table,
+        )
+        self.send_action = SendToDuckDB(self.iface, self.send_flow)
+        self.content.import_layers_action.triggered.connect(
+            lambda: self.send_flow.run(None, selected_layer_ids(self.iface)) if self.send_flow else None
+        )
+
+    def _open_table(self, table: ImportedTable) -> None:
+        """«Abrir» tras enviar: GeoDuck visible con la tabla seleccionada en el explorador."""
+        if self.workspace is not None:
+            self.workspace.set_visible(True)
+        if self.content is not None:
+            self.content.open_table(table.database, table.schema, table.name)
 
     def _view_map(self, layer_ids: list[str]) -> str | None:
         """Selecciona y hace zoom; en la ventana propia, GeoDuck se minimiza para dejar ver el mapa."""
@@ -220,6 +273,12 @@ class GeoDuckPlugin:
             self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 
     def unload(self) -> None:
+        if self.send_action is not None:
+            self.send_action.unload()
+            self.send_action = None
+        if self.send_flow is not None:
+            self.send_flow.detach()
+            self.send_flow = None
         if self.validity is not None:
             self.validity.unload()
             self.validity = None

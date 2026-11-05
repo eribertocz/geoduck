@@ -6,10 +6,15 @@ from __future__ import annotations
 import pytest
 
 from geoduck.domain.importing import (
+    PATH_PARQUET,
+    PATH_QGIS,
     ImportColumn,
+    ImportedTable,
     ImportGeometry,
     ImportJob,
     ImportMode,
+    SendCandidate,
+    append_problem,
     column_names,
     duck_type_for,
     estimated_seconds,
@@ -95,3 +100,65 @@ def test_sql_of_each_mode():
     assert 'ST_GeomFromWKB("__geoduck_wkb") AS "g"' in append.select_sql()
     quoted = ImportJob("c", "t", ImportMode.CREATE, cols, ImportGeometry("g", "it's"))
     assert "'it''s'" in quoted.select_sql()
+
+
+# -- diálogo (G8 · E3) --------------------------------------------------------------------------------
+
+APPEND_COLUMNS = (ImportColumn("id", "c0", "INTEGER"), ImportColumn("nombre", "c1", "VARCHAR"))
+
+
+def test_append_accepts_same_or_wider_types_and_missing_table_columns():
+    target = (("ID", "BIGINT"), ("nombre", "VARCHAR"), ("extra", "DATE"), ("geom", "GEOMETRY('EPSG:4326')"))
+    assert append_problem(APPEND_COLUMNS, ImportGeometry("geom", "EPSG:4326"), target) is None
+
+
+def test_append_explains_the_failing_column():
+    assert "«nombre»" in append_problem(APPEND_COLUMNS, None, (("id", "INTEGER"),))
+    problem = append_problem(APPEND_COLUMNS, None, (("id", "SMALLINT"), ("nombre", "VARCHAR")))
+    assert "«id»" in problem and "SMALLINT" in problem
+
+
+def test_append_requires_the_same_crs():
+    target = (("id", "INTEGER"), ("nombre", "VARCHAR"), ("geom", "GEOMETRY('EPSG:32719')"))
+    assert "EPSG:32719" in append_problem(APPEND_COLUMNS, ImportGeometry("geom", "EPSG:4326"), target)
+    assert (
+        append_problem(APPEND_COLUMNS, ImportGeometry("geom", None), (*target[:2], ("geom", "GEOMETRY")))
+        is None
+    )
+
+
+def candidate(path=PATH_QGIS, *, features=10, selected=0, filtered=False):
+    return SendCandidate(
+        "L",
+        "capa",
+        "GeoPackage",
+        features,
+        selected,
+        "Point",
+        "EPSG:4326",
+        filtered,
+        path,
+        (),
+        None,
+        (),
+        "capa",
+    )
+
+
+def test_candidate_view_rows_and_path():
+    assert candidate(PATH_PARQUET).can_view
+    assert not candidate(PATH_PARQUET, filtered=True).can_view
+    parquet = candidate(PATH_PARQUET, selected=2)
+    assert parquet.path_for(only_selected=True) == PATH_QGIS
+    assert parquet.path_for(only_selected=False) == PATH_PARQUET
+    assert parquet.rows_for(True) == 2 and parquet.rows_for(False) == 10
+    assert candidate(selected=0).rows_for(True) == 10  # sin selección, toda la capa
+
+
+def test_only_new_tables_can_be_undone():
+    def table(mode):
+        return ImportedTable("t", "t", mode, 1)
+
+    assert table(ImportMode.CREATE).can_undo
+    assert not table(ImportMode.REPLACE).can_undo
+    assert not table(ImportMode.APPEND).can_undo
