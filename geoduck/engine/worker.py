@@ -39,6 +39,7 @@ from geoduck.domain.catalog import (
     ColumnInfo,
     DetachResult,
 )
+from geoduck.domain.channel import BatchChannel
 from geoduck.domain.completion import Vocabulary
 from geoduck.domain.errors import (
     ActiveResultError,
@@ -53,6 +54,7 @@ from geoduck.domain.errors import (
 )
 from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.i18n import tr
+from geoduck.domain.importing import ImportJob, ImportReport
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
 from geoduck.domain.transaction import TransactionState
@@ -62,6 +64,7 @@ from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
 from geoduck.engine.export import export_query
+from geoduck.engine.importing import import_batches
 from geoduck.engine.spatial import activate_spatial, spatial_state
 from geoduck.engine.sql import StatementListener, run_in_database, run_script
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
@@ -408,6 +411,13 @@ class SessionWorker:
     def export_query(self, request: ExportRequest) -> OperationHandle[ExportReport]:
         """«Exportar ▾» (G7 · E3): `COPY` de la consulta completa, en la base del resultado; cancelable."""
         return self.submit(lambda h, t: export_query(h, t, request), database=request.database)
+
+    def import_batches(
+        self, jobs: list[ImportJob], channel: BatchChannel[Any]
+    ) -> OperationHandle[ImportReport]:
+        """«Enviar a DuckDB» (G8): escribe los lotes del canal en una transacción
+        (`geoduck.engine.importing`). Se cancela con `cancel(handle.op_id)`: `ROLLBACK` y nada cambia."""
+        return self.submit(lambda h, t: import_batches(h, t, jobs, channel))
 
     def read_table(
         self, sql: str, *, priority: bool = True, database: str | None = None

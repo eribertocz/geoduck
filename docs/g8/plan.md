@@ -47,4 +47,5 @@ sin bloquear.
 | Entrega | Estado | PR |
 |---|---|---|
 | E0 SPEC, ADR-0015, roadmap, maqueta y plan | Fusionado | #104 |
-| E0b Spike G8-A y decisiones del E0 | En revisión: F-114..F-119 (`docs/evidence/g8/spike/`); 1 millón de puntos en 5–7 s; SRC personalizado como PROJJSON | — |
+| E0b Spike G8-A y decisiones del E0 | Fusionado (#105): F-114..F-119 (`docs/evidence/g8/spike/`); 1 millón de puntos en 5–7 s; SRC personalizado como PROJJSON | #105 |
+| E1 Motor | En revisión: `domain/importing.py` (modos, nombres de tabla y de columna, tipos, SQL de cada lote, estimación de capa grande) y `engine/importing.py` (una transacción: `CREATE [OR REPLACE] TABLE … AS` con el primer lote, `INSERT … BY NAME` después, conteo, `ROLLBACK` ante error, cancelación o fallo del lector; rechaza una transacción del usuario abierta sin abortarla; F-120: base que no guarda SRC). AT-IMP-004, 006, 007 (motor) | — |

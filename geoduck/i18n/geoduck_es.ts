@@ -280,6 +280,26 @@
             <translation>La geometría «{0}» no tiene SRC: quien abra el archivo supondrá grados (OGC:CRS84). Si tus datos usan otro sistema, indícalo con ST_SetCRS en la consulta antes de exportar</translation>
         </message>
         <message>
+            <location filename="../../geoduck/domain/importing.py" line="212" />
+            <source>type «{0}» sent as JSON text</source>
+            <translation>tipo «{0}» enviado como texto JSON</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/domain/importing.py" line="78" />
+            <source>{0} (temporary)</source>
+            <translation>{0} (temporal)</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/domain/importing.py" line="211" />
+            <source>list of «{0}» sent as text</source>
+            <translation>lista de «{0}» enviada como texto</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/domain/importing.py" line="159" />
+            <source>Field «{0}» renamed to «{1}»: DuckDB does not tell upper and lower case apart</source>
+            <translation>Campo «{0}» renombrado a «{1}»: DuckDB no distingue mayúsculas de minúsculas</translation>
+        </message>
+        <message>
             <location filename="../../geoduck/domain/load.py" line="97" />
             <source>independent copy of DuckDB</source>
             <translation>copia independiente de DuckDB</translation>
@@ -639,7 +659,7 @@
         </message>
         <message>
             <location filename="../../geoduck/engine/detach.py" line="87" />
-            <location filename="../../geoduck/engine/worker.py" line="765" />
+            <location filename="../../geoduck/engine/worker.py" line="775" />
             <source>The transaction is aborted; it can only be rolled back (ROLLBACK).</source>
             <translation>La transacción está abortada; solo se puede revertir (ROLLBACK).</translation>
         </message>
@@ -667,6 +687,31 @@
             <location filename="../../geoduck/engine/detach.py" line="56" />
             <source>There is no attached database «{0}».</source>
             <translation>No hay ninguna base «{0}» adjunta.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/engine/importing.py" line="70" />
+            <source>The session has an open transaction: commit or roll it back before sending layers</source>
+            <translation>La sesión tiene una transacción abierta: confírmela o reviértala antes de enviar capas</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/engine/importing.py" line="78" />
+            <source>The database «{0}» uses an older file format that cannot store the CRS of a geometry: send the layer without CRS or choose another database</source>
+            <translation>La base «{0}» usa un formato de archivo antiguo que no guarda el SRC de una geometría: envíe la capa sin SRC o elija otra base</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/engine/importing.py" line="107" />
+            <source>No data arrived for: {0}</source>
+            <translation>No llegaron datos de: {0}</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/engine/importing.py" line="138" />
+            <source>{0}: the geometry has no CRS (the layer had none)</source>
+            <translation>{0}: la geometría no tiene SRC (la capa no tenía)</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/engine/importing.py" line="114" />
+            <source>Row count mismatch in {0}: {1} expected, {2} found</source>
+            <translation>Conteo distinto en {0}: se esperaban {1}, hay {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/engine/probe.py" line="49" />
@@ -716,73 +761,73 @@
             <translation>Tras {0} la transacción sigue {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="762" />
-            <location filename="../../geoduck/engine/worker.py" line="89" />
+            <location filename="../../geoduck/engine/worker.py" line="772" />
+            <location filename="../../geoduck/engine/worker.py" line="92" />
             <source>Operation cancelled</source>
             <translation>Operación cancelada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="112" />
+            <location filename="../../geoduck/engine/worker.py" line="115" />
             <source>The DuckDB connection can only be used from its owner thread</source>
             <translation>La conexión DuckDB solo puede usarse desde su hilo propietario</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="114" />
+            <location filename="../../geoduck/engine/worker.py" line="117" />
             <source>The session is closed</source>
             <translation>La sesión está cerrada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="117" />
+            <location filename="../../geoduck/engine/worker.py" line="120" />
             <source>There is an open Arrow reader in this session; finish or cancel the reading first</source>
             <translation>Hay un lector Arrow abierto en esta sesión; termine o cancele la lectura primero</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="173" />
+            <location filename="../../geoduck/engine/worker.py" line="176" />
             <source>The statement produces no rows; it cannot be read as Arrow</source>
             <translation>La sentencia no produce filas; no se puede leer como Arrow</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="689" />
+            <location filename="../../geoduck/engine/worker.py" line="699" />
             <source>The state of the connection could not be checked; the session was invalidated</source>
             <translation>No se pudo comprobar el estado de la conexión; la sesión se invalidó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="425" />
+            <location filename="../../geoduck/engine/worker.py" line="435" />
             <source>Reading cancelled</source>
             <translation>Lectura cancelada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="513" />
+            <location filename="../../geoduck/engine/worker.py" line="523" />
             <source>The session does not accept operations</source>
             <translation>La sesión no acepta operaciones</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="598" />
+            <location filename="../../geoduck/engine/worker.py" line="608" />
             <source>The session thread ended unexpectedly; the session was invalidated</source>
             <translation>El hilo de la sesión terminó inesperadamente; la sesión se invalidó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="667" />
+            <location filename="../../geoduck/engine/worker.py" line="677" />
             <source>DuckDB reported a fatal error; the session was invalidated</source>
             <translation>DuckDB informó un error fatal; la sesión se invalidó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="682" />
+            <location filename="../../geoduck/engine/worker.py" line="692" />
             <source>The DuckDB connection does not respond after an interruption; the session was invalidated</source>
             <translation>La conexión DuckDB no responde tras una interrupción; la sesión se invalidó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="779" />
+            <location filename="../../geoduck/engine/worker.py" line="789" />
             <source>DuckDB could not start: {0}</source>
             <translation>No se pudo iniciar DuckDB: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="557" />
+            <location filename="../../geoduck/engine/worker.py" line="567" />
             <source>DuckDB {0} is not supported; {1} or later is required</source>
             <translation>DuckDB {0} no es compatible; se requiere {1} o superior</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="617" />
+            <location filename="../../geoduck/engine/worker.py" line="627" />
             <source>The session was closed</source>
             <translation>La sesión se cerró</translation>
         </message>
