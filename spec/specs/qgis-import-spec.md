@@ -96,6 +96,9 @@ acción explica que hay que iniciar una.
   GDAL `osr` desde su WKT2). WKT2 no sirve: DuckDB 1.5.0 lo pierde al leer (F-116). Si no se puede expresar,
   el diálogo ofrece «Reproyectar a…» o continuar **sin SRC** de forma explícita. Nunca se inventa (C4).
 - Capa sin SRC: la tabla queda sin SRC, con aviso.
+- **Base que no guarda SRC** (F-120): un archivo con formato `v1.0.0+` —el que crea DuckDB 1.5.x por defecto—
+  no admite `GEOMETRY` con SRC. El diálogo lo detecta (`duckdb_databases().tags['storage_version']`) y lo
+  dice; el usuario elige enviar **sin SRC** u otra base. Nada se escribe hasta que elige.
 - Z/M y colecciones se conservan (WKB). Las geometrías inválidas se copian tal cual (no es una reparación;
   para eso, «Diagnosticar geometrías…»). Las `NULL` siguen `NULL`.
 - Varias familias en la misma capa: se copian todas en la misma columna `GEOMETRY`.

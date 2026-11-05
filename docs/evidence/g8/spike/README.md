@@ -14,6 +14,7 @@ QGIS 3.34.6, 3.44.14 y 4.2.3 (conda-forge); DuckDB 1.5.0 y 2.0.0; PyArrow 25.0.1
 | F-117 | `QgsVectorLayerFeatureSource` se lee completa desde otro hilo con los proveedores `ogr` (GeoPackage), `memory` y `delimitedtext` (CSV). `postgres` no se pudo probar aquí | QGIS 3.34/3.44/4.2 | Lectura en `QgsTask`; PostGIS, en la guía manual de Windows (E5) |
 | F-118 | Un GeoParquet con SRC (escrito con `GEOPARQUET_VERSION 'V2'`) se lee con `read_parquet` como `GEOMETRY` **sin SRC** si `spatial` no está cargada | 1.5.0, 2.0.0 | En el camino Parquet, el SRC se fija con `ST_SetCRS` usando el SRC de la capa de QGIS (§5.2) |
 | F-119 | Selección de una capa Conectada: `IN (lista)` tarda 11–30 ms con 1 203 identificadores y 0,4–1,2 s con 100 000; un `JOIN` con una tabla Arrow de identificadores, 7–17 ms en ambos casos | 1.5.0, 2.0.0 | La selección se pasa siempre como tabla Arrow y `JOIN` (§5.1) |
+| F-120 | Un archivo DuckDB con formato `v1.0.0+` (el que crea DuckDB 1.5.x por defecto; se lee en `duckdb_databases().tags['storage_version']`) **no guarda `GEOMETRY` con SRC**: «not supported in storage versions prior v1.5.0». Con `STORAGE_VERSION 'v1.5.0'` o creado con DuckDB 2.0 (`v2.0.0+`), sí | 1.5.0, 1.5.6, 2.0.0 (hallado en E1) | El envío lo comprueba antes de escribir; el diálogo ofrece «sin SRC» u otra base (§7) |
 
 ## Reproducir
 
