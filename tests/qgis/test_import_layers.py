@@ -49,7 +49,9 @@ def session(qgis_app):
 
 
 def rows(session, text):
-    return session.engine.query(text, priority=False).future.result(TIMEOUT).rows
+    """Filas con sus tipos de Python (la consulta del panel las devuelve como texto)."""
+    run = session.engine.submit(lambda h, t: h.execute(text, max_rows=1000))
+    return run.future.result(TIMEOUT).rows
 
 
 def tables(session):
@@ -94,7 +96,6 @@ def make_gpkg(path):
     boolean.SetSubType(ogr.OFSTBoolean)
     for defn in (
         ogr.FieldDefn("codigo", ogr.OFTInteger64),
-        ogr.FieldDefn("Nombre", ogr.OFTString),
         ogr.FieldDefn("nombre", ogr.OFTString),
         ogr.FieldDefn("area", ogr.OFTReal),
         ogr.FieldDefn("alta", ogr.OFTDate),
@@ -106,7 +107,6 @@ def make_gpkg(path):
     for i in range(3):
         f = ogr.Feature(lyr.GetLayerDefn())
         f.SetField("codigo", 10_000_000_000 + i)
-        f.SetField("Nombre", f"Lote {i}")
         f.SetField("nombre", f"lote {i}")
         f.SetField("area", 1.5 * i)
         if i < 2:
@@ -127,7 +127,6 @@ def test_geopackage_types_geometry_name_and_crs(session, tmp_path):
     plan = plan_layer(layer, table="lotes_rurales")
     assert plan.path == PATH_QGIS
     assert plan.job.geometry.name == "shape"  # el nombre que trae la capa (§7)
-    assert any("nombre_2" in w for w in plan.warnings)  # `Nombre` y `nombre` chocan en DuckDB (§6)
     report, _ = send(session, [plan])
     assert isinstance(report, ImportReport), report
     assert report.tables[0].rows == 3
@@ -138,15 +137,14 @@ def test_geopackage_types_geometry_name_and_crs(session, tmp_path):
     )
     assert types["fid"] == "BIGINT"  # el FID solo se copia porque el GeoPackage lo da como campo
     assert types["codigo"] == "BIGINT"
-    assert types["Nombre"] == "VARCHAR" and types["nombre_2"] == "VARCHAR"
+    assert types["nombre"] == "VARCHAR"
     assert types["area"] == "DOUBLE"
     assert types["alta"] == "DATE" and types["visto"] == "TIMESTAMP"
     assert types["activo"] == "BOOLEAN" and types["foto"] == "BLOB"
     assert types["shape"] == "GEOMETRY('EPSG:32719')"
     got = rows(
         session,
-        "SELECT codigo, nombre_2, alta, visto, activo, foto, shape IS NULL "
-        "FROM lotes_rurales ORDER BY codigo",
+        "SELECT codigo, nombre, alta, visto, activo, foto, shape IS NULL FROM lotes_rurales ORDER BY codigo",
     )
     assert got[0] == (
         10_000_000_000,
@@ -178,6 +176,19 @@ def test_memory_layer_selection_and_filter(session):
     assert layer.subsetString() == '"id" >= 50' and len(layer.selectedFeatureIds()) == 4  # la capa no cambia
 
 
+def test_fields_that_differ_only_in_case_are_renamed(session):
+    layer = QgsVectorLayer("Point?crs=EPSG:4326&field=ID:integer&field=id:string", "dos", "memory")
+    f = QgsFeature(layer.fields())
+    f.setAttributes([7, "siete"])
+    layer.dataProvider().addFeatures([f])
+    plan = plan_layer(layer, table="dos")
+    assert any("id_2" in w for w in plan.warnings)  # DuckDB no distingue mayúsculas (§6)
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    assert any("id_2" in w for w in report.warnings)
+    assert rows(session, 'SELECT "ID", id_2 FROM dos') == ((7, "siete"),)
+
+
 def test_csv_without_geometry(session, tmp_path):
     csv = tmp_path / "datos.csv"
     csv.write_text("id,nombre,valor\n1,uno,1.5\n2,dos,\n", encoding="utf-8")
@@ -203,19 +214,24 @@ def test_empty_layer_creates_the_table(session):
 
 def test_custom_crs_goes_as_projjson_and_comes_back(session):
     proj = (
-        "+proj=tmerc +lat_0=0 +lon_0=-63 +k=0.9996 +x_0=500000 +y_0=10000000 +ellps=WGS84 +units=m +no_defs"
+        "+proj=tmerc +lat_0=0 +lon_0=-63.5 +k=0.9996 +x_0=500000 +y_0=10000000 +ellps=WGS84 +units=m +no_defs"
     )
     crs = QgsCoordinateReferenceSystem.fromProj(proj)
-    layer = points("propio", 5, crs=crs.toWkt())
+    assert crs.isValid() and not crs.authid()
+    layer = points("propio", 5)
     layer.setCrs(crs)
     text = crs_text(layer.crs())
-    assert json.loads(text)["type"] == "ProjectedCRS"  # PROJJSON, no WKT2 (F-116)
+    assert text and json.loads(text)["type"] == "ProjectedCRS", text  # PROJJSON, no WKT2 (F-116)
     report, _ = send(session, [plan_layer(layer, table="propio")])
     assert isinstance(report, ImportReport), report
     declared = rows(session, "SELECT data_type FROM duckdb_columns() WHERE column_name = 'geom'")[0][0]
     back = QgsCoordinateReferenceSystem()
     back.createFromUserInput(declared[len("GEOMETRY('") : -2].replace("''", "'"))
-    assert back.isValid() and back.toProj().split() == crs.toProj().split()
+
+    def parts(c):
+        return sorted(set(c.toProj().split()) - {"+type=crs"})
+
+    assert back.isValid() and parts(back) == parts(crs)
 
 
 def test_without_crs_is_explicit(session):

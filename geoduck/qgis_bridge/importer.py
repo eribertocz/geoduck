@@ -98,13 +98,16 @@ class LayerPlan:
 
 
 def type_name(type_id: Any) -> str:
-    """Nombre del `QMetaType` de un campo (`int`, `QString`, `QDate`…), igual en Qt 5 y Qt 6."""
+    """Nombre del `QMetaType` de un campo (`int`, `QString`, `QDate`…): `QByteArray` en Qt 5, `bytes` en
+    Qt 6. Vacío si no hay tipo (el subtipo de un campo que no es lista: `b''` en Qt 5, None en Qt 6)."""
     if type_id is None:
         return ""
     name = QMetaType(int(type_id)).name()
-    if isinstance(name, (bytes, bytearray)):
-        return bytes(name).decode()
-    return str(name or "")
+    if name is None:
+        return ""
+    if not isinstance(name, (bytes, bytearray)):
+        name = name.data()  # QByteArray
+    return bytes(name).decode()
 
 
 def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
@@ -254,11 +257,13 @@ def _connected_sql(
     select = f"SELECT {', '.join(parts)} FROM ({provider.base}) AS __geoduck_layer"
     if fids is None:
         return select, None
-    ids = id_columns(provider.fid_mode, provider.keys)
+    # Como `fid_filter_sql`: en modo `map`, los valores de la clave; en los demás, el FID
     if provider.fid_mode == "map":
+        ids = id_columns("map", provider.keys)
         keys = provider.keys_for(fids)
         selection = pa.table({key_alias(i): [k[i] for k in keys] for i in range(len(ids))})
     else:
+        ids = [FID]
         selection = pa.table({FID: pa.array(fids, type=pa.int64())})
     using = ", ".join(quote_identifier(c) for c in ids)
     return f"{select} SEMI JOIN {quote_identifier(SELECTION_VIEW)} USING ({using})", selection
@@ -290,7 +295,7 @@ def _value(v: Any) -> Any:
     if hasattr(v, "toPyTime"):
         return v.toPyTime() if v.isValid() else None
     if type(v).__name__ == "QByteArray":
-        return bytes(v.data())
+        return None if v.isNull() else bytes(v.data())
     return v
 
 
@@ -401,6 +406,9 @@ class LayerImport:
         self._handle: Any = None
         #: Entidades leídas de QGIS (las escribe la tarea lectora; un `int` se asigna de una vez).
         self.read = 0
+        #: Solo se guarda: sin una referencia de Python, PyQGIS pierde el `run` de la tarea. Nunca se usa,
+        #: porque QGIS la borra al terminar.
+        self._reader: LayerReader | None = None
         self._finished = False
         self._timer = QTimer()
         self._timer.setInterval(50)
@@ -410,7 +418,8 @@ class LayerImport:
         self._handle = self._engine.import_batches([p.job for p in self._plans], self._channel)
         general = [(i, p) for i, p in enumerate(self._plans) if not p.job.by_sql]
         if general:
-            QgsApplication.taskManager().addTask(LayerReader(general, self._channel, self._set_read))
+            self._reader = LayerReader(general, self._channel, self._set_read)
+            QgsApplication.taskManager().addTask(self._reader)
         else:
             self._channel.finish()
         self._timer.start()
@@ -427,6 +436,7 @@ class LayerImport:
         if self._finished or self._handle is None:
             return
         self._engine.cancel(self._handle.op_id)
+        self._channel.abandon()  # también si el motor aún no empezó el envío: nadie leerá el canal
 
     def _poll(self) -> None:
         if self._finished:
@@ -436,6 +446,7 @@ class LayerImport:
             return
         self._finished = True
         self._timer.stop()
+        self._channel.abandon()  # nadie más lee el canal: el lector, si sigue, se detiene
         exc = self._handle.future.exception()
         if exc is not None:
             self._on_done(exc)
