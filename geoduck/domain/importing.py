@@ -12,6 +12,7 @@ import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
@@ -20,6 +21,8 @@ from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 BATCH_VIEW = "__geoduck_import_batch"
 #: Columna del lote con la geometría en WKB.
 WKB_COLUMN = "__geoduck_wkb"
+#: Vista temporal con los identificadores de la selección de una capa Conectada (F-119: `JOIN`, no `IN`).
+SELECTION_VIEW = "__geoduck_import_selection"
 #: Entidades por segundo para estimar el camino general: cifra prudente del spike G8-A (F-114: 140–205 mil).
 RATE = 100_000
 #: Más de esto (segundos estimados) es una «capa grande»: se avisa, nunca se bloquea (qgis-import-spec §3).
@@ -64,6 +67,19 @@ class ImportJob:
     schema: str = "main"
     #: Tabla temporal (solo esta sesión): `database` y `schema` no se usan.
     temporary: bool = False
+    #: Camino SQL (qgis-import-spec §5.1 y §5.2): `SELECT` con las columnas finales, que DuckDB ejecuta sin
+    #: lotes. None = camino general (lotes Arrow del canal).
+    source_sql: str | None = None
+    #: Base en uso para `source_sql` (la de la capa Conectada, G7); None = no cambia.
+    source_database: str | None = None
+    #: Vista en vez de copia (solo un Parquet sin selección ni filtro, §5.2).
+    as_view: bool = False
+    #: Camino SQL con selección: tabla Arrow de identificadores que `source_sql` une como `SELECTION_VIEW`.
+    selection: Any = None
+
+    @property
+    def by_sql(self) -> bool:
+        return self.source_sql is not None
 
     @property
     def qualified(self) -> str:
@@ -104,6 +120,18 @@ class ImportJob:
 
     def next_batch_sql(self) -> str:
         return f"INSERT INTO {self.qualified} BY NAME {self.select_sql()}"
+
+    def source_write_sql(self) -> str:
+        """Camino SQL: la tabla (o la vista) a partir de `source_sql`, o sus filas añadidas por nombre."""
+        assert self.source_sql is not None
+        temp = "TEMP " if self.temporary else ""
+        name = quote_identifier(self.table) if self.temporary else self.qualified
+        kind = "VIEW" if self.as_view else "TABLE"
+        if self.mode is ImportMode.CREATE:
+            return f"CREATE {temp}{kind} {name} AS {self.source_sql}"
+        if self.mode is ImportMode.REPLACE:
+            return f"CREATE OR REPLACE {temp}{kind} {name} AS {self.source_sql}"
+        return f"INSERT INTO {self.qualified} BY NAME {self.source_sql}"
 
 
 @dataclass(frozen=True)

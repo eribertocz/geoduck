@@ -28,8 +28,16 @@ import pyarrow as pa
 from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import EngineError, InvalidArgumentError, TransactionError
 from geoduck.domain.i18n import tr
-from geoduck.domain.importing import BATCH_VIEW, ImportedTable, ImportJob, ImportMode, ImportReport
+from geoduck.domain.importing import (
+    BATCH_VIEW,
+    SELECTION_VIEW,
+    ImportedTable,
+    ImportJob,
+    ImportMode,
+    ImportReport,
+)
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
+from geoduck.engine.sql import run_in_database
 from geoduck.engine.transactions import probe_transaction
 
 if TYPE_CHECKING:
@@ -51,6 +59,23 @@ def stores_geometry_crs(handle: ConnectionHandle, database: str) -> bool:
     version = str(rows[0][0]) if rows and rows[0][0] is not None else ""
     match = re.match(r"v(\d+)\.(\d+)", version)
     return match is None or (int(match.group(1)), int(match.group(2))) >= (1, 5)
+
+
+def _write_from_sql(handle: ConnectionHandle, job: ImportJob) -> int:
+    """Escribe una capa del camino SQL en la base de su consulta; devuelve las filas de la consulta."""
+    assert job.source_sql is not None
+    source = job.source_sql
+
+    def write() -> int:
+        rows = handle.execute(f"SELECT count(*) FROM ({source}) AS __geoduck_src", max_rows=1).rows
+        handle.execute(job.source_write_sql(), max_rows=1)
+        return int(str(rows[0][0]))
+
+    if job.selection is not None:  # la selección, como tabla Arrow unida con `JOIN` (F-119)
+        with handle.registered(SELECTION_VIEW, job.selection):
+            return run_in_database(handle, job.source_database, write)
+
+    return run_in_database(handle, job.source_database, write)
 
 
 def _count(handle: ConnectionHandle, job: ImportJob) -> int:
@@ -85,6 +110,11 @@ def import_batches(
         before = {i: _count(handle, job) for i, job in enumerate(jobs) if job.mode is ImportMode.APPEND}
         sent = dict.fromkeys(range(len(jobs)), 0)
         started: set[int] = set()
+        for i, job in enumerate(jobs):  # camino SQL: DuckDB copia sin pasar por QGIS (§5.1, §5.2)
+            if job.by_sql:
+                token.raise_if_cancelled()
+                sent[i] = _write_from_sql(handle, job)
+                started.add(i)
         while True:
             token.raise_if_cancelled()
             try:
