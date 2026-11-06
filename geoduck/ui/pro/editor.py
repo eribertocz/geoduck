@@ -73,3 +73,34 @@ def _monospace() -> QFont:
     font.setStyleHint(QFont.StyleHint.Monospace)
     font.setPointSize(EDITOR_POINTS)
     return font
+
+
+def free_keys(editor: Any, keys: tuple[str, ...]) -> None:
+    """Quita esas teclas de los comandos de QScintilla de este editor (p. ej. Ctrl+Intro), para que lleguen
+    a los atajos de GeoDuck. Solo en los editores de GeoDuck."""
+    from qgis.PyQt.QtGui import QKeySequence  # noqa: PLC0415
+
+    commands = editor.standardCommands()
+    for key in keys:
+        sequence = QKeySequence(key)
+        code = int(sequence[0].toCombined()) if hasattr(sequence[0], "toCombined") else int(sequence[0])
+        command = commands.boundTo(code)
+        if command is not None:
+            if command.key() == code:
+                command.setKey(0)
+            else:
+                command.setAlternateKey(0)
+
+
+def make(colors: Colors, *, dark: bool) -> Any:
+    """Un `QgsCodeEditorSQL` de GeoDuck: números de línea, sin marco, colores del tema y los atajos de la
+    consulta libres (Ctrl+Intro, Ctrl+Mayús+Intro, Ctrl+S, Ctrl+O, Ctrl+W)."""
+    from qgis.gui import QgsCodeEditorSQL  # noqa: PLC0415
+    from qgis.PyQt.QtWidgets import QFrame  # noqa: PLC0415
+
+    editor = QgsCodeEditorSQL()
+    editor.setLineNumbersVisible(True)
+    editor.setFrameShape(QFrame.Shape.NoFrame)
+    free_keys(editor, ("Ctrl+Return", "Ctrl+Shift+Return", "Ctrl+S", "Ctrl+O", "Ctrl+W", "Ctrl+T"))
+    paint(editor, colors, dark=dark)
+    return editor

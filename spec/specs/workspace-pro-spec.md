@@ -1,6 +1,6 @@
 # SPEC GD-WSP — Workspace Pro (interfaz nueva)
 
-**Estado:** Propuesta · G9 · `v0.10.0a1` (decisiones del propietario, 2026-11-05; ADR-0016) · **IDs:** GD-WSP-001..012
+**Estado:** Propuesta · G9 · `v0.10.0a1` (decisiones del propietario, 2026-11-05 y 2026-11-06; ADR-0016) · **IDs:** GD-WSP-001..012
 
 ## 1. Meta y principios
 Una interfaz **nueva desde cero**, de administrador de base de datos, moderna y minimalista (tipo TablePlus),
@@ -27,7 +27,13 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 ## 3. Disposición (GD-WSP-002; maqueta `docs/g8/maqueta/1-tabla`, `2-consulta`, `3-panel`)
 - **Ventana propia** (por defecto) y **panel acoplado** a QGIS, con la misma sesión y las mismas pestañas
   (ADR-0013 se mantiene). «Acoplar a QGIS» / «Ventana» alterna sin perder nada.
-- **Barra superior:** estado de la sesión («Lista · DuckDB 2.0.0 · en memoria»), «Ctrl K» y «Acoplar».
+- **Estado de DuckDB** (propietario, 2026-11-06: sin una barra más): en la ventana, arriba de la barra lateral
+  («DuckDB 2.0.0» y «● Lista · en memoria», con «⋯»: Actualizar, **Cerrar DuckDB**); en el panel, en su
+  cabecera. La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
+- **Iniciar y cerrar** (propietario, 2026-11-06): **«Iniciar DuckDB»** (botón grande en el centro cuando no
+  está iniciado) y **«Cerrar DuckDB»** (menú «⋯»); la palabra «sesión» no aparece en la interfaz. Sin DuckDB
+  iniciado, **todo está en gris** salvo «Iniciar DuckDB», «Abrir base…», «Crear base…», «Diagnóstico» y
+  «Acerca de».
 - **Barra lateral** (plegable, Ctrl+B): búsqueda; **Recientes**; **★ Favoritos**; **Bases** (árbol: bases,
   esquemas, tablas, vistas, temporales, con su acceso); «+» (abrir o crear base, importar capas de QGIS); al pie,
   «Diagnóstico», «Acerca de» y la versión.
@@ -91,9 +97,17 @@ Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hast
   objeto ya no existe, se muestra atenuado con su motivo.
 
 ## 9. Enviar a DuckDB (GD-WSP-008; qgis-import-spec)
-El diálogo de G8 rehecho con el sistema de diseño, mismo comportamiento. Nuevo: **arrastrar** capas del panel de
-capas de QGIS a una base de la barra lateral abre el diálogo con esa base como destino; Ctrl+K → «Enviar capa
-de QGIS a DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decisión, 2026-11-05).
+El diálogo de G8 rehecho con el sistema de diseño, mismo comportamiento. Ctrl+K → «Enviar capa de QGIS a
+DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decisión, 2026-11-05).
+
+**Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5). Lo mínimo: se pregunta solo lo que falta.
+- **QGIS → DuckDB:** soltar una o varias capas del panel de capas en una base de la barra lateral (en el panel
+  acoplado, en cualquier parte: la base actual) abre el diálogo de envío con la base y las capas elegidas; un
+  clic en «Enviar». Cada tabla guarda el SRC de su capa.
+- **DuckDB → QGIS:** soltar una o varias tablas o vistas en el mapa o en el panel de capas abre un **mini
+  menú** «Copia» / «Conectada»: un clic carga todo lo soltado; Esc cancela. El SRC sale de la columna de
+  geometría (`GEOMETRY('EPSG:4326')`); **solo si a alguna le falta**, una sola ventana pequeña pide uno para
+  todas (desplegable para elegir por tabla).
 
 ## 10. Sistema de diseño (GD-WSP-009)
 - **Tokens** en un solo lugar: colores, tipografía (la del sistema), tamaños, espacios, radios, sombras,
@@ -108,7 +122,10 @@ de QGIS a DuckDB…». «Reproyectar a…» sigue siendo global para todo el env
 ## 11. Accesibilidad, idioma y estados (GD-WSP-010)
 - Todo con teclado (Tab, flechas, atajos); foco visible; nombres accesibles y ayuda en cada acción.
 - Inglés y español según el idioma de QGIS (catálogo `.ts`, como G6).
-- Estados obligatorios en cada vista: sin sesión, cargando, vacío, error (con qué hacer), sesión ocupada.
+- Estados obligatorios en cada vista: DuckDB sin iniciar, cargando, vacío, error (con qué hacer), DuckDB
+  ocupado.
+- Pocos pasos y el espacio para lo que importa (propietario, 2026-11-06): una sola barra fina por pestaña,
+  los avisos en el pie, nada que no se use.
 - Panel estrecho: se compacta sin perder acciones.
 
 ## 12. Cambio y retiro (GD-WSP-011)

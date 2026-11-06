@@ -141,7 +141,7 @@ class Sidebar(QFrame):
         titles.setSpacing(0)
         self.title = label("DuckDB")
         self.title.setFont(ui_font(bold=True))
-        self.status = ElidedLabel(tr("No session"), "muted")
+        self.status = ElidedLabel(tr("Not started"), "muted")
         self.status.setFont(ui_font(METRICS.font_small))
         titles.addWidget(self.title)
         titles.addWidget(self.status)
@@ -151,7 +151,7 @@ class Sidebar(QFrame):
         self.refresh_action = self.session_menu.addAction(tr("Refresh"))
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
         self.session_menu.addSeparator()
-        self.close_action = self.session_menu.addAction(tr("Close session"))
+        self.close_action = self.session_menu.addAction(tr("Close DuckDB"))
         self.close_action.triggered.connect(self.close_session_requested.emit)
         self.session_button.clicked.connect(lambda: self._popup(self.session_menu, self.session_button))
         row.addWidget(self.session_button)
@@ -239,6 +239,11 @@ class Sidebar(QFrame):
         for action in (self.open_db_action, self.create_db_action):
             action.setEnabled(ready or dot == "off")
         self.send_action.setEnabled(ready)
+        # Sin DuckDB, todo en gris salvo iniciar, abrir o crear una base, Diagnóstico y Acerca de
+        # (propietario, 2026-11-06)
+        started = dot != "off"
+        for widget in (self.search, self.tree, self.session_button):
+            widget.setEnabled(started)
 
     def render(self, catalog: CatalogSnapshot | None) -> None:
         """Rehace el árbol (recientes, favoritos y bases) conservando lo plegado y el filtro."""
@@ -250,7 +255,7 @@ class Sidebar(QFrame):
         self._add_places("★ " + tr("Favorites"), "favorites", self.places.favorites)
         self._section(tr("Databases"), "databases")
         if catalog is None:
-            hint = QTreeWidgetItem([tr("Start a session")])
+            hint = QTreeWidgetItem([tr("Start DuckDB to see your databases")])
             hint.setFlags(Qt.ItemFlag.NoItemFlags)
             hint.setForeground(0, QColor(self.colors.faint))
             tree.addTopLevelItem(hint)

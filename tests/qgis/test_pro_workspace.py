@@ -123,7 +123,7 @@ def test_without_session_it_offers_to_start_and_then_welcomes(coordinator):
     ws = workspace(coordinator)
     assert ws.body.currentIndex() == STATE
     assert ws.start_button.isVisible() and ws.start_button.isEnabled()
-    assert ws.sidebar.status.text() == tr("No session")
+    assert ws.sidebar.status.text() == tr("Not started")
     ws.start_button.click()
     assert wait_for(lambda: ready(coordinator))
     assert wait_for(lambda: ws.body.currentIndex() == WELCOME)
@@ -221,7 +221,7 @@ def test_ctrl_k_finds_without_accents_opens_with_enter_and_closes_with_esc(coord
     ws = workspace(coordinator)
     run(coordinator, "CREATE TABLE lecturas(x INT); CREATE TABLE niño(x INT);", has("niño"))
     shortcut(ws, "Ctrl+K").activated.emit()
-    palette = ws.palette
+    palette = ws.command_palette
     assert palette.isVisible()
     QTest.keyClicks(palette.edit, "nino")
     assert palette.shown[0].title == "niño"
@@ -249,11 +249,11 @@ def test_ctrl_k_with_a_thousand_objects_answers_under_50_ms_per_key(coordinator)
     worst = 0.0
     for text in ("t", "ta", "tab", "tabla_09", "tabla_099", "cnsm", "xyz"):
         begin = time.perf_counter()
-        ws.palette.refresh(text)
+        ws.command_palette.refresh(text)
         worst = max(worst, time.perf_counter() - begin)
     assert worst < 0.05, worst
-    ws.palette.refresh("tabla_0999")
-    assert ws.palette.shown[0].title == "tabla_0999_consumo"
+    ws.command_palette.refresh("tabla_0999")
+    assert ws.command_palette.shown[0].title == "tabla_0999_consumo"
 
 
 def test_window_and_panel_share_the_same_tabs_and_the_sidebar_choice_is_remembered(coordinator, iface):

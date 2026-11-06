@@ -94,9 +94,24 @@ def short_type(data_type: str) -> str:
     return text if len(text) <= 18 else text.split("(", 1)[0]
 
 
+def fit_columns(grid: QTableView, model: PageModel) -> None:
+    """Ancho de cada columna: el de su contenido o el de su encabezado (nombre y tipo), entre 90 y 360 px."""
+    if not model.columns:
+        return
+    grid.resizeColumnsToContents()
+    metrics = grid.horizontalHeader().fontMetrics()
+    for i, column in enumerate(model.columns):
+        title = metrics.horizontalAdvance(column.name + short_type(column.data_type)) + 48
+        grid.setColumnWidth(i, min(max(grid.columnWidth(i), title, 90), 360))
+
+
 def cell_text(value: object) -> str:
+    """El valor en la grilla: NULL, binarios en hexadecimal, números reales con 15 cifras significativas
+    (159.232 y no 159.23199999999972) y el texto, abreviado."""
     if value is None:
         return "NULL"
+    if isinstance(value, float):
+        return format(value, ".15g")
     text = value.hex() if isinstance(value, (bytes, bytearray)) else str(value)
     return text if len(text) <= CELL else text[:CELL] + "…"
 
@@ -632,7 +647,7 @@ class TablePage(QWidget):
         self._pending = True
         state = self._coordinator.state
         if self._coordinator.engine_info is None or state is SessionState.DISCONNECTED:
-            self._show_message(tr("Start a session to see this table."))
+            self._show_message(tr("Start DuckDB to see this table."))
             return
         if state is not SessionState.READY:
             self._show_busy()
@@ -718,15 +733,7 @@ class TablePage(QWidget):
         self.next_button.setEnabled(more)
 
     def _fit_columns(self) -> None:
-        if self.header.count() == 0:
-            return
-        self.grid.resizeColumnsToContents()
-        for i, column in enumerate(self.model.columns):
-            width = self.grid.columnWidth(i)
-            title = (
-                self.header.fontMetrics().horizontalAdvance(column.name + short_type(column.data_type)) + 48
-            )
-            self.grid.setColumnWidth(i, min(max(width, title, 90), 360))
+        fit_columns(self.grid, self.model)
 
     # -- acciones -------------------------------------------------------------------------------------
 
@@ -920,7 +927,7 @@ class TablePage(QWidget):
                 self.load()
             elif event.current is SessionState.DISCONNECTED:
                 self.browse = None
-                self._show_message(tr("Start a session to see this table."))
+                self._show_message(tr("Start DuckDB to see this table."))
 
     def close_page(self) -> None:
         """La pestaña se cierra: deja de escuchar y descarta las respuestas que lleguen después."""

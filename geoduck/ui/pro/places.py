@@ -103,7 +103,7 @@ def missing_reason(place: Place, catalog: CatalogSnapshot | None) -> str | None:
             return tr("The file no longer exists")
         return None
     if catalog is None:
-        return tr("No session")
+        return tr("DuckDB is not started")
     if catalog.get(place.database) is None:
         return tr("The database «{}» is not open").format(place.database)
     key = catalog_key(place.database)

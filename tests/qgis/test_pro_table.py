@@ -177,8 +177,8 @@ def test_view_sql_opens_the_equivalent_query(consumidores):
     page.sql_button.click()
     query = ws.tabs.page(ws.tabs.bar.currentIndex())
     assert ws.tabs.current.kind == QUERY
-    assert query.sql.toPlainText() == page.browse.display_sql()
-    assert "WHERE \"kwh\" > '700'" in query.sql.toPlainText()
+    assert query.editor.text() == page.browse.display_sql()
+    assert "WHERE \"kwh\" > '700'" in query.editor.text()
 
 
 def test_row_detail_shows_full_values_and_a_geometry_summary(coordinator):
