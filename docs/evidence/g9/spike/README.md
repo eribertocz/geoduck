@@ -49,7 +49,7 @@ añade poco (G3: < 1 ms por operación).
 Ninguna de las dos sobrevive a guardar y reabrir el proyecto: son copias de la sesión. La rápida, además, no
 la marca QGIS como temporal, así que no avisa al cerrar y al reabrir aparece rota.
 
-**Propuesta para la «Copia» unificada (decisión del propietario en este E0b):** al guardar el proyecto con alguna
+**Decisión del propietario (2026-11-05): sí.** al guardar el proyecto con alguna
 «Copia», GeoDuck lo dice y ofrece en un clic **«Guardar las copias junto al proyecto»** (un GeoPackage al lado
 del `.qgz`; la capa pasa a leer ese archivo y sobrevive). Sin elegirlo, al reabrir la capa se muestra como no
 disponible con su motivo, no rota sin explicación.
