@@ -4,15 +4,21 @@ qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 supportsQt6=True
 description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
-about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica.
+about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica; y las capas de QGIS se envían a DuckDB como tablas.
 
-    ESTADO: Alpha (0.8.0a1, Notebook). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
+    ESTADO: Alpha (0.9.0a1, QGIS → DuckDB). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
     DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en GeoDuck para comprobarlos. La extensión DuckDB «spatial» es opcional.
-version=0.8.0a1
+version=0.9.0a1
 author=eribertocz
 email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
-changelog=0.8.0a1 (G7 · Notebook, incluye G6 · SQL Professional)
+changelog=0.9.0a1 (G8 · QGIS → DuckDB)
+    - «Enviar a DuckDB…» en el menú de las capas vectoriales y «Importar capas de QGIS…» en el «+»: copia una o varias capas (o su selección, respetando su filtro) a tablas de DuckDB con su geometría y su SRC, en una sola transacción.
+    - Diálogo con «qué pasará» por capa: si la tabla ya existe, por defecto no se envía; reemplazar, añadir filas u otro nombre se eligen.
+    - Capas Conectadas y GeoParquet se copian dentro de DuckDB; GeoParquet también como vista. «Reproyectar a…» con QGIS/PROJ. Tabla temporal de la sesión.
+    - Progreso con «Cancelar» y aviso final con «Abrir» y «Deshacer» en la barra de mensajes de QGIS.
+    - Correcciones: las cargas a QGIS funcionan tras abrir un GeoParquet en QGIS y conservan el SRC con tipos de geometría mixtos o colecciones.
+    0.8.0a1 (G7 · Notebook, incluye G6 · SQL Professional)
     - Cuadernos de celdas SQL: cada celda con su base, su resultado y «Cargar ▾»; Ctrl+Intro ejecuta la celda, Ctrl+Mayús+Intro la selección y Mayús+Intro la celda y avanza.
     - «Exportar ▾» del resultado a CSV o Parquet (GeoParquet) con la consulta completa.
     - Guardar y abrir cuadernos como .sql (Ctrl+S, Ctrl+O), con autoguardado y copia de recuperación tras un cierre inesperado (desactivable).

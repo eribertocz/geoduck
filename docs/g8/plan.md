@@ -1,6 +1,6 @@
 # G8 · `v0.9.0a1` QGIS → DuckDB — plan
 
-**Estado:** En aceptación (E5). **ADR-0015.** **Requisitos:** GD-IMP-001..007. **Contrato:**
+**Estado:** Cerrado (aceptado por el propietario, 2026-11-05; #104–#112; versión `0.9.0a1`). **ADR-0015.** **Requisitos:** GD-IMP-001..007. **Contrato:**
 `spec/specs/qgis-import-spec.md`; maqueta `docs/g8/maqueta/4-enviar-a-duckdb.dc.html`.
 
 **Gate:** AT-IMP-001..008 en la matriz de CI (QGIS 3.34, 3.40, 3.44, 4.2 × DuckDB 1.5.0, 2.0.0); velocidad del
@@ -54,4 +54,5 @@ sin bloquear.
 | E3 Diálogo y puntos de entrada | Fusionado (#109): «Enviar a DuckDB…» en el menú de las capas vectoriales y «Importar capas de QGIS…» en el «+» del workspace; diálogo (`ui/send_dialog.py`) con destino (bases en escritura, esquema o tabla temporal), una fila por capa con su tabla y «qué pasará» en vivo (nueva, ya existe —por defecto «No enviar»—, reemplazar, añadir con comprobación de columnas y SRC, otro nombre), «Solo seleccionadas» y «Vista en vez de copia» solo cuando aplican, «Enviar sin SRC» solo si hace falta (F-120 o SRC no expresable), columnas plegadas, resumen con camino y aviso de capa grande, Ctrl+Intro; progreso con «Cancelar» y aviso final con «Abrir» y «Deshacer» en la barra de mensajes de QGIS (`ui/send_flow.py`); el envío ocupa la sesión (BUSY) como una exportación. Capturas en `docs/evidence/g8/ui/`. AT-IMP-001, 002, 006 (diálogo) | #109 |
 | E4 Reproyectar y SRC | Fusionado (#110): «Reproyectar a…» en el diálogo (QGIS/PROJ al leer, como las copias de spatial-spec §4; nunca DuckDB sin `spatial`), que lleva por el camino general a GeoParquet y al resto; la geometría queda con el SRC destino y «Añadir filas» lo compara con el de la tabla. Una capa Conectada de esta sesión no se reproyecta (leerla con QGIS pediría páginas al worker que escribe el envío). Sin SRC de origen, «No se puede» con el motivo. SRC personalizado: aviso de que se guarda como PROJJSON; SRC no expresable: reproyectar o «sin SRC». Error de reproyección con el FID de la entidad y «no se envió nada». Nombres accesibles; diálogo usable desde 600 px. AT-IMP-003, 007 | #110 |
 | E5 Aceptación | Fusionado (#111): `docs/g8/acceptance.md` (AT-IMP-001..008, gate, decisiones, hallazgos F-121 y F-122), velocidad publicada en `docs/evidence/g8/velocidad/` (camino general: 120–175 mil entidades/s, 1 millón en 5,7–8,3 s), guía manual de Windows `docs/certification/send-to-duckdb.md`; pruebas de Shapefile, listas y mapas, Z/M/colección/inválida/NULL y conteo forzado | #111 |
-| Corrección F-122 | En revisión: capas con tipos de geometría mixtos o colecciones conservan el SRC (Conectada y Copia rápida) | — |
+| Corrección F-122 | Fusionado: capas con tipos de geometría mixtos o colecciones conservan el SRC (Conectada y Copia rápida) | #112 |
+| Versión `0.9.0a1` | Este PR: `metadata.txt` y `__init__.py`; G8 cerrado. Tag y release: el propietario | — |
