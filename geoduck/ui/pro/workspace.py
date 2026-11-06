@@ -62,7 +62,8 @@ from geoduck.ui.pro.places import (
     save_tabs,
 )
 from geoduck.ui.pro.sidebar import Sidebar
-from geoduck.ui.pro.tabs import TabArea
+from geoduck.ui.pro.table_page import TablePage
+from geoduck.ui.pro.tabs import PlacePage, TabArea
 from geoduck.ui.pro.tokens import METRICS
 from geoduck.ui.pro.widgets import button, icon_button, label
 
@@ -138,7 +139,7 @@ class ProWorkspace(QWidget):
         self.places = Places(self._settings)
 
         self.sidebar = Sidebar(self.colors, self.places)
-        self.tabs = TabArea(self.colors, page_factory, self)
+        self.tabs = TabArea(self.colors, page_factory or self._make_page, self)
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -422,6 +423,17 @@ class ProWorkspace(QWidget):
         self.sidebar.render(self._coordinator.catalog)
         self._render()
 
+    def _make_page(self, place: Place) -> QWidget:
+        """La página de cada pestaña: la de tabla para tablas y vistas (E3); la de consulta llega en E4."""
+        if place.is_query:
+            return PlacePage(place, self.colors)
+        return TablePage(place, self._coordinator, self.colors, view_sql=self.open_sql)
+
+    def open_sql(self, text: str) -> None:
+        """«Ver SQL»: la consulta equivalente, en una pestaña de consulta nueva."""
+        self.tabs.new_query(text)
+        self._render()
+
     def new_query(self) -> None:
         if self._coordinator.engine_info is None:
             return
@@ -556,3 +568,7 @@ class ProWorkspace(QWidget):
         """Al descargar GeoDuck: deja de escuchar al coordinador."""
         with contextlib.suppress(Exception):
             self._unsubscribe()
+        for index in range(len(self.tabs)):
+            page = self.tabs.page(index)
+            if hasattr(page, "close_page"):
+                page.close_page()

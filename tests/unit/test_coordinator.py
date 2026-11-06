@@ -47,7 +47,7 @@ from geoduck.domain.errors import (
     SessionStateError,
     UnsupportedEngineError,
 )
-from geoduck.domain.operations import EngineInfo
+from geoduck.domain.operations import EngineInfo, StatementOutcome
 from geoduck.domain.session import ErrorCause
 from geoduck.domain.session import SessionState as S
 from geoduck.domain.transaction import CloseChoice
@@ -135,6 +135,13 @@ class FakeEngine:
     def vocabulary(self):
         self.word_reads.append(Future())
         return self.word_reads[-1]
+
+    def query(self, sql, *, max_rows=1000, priority=True, database=None):
+        from types import SimpleNamespace
+
+        self.queries = getattr(self, "queries", [])
+        self.queries.append((sql, max_rows, priority, Future()))
+        return SimpleNamespace(future=self.queries[-1][3])
 
 
 INFO = EngineInfo("2.0.0", ":memory:", True, "memory")
@@ -1147,3 +1154,28 @@ def test_the_vocabulary_is_read_again_after_a_catalog_change(env):
     dispatcher.drain()
     assert coordinator.vocabulary() is None and len(engines[0].word_reads) == 2
     assert coordinator.reserved_words == frozenset()  # las palabras clave siguen valiendo para citar
+
+
+def test_read_rows_reads_without_busy_and_answers_on_the_main_thread(env):
+    """G9 · E3: la pestaña de tabla lee páginas sin pasar por BUSY; la respuesta llega por el dispatcher."""
+    coordinator, dispatcher, engines, _events = _ready(env)
+    answers = []
+    coordinator.read_rows("SELECT 1", 100, answers.append)
+    assert coordinator.state is S.READY
+    sql, max_rows, priority, fut = engines[0].queries[0]
+    assert (sql, max_rows, priority) == ("SELECT 1", 100, False)
+    outcome = StatementOutcome(columns=("x",), rows=((1,),))
+    fut.set_result(outcome)
+    assert answers == []
+    dispatcher.drain()
+    assert answers == [outcome]
+    coordinator.read_rows("SELECT boom", 1, answers.append)
+    engines[0].queries[1][3].set_exception(EngineError("boom"))
+    dispatcher.drain()
+    assert isinstance(answers[-1], EngineError)
+
+
+def test_read_rows_needs_a_ready_session(env):
+    coordinator, _dispatcher, _engines, _events = env
+    with pytest.raises(SessionStateError):
+        coordinator.read_rows("SELECT 1", 1, print)

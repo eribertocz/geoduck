@@ -50,6 +50,10 @@ PATHS: dict[str, str] = {
     "geometry": '<path d="M5 18l4-11 6 4 4-6"/><circle cx="5" cy="18" r="1.5" fill="currentColor"/>'
     '<circle cx="9" cy="7" r="1.5" fill="currentColor"/>'
     '<circle cx="15" cy="11" r="1.5" fill="currentColor"/>',
+    "copy": '<rect x="8" y="8" width="12" height="12" rx="2"/>'
+    '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    "arrow-up": '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    "arrow-down": '<path d="M12 5v14M6 13l6 6 6-6"/>',
     "history": '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/><path d="M12 8v4l3 2"/>',
 }
 
