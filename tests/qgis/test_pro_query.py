@@ -1,0 +1,282 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Pestaña de consulta de Workspace Pro (G9 · E4; workspace-pro-spec §5; AT-WSP-005).
+
+PyQGIS real con una sesión real de DuckDB: ejecutar la sentencia actual, la selección o todo; resultados por
+sentencia; mensajes con la línea del error e «Ir»; base de la consulta; cancelar; abrir y guardar `.sql` (un
+cuaderno de G7 como una consulta); autoguardado; preguntar al cerrar; copia de recuperación; exportar; y
+GeoDuck sin DuckDB iniciado.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import gc
+import os
+from pathlib import Path
+
+import pytest
+from qgis.PyQt.QtCore import QCoreApplication, QEvent
+
+from geoduck.app.coordinator import SessionCoordinator
+from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
+from geoduck.domain.i18n import tr
+from geoduck.domain.notebook import Cell, Notebook
+from geoduck.domain.session import SessionState
+from geoduck.domain.sql import RunScope
+from geoduck.plugin import make_memory_engine
+from geoduck.ui.dispatcher import QtDispatcher
+from geoduck.ui.notebook_store import RecoveryStore
+from geoduck.ui.pro.places import QUERY, Place
+from geoduck.ui.pro.query_page import MESSAGES, RESULT, QueryPage
+from geoduck.ui.pro.workspace import ProWorkspace
+from tests.qgis.conftest import wait_for
+
+pytestmark = pytest.mark.qgis
+
+_CREATED: list = []
+
+
+class Store(dict):
+    def value(self, key, defaultValue=None):  # noqa: N803
+        return self.get(key, defaultValue)
+
+    def setValue(self, key, value):
+        self[key] = value
+
+
+@pytest.fixture(autouse=True)
+def recovery_dir(tmp_path, monkeypatch):
+    """La copia de recuperación en una carpeta de la prueba, nunca en el perfil de QGIS."""
+    folder = tmp_path / "recuperacion"
+    monkeypatch.setenv("GEODUCK_RECOVERY_DIR", str(folder))
+    yield folder
+    while _CREATED:
+        widget = _CREATED.pop()
+        with contextlib.suppress(RuntimeError):
+            widget.detach_coordinator()
+            widget.close()
+            widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+
+
+@pytest.fixture
+def coordinator(qgis_app):
+    dispatcher = QtDispatcher()
+    coordinator = SessionCoordinator(make_memory_engine, dispatcher)
+    coordinator.start_memory_session()
+    assert wait_for(lambda: coordinator.state is SessionState.READY and coordinator.catalog is not None)
+    yield coordinator
+    coordinator.shutdown(10)
+    dispatcher.close()
+
+
+def workspace(coordinator, *, paths=(), confirm="discard", store=None):
+    answers = list(paths)
+    ws = ProWorkspace(
+        coordinator,
+        lambda: None,
+        store if store is not None else Store(),
+        ask_path=lambda _title, _name, _pattern: answers.pop(0) if answers else "",
+        confirm_close=lambda _name: confirm,
+    )
+    _CREATED.append(ws)
+    ws.resize(1300, 800)
+    ws.show()
+    return ws
+
+
+def new_query(ws, sql=""):
+    ws.new_query()
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    assert isinstance(page, QueryPage)
+    page.editor.setText(sql)
+    return page
+
+
+def done(coordinator, page):
+    return page.run is None and coordinator.state is SessionState.READY
+
+
+def test_run_runs_the_statement_under_the_cursor_and_shows_its_rows(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;\nSELECT range AS n FROM range(5);")
+    page.editor.setCursorPosition(1, 3)
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert len(page.results) == 1
+    assert [c.name for c in page.model.columns] == ["n"]
+    assert page.model.rowCount() == 5
+    assert page.view.current == RESULT and not page.result_tabs.isVisible()
+    assert page.summary.text().startswith(tr("{} rows").format(5) + " · ")
+
+
+def test_all_shows_one_result_tab_per_statement_with_rows(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "CREATE TABLE t AS SELECT 1 AS a;\nSELECT * FROM t;\nSELECT 2 AS b, 3 AS c;")
+    page.all_button.click()
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 3)
+    assert page.result_tabs.isVisible() and page.result_tabs.count() == 2
+    assert [c.name for c in page.model.columns] == ["b", "c"]  # la última, elegida
+    page.result_tabs.setCurrentIndex(0)
+    assert [c.name for c in page.model.columns] == ["a"]
+    page.view.buttons[MESSAGES].click()
+    assert len(page._log) == 3 and all(ok for ok, _ in page._log)
+
+
+def test_selection_runs_only_the_selection(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno, 2 AS dos")
+    page.editor.setSelection(0, 0, 0, 15)  # «SELECT 1 AS uno»
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert [c.name for c in page.model.columns] == ["uno"]
+
+
+def test_an_error_shows_messages_with_its_line_and_go_moves_the_cursor(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1;\nSELECT no_existe FROM range(1);\nSELECT 3;")
+    page.all_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.view.current == MESSAGES
+    assert [ok for ok, _ in page._log] == [True, False]
+    assert "no_existe" in page._log[1][1]
+    links = [w for w in page.messages.widget().findChildren(type(page.summary)) if "href" in w.text()]
+    assert links and tr("line {}, column {}").format(2, 8) in links[0].text()
+    links[0].linkActivated.emit("#")
+    assert page.editor.getCursorPosition() == (1, 7)
+    assert page.summary.text() == tr("{} OK · {} with error").format(1, 1)
+
+
+def test_the_query_runs_in_its_database(coordinator, tmp_path):
+    coordinator.attach_database(
+        AttachRequest(str(tmp_path / "db.duckdb"), AccessMode.READ_WRITE, OpenAction.CREATE_NEW, "db")
+    )
+    assert wait_for(lambda: coordinator.catalog is not None and coordinator.catalog.get("db") is not None)
+    ws = workspace(coordinator)
+    page = new_query(ws, "CREATE TABLE en_db AS SELECT 1 AS x;")
+    assert wait_for(lambda: page.base.findData("db") >= 0)
+    page.base.setCurrentIndex(page.base.findData("db"))
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert wait_for(
+        lambda: any(o.database == "db" and o.name == "en_db" for o in coordinator.catalog.objects)
+    )
+
+
+def test_cancel_stops_a_long_query(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT count(*) FROM range(100000000000) a;")
+    page.run_button.click()
+    assert wait_for(page.cancel_button.isEnabled)
+    page.cancel_button.click()
+    assert wait_for(lambda: done(coordinator, page), 30)
+    assert page._log and page._log[0] == (False, tr("Cancelled"))
+
+
+def test_save_as_autosave_and_reopen(coordinator, tmp_path):
+    path = tmp_path / "consumo.sql"
+    store = Store()
+    ws = workspace(coordinator, paths=[str(tmp_path / "consumo")], store=store)
+    page = new_query(ws, "SELECT 42;")
+    assert page.modified
+    assert page.save()
+    assert path.read_text(encoding="utf-8") == "SELECT 42;"
+    assert ws.tabs.current == Place(QUERY, "consumo.sql", path=str(path))
+    assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()) == "consumo.sql"
+    assert [p.name for p in ws.places.recents] == ["consumo.sql"]
+    page.editor.setText("SELECT 43;")
+    assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()) == "consumo.sql •"
+    assert wait_for(lambda: path.read_text(encoding="utf-8") == "SELECT 43;", 5)  # autoguardado
+    again = workspace(coordinator, store=store)  # «reinicio»: la consulta guardada vuelve con su SQL
+    restored = again.tabs.page(0)
+    assert isinstance(restored, QueryPage) and restored.editor.text() == "SELECT 43;"
+    assert not restored.modified
+
+
+def test_a_g7_notebook_opens_as_one_query(coordinator, tmp_path):
+    from geoduck.domain.notebook_file import dumps
+
+    path = tmp_path / "cuaderno.sql"
+    notebook = Notebook("cuaderno", [Cell(sql="SELECT 1;", database="memory"), Cell(sql="SELECT 2;")])
+    path.write_text(dumps(notebook), encoding="utf-8")
+    ws = workspace(coordinator, paths=[str(path)])
+    QCoreApplication.processEvents()
+    ws.open_query_file()
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    assert isinstance(page, QueryPage)
+    assert page.editor.text() == f"-- {tr('database')}: memory\nSELECT 1;\n\nSELECT 2;\n"
+    assert page.database == "memory"
+
+
+def test_closing_an_unsaved_query_asks(coordinator):
+    keep = workspace(coordinator, confirm="cancel")
+    new_query(keep, "SELECT 1;")
+    keep.tabs.close_current()
+    assert len(keep.tabs) == 1
+    drop = workspace(coordinator, confirm="discard")
+    new_query(drop, "SELECT 1;")
+    drop.tabs.close_current()
+    assert len(drop.tabs) == 0
+    empty = workspace(coordinator, confirm="cancel")
+    new_query(empty, "")
+    empty.tabs.close_current()  # una consulta vacía se cierra sin preguntar
+    assert len(empty.tabs) == 0
+
+
+def test_the_recovery_copy_brings_back_queries_after_a_crash(coordinator, recovery_dir):
+    crashed = RecoveryStore(Path(recovery_dir))
+    crashed.save([Notebook("Consulta 7", [Cell(sql="SELECT 7;", database="memory")])])
+    crashed._lock.unlock()  # su QGIS «se cerró de golpe»: la carpeta queda sin dueño
+    ws = workspace(coordinator)
+    toast = ws.recovery.toast
+    assert toast is not None and toast.isVisible()
+    toast.actions[0].click()  # «Recuperar»
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    assert isinstance(page, QueryPage)
+    assert page.editor.text() == "SELECT 7;" and page.database == "memory"
+    assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()).endswith("•")
+    assert not crashed.folder.exists()
+    page.editor.setText("SELECT 8;")
+    ws.recovery.save()
+    own = ws.recovery.store.folder
+    assert own is not None and "SELECT 8;" in "".join(p.read_text() for p in own.glob("*.sql"))
+    ws.detach_coordinator()
+    assert not own.exists()  # al cerrar bien, la copia se borra
+
+
+def test_export_writes_the_full_query(coordinator, tmp_path):
+    target = tmp_path / "salida.csv"
+    ws = workspace(coordinator, paths=[str(target)])
+    page = new_query(ws, "SELECT range AS n FROM range(5000);")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.export_button.isEnabled()
+    page.export_menu.actions()[0].trigger()  # CSV
+    assert wait_for(lambda: target.exists() and coordinator.state is SessionState.READY, 20)
+    assert len(target.read_text().splitlines()) == 5001  # entera, no la vista previa
+
+
+def test_without_duckdb_everything_is_grey_except_start(qgis_app):
+    dispatcher = QtDispatcher()
+    idle = SessionCoordinator(make_memory_engine, dispatcher)
+    ws = workspace(idle)
+    assert ws.start_button.text() == tr("Start DuckDB") and ws.start_button.isEnabled()
+    assert ws.open_button.isEnabled() and ws.create_button.isEnabled()
+    for widget in (ws.sidebar.search, ws.sidebar.tree, ws.sidebar.session_button, ws.new_query_button):
+        assert not widget.isEnabled()
+    assert ws.sidebar.diagnostics_button.isEnabled() and ws.sidebar.about_button.isEnabled()
+    assert ws.state_title.text() == tr("DuckDB is not started")
+    idle.shutdown(5)
+    dispatcher.close()
+
+
+def test_run_sql_typed_by_the_user_through_execute_too(coordinator):
+    """Ctrl+Intro y Ctrl+Mayús+Intro llegan a la consulta aunque el foco esté en el editor."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 5 AS cinco;")
+    page.editor.setFocus()
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.model.rows == ((5,),)
+    assert os.environ["GEODUCK_RECOVERY_DIR"]

@@ -14,15 +14,18 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QShortcut,
     QStackedWidget,
     QVBoxLayout,
@@ -52,6 +55,7 @@ from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
+    QUERY,
     Place,
     Places,
     Store,
@@ -61,9 +65,11 @@ from geoduck.ui.pro.places import (
     read_tabs,
     save_tabs,
 )
+from geoduck.ui.pro.query_page import QueryPage
+from geoduck.ui.pro.recovery import QueryRecovery, read_query
 from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
-from geoduck.ui.pro.tabs import PlacePage, TabArea
+from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
 from geoduck.ui.pro.widgets import button, icon_button, label
 
@@ -79,7 +85,7 @@ def session_parts(coordinator: Any) -> tuple[str, str, str]:
     if state is SessionState.DISCONNECTED or info is None:
         if state is SessionState.CONNECTING:
             return "busy", "DuckDB", tr("Starting…")
-        return "off", "DuckDB", tr("No session")
+        return "off", "DuckDB", tr("Not started")
     engine = f"DuckDB {info.duckdb_version}"
     catalog = coordinator.catalog
     where = tr("in memory")
@@ -116,7 +122,7 @@ class ProWorkspace(QWidget):
     #: Cambió el estado de la sesión: punto y texto (para la cabecera del panel).
     status_changed = pyqtSignal(str, str)
 
-    def __init__(
+    def __init__(  # noqa: PLR0915 - la estructura se arma en un solo lugar
         self,
         coordinator: Any,
         run_diagnostics: Callable[[], DiagnosticReport],
@@ -125,8 +131,14 @@ class ProWorkspace(QWidget):
         ask_attach: Callable[[OpenAction, QWidget], AttachRequest | None] | None = None,
         ask_close: Callable[[CloseConfirmationRequired, QWidget], Any] | None = None,
         page_factory: Callable[[Place], QWidget] | None = None,
+        ask_path: Callable[[str, str, str], str] | None = None,
+        confirm_close: Callable[[str], str] | None = None,
+        recovery: Any = None,
     ) -> None:
         super().__init__()
+        self._pending_query: tuple[str, str | None] | None = None
+        self._ask_path = ask_path or self._file_dialog
+        self._confirm_close = confirm_close or self._confirm
         self._coordinator = coordinator
         self._run_diagnostics = run_diagnostics
         self._report: DiagnosticReport | None = None
@@ -139,7 +151,9 @@ class ProWorkspace(QWidget):
         self.places = Places(self._settings)
 
         self.sidebar = Sidebar(self.colors, self.places)
+        self.recovery = QueryRecovery(self, recovery)
         self.tabs = TabArea(self.colors, page_factory or self._make_page, self)
+        self.tabs.can_close = self._ask_save
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -159,21 +173,25 @@ class ProWorkspace(QWidget):
         self.body.addWidget(self._build_welcome())
         main.addWidget(self.body, 1)
         main.addWidget(self._build_footer())
-        self.palette = CommandPalette(self, self.colors, self.palette_entries)
+        self.command_palette = CommandPalette(self, self.colors, self.palette_entries)
 
         self._connect_sidebar()
         self.tabs.changed.connect(self._tabs_changed)
         self._shortcut("Ctrl+K", self.open_palette)
         self._shortcut("Ctrl+B", self.toggle_sidebar)
         self._shortcut("Ctrl+W", self.tabs.close_current)
+        self._shortcut("Ctrl+O", self.open_query_file)
         tabs, current = read_tabs(self._settings)
         for place in tabs:
+            if place.is_query and missing_reason(place, None) is not None:
+                continue  # su archivo ya no existe
             self.tabs.open_place(place, activate=False)
         if tabs:
             self.tabs.bar.setCurrentIndex(current)
         self._unsubscribe = coordinator.subscribe(self._on_event)
         self.sidebar.render(coordinator.catalog)  # una sesión ya abierta (p. ej. al cambiar de interfaz)
         self._render()
+        self.recovery.offer()
 
     # -- construcción ---------------------------------------------------------------------------------
 
@@ -212,8 +230,8 @@ class ProWorkspace(QWidget):
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         super().resizeEvent(event)
-        if self.palette.isVisible():
-            self.palette.refresh(self.palette.edit.text())
+        if self.command_palette.isVisible():
+            self.command_palette.refresh(self.command_palette.edit.text())
 
     def _empty_page(self, icon: str, buttons: list[QWidget]) -> tuple[QWidget, QLabel, QLabel, QLabel]:
         """Página de estado: icono, título, texto (con ajuste de línea) y botones, centrados. Las columnas van
@@ -252,7 +270,7 @@ class ProWorkspace(QWidget):
 
     def _build_state_page(self) -> QWidget:
         self.start_button = button(
-            tr("Start"), "primary", tooltip=tr("Starts DuckDB in memory, in its own thread")
+            tr("Start DuckDB"), "primary", tooltip=tr("Starts DuckDB in memory, in its own thread")
         )
         self.start_button.clicked.connect(self.start)
         self.open_button = button(tr("Open database…"), tooltip=tr("Opens a .duckdb file"))
@@ -371,7 +389,7 @@ class ProWorkspace(QWidget):
             self.state_title.setText(tr("Closing the session…"))
             self.state_text.setText("")
         else:
-            self.state_title.setText(tr("No session"))
+            self.state_title.setText(tr("DuckDB is not started"))
             self.state_text.setText(tr("Start DuckDB in memory, or open a database file."))
         for widget in (self.start_button, self.open_button, self.create_button):
             widget.setVisible(idle)
@@ -424,14 +442,108 @@ class ProWorkspace(QWidget):
         self._render()
 
     def _make_page(self, place: Place) -> QWidget:
-        """La página de cada pestaña: la de tabla para tablas y vistas (E3); la de consulta llega en E4."""
-        if place.is_query:
-            return PlacePage(place, self.colors)
-        return TablePage(place, self._coordinator, self.colors, view_sql=self.open_sql)
+        """La página de cada pestaña: la de tabla para tablas y vistas (E3), la de consulta (E4)."""
+        if not place.is_query:
+            return TablePage(place, self._coordinator, self.colors, view_sql=self.open_sql)
+        sql, database = self._pending_query or ("", None)
+        self._pending_query = None
+        if place.path and not sql:
+            sql, database = read_query(place.path)
+        page = QueryPage(
+            place, self._coordinator, self.colors, sql=sql, database=database, ask_path=self._ask_path
+        )
+        page.changed.connect(lambda p=page: self._query_changed(p))
+        page.renamed.connect(lambda old, p=page: self._query_renamed(p, old))
+        page.open_requested.connect(self.open_query_file)
+        page.notice.connect(self.notify)
+        return page
+
+    def _query_changed(self, page: QueryPage) -> None:
+        self.tabs.retitle(page, modified=page.modified)
+        self.recovery.schedule()
+
+    def _query_renamed(self, page: QueryPage, old: Place) -> None:
+        self.places.rename_query(old, page.place)
+        self.places.touch(page.place)
+        self.tabs.retitle(page, modified=page.modified)
+        self.sidebar.render(self._coordinator.catalog)
+
+    def open_query_file(self, path: str = "") -> None:
+        """Ctrl+O: abre un `.sql` en una pestaña (un cuaderno de G7, como una sola consulta)."""
+        if not path:
+            path = self._ask_path(tr("Open query"), "", tr("SQL files (*.sql)"))
+        if not path:
+            return
+        try:
+            self._pending_query = read_query(path)
+        except (OSError, UnicodeDecodeError) as exc:
+            self.notify(
+                tr("The query could not be opened: {}").format(getattr(exc, "strerror", "") or str(exc))
+            )
+            return
+        place = Place(QUERY, Path(path).name, path=str(Path(path)))
+        self.tabs.open_place(place)
+        self._pending_query = None
+        self.places.touch(place)
+        self.sidebar.render(self._coordinator.catalog)
+        self._render()
+
+    def _ask_save(self, page: QWidget) -> bool:
+        """Antes de cerrar una consulta con cambios sin archivo: guardar, no guardar o seguir editando."""
+        if not isinstance(page, QueryPage):
+            return True
+        page.save_if_saved()
+        if page.place.path or not page.modified:
+            return True
+        choice = self._confirm_close(page.place.name)
+        if choice == "save":
+            return page.save()
+        return choice == "discard"
+
+    def _confirm(self, name: str) -> str:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("GeoDuck"))
+        box.setText(tr("Save the changes to «{}»?").format(name))
+        box.setInformativeText(tr("If you do not save them, they are lost."))
+        save = box.addButton(tr("Save…"), QMessageBox.ButtonRole.AcceptRole)
+        discard = box.addButton(tr("Don't save"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(save)
+        box.exec()
+        clicked = box.clickedButton()
+        return "save" if clicked is save else "discard" if clicked is discard else "cancel"
+
+    def _file_dialog(self, title: str, name: str, pattern: str) -> str:
+        if title == tr("Open query"):
+            path, _ = QFileDialog.getOpenFileName(self, title, str(Path.home()), pattern)
+        else:
+            path, _ = QFileDialog.getSaveFileName(self, title, str(Path.home() / name), pattern)
+        return path
+
+    def open_recovered(self, name: str, sql: str, database: str | None, path: str | None) -> None:
+        """Una consulta de la copia de recuperación, en una pestaña (con cambios sin guardar)."""
+        place = Place(QUERY, name, path=path or "")
+        if self.tabs.index_of(place) >= 0:
+            place = Place(QUERY, tr("{} (recovered)").format(name), path="")
+        self._pending_query = (sql, database)
+        page = self.tabs.open_place(place)
+        self._pending_query = None
+        if isinstance(page, QueryPage):
+            if path and Path(path).is_file():
+                with contextlib.suppress(OSError, UnicodeDecodeError):
+                    page.saved_text = read_query(path)[0]
+            self.tabs.retitle(page, modified=page.modified)
+        self._render()
+
+    def query_pages(self) -> list[QueryPage]:
+        return [p for p in (self.tabs.page(i) for i in range(len(self.tabs))) if isinstance(p, QueryPage)]
 
     def open_sql(self, text: str) -> None:
         """«Ver SQL»: la consulta equivalente, en una pestaña de consulta nueva."""
-        self.tabs.new_query(text)
+        self._pending_query = (text, None)
+        self.tabs.new_query()
+        self._pending_query = None
         self._render()
 
     def new_query(self) -> None:
@@ -469,7 +581,7 @@ class ProWorkspace(QWidget):
 
     def open_palette(self) -> None:
         if self._coordinator.engine_info is not None:
-            self.palette.open()
+            self.command_palette.open()
 
     def palette_entries(self) -> list[Entry]:
         """Pestañas abiertas, recientes, acciones y, al final, todas las tablas y vistas de la sesión."""
@@ -506,7 +618,10 @@ class ProWorkspace(QWidget):
     def _actions(self) -> list[Entry]:
         action = tr("Action")
         ready = self._coordinator.state is SessionState.READY
-        found = [Entry(tr("New query"), action, "plus", self.new_query)]
+        found = [
+            Entry(tr("New query"), action, "plus", self.new_query),
+            Entry(tr("Open query…"), "Ctrl+O", "sql", self.open_query_file),
+        ]
         if ready:
             found += [
                 Entry(
@@ -571,4 +686,5 @@ class ProWorkspace(QWidget):
         for index in range(len(self.tabs)):
             page = self.tabs.page(index)
             if hasattr(page, "close_page"):
-                page.close_page()
+                page.close_page()  # una consulta con archivo guarda lo pendiente
+        self.recovery.stop()

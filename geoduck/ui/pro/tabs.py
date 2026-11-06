@@ -69,6 +69,8 @@ class TabArea(QObject):
         self.colors = colors
         self.page_factory = page_factory or (lambda place: PlacePage(place, colors))
         self._queries = 0
+        #: Antes de cerrar una pestaña (p. ej. preguntar si guardar una consulta): `False` la deja abierta.
+        self.can_close: Callable[[QWidget], bool] = lambda _page: True
         self.bar = QTabBar()
         self.bar.setProperty("pro", "tabs")
         self.bar.setFont(ui_font())
@@ -146,11 +148,27 @@ class TabArea(QObject):
         if not 0 <= index < self.bar.count():
             return
         page = self.page(index)
+        if not self.can_close(page):
+            return
         if hasattr(page, "close_page"):
             page.close_page()  # deja de escuchar a la sesión antes de borrarse
         self.bar.removeTab(index)
         self.stack.removeWidget(page)
         page.deleteLater()
+        self.changed.emit()
+
+    def retitle(self, page: QWidget, *, modified: bool = False) -> None:
+        """El nombre de la pestaña de `page` (tras «Guardar como…») y «•» si tiene cambios sin guardar."""
+        index = self.stack.indexOf(page)
+        for i in range(self.bar.count()):
+            if self.page(i) is page:
+                index = i
+                break
+        else:
+            return
+        place: Place = page.place  # type: ignore[attr-defined]
+        self.bar.setTabText(index, place.name + (" •" if modified else ""))
+        self.bar.setTabToolTip(index, place.path or f"{place.location} · {place.name}")
         self.changed.emit()
 
     def close_current(self) -> None:

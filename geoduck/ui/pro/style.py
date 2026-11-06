@@ -20,6 +20,8 @@ from geoduck.ui.pro.tokens import DARK, FONT_FAMILIES, LIGHT, METRICS, MONO_FAMI
 
 #: Nombre de objeto de la raíz de Workspace Pro: la hoja no sale de aquí.
 ROOT = "geoduckPro"
+#: Tamaño del editor SQL, en puntos (QScintilla no admite píxeles; 10 pt ≈ 13 px, el texto de GeoDuck).
+EDITOR_POINTS = 10
 
 
 def installed_families() -> set[str]:
@@ -101,6 +103,7 @@ def stylesheet(c: Colors) -> str:
 {r} QPushButton[pro="danger"]:hover {{ background: {c.error_soft}; }}
 {r} QPushButton[pro="ghost"] {{ border: 1px solid transparent; background: transparent; color: {c.muted}; }}
 {r} QPushButton[pro="ghost"]:hover {{ background: {c.segment}; color: {c.text}; }}
+{r} QPushButton[pro="ghost"]:disabled {{ color: {c.null}; }}
 {r} QPushButton[pro="add-chip"] {{ border: 1px dashed {c.null}; border-radius: {m.pill}px;
     background: transparent; color: {c.muted}; padding: 0 11px; }}
 {r} QPushButton[pro="segment"] {{ border: 0; border-radius: {m.radius_sm}px; background: transparent;
@@ -127,6 +130,8 @@ def stylesheet(c: Colors) -> str:
     padding: 0 {m.space_sm + 1}px; min-height: {m.control - 2}px; selection-background-color: {c.accent};
     selection-color: {c.on_accent}; }}
 {r} QLineEdit:focus {{ border-color: {c.accent}; }}
+{r} QLineEdit:disabled {{ color: {c.null}; }}
+{r} QFrame[pro="field"]:disabled {{ background: {c.side}; border-color: {c.line}; }}
 {r} QFrame[pro="field"] QLineEdit {{ border: 0; background: transparent; padding: 0; }}
 {r} QComboBox {{ background: {c.bg}; border: 1px solid {c.border}; border-radius: {m.radius}px;
     padding: 0 {m.space_sm}px; min-height: {m.control - 2}px; }}
@@ -146,6 +151,7 @@ def stylesheet(c: Colors) -> str:
 
 {r} QToolTip {{ background: {c.toast}; color: {c.toast_text}; border: 0; padding: 4px 8px; }}
 
+{r} QsciScintilla {{ font-family: "{mono}"; font-size: {EDITOR_POINTS}pt; }}
 {r} QSplitter::handle {{ background: {c.border}; }}
 {r} QMenu {{ background: {c.bg}; border: 1px solid {c.border}; padding: 4px; }}
 {r} QMenu::item {{ padding: 6px 28px 6px 10px; border-radius: {m.radius_sm}px; }}

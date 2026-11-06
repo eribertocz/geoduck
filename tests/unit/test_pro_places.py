@@ -109,7 +109,7 @@ def test_a_missing_object_says_why(tmp_path):
     assert missing_reason(table("t", database="ventas"), snapshot) == tr(
         "The database «{}» is not open"
     ).format("ventas")
-    assert missing_reason(table("consumidores"), None) == tr("No session")
+    assert missing_reason(table("consumidores"), None) == tr("DuckDB is not started")
     sql = tmp_path / "consulta.sql"
     assert missing_reason(Place(QUERY, "consulta.sql", path=str(sql)), snapshot) == tr(
         "The file no longer exists"

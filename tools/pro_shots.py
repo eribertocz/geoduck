@@ -129,10 +129,10 @@ def main() -> None:  # noqa: PLR0915 - todas las capturas, en orden
             ws.tabs.bar.setCurrentIndex(1)
             ws.notify("Base «db» abierta")
             shoot(ws, out / f"ventana-{name}-{qt}.png")
-            ws.palette.open()
-            ws.palette.edit.setText("lec")
+            ws.command_palette.open()
+            ws.command_palette.edit.setText("lec")
             shoot(ws, out / f"ctrl-k-{name}-{qt}.png")
-            ws.palette.close_palette()
+            ws.command_palette.close_palette()
             if not dark:
                 for index in reversed(range(len(ws.tabs))):
                     ws.tabs.close_tab(index)
