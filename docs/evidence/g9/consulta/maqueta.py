@@ -97,6 +97,10 @@ def query_page(colors, place, *, messages=False):  # noqa: PLR0915 - una maqueta
     editor.setLineNumbersVisible(True)
     editor.setText(SQL)
     editor.setFrameShape(QFrame.Shape.NoFrame)
+    from geoduck.ui.pro import editor as pro_editor
+    from geoduck.ui.pro.style import is_dark
+
+    pro_editor.paint(editor, colors, dark=is_dark(page) or colors.bg.lower() < "#808080")
     split.addWidget(editor)
 
     results = QWidget()

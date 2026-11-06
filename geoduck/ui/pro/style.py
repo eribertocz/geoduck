@@ -20,6 +20,8 @@ from geoduck.ui.pro.tokens import DARK, FONT_FAMILIES, LIGHT, METRICS, MONO_FAMI
 
 #: Nombre de objeto de la raíz de Workspace Pro: la hoja no sale de aquí.
 ROOT = "geoduckPro"
+#: Tamaño del editor SQL, en puntos (QScintilla no admite píxeles; 10 pt ≈ 13 px, el texto de GeoDuck).
+EDITOR_POINTS = 10
 
 
 def installed_families() -> set[str]:
@@ -146,6 +148,7 @@ def stylesheet(c: Colors) -> str:
 
 {r} QToolTip {{ background: {c.toast}; color: {c.toast_text}; border: 0; padding: 4px 8px; }}
 
+{r} QsciScintilla {{ font-family: "{mono}"; font-size: {EDITOR_POINTS}pt; }}
 {r} QSplitter::handle {{ background: {c.border}; }}
 {r} QMenu {{ background: {c.bg}; border: 1px solid {c.border}; padding: 4px; }}
 {r} QMenu::item {{ padding: 6px 28px 6px 10px; border-radius: {m.radius_sm}px; }}
