@@ -16,6 +16,11 @@ Principios (propietario, 2026-11-05):
 - **Nada que se pueda romper sin deshacerlo**; lo irreversible se dice antes.
 - **Teclado para quien lo quiera** (Ctrl+K, atajos) y ratón para todo.
 - **Capturas antes de construir** cada pantalla; el propietario las aprueba (E0b en adelante).
+- **El balance entre opciones y claridad, en toda la interfaz** (propietario, 2026-11-06). Más opciones
+  complican; quitarlas también falla. Para cada pantalla: lo común en un clic con el valor por defecto
+  correcto; lo avanzado un paso atrás («Más opciones…»), nunca eliminado; solo se muestra lo que aplica en ese
+  caso; cada opción dice en una línea qué pasará, y antes de una acción el usuario ve en una frase qué va a
+  ocurrir. Así el usuario siempre sabe qué está haciendo.
 
 ## 2. Tecnología (GD-WSP-001; ADR-0016)
 Qt Widgets de `qgis.PyQt`, en QGIS 3.34+ (Qt 5) y 4.x (Qt 6), con un **sistema de diseño propio** (§10). Sin
