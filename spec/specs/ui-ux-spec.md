@@ -1,6 +1,6 @@
 # SPEC GD-UX — Interfaz moderna, minimalista y profesional
 
-**Estado:** baseline Alpha · **ID:** GD-UX-001
+**Estado:** baseline Alpha · **ID:** GD-UX-001 · La interfaz de §2 y §8–§10 se sustituye en G9 por la de workspace-pro-spec (ADR-0016); los principios de §1 y §5–§7 siguen.
 
 ## 1. Filosofía
 Una sola superficie coherente dentro de QGIS: **explorar, escribir, consultar y entregar**. UI nativa Qt, respetando tema claro/oscuro de QGIS, tipografía de sistema, espaciado generoso, controles discretos, íconos consistentes y estados visibles. No introducir landing pages, dashboards ni animaciones innecesarias.

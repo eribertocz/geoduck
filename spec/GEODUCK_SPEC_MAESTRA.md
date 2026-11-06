@@ -14,13 +14,14 @@
 - [09. specs/spatial-spec.md](#capitulo-9)
 - [10. specs/ui-ux-spec.md](#capitulo-10)
 - [11. specs/qgis-import-spec.md](#capitulo-11)
-- [12. docs/security.md](#capitulo-12)
-- [13. docs/compatibility-distribution.md](#capitulo-13)
-- [14. qa/test-strategy.md](#capitulo-14)
-- [15. qa/benchmarks.md](#capitulo-15)
-- [16. docs/roadmap.md](#capitulo-16)
-- [17. docs/implementation-handoff.md](#capitulo-17)
-- [18. docs/references.md](#capitulo-18)
+- [12. specs/workspace-pro-spec.md](#capitulo-12)
+- [13. docs/security.md](#capitulo-13)
+- [14. docs/compatibility-distribution.md](#capitulo-14)
+- [15. qa/test-strategy.md](#capitulo-15)
+- [16. qa/benchmarks.md](#capitulo-16)
+- [17. docs/roadmap.md](#capitulo-17)
+- [18. docs/implementation-handoff.md](#capitulo-18)
+- [19. docs/references.md](#capitulo-19)
 
 
 ---
@@ -208,6 +209,18 @@ Flujo extremo a extremo reproducible; SQL de DuckDB sin dialecto inventado; `DET
 | GD-IMP-005 | P0 | Conversión de tipos explícita; nombres que chocan sin distinguir mayúsculas se renombran con aviso; «Añadir filas» solo con columnas compatibles | AT-IMP-006 |
 | GD-IMP-006 | P0 | Geometría con su SRC (`ST_SetCRS`, sin `spatial`), Z/M, colecciones y `NULL`; nunca un SRC inventado | AT-IMP-007 |
 | GD-IMP-007 | P0 | Sin regresión G0–G7 | AT-IMP-008 |
+| GD-WSP-001 | P0 | Interfaz nueva con Qt Widgets y sistema de diseño propio, sin motor web (ADR-0016) | AT-WSP-001 |
+| GD-WSP-002 | P0 | Ventana y panel con la misma sesión; barra lateral con Recientes, ★ y Bases; pestañas de tabla y de consulta | AT-WSP-002 |
+| GD-WSP-003 | P0 | Pestaña de tabla: grilla por páginas, orden, filtros en chips, búsqueda, detalle de fila, «Estructura»; doble clic la abre | AT-WSP-003, AT-WSP-004 |
+| GD-WSP-004 | P0 | Pestaña de consulta: editor, ejecutar sentencia o todo, resultado, mensajes, abrir y guardar `.sql` | AT-WSP-005 |
+| GD-WSP-005 | P0 | Ctrl+K: tablas, consultas y acciones | AT-WSP-006 |
+| GD-WSP-006 | P0 | «Cargar en QGIS»: «Copia» (rápida por dentro, memoria como respaldo automático) y «Conectada» | AT-WSP-007 |
+| GD-WSP-007 | P1 | Recientes y favoritos (solo nombres en las opciones) | AT-WSP-008 |
+| GD-WSP-008 | P0 | «Enviar a DuckDB» en el estilo nuevo; arrastrar capas a una base | AT-WSP-009 |
+| GD-WSP-009 | P0 | Sistema de diseño: tokens, temas claro y oscuro, componentes, solo dentro de GeoDuck | AT-WSP-001 |
+| GD-WSP-010 | P0 | Teclado, accesibilidad, inglés y español, estados obligatorios, panel estrecho | AT-WSP-010 |
+| GD-WSP-011 | P0 | Retiro de la interfaz anterior y de los cuadernos; los guardados vuelven como consultas | AT-WSP-011 |
+| GD-WSP-012 | P1 | Objetivos de rendimiento de la interfaz | AT-WSP-012 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |
@@ -1057,7 +1070,7 @@ GeoDuck nunca ejecuta `INSTALL` ni `LOAD` por su cuenta. `LOAD`/`INSTALL` escrit
 
 # SPEC GD-UX — Interfaz moderna, minimalista y profesional
 
-**Estado:** baseline Alpha · **ID:** GD-UX-001
+**Estado:** baseline Alpha · **ID:** GD-UX-001 · La interfaz de §2 y §8–§10 se sustituye en G9 por la de workspace-pro-spec (ADR-0016); los principios de §1 y §5–§7 siguen.
 
 ## 1. Filosofía
 Una sola superficie coherente dentro de QGIS: **explorar, escribir, consultar y entregar**. UI nativa Qt, respetando tema claro/oscuro de QGIS, tipografía de sistema, espaciado generoso, controles discretos, íconos consistentes y estados visibles. No introducir landing pages, dashboards ni animaciones innecesarias.
@@ -1332,7 +1345,145 @@ Las cargas DuckDB → QGIS (G3–G4), el workspace, el SQL, los cuadernos y las 
 
 <a id="capitulo-12"></a>
 
-## CAPÍTULO 12 — `docs/security.md`
+## CAPÍTULO 12 — `specs/workspace-pro-spec.md`
+
+# SPEC GD-WSP — Workspace Pro (interfaz nueva)
+
+**Estado:** Propuesta · G9 · `v0.10.0a1` (decisiones del propietario, 2026-11-05; ADR-0016) · **IDs:** GD-WSP-001..012
+
+## 1. Meta y principios
+Una interfaz **nueva desde cero**, de administrador de base de datos, moderna y minimalista (tipo TablePlus),
+que reemplaza la de G5–G8. No se corrige ni se reaprovecha la actual: se construye aparte y la sustituye cuando
+cubre todo (§12). El motor, la sesión, las cargas y el envío a DuckDB (G1–G8) no cambian: solo lo que el
+usuario ve.
+
+Principios (propietario, 2026-11-05):
+- **Facilidad tremenda sin perder detalle.** Lo común en uno o dos clics, con valores por defecto correctos.
+  El detalle no se pierde: está a un clic, visible cuando hace falta y escondido cuando no.
+- **Menos es más.** Cada control se gana su sitio; las opciones aparecen solo cuando aplican.
+- **Mensajes cortos, en lenguaje simple**, sin jerga técnica en lo común.
+- **Nada que se pueda romper sin deshacerlo**; lo irreversible se dice antes.
+- **Teclado para quien lo quiera** (Ctrl+K, atajos) y ratón para todo.
+- **Capturas antes de construir** cada pantalla; el propietario las aprueba (E0b en adelante).
+
+## 2. Tecnología (GD-WSP-001; ADR-0016)
+Qt Widgets de `qgis.PyQt`, en QGIS 3.34+ (Qt 5) y 4.x (Qt 6), con un **sistema de diseño propio** (§10). Sin
+motor web (Qt WebEngine no viene en todas las instalaciones de QGIS, ADR-0016) y sin QML como base.
+Componentes dibujados a mano donde Qt se ve anticuado (grilla, pestañas, barra lateral, chips, avisos, paleta).
+Se mantienen el editor SQL de QGIS (`QgsCodeEditorSQL`), el lienzo del mapa y el arrastre del panel de capas.
+Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se retira en E6.
+
+## 3. Disposición (GD-WSP-002; maqueta `docs/g8/maqueta/1-tabla`, `2-consulta`, `3-panel`)
+- **Ventana propia** (por defecto) y **panel acoplado** a QGIS, con la misma sesión y las mismas pestañas
+  (ADR-0013 se mantiene). «Acoplar a QGIS» / «Ventana» alterna sin perder nada.
+- **Barra superior:** estado de la sesión («Lista · DuckDB 2.0.0 · en memoria»), «Ctrl K» y «Acoplar».
+- **Barra lateral** (plegable, Ctrl+B): búsqueda; **Recientes**; **★ Favoritos**; **Bases** (árbol: bases,
+  esquemas, tablas, vistas, temporales, con su acceso); «+» (abrir o crear base, importar capas de QGIS); al pie,
+  «Diagnóstico», «Acerca de» y la versión.
+- **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
+  Ctrl+W), reordenar y recordar las abiertas.
+- **Pie:** el último aviso (p. ej. «Capa «consumidores» cargada · Conectada · Ver en el mapa»).
+- **Panel acoplado:** pestañas en una fila compacta, sin barra lateral (Ctrl+K y el menú de la pestaña la
+  sustituyen); ninguna acción desaparece, se compacta.
+
+## 4. Pestaña de tabla (GD-WSP-003)
+Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o Ctrl+K). Solo lectura en G9.
+- **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con
+  tipo bajo cada columna y número de fila.
+  - **Orden:** clic en el encabezado (ascendente, descendente, sin orden); lo ejecuta DuckDB.
+  - **Filtros en chips:** «+ Filtro» → columna, operador (=, ≠, >, <, contiene, empieza por, es nulo…) y valor;
+    cada chip se quita con ×. Se combinan con Y. **«Ver SQL»** muestra la consulta equivalente y la abre en una
+    pestaña de consulta.
+  - **Buscar** en la tabla (texto en las columnas de texto).
+  - **Paginación:** «1–100 de 48 312», ‹ ›; el total se cuenta aparte, sin bloquear.
+  - **Detalle de fila** (panel derecho, plegable): cada campo con su tipo y su valor completo; la geometría
+    resumida (tipo, SRC, número de vértices); copiar valor.
+- **Estructura:** columnas (nombre, tipo, nulos, clave), filas, tamaño aproximado y la sentencia `CREATE`.
+- **Acciones:** «Cargar en QGIS ▾» (§7), «Ver en el mapa» tras cargar, «Exportar ▾» (CSV, Parquet), «Copiar»
+  (Ctrl+C sobre la selección).
+
+## 5. Pestaña de consulta (GD-WSP-004)
+- Editor SQL de QGIS con resaltado, números de línea y el autocompletado de G6 (bases, tablas, columnas,
+  funciones). Base de la consulta en un desplegable.
+- **Ejecutar** la sentencia bajo el cursor o la selección (Ctrl+Intro) y **Todo** (Ctrl+Mayús+Intro);
+  **Cancelar**.
+- **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una), con «N filas · X ms»;
+  **Mensajes** con el registro (OK, errores con línea y columna).
+- «Exportar ▾» y «Cargar en QGIS ▾» del resultado.
+- **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación (ADR-0014, ahora por
+  consulta). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
+  como comentario).
+
+## 6. Ctrl+K (GD-WSP-005)
+Paleta única para ir a cualquier sitio y hacer cualquier cosa sin el ratón: tablas y vistas de todas las bases,
+consultas abiertas y recientes, y acciones (nueva consulta, adjuntar o crear base, enviar capas de QGIS,
+cargar la tabla actual, diagnóstico, acoplar). Búsqueda tolerante (letras en orden, sin acentos ni mayúsculas),
+con la base y el tipo de cada resultado. Intro abre; Esc cierra.
+
+## 7. Cargar en QGIS (GD-WSP-006; decisión del propietario, 2026-11-05)
+Dos opciones, en lenguaje simple:
+- **«Copia»:** independiente de DuckDB. Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
+  Copia en memoria solo como **respaldo automático** si GDAL no permite la rápida. El usuario nunca elige entre
+  las dos. Antes de unificar, E0b comprueba guardar y reabrir un proyecto con una «Copia».
+- **«Conectada»:** en vivo, editable en DuckDB (ADR-0012).
+Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
+
+## 8. Recientes y favoritos (GD-WSP-007)
+- **Recientes:** las tablas y consultas abiertas hace poco (máximo 10), en esta y en sesiones anteriores.
+- **★ Favoritos:** el usuario marca tablas y consultas; aparecen arriba.
+- Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
+  objeto ya no existe, se muestra atenuado con su motivo.
+
+## 9. Enviar a DuckDB (GD-WSP-008; qgis-import-spec)
+El diálogo de G8 rehecho con el sistema de diseño, mismo comportamiento. Nuevo: **arrastrar** capas del panel de
+capas de QGIS a una base de la barra lateral abre el diálogo con esa base como destino; Ctrl+K → «Enviar capa
+de QGIS a DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decisión, 2026-11-05).
+
+## 10. Sistema de diseño (GD-WSP-009)
+- **Tokens** en un solo lugar: colores, tipografía (la del sistema), tamaños, espacios, radios, sombras,
+  duraciones. Tema **claro y oscuro** según el de QGIS. Los estilos se generan de los tokens y se aplican **solo
+  a GeoDuck** (ADR-0011: nunca a QGIS).
+- **Componentes:** botón (primario, secundario, peligro, fantasma), campo, desplegable, chip, pestaña, árbol,
+  grilla, aviso, insignia, paleta, panel lateral.
+- **Iconos** SVG propios, monocromos, que siguen el color del texto.
+- **Movimiento** breve y medido (≤ 150 ms); nada que distraiga.
+- Contraste AA en los dos temas.
+
+## 11. Accesibilidad, idioma y estados (GD-WSP-010)
+- Todo con teclado (Tab, flechas, atajos); foco visible; nombres accesibles y ayuda en cada acción.
+- Inglés y español según el idioma de QGIS (catálogo `.ts`, como G6).
+- Estados obligatorios en cada vista: sin sesión, cargando, vacío, error (con qué hacer), sesión ocupada.
+- Panel estrecho: se compacta sin perder acciones.
+
+## 12. Cambio y retiro (GD-WSP-011)
+La interfaz nueva se construye en paralelo (E1–E5) y sustituye a la actual en E6, cuando cubre todas sus
+funciones. Entonces se retiran el workspace de G5, el editor de G6 y los cuadernos de G7 (la lista de cuadernos,
+las celdas y su selector). Los cuadernos guardados que estaban abiertos vuelven como consultas. Las
+preferencias de presentación (ventana o panel, barra lateral) se conservan.
+
+## 13. Rendimiento (GD-WSP-012)
+Objetivos en la máquina de referencia (benchmarks.md), verificados en E3–E6:
+- abrir una tabla de 1 millón de filas: primera página visible en menos de 0,5 s;
+- desplazar, ordenar y filtrar sin congelar la interfaz (el trabajo va al worker);
+- Ctrl+K con 1 000 objetos: resultados al teclear (< 50 ms por tecla);
+- alternar ventana y panel en menos de 0,2 s.
+
+## 14. Fuera de alcance de G9
+Editar celdas en la grilla (después de G9); gráficos; diagramas entidad-relación; varias sesiones a la vez;
+ejecutar en segundo plano varias consultas a la vez (el worker sigue siendo serial).
+
+## 15. Sin regresión
+La sesión, el SQL, las tres cargas (ahora con «Copia» unificada), el envío a DuckDB, el diagnóstico, la
+convivencia (ADR-0011) y las protecciones de sesión siguen igual. Toda la suite G0–G8 pasa, con las pruebas de
+interfaz reescritas para la interfaz nueva en E6.
+
+
+
+---
+
+<a id="capitulo-13"></a>
+
+## CAPÍTULO 13 — `docs/security.md`
 
 # GeoDuck — Modelo de seguridad y efectos de SQL
 
@@ -1385,9 +1536,9 @@ No publicar Alpha externa si carga extensiones no firmadas por defecto, si ignor
 
 ---
 
-<a id="capitulo-13"></a>
+<a id="capitulo-14"></a>
 
-## CAPÍTULO 13 — `docs/compatibility-distribution.md`
+## CAPÍTULO 14 — `docs/compatibility-distribution.md`
 
 # GeoDuck — Compatibilidad y distribución Windows
 
@@ -1447,9 +1598,9 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 
 ---
 
-<a id="capitulo-14"></a>
+<a id="capitulo-15"></a>
 
-## CAPÍTULO 14 — `qa/test-strategy.md`
+## CAPÍTULO 15 — `qa/test-strategy.md`
 
 # GeoDuck — Estrategia de pruebas y CI
 
@@ -1544,6 +1695,18 @@ GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de prime
 | AT-IMP-006 | todos los tipos de §6; `ID` e `id`; añadir con columnas incompatibles | tipos de la tabla; renombrado con aviso; «No se puede» con la columna que falla |
 | AT-IMP-007 | EPSG:4326, EPSG:32719, SRC personalizado, sin SRC; Z/M, colección, `NULL`, inválida | `GEOMETRY('<SRC>')` que vuelve a QGIS con el mismo SRC y coordenadas; personalizado: aviso y decisión; sin `spatial` cargada |
 | AT-IMP-008 | regresión G0–G7 | todas pasan |
+| AT-WSP-001 | tema claro y oscuro de QGIS, Qt 5 y Qt 6; estilos de QGIS antes y después | GeoDuck legible y con su diseño; QGIS no cambia (ADR-0011); sin módulos web |
+| AT-WSP-002 | ventana ↔ panel con pestañas abiertas y una consulta en curso; barra lateral plegada | nada se pierde; Ctrl+B se recuerda |
+| AT-WSP-003 | abrir una tabla de 1 millón de filas; ordenar; filtrar con dos chips; buscar; paginar; «Ver SQL» | primera página < 0,5 s; resultados correctos frente a SQL; la UI responde |
+| AT-WSP-004 | detalle de fila con geometría y texto largo; «Estructura» de tabla y vista | valores completos; columnas, tipos, nulos, clave y `CREATE` |
+| AT-WSP-005 | ejecutar sentencia, selección y todo; error con línea; cancelar; abrir y guardar `.sql`; un cuaderno de G7 | resultado y registro correctos; el cuaderno se abre como una consulta |
+| AT-WSP-006 | Ctrl+K con 1 000 objetos; teclear sin acentos; Intro y Esc | encuentra la tabla o acción; < 50 ms por tecla |
+| AT-WSP-007 | «Copia» y «Conectada»; GDAL sin `WriteArrow`; guardar y reabrir un proyecto con una «Copia» | copia rápida o respaldo automático sin preguntar; comportamiento al reabrir según E0b |
+| AT-WSP-008 | recientes y ★ tras reiniciar QGIS; objeto borrado | vuelven; el borrado aparece atenuado con motivo; solo nombres en las opciones |
+| AT-WSP-009 | enviar desde el diálogo nuevo; arrastrar una capa a una base; Ctrl+K | mismo comportamiento que AT-IMP-001..007; el destino es la base soltada |
+| AT-WSP-010 | solo teclado; inglés y español; sin sesión, cargando, vacío y error; panel estrecho | todo alcanzable; textos traducidos; estados visibles; ninguna acción desaparece |
+| AT-WSP-011 | actualizar desde 0.9.0a1 con cuadernos guardados abiertos | vuelven como consultas; preferencias de presentación conservadas |
+| AT-WSP-012 | medidas de §13 de workspace-pro-spec en QGIS 3.44 y 4.2 | dentro de los objetivos |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
@@ -1581,9 +1744,9 @@ A cada plataforma/versión declarar: `certificado`, `conocido con limitaciones`,
 
 ---
 
-<a id="capitulo-15"></a>
+<a id="capitulo-16"></a>
 
-## CAPÍTULO 15 — `qa/benchmarks.md`
+## CAPÍTULO 16 — `qa/benchmarks.md`
 
 # GeoDuck — Protocolo de benchmarks y perfiles
 
@@ -1640,9 +1803,9 @@ Guardar `json`/`csv` de métricas, commit, archivos de fixture, entorno, gráfic
 
 ---
 
-<a id="capitulo-16"></a>
+<a id="capitulo-17"></a>
 
-## CAPÍTULO 16 — `docs/roadmap.md`
+## CAPÍTULO 17 — `docs/roadmap.md`
 
 # GeoDuck — Roadmap Alpha por fases y versiones tentativas
 
@@ -1667,7 +1830,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 | G6 · `v0.7.0a1` SQL Professional | columnas en el explorador, autocompletado, pestañas de editor, historial de la sesión, «Explicar»; interfaz en inglés (#68) | GD-CAT-002, GD-SQL-007, GD-I18N-001 | AT-CAT-002, AT-SQL-007..010, AT-I18N-001; regresiones G0–G5; teclado, Qt 5 y Qt 6 |
 | G7 · `v0.8.0a1` Notebook | cuadernos de celdas SQL en el mismo workspace: cada celda con su base, su resultado y «Cargar en QGIS ▾» (decisión del propietario, 2026-11-03); exportar y guardar cuadernos `.sql` con copia de recuperación | GD-NB-001..008 | AT-NB-001..012; regresiones G0–G6 |
 | G8 · `v0.9.0a1` QGIS → DuckDB | enviar capas de QGIS (o su selección) a tablas DuckDB con geometría y SRC; todo o nada (ADR-0015) | GD-IMP-001..007 | AT-IMP-001..008; velocidad medida y publicada; regresiones G0–G7 |
-| G9 · `v0.10.0a1` Workspace Pro | interfaz de administrador de base de datos tipo TablePlus: pestañas de tabla y de consulta, sin cuadernos (decisión del propietario, 2026-11-05) | por definir en su E0 | AT por definir; regresiones G0–G8 |
+| G9 · `v0.10.0a1` Workspace Pro | interfaz nueva de administrador de base de datos tipo TablePlus, con Qt Widgets y sistema de diseño propio (ADR-0016): pestañas de tabla y de consulta, Ctrl+K, recientes y favoritos, «Copia» unificada; sin cuadernos | GD-WSP-001..012 | AT-WSP-001..012; capturas aprobadas por el propietario; regresiones G0–G8 |
 | G10 · `v0.11.0a1` Performance | backpressure, cancelación robusta, memoria | GD-BRD-003, GD-QA-001 | perf baseline y estrés sin crashes |
 | G11 · `v0.12.0a1` Reliability & Distribution | instalación limpia, recuperación, hardening | GD-SEC-001, GD-COMP-001, GD-CFG-001 | matriz Windows/QGIS certificada |
 | G12 · `v0.13.0a1` Public Alpha | feedback externo, documentación, issues reproducibles | cobertura consolidada | pruebas E2E, checklist release, known issues |
@@ -1685,6 +1848,7 @@ Cada gate se cierra solo cuando pasan pruebas e2e relevantes y se aprueba su doc
 - **Decisión 2026-11-03:** G7 · Notebook entra antes de Performance; Performance pasa a G8, Reliability & Distribution a G9, Public Alpha a G10. Inspirado en la DuckDB UI (cuadernos de celdas), pero nativo en Qt y sobre la sesión única: no se incrusta la DuckDB UI (interfaz no libre, descargada de internet, servidor HTTP sin autenticación y fuera del worker; ADR-0006, ADR-0011).
 - **Decisión 2026-11-05:** G8 · QGIS → DuckDB (ADR-0015) y G9 · Workspace Pro entran antes de Performance; Performance pasa a G10, Reliability & Distribution a G11, Public Alpha a G12. Orden A (propietario): primero QGIS → DuckDB, que no depende de la interfaz nueva; arrastrar capas a la barra lateral llega con G9.
 - **Decisión 2026-11-05 (rumbo de G9):** interfaz de administrador de base de datos, moderna y minimalista, tipo TablePlus: barra lateral con recientes, favoritos y bases; pestañas de tabla (datos con filtros en chips, orden, paginación, búsqueda, «Estructura», detalle de fila) y de consulta (editor y resultado); Ctrl+K para abrir tablas y acciones; aviso con «Abrir»/«Deshacer». Los cuadernos de G7 se retiran (los `.sql` guardados se abren como consulta). Doble clic en una tabla abre su pestaña de datos. Editar celdas en la grilla queda para después. Maqueta en `docs/g8/maqueta/` (pantallas 1–3); su SPEC se escribe en el E0 de G9.
+- **Decisión 2026-11-05 (tecnología y alcance de G9):** interfaz **nueva desde cero**, no una corrección de la actual; Qt Widgets con sistema de diseño propio, sin motor web (ADR-0016, tras evaluar Svelte + Qt WebEngine y QML). «Cargar en QGIS» con dos opciones: «Copia» (Copia rápida por dentro; Copia en memoria solo como respaldo automático) y «Conectada». «Reproyectar a…» global en el envío. Principio: facilidad tremenda sin perder detalle, con capturas aprobadas antes de construir cada pantalla. Nueve entregas (E0, E0b, E1–E7; `docs/g9/plan.md`).
 - **Spike G8-A:** velocidad del camino general (QGIS → Arrow → DuckDB) con 100 mil y 1 millón de entidades en QGIS 3.34 y 4.2; `ST_SetCRS` con SRC personalizados (PROJJSON/WKT2) sin `spatial`; GeoParquet con `read_parquet` sin `spatial`; selección de una capa Conectada como lista de identificadores; lectura de `QgsVectorLayerFeatureSource` en una `QgsTask` con los proveedores ogr, postgres, memory y delimitedtext.
 - **Spike G10-A** (antes G8-A, G7-A y G6-A): mecanismo de cancelación DuckDB compatible y seguro, mediciones reales.
 
@@ -1708,9 +1872,9 @@ Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.0+**,
 
 ---
 
-<a id="capitulo-17"></a>
+<a id="capitulo-18"></a>
 
-## CAPÍTULO 17 — `docs/implementation-handoff.md`
+## CAPÍTULO 18 — `docs/implementation-handoff.md`
 
 # GeoDuck — Contrato de trabajo para Claude Code (implementador)
 
@@ -1769,9 +1933,9 @@ Claude Code debe implementar soporte mínimo de **DuckDB 1.5.0** y mantener comp
 
 ---
 
-<a id="capitulo-18"></a>
+<a id="capitulo-19"></a>
 
-## CAPÍTULO 18 — `docs/references.md`
+## CAPÍTULO 19 — `docs/references.md`
 
 # GeoDuck — Fuentes técnicas oficiales consultadas
 

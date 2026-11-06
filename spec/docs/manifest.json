@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 158956,
-      "sha256": "98ff664299c05245e3734fb52a00bddfabab160fbe6a3c56d815684d96707073"
+      "bytes": 172335,
+      "sha256": "7522ebea05d1739c41d612cd54affe33cce9eaf666584569b8939282a0bd5a00"
     },
     {
       "path": "README.md",
@@ -90,9 +90,14 @@
       "sha256": "16d14f43e72709380e1a256afc3520ef1b29c0f84fd12491a85e4d4aa2b53d31"
     },
     {
+      "path": "docs/adr/0016-workspace-pro-qt-widgets.md",
+      "bytes": 3262,
+      "sha256": "0a0603ef2cc646f444927103de20537f635fc98d37b126a0d1568e86ad1a5621"
+    },
+    {
       "path": "docs/adr/README.md",
-      "bytes": 2618,
-      "sha256": "1fbcb0a0d9b65c87491cb0e48f71de654a3375e62cb5e49ffae4ba2dd9e21073"
+      "bytes": 2782,
+      "sha256": "3188eed7238f07c39fa0b51d36a44eb0d2e15459d1ab58320ee84a9528b006b5"
     },
     {
       "path": "docs/architecture.md",
@@ -111,8 +116,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 12267,
-      "sha256": "8f24a3829f85f61d18cd0d525d454b05943a5113da8d355b86b91b46c9a8ce3c"
+      "bytes": 13679,
+      "sha256": "3b3ff45186f5b39141c154bee52cb8e27ef437e475160c3772e1c69e85560c05"
     },
     {
       "path": "docs/references.md",
@@ -121,8 +126,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 8905,
-      "sha256": "f0e5e977ede7d30c5a0c6ce6559029fea397fc4a419fc4896c26ff9ec883c020"
+      "bytes": 9588,
+      "sha256": "0eb851d1a126d43905f34648bb97605a8de38897a6ba0fe15241fcc0e4324e28"
     },
     {
       "path": "docs/security.md",
@@ -146,8 +151,8 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 15341,
-      "sha256": "092bd131014be0dfca2a524c62866aac20e76e76ed5eb606504b3cefff230af8"
+      "bytes": 17277,
+      "sha256": "4dff27f74fd93144b8e132eafdbc1ec986c08c948f68615af0b2f61c277bfbaf"
     },
     {
       "path": "specs/qgis-bridge-spec.md",
@@ -176,8 +181,13 @@
     },
     {
       "path": "specs/ui-ux-spec.md",
-      "bytes": 18523,
-      "sha256": "c370f350cc2ba4e25e11858527ed3729ba552700e579182cb43d6baa323049c2"
+      "bytes": 18660,
+      "sha256": "ee74afbd81a8045e48bd1f2051782209f498aba0b79922e0f251d554a0efda6c"
+    },
+    {
+      "path": "specs/workspace-pro-spec.md",
+      "bytes": 9076,
+      "sha256": "c058c9dc4d06655f236d27d0f620b62cdd6dd5bb21fc012587981e8fab97b9e0"
     }
   ]
 }
