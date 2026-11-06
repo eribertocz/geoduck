@@ -1,6 +1,6 @@
 # G8 · `v0.9.0a1` QGIS → DuckDB — evidencia de aceptación (AT-IMP-001..008)
 
-**Estado:** Propuesto para aceptación (E5). El tag y la release `v0.9.0a1` los hace el propietario.
+**Estado:** Aceptado (propietario, 2026-11-05; la prueba manual de Windows queda para G9). El tag y la release `v0.9.0a1` los hace el propietario. Versión en `metadata.txt`: `0.9.0a1` (PR de versión, como en G7).
 **Base verificada:** E5 sobre E0–E4 (#104, #105, #106, #108, #109, #110) y la corrección F-121 (#107). Las
 cifras de la CI de este PR se anotan en un comentario del PR. **Contrato:** `docs/g8/plan.md`,
 `spec/specs/qgis-import-spec.md` (GD-IMP-001..007), ADR-0015, `docs/g8/maqueta/`, `spec/qa/test-strategy.md`.
