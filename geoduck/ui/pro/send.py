@@ -15,6 +15,7 @@ El diálogo y el envío son los de G8 (`SendDialog`, `send_layers`): aquí no ca
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 from typing import Any
 
@@ -58,6 +59,7 @@ class QuickSend:
         self.dialog_factory = dialog_factory
         self.dialog: SendDialog | None = None
         self._mine = False
+        self._deciding = False
         self._undoing = False
         self._expected = 0
         self._open_after = False
@@ -95,13 +97,18 @@ class QuickSend:
         if dialog.target_ready:  # ya se sabe qué hay en el destino (p. ej. la tabla temporal)
             QTimer.singleShot(0, self._decide)
         else:
-            dialog.on_target = lambda: QTimer.singleShot(0, self._decide)
+            dialog.on_target = self._target_read
+
+    def _target_read(self) -> None:
+        if self.dialog is not None:
+            self.dialog.on_target = None  # una sola decisión aunque el destino se lea dos veces
+            QTimer.singleShot(0, self._decide)
 
     def _decide(self) -> None:
         dialog = self.dialog
-        if dialog is None:
+        if dialog is None or self._deciding:
             return
-        dialog.on_target = None
+        self._deciding = True
         try:
             if dialog.needs_decision():
                 self.asked = True
@@ -109,8 +116,10 @@ class QuickSend:
                     return
             self._send(dialog)
         finally:
+            self._deciding = False
             self.dialog = None
-            dialog.deleteLater()
+            with contextlib.suppress(RuntimeError):  # QGIS pudo cerrarlo (p. ej. al descargar GeoDuck)
+                dialog.deleteLater()
 
     def _send(self, dialog: SendDialog) -> None:
         request = dialog.request()

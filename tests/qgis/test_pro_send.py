@@ -40,6 +40,9 @@ from tests.qgis.conftest import wait_for
 pytestmark = pytest.mark.qgis
 
 TIMEOUT = 60
+#: Destino de los envíos: la base en memoria guarda el SRC con DuckDB 1.5 y 2.0. (Una base nueva en archivo
+#: con DuckDB 1.5 usa el formato antiguo, sin SRC: ahí el diálogo sí se abre, y eso es lo correcto.)
+DB = "memory"
 _CREATED: list = []
 
 
@@ -148,7 +151,7 @@ def ended(coordinator, ws):
 
 
 def tables_in_db(coordinator):
-    return {o.name for o in coordinator.catalog.objects_in("db", "main")}
+    return {o.name for o in coordinator.catalog.objects_in(DB, "main")}
 
 
 def has_tables(coordinator, names, *, present=True):
@@ -168,18 +171,18 @@ def test_the_layers_panel_format_gives_the_dragged_layer_ids(coordinator):
 def test_dropping_on_a_database_sends_without_a_dialog_and_offers_open_and_undo(coordinator):
     ws = workspace(coordinator)
     a, b = points("medidores", 12), points("zonas", 3)
-    item = database_item(ws, "db")
-    assert tuple(item.data(0, TARGET)) == ("db", "main")
+    item = database_item(ws, DB)
+    assert tuple(item.data(0, TARGET)) == (DB, "main")
     tree = ws.sidebar.tree
     _model, data = layers_mime([a, b])
     dropped = []
     tree.layers_dropped.connect(lambda ids, target: dropped.append((ids, target)))
     drop(tree, data, tree.visualItemRect(item).center())
-    assert dropped == [([b.id(), a.id()], ("db", "main"))]
+    assert dropped == [([b.id(), a.id()], (DB, "main"))]
     assert wait_for(lambda: ws.quick_send.last_report is not None and ended(coordinator, ws), TIMEOUT)
     assert ws.quick_send.asked is False  # todo era nuevo: sin diálogo
     assert has_tables(coordinator, {"medidores", "zonas"})
-    assert ws.notice.text().startswith(tr("{0} layers sent to {1}").format(2, "db"))
+    assert ws.notice.text().startswith(tr("{0} layers sent to {1}").format(2, DB))
     toast = ws.last_toast
     assert [b.text() for b in toast.actions] == [tr("Open"), tr("Undo")]
     assert not ws.progress.isVisible()
@@ -193,7 +196,7 @@ def test_dropping_on_a_database_sends_without_a_dialog_and_offers_open_and_undo(
 def test_an_existing_table_opens_the_dialog_with_the_new_style(coordinator, monkeypatch):
     ws = workspace(coordinator)
     layer = points("zonas", 3)
-    ws.send_layers([layer.id()], ("db", "main"))
+    ws.send_layers([layer.id()], (DB, "main"))
     assert wait_for(lambda: ws.quick_send.last_report is not None and ended(coordinator, ws), TIMEOUT)
     shown = []
 
@@ -203,11 +206,11 @@ def test_an_existing_table_opens_the_dialog_with_the_new_style(coordinator, monk
 
     monkeypatch.setattr(SendDialog, "exec", fake_exec)
     ws.quick_send.last_report = None
-    ws.send_layers([layer.id()], ("db", "main"))
+    ws.send_layers([layer.id()], (DB, "main"))
     assert wait_for(lambda: shown and ended(coordinator, ws), TIMEOUT)
     assert ws.quick_send.asked is True
     # la tabla ya existe: se ve «Qué pasará» y, cancelado, nada se envía
-    assert shown == [(True, ("db", "main"), False)]
+    assert shown == [(True, (DB, "main"), False)]
     assert ws.quick_send.last_report is None
 
 
@@ -216,20 +219,38 @@ def test_a_selection_is_a_decision_too(coordinator, monkeypatch):
     layer = points("medidores", 10)
     layer.selectByIds([1, 2])
     monkeypatch.setattr(SendDialog, "exec", lambda _d: QDialog.DialogCode.Rejected)
-    ws.send_layers([layer.id()], ("db", "main"))
+    ws.send_layers([layer.id()], (DB, "main"))
     assert wait_for(lambda: ws.quick_send.asked and ended(coordinator, ws), TIMEOUT)
+
+
+def test_a_database_that_cannot_store_the_crs_is_a_decision(coordinator, monkeypatch):
+    ws = workspace(coordinator)
+    layer = points("medidores", 4)
+    shown = []
+
+    def fake_exec(dialog):
+        shown.append(dialog.without_crs.isVisibleTo(dialog))
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(SendDialog, "exec", fake_exec)
+    ws.send_layers([layer.id()], ("db", "main"))
+    assert wait_for(lambda: ended(coordinator, ws) and (shown or ws.quick_send.last_report), TIMEOUT)
+    # con DuckDB 1.5 la base nueva en archivo no guarda el SRC: se pregunta, y la razón está a la vista;
+    # con 2.0 sí lo guarda: se envía sin diálogo
+    assert shown in ([], [True])
+    assert ws.quick_send.asked is bool(shown)
 
 
 def test_dropping_on_empty_space_goes_to_the_current_database(coordinator):
     ws = workspace(coordinator)
     layer = points("puntos", 4)
     tree = ws.sidebar.tree
-    tree.setCurrentItem(database_item(ws, "db"))
+    tree.setCurrentItem(database_item(ws, DB))
     dropped = []
     tree.layers_dropped.connect(lambda ids, target: dropped.append(target))
     _model, data = layers_mime([layer])
     drop(tree, data, QPoint(tree.viewport().width() // 2, tree.viewport().height() - 4))
-    assert dropped == [("db", "main")]
+    assert dropped == [(DB, "main")]
     assert wait_for(lambda: ws.quick_send.last_report is not None and ended(coordinator, ws), TIMEOUT)
     assert has_tables(coordinator, {"puntos"})
 
@@ -243,7 +264,7 @@ def test_the_dialog_hides_what_will_happen_when_all_is_new_and_folds_the_options
         coordinator.read_import_target,
         ws,
         checked={layer.id()},
-        destination=("db", "main"),
+        destination=(DB, "main"),
         pro=True,
     )
     _CREATED.append(dialog)
@@ -261,14 +282,14 @@ def test_the_dialog_hides_what_will_happen_when_all_is_new_and_folds_the_options
 
 def test_tables_dragged_to_the_map_ask_how_and_ask_the_crs_once(coordinator):
     coordinator.execute_sql(
-        "CREATE TABLE db.con_src AS SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY('OGC:CRS84') AS geom;"
-        " CREATE TABLE db.sin_a AS SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY AS geom;"
-        " CREATE TABLE db.sin_b AS SELECT 2 AS id, 'POINT (3 4)'::GEOMETRY AS geom;",
+        "CREATE TABLE con_src AS SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY('OGC:CRS84') AS geom;"
+        " CREATE TABLE sin_a AS SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY AS geom;"
+        " CREATE TABLE sin_b AS SELECT 2 AS id, 'POINT (3 4)'::GEOMETRY AS geom;",
         RunScope.ALL,
     )
     assert wait_for(lambda: coordinator.state is SessionState.READY)
     ws = workspace(coordinator, crs={"sin_a · geom": "EPSG:32719", "sin_b · geom": "EPSG:32719"})
-    places = [Place(TABLE, name, "db", "main") for name in ("con_src", "sin_a", "sin_b")]
+    places = [Place(TABLE, name, DB, "main") for name in ("con_src", "sin_a", "sin_b")]
     data = places_mime(places)
     assert places_from(data) == places
     handler = PlacesDropHandler(lambda: ws)
