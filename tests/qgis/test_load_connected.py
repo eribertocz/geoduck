@@ -455,7 +455,7 @@ def test_query_result_explains_how_to_edit(session):
     report, layer = session.load("SELECT * FROM puntos", name="consulta")
     assert not layer.dataProvider().editable
     assert report.origin == "consulta SQL"
-    assert report.access.startswith("solo lectura") and "doble clic" in report.access
+    assert report.access.startswith("solo lectura") and "Conectada, sin filtros" in report.access
     assert not any("lectura" in w for w in report.warnings)
 
 
