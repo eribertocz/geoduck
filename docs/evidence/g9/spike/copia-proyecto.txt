@@ -1,0 +1,10 @@
+QGIS  · antes de guardar:
+  copia_memoria: proveedor memory, válida True, 100 entidades, origen Point&uid={1be369ee-a29c-4e3f-99a1-8bf8cf7523b7}
+  copia_rapida: proveedor ogr, válida True, 100 entidades, origen /vsimem/geoduck/70cd220c03304ae29da372f95d286bd6.gpkg
+guardado: True
+reabierto (misma sesión de QGIS, el /vsimem sigue en RAM): True
+  copia_memoria: proveedor memory, válida True, 0 entidades
+  copia_rapida: proveedor ogr, válida False, - entidades
+reabierto tras cerrar QGIS (sin /vsimem): True
+  copia_memoria: proveedor memory, válida True, 0 entidades
+  copia_rapida: proveedor ogr, válida False, - entidades

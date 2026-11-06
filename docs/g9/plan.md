@@ -43,4 +43,5 @@ Las tres, «sí»:
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, ADR-0016, roadmap, AT-WSP y plan | En revisión | — |
+| E0 SPEC, ADR-0016, roadmap, AT-WSP y plan | Fusionado | #114 |
+| E0b Spike visual y «Copia» | En revisión: pestaña de tabla en Qt Widgets frente a la maqueta (claro/oscuro, Qt 5/Qt 6), 1 millón de filas (primera página < 25 ms), F-123 (fuente con hojas de estilo); la «Copia» no sobrevive a reabrir el proyecto → propuesta «Guardar las copias junto al proyecto». `docs/evidence/g9/spike/` | — |

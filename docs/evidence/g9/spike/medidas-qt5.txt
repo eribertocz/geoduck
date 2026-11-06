@@ -1,0 +1,6 @@
+Qt 5.15.15 · DuckDB 2.0.0 · tabla de 1 000 000 filas (0.8 s)
+pantalla completa construida y pintada: 154 ms
+primera página (100 filas, filtro y orden): 8 ms
+conteo con filtro: 7 ms
+10 páginas siguientes (media por página): 7 ms
+50 pasos de desplazamiento pintados: 5.0 ms por paso
