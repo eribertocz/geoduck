@@ -1,0 +1,5 @@
+# QGIS 3.44.14-Solothurn · DuckDB 2.0.0
+general 100000 0.71 140,696
+conectada 100000 0.05 1,924,500
+general 1000000 5.74 174,136
+conectada 1000000 0.05 20,554,832

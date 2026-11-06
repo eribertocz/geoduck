@@ -1,0 +1,5 @@
+# QGIS 3.34.6-Prizren · DuckDB 2.0.0
+general 100000 0.78 128,431
+conectada 100000 0.05 1,925,422
+general 1000000 8.30 120,536
+conectada 1000000 0.10 9,619,029
