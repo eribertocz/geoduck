@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Cierre con una transacción abierta desde el panel (G1 paso 7), con PyQGIS y DuckDB reales.
+"""Cierre con una transacción abierta desde GeoDuck («Cerrar DuckDB»; G1 paso 7), con PyQGIS y DuckDB reales.
 
 Decisión del 2026-11-01: COMMIT, ROLLBACK o cancelar el cierre; cancelar no modifica la transacción;
 COMMIT deshabilitado si no es válido.
@@ -46,7 +46,7 @@ def db_file(tmp_path):
 def open_with_transaction(iface, db_file, chooser):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    plugin.content._ask_close_choice = chooser
+    plugin.content._ask_close = chooser
     coordinator = plugin.coordinator
     coordinator.start_file_session(
         AttachRequest(db_file, AccessMode.READ_WRITE, OpenAction.OPEN_EXISTING, "d")
@@ -70,7 +70,7 @@ def test_cancel_keeps_session_and_transaction_then_commit_persists(iface, db_fil
     chooser = Chooser(CloseChoice.CANCEL, CloseChoice.COMMIT)
     plugin, coordinator, engine = open_with_transaction(iface, db_file, chooser)
 
-    plugin.content.close_button.click()
+    plugin.content.sidebar.close_action.trigger()
     assert wait_for(lambda: len(chooser.asked) == 1)
     assert chooser.asked[0] == CloseConfirmationRequired(TransactionState.ACTIVE, commit_allowed=True)
     assert coordinator.state is SessionState.READY
@@ -79,7 +79,7 @@ def test_cancel_keeps_session_and_transaction_then_commit_persists(iface, db_fil
         (2,),
     )
 
-    plugin.content.close_button.click()
+    plugin.content.sidebar.close_action.trigger()
     assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
     assert rows(db_file) == [1, 2]  # confirmada antes de cerrar
     plugin.unload()
@@ -88,7 +88,7 @@ def test_cancel_keeps_session_and_transaction_then_commit_persists(iface, db_fil
 def test_rollback_discards_and_closes(iface, db_file):
     chooser = Chooser(CloseChoice.ROLLBACK)
     plugin, coordinator, _engine = open_with_transaction(iface, db_file, chooser)
-    plugin.content.close_button.click()
+    plugin.content.sidebar.close_action.trigger()
     assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
     assert rows(db_file) == [1]
     plugin.unload()
@@ -107,7 +107,7 @@ def test_aborted_transaction_disables_commit_and_rollback_closes(iface, db_file)
     engine.cancel(long_query.op_id)
     assert engine.transaction_state().result(TIMEOUT) is TransactionState.ABORTED
 
-    plugin.content.close_button.click()
+    plugin.content.sidebar.close_action.trigger()
     assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
     assert chooser.asked == [CloseConfirmationRequired(TransactionState.ABORTED, commit_allowed=False)]
     assert rows(db_file) == [1]
@@ -118,10 +118,10 @@ def test_without_transaction_close_does_not_ask(iface, db_file):
     chooser = Chooser()
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    plugin.content._ask_close_choice = chooser
+    plugin.content._ask_close = chooser
     plugin.content.start_button.click()
     assert wait_for(lambda: plugin.coordinator.state is SessionState.READY)
-    plugin.content.close_button.click()
+    plugin.content.sidebar.close_action.trigger()
     assert wait_for(lambda: plugin.coordinator.state is SessionState.DISCONNECTED)
     assert chooser.asked == []
     plugin.unload()

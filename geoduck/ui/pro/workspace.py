@@ -50,15 +50,17 @@ from geoduck.app.events import (
     TransactionFailed,
 )
 from geoduck.domain.catalog import AttachRequest, ObjectKind, OpenAction
-from geoduck.domain.diagnostics import DiagnosticReport
+from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
-from geoduck.domain.session import SessionState
+from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
-from geoduck.ui.pro.load import QuickLoad
+from geoduck.ui.pro.history import History, HistoryPage
+from geoduck.ui.pro.load import QuickLoad, finished_title
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
+    HISTORY,
     QUERY,
     Place,
     Places,
@@ -162,9 +164,15 @@ class ProWorkspace(QWidget):
         self.sidebar = Sidebar(self.colors, self.places)
         self.recovery = QueryRecovery(self, recovery)
         self.loader = QuickLoad(coordinator, self, self.notify, ask_crs)
+        #: Lo ejecutado en la sesión (E6): la pestaña «Historial» lo muestra.
+        self.history = History(coordinator, self)
+        #: «Ver en el mapa» (E6): selecciona las capas y hace zoom; lo pone el complemento (necesita `iface`).
+        self.on_view_map: Callable[[list[str]], str | None] | None = None
+        self.loader.on_loaded = self._loaded
         #: Capas de QGIS soltadas sobre GeoDuck (E5): sin diálogo si no hay nada que decidir.
         self.quick_send = QuickSend(coordinator, self)
         self.last_toast: Toast | None = None
+        self.aborted_toast: Toast | None = None
         self.setAcceptDrops(True)
         #: «Guardar las copias junto al proyecto»: solo con `copies_bridge` (`qgis_bridge.copies`, que pasa el
         #: complemento; la interfaz no importa el puente, ADR-0010).
@@ -211,7 +219,7 @@ class ProWorkspace(QWidget):
             self.tabs.bar.setCurrentIndex(current)
         self._unsubscribe = coordinator.subscribe(self._on_event)
         self.sidebar.render(coordinator.catalog)  # una sesión ya abierta (p. ej. al cambiar de interfaz)
-        self._render()
+        self.refresh_environment()
         self.recovery.offer()
 
     # -- construcción ---------------------------------------------------------------------------------
@@ -263,7 +271,7 @@ class ProWorkspace(QWidget):
         row = QHBoxLayout()
         row.addStretch(1)
         column = QWidget()
-        column.setMaximumWidth(460)
+        column.setMaximumWidth(560)  # cabe la fila de botones más larga (con «Diagnóstico»)
         box = QVBoxLayout(column)
         box.setContentsMargins(16, 0, 16, 0)
         box.setSpacing(8)
@@ -298,8 +306,11 @@ class ProWorkspace(QWidget):
         self.open_button.clicked.connect(lambda: self.attach(OpenAction.OPEN_EXISTING))
         self.create_button = button(tr("Create database…"), tooltip=tr("Creates a new .duckdb file"))
         self.create_button.clicked.connect(lambda: self.attach(OpenAction.CREATE_NEW))
+        self.diagnostics_button = button(tr("Diagnostics"), tooltip=tr("What is missing and what to do"))
+        self.diagnostics_button.clicked.connect(self.show_diagnostics)
+        self.diagnostics_button.setVisible(False)
         page, _, self.state_title, self.state_text = self._empty_page(
-            "database", [self.start_button, self.open_button, self.create_button]
+            "database", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
         )
         return page
 
@@ -362,6 +373,19 @@ class ProWorkspace(QWidget):
             toast.add_action(name, callback)
         toast.show_at_corner(bottom=40)
         self.last_toast = toast
+
+    def _loaded(self, report: Any) -> None:
+        """Capa cargada: el aviso con «Ver en el mapa» (si el complemento sabe mostrarla)."""
+        if self.on_view_map is None:
+            return
+        ids = [layer_id for layer_id, _ in report.layers] or [report.layer_id]
+        self.toast(finished_title(report), [(tr("View on map"), lambda: self.view_map(ids))], 10)
+
+    def view_map(self, layer_ids: list[str]) -> None:
+        if self.on_view_map is not None:
+            message = self.on_view_map(layer_ids)
+            if message:
+                self.notify(message)
 
     def open_table(self, table: Any) -> None:
         """«Abrir» del aviso: la tabla (o vista) recién enviada."""
@@ -469,6 +493,36 @@ class ProWorkspace(QWidget):
                 else tr("Press Ctrl+K to search, or + for a new query.")
             )
             self.body.setCurrentIndex(WELCOME)
+        self._render_aborted()
+
+    def transaction_aborted(self) -> bool:
+        return (
+            self._coordinator.state is SessionState.ERROR_RECOVERABLE
+            and self._coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
+        )
+
+    def _render_aborted(self) -> None:
+        """Transacción abortada (E6): un aviso que no se va solo, con «Revertir» (ROLLBACK). Sin él, la sesión
+        no se puede volver a usar salvo cerrándola."""
+        aborted = self.transaction_aborted()
+        if aborted and self.aborted_toast is None:
+            toast = Toast(
+                self,
+                tr("The transaction failed. «Roll back» discards its changes and DuckDB is ready again."),
+                kind="error",
+                seconds=0,
+            )
+            toast.add_action(tr("Roll back"), self.rollback)
+            toast.show_at_corner(bottom=40)
+            self.aborted_toast = toast
+        elif not aborted and self.aborted_toast is not None:
+            with contextlib.suppress(RuntimeError):
+                self.aborted_toast.dismiss()
+            self.aborted_toast = None
+
+    def rollback(self) -> None:
+        self.aborted_toast = None  # el aviso se cierra con su botón
+        self._guard(self._coordinator.rollback_transaction)
 
     def _render_state(self, state: SessionState) -> None:
         idle = state is SessionState.DISCONNECTED or (
@@ -480,12 +534,20 @@ class ProWorkspace(QWidget):
         elif state is SessionState.CLOSING:
             self.state_title.setText(tr("Closing the session…"))
             self.state_text.setText("")
+        elif not self.environment_ok:  # AT-BOOT-002: abre, explica y no deja iniciar
+            checks = self._report.checks if self._report is not None else ()
+            failing = [c.title for c in checks if c.status is CheckStatus.FAIL]
+            self.state_title.setText(tr("The environment is not ready for GeoDuck"))
+            self.state_text.setText(
+                tr("Missing: {}. Press «Diagnostics» to see how to install it.").format(", ".join(failing))
+            )
         else:
             self.state_title.setText(tr("DuckDB is not started"))
             self.state_text.setText(tr("Start DuckDB in memory, or open a database file."))
         for widget in (self.start_button, self.open_button, self.create_button):
             widget.setVisible(idle)
-            widget.setEnabled(idle and self._coordinator.can_start)
+            widget.setEnabled(idle and self._coordinator.can_start and self.environment_ok)
+        self.diagnostics_button.setVisible(idle and not self.environment_ok)
 
     # -- acciones -------------------------------------------------------------------------------------
 
@@ -535,6 +597,8 @@ class ProWorkspace(QWidget):
 
     def _make_page(self, place: Place) -> QWidget:
         """La página de cada pestaña: la de tabla para tablas y vistas (E3), la de consulta (E4)."""
+        if place.kind == HISTORY:
+            return HistoryPage(place, self.history, self.colors, self.open_sql)
         if not place.is_query:
             return TablePage(
                 place,
@@ -645,11 +709,16 @@ class ProWorkspace(QWidget):
     def query_pages(self) -> list[QueryPage]:
         return [p for p in (self.tabs.page(i) for i in range(len(self.tabs))) if isinstance(p, QueryPage)]
 
-    def open_sql(self, text: str) -> None:
-        """«Ver SQL»: la consulta equivalente, en una pestaña de consulta nueva."""
-        self._pending_query = (text, None)
+    def open_sql(self, text: str, database: str | None = None) -> None:
+        """«Ver SQL» o una línea del historial: el SQL, en una pestaña de consulta nueva (sin ejecutarlo)."""
+        self._pending_query = (text, database)
         self.tabs.new_query()
         self._pending_query = None
+        self._render()
+
+    def open_history(self) -> None:
+        """Ctrl+K › «Historial de ejecución»: la pestaña con lo ejecutado en la sesión."""
+        self.tabs.open_place(Place(HISTORY, tr("History")))
         self._render()
 
     def new_query(self) -> None:
@@ -672,11 +741,20 @@ class ProWorkspace(QWidget):
         if self._coordinator.engine_info is not None:
             self._render()
 
+    @property
+    def environment_ok(self) -> bool:
+        return self._report is None or self._report.ok
+
+    def refresh_environment(self) -> DiagnosticReport:
+        """Comprueba Python, QGIS, DuckDB y PyArrow (al abrir y en «Diagnóstico»)."""
+        self._report = self._run_diagnostics()
+        self._render()
+        return self._report
+
     def show_diagnostics(self) -> None:
         from geoduck.ui.diagnostics_dialog import DiagnosticsDialog  # noqa: PLC0415
 
-        self._report = self._run_diagnostics()
-        DiagnosticsDialog(self._report, self).exec()
+        DiagnosticsDialog(self.refresh_environment(), self).exec()
 
     def show_about(self) -> None:
         from geoduck.ui.about_dialog import AboutDialog  # noqa: PLC0415
@@ -727,7 +805,10 @@ class ProWorkspace(QWidget):
         found = [
             Entry(tr("New query"), action, "plus", self.new_query),
             Entry(tr("Open query…"), "Ctrl+O", "sql", self.open_query_file),
+            Entry(tr("Execution history"), action, "history", self.open_history),
         ]
+        if self.transaction_aborted():
+            found.append(Entry(tr("Roll back transaction"), action, "warning", self.rollback))
         if ready:
             found += [
                 Entry(
@@ -778,7 +859,9 @@ class ProWorkspace(QWidget):
             self._coordinator.resolve_close(ask(event, self))
         elif isinstance(event, SessionInvalidated):
             self.notify(
-                tr("Session invalidated:") + f" {event.message} " + tr("Start a new session or close.")
+                tr("Session invalidated:")
+                + f" {event.message} [{event.code.value}] "
+                + tr("Start a new session or close.")
             )
         elif isinstance(event, TransactionFailed):
             self.notify(tr("The transaction operation did not complete.") + f" {event.message}")
@@ -795,6 +878,7 @@ class ProWorkspace(QWidget):
                 page.close_page()  # una consulta con archivo guarda lo pendiente
         self.recovery.stop()
         self.loader.detach()
+        self.history.detach()
         self.quick_send.detach()
         if self.project_copies is not None:
             self.project_copies.detach()

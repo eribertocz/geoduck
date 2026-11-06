@@ -60,6 +60,7 @@ class QuickSend:
         self.dialog: SendDialog | None = None
         self._mine = False
         self._deciding = False
+        self._ask = False
         self._undoing = False
         self._expected = 0
         self._open_after = False
@@ -70,8 +71,21 @@ class QuickSend:
 
     # -- entrada ----------------------------------------------------------------------------------------
 
-    def send(self, layer_ids: list[str], destination: tuple[str, str] | None = None) -> None:
-        """Las capas soltadas, a `destination` (base, esquema) o, sin ella, a la base actual."""
+    def choose(self, checked: list[str], destination: tuple[str, str] | None = None) -> None:
+        """«+» › «Enviar capas de QGIS a DuckDB…» y Ctrl+K: todas las capas del proyecto en el diálogo (para
+        elegir), marcadas las de `checked`. Aquí el diálogo siempre se abre."""
+        self.send(None, destination, checked=checked, ask=True)
+
+    def send(
+        self,
+        layer_ids: list[str] | None,
+        destination: tuple[str, str] | None = None,
+        *,
+        checked: list[str] | None = None,
+        ask: bool = False,
+    ) -> None:
+        """Las capas soltadas (o las del menú de capa), a `destination` (base, esquema) o, sin ella, a la base
+        actual. Sin diálogo si no hay nada que decidir, salvo con `ask`."""
         coordinator = self._coordinator
         if coordinator.state is not SessionState.READY or coordinator.catalog is None:
             self._host.notify(tr("Start DuckDB to send layers."))
@@ -88,12 +102,13 @@ class QuickSend:
             coordinator.catalog,
             coordinator.read_import_target,
             self._host if isinstance(self._host, QWidget) else None,
-            checked=set(layer_ids),
+            checked=set(layer_ids if layer_ids is not None else checked or []),
             destination=destination,
             pro=True,
         )
         self.dialog = dialog
         self.asked = False
+        self._ask = ask
         if dialog.target_ready:  # ya se sabe qué hay en el destino (p. ej. la tabla temporal)
             QTimer.singleShot(0, self._decide)
         else:
@@ -110,7 +125,7 @@ class QuickSend:
             return
         self._deciding = True
         try:
-            if dialog.needs_decision():
+            if self._ask or dialog.needs_decision():
                 self.asked = True
                 if dialog.exec() != QDialog.DialogCode.Accepted:
                     return

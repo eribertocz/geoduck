@@ -455,13 +455,13 @@ def test_query_result_explains_how_to_edit(session):
     report, layer = session.load("SELECT * FROM puntos", name="consulta")
     assert not layer.dataProvider().editable
     assert report.origin == "consulta SQL"
-    assert report.access.startswith("solo lectura") and "doble clic" in report.access
+    assert report.access.startswith("solo lectura") and "Conectada, sin filtros" in report.access
     assert not any("lectura" in w for w in report.warnings)
 
 
 def test_messages_name_the_origin_and_access(session):
     """Mensajes de carga (decisión del propietario, 2026-11-02): origen y acceso explícitos."""
-    from geoduck.ui.load_flow import finished_message
+    from geoduck.ui.pro.load import finished_text
 
     report, _ = load_table(session)
     assert (report.origin, report.access) == ("tabla memory.main.puntos", "lectura y escritura")
@@ -470,6 +470,6 @@ def test_messages_name_the_origin_and_access(session):
         'SELECT * FROM "memory"."main"."vp"', name="vp", source=("memory", "main", "vp"), source_kind="view"
     )
     assert (view.origin, view.access) == ("vista memory.main.vp", "solo lectura")
-    text = finished_message(report)
-    assert text.splitlines()[0] == f"Capa «capa» cargada · Conectada · {N:,} entidades".replace(",", " ")
-    assert text.splitlines()[1] == "Origen: tabla memory.main.puntos · Acceso: lectura y escritura"
+    text = finished_text(report)
+    first = f"Capa «capa» cargada · Conectada · {N:,} entidades".replace(",", " ")
+    assert text == first + " · Origen: tabla memory.main.puntos · Acceso: lectura y escritura"

@@ -43,11 +43,13 @@ from qgis.PyQt.QtWidgets import (
 from geoduck.app.events import (
     AppEvent,
     CatalogChanged,
+    ColumnsListed,
     PreviewsInvalidated,
     ScriptFinished,
     ScriptRejected,
     SessionStateChanged,
     StatementFinished,
+    VocabularyChanged,
 )
 from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
@@ -134,6 +136,7 @@ class QueryPage(QWidget):
         self.split.addWidget(self._build_results())
         self.split.setSizes([360, 400])
         box.addWidget(self.split, 1)
+        self.completer: Any = None
         with contextlib.suppress(Exception):  # G6: el mismo autocompletado que el editor de G6
             from geoduck.ui.completer import SqlCompleter  # noqa: PLC0415
 
@@ -614,7 +617,12 @@ class QueryPage(QWidget):
             if event.current is SessionState.DISCONNECTED:
                 self.run = None  # la sesión se cerró: la ejecución no terminará
             self._render_state()
+        elif isinstance(event, (ColumnsListed, VocabularyChanged)):
+            if self.completer is not None:
+                self.completer.refresh()  # llegaron las columnas o las palabras que esperaba la lista
         elif isinstance(event, CatalogChanged):
+            with contextlib.suppress(Exception):
+                self._coordinator.vocabulary()  # se pide ya, para que el autocompletado lo tenga a tiempo
             self.show_databases(event.catalog)
         elif isinstance(event, PreviewsInvalidated) and self.view.current == RESULT:
             self._show_grid()

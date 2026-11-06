@@ -20,7 +20,6 @@ from qgis.core import (
 from geoduck.app.events import (
     LoadFailed,
     LoadFinished,
-    LoadPrepared,
     SpatialActivated,
     StatementFinished,
 )
@@ -29,7 +28,6 @@ from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
 from geoduck.engine.probe import probe_spatial
 from geoduck.infra.diagnostics import _check_spatial
-from geoduck.ui.load_dialog import LoadDialog
 from tests.qgis.conftest import wait_for
 from tests.qgis.test_multi_geometry import TIMEOUT, Session
 
@@ -217,16 +215,6 @@ def test_ax_4b_unknown_crs_is_kept_in_the_message_not_replaced(session, mode):
     assert "SRC «FOO:123» no reconocido por QGIS: sin SRC asignado" in ev.report.warnings
 
 
-def test_ax_4b_dialog_asks_when_qgis_does_not_recognize_the_crs(session):
-    sql = f"SELECT ST_SetCRS({POINT}::GEOMETRY, 'FOO:123') AS g"
-    token = session.coordinator.prepare_load(sql)
-    assert wait_for(lambda: any(isinstance(e, LoadPrepared) and e.token == token for e in session.events))
-    plan = next(e for e in session.events if isinstance(e, LoadPrepared) and e.token == token).plan
-    dialog = LoadDialog(sql, "x", plan, session.coordinator.load_modes())
-    assert dialog._crs_unknown and set(dialog.crs_widgets) == {"g"}
-    assert "«FOO:123»" in dialog.warnings_label.text()
-
-
 @pytest.mark.parametrize("mode", list(LoadMode))
 def test_ax_4c_choosing_a_crs_labels_without_moving(session, mode):
     ev = session.load(mode, f"SELECT ST_SetCRS({POINT}::GEOMETRY, 'FOO:123') AS g", crs_override="EPSG:4326")
@@ -281,24 +269,3 @@ def test_connected_is_never_reprojected(session):
                 reproject_to="EPSG:32719",
             )
         )
-
-
-def test_dialog_offers_reprojection_only_for_copies_with_crs(session):
-    sql = f"SELECT {POINT}::GEOMETRY('OGC:CRS84') AS a, {POINT}::GEOMETRY AS b"
-    token = session.coordinator.prepare_load(sql)
-    assert wait_for(lambda: any(isinstance(e, LoadPrepared) and e.token == token for e in session.events))
-    plan = next(e for e in session.events if isinstance(e, LoadPrepared) and e.token == token).plan
-    dialog = LoadDialog(sql, "x", plan, session.coordinator.load_modes())
-    dialog.mode_buttons[LoadMode.MEMORY].setChecked(True)
-    assert dialog.reproject_check.isEnabled()  # «a» declara OGC:CRS84
-    dialog.reproject_check.setChecked(True)
-    dialog.reproject_widget.setCrs(QgsCoordinateReferenceSystem("EPSG:32719"))
-    assert dialog.request().reproject_to == "EPSG:32719"
-    dialog.mode_buttons[LoadMode.CONNECTED].setChecked(True)
-    assert not dialog.reproject_check.isEnabled()
-    assert dialog.request().reproject_to is None
-    dialog.mode_buttons[LoadMode.SNAPSHOT].setChecked(True)
-    dialog.geometry_checks["b"].setChecked(True)  # «b» sin SRC: hay que elegirlo antes
-    assert not dialog.reproject_check.isEnabled()
-    dialog.crs_widgets["b"].setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
-    assert dialog.reproject_check.isEnabled()

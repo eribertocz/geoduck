@@ -17,8 +17,7 @@ from geoduck.engine.worker import SessionWorker
 from geoduck.qgis_bridge.loader import BridgeLoader
 from geoduck.qgis_bridge.vsimem import PREFIX
 from geoduck.ui.dispatcher import QtDispatcher
-from geoduck.ui.load_dialog import LoadDialog
-from geoduck.ui.load_flow import finished_message
+from geoduck.ui.pro.load import finished_text as finished_message
 from tests.qgis.conftest import wait_for
 
 pytestmark = pytest.mark.qgis
@@ -285,29 +284,3 @@ def test_connected_edit_writes_back_in_the_column_format(session, column, fmt, e
         assert value == ("BLOB", "0101000000000000000000144000000000000018" + "40")
     else:
         assert session.rows("SELECT typeof(wkt), wkt FROM crudas WHERE id = 1")[0] == ("VARCHAR", expected)
-
-
-# -- diálogo ------------------------------------------------------------------------------------
-
-
-def test_dialog_marks_geometries_and_candidates(session):
-    token = session.coordinator.prepare_load("SELECT * FROM zonas, crudas")
-    assert wait_for(lambda: any(isinstance(e, LoadPrepared) and e.token == token for e in session.events))
-    plan = next(e for e in session.events if isinstance(e, LoadPrepared) and e.token == token).plan
-    dialog = LoadDialog("SELECT * FROM zonas, crudas", "z", plan, session.coordinator.load_modes())
-    assert dialog.checked_geometries() == ["centro"]  # una sola por defecto
-    dialog.geometry_checks["poligono"].setChecked(True)
-    index = dialog.candidate_combo.findData("wkb")
-    assert index > 0
-    dialog.candidate_combo.setCurrentIndex(index)  # «Usar como geometría»: se añade marcada
-    assert dialog.checked_geometries() == ["centro", "poligono", "wkb"]
-    assert dialog.candidate_combo.findData("wkb") < 0
-    assert set(dialog.crs_widgets) == {"poligono", "wkb"}  # sin CRS declarado: se pregunta por columna
-    request = dialog.request()
-    assert request.geometries == ("centro", "poligono", "wkb")
-    assert request.formats == (("wkb", "wkb"),)
-    assert dict(request.crs_overrides) == {"poligono": "", "wkb": ""}
-    assert [r.layer_name for r in request.split()] == ["z · centro", "z · poligono", "z · wkb"]
-    for name in ("centro", "poligono", "wkb"):
-        dialog.geometry_checks[name].setChecked(False)
-    assert not dialog._ok.isEnabled()  # al menos una geometría

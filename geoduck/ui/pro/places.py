@@ -21,6 +21,8 @@ from geoduck.domain.i18n import tr
 TABLE = "table"
 VIEW = "view"
 QUERY = "query"
+#: La pestaña «Historial» (E6): lo ejecutado en la sesión; no se recuerda entre reinicios.
+HISTORY = "history"
 KINDS = (TABLE, VIEW, QUERY)
 
 #: Máximo de recientes (§8).
@@ -53,6 +55,8 @@ class Place:
         """Identidad: la misma tabla aunque cambie la grafía de la base (regla de DuckDB)."""
         if self.is_query:
             return (QUERY, self.path or self.name)
+        if self.kind == HISTORY:
+            return (HISTORY,)
         return ("object", catalog_key(self.database), self.schema, self.name)
 
     @property
@@ -60,11 +64,15 @@ class Place:
         """Dónde está, para mostrarlo en gris: «db» o «db.ventas»; para una consulta, «SQL»."""
         if self.is_query:
             return "SQL"
+        if self.kind == HISTORY:
+            return ""
         return self.database if self.schema in ("", "main") else f"{self.database}.{self.schema}"
 
     @property
     def remembered(self) -> bool:
         """Se puede recordar entre reinicios: un objeto, o una consulta guardada en un archivo."""
+        if self.kind == HISTORY:
+            return False
         return not self.is_query or bool(self.path)
 
     def to_json(self) -> dict[str, str]:
@@ -89,7 +97,7 @@ class Place:
 
 def icon_name(place: Place) -> str:
     """Icono de un lugar (de `icons.PATHS`)."""
-    return {TABLE: "table", VIEW: "view"}.get(place.kind, "sql")
+    return {TABLE: "table", VIEW: "view", HISTORY: "history"}.get(place.kind, "sql")
 
 
 def place_of(database: str, schema: str, name: str, kind: ObjectKind) -> Place:
@@ -98,7 +106,7 @@ def place_of(database: str, schema: str, name: str, kind: ObjectKind) -> Place:
 
 def missing_reason(place: Place, catalog: CatalogSnapshot | None) -> str | None:
     """Por qué un lugar recordado no se puede abrir ahora (se muestra atenuado con este motivo), o `None`."""
-    if place.is_query:
+    if place.is_query or place.kind == HISTORY:
         if place.path and not Path(place.path).is_file():
             return tr("The file no longer exists")
         return None

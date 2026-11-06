@@ -161,8 +161,7 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         readonly = tr("read only")
     elif not is_table:
         readonly = tr(
-            "read only. To edit, load the table from the explorer (right-click "
-            "or double-click → Load into QGIS…)"
+            "read only. To edit, open the table and use «Load into QGIS» → Connected, without filters"
         )
     key_default: str | None = None
     defaults: list[str] = []

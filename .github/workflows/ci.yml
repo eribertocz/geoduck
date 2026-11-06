@@ -103,10 +103,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/qgis -q --junitxml=qgis-${{ matrix.qgis }}-${{ matrix.duckdb }}.xml
-      - name: capturas del panel
+      - name: capturas de Workspace Pro
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python tools/screenshot_dock.py screenshots
+        run: python tools/pro_shots.py screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:

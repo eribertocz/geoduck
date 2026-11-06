@@ -139,10 +139,19 @@ class FakeIface:
             self.canvas.resize(400, 300)  # como el lienzo de QGIS: con tamaño, el zoom tiene extensión
         return self.canvas
 
+    def registerCustomDropHandler(self, handler):
+        self.drop_handlers = [*getattr(self, "drop_handlers", []), handler]
+
+    def unregisterCustomDropHandler(self, handler):
+        self.drop_handlers = [h for h in getattr(self, "drop_handlers", []) if h is not handler]
+
 
 def reset_workspace_settings():
-    """Preferencias de presentación de G5 como en una instalación limpia (ui-ux-spec §8)."""
-    qgis_core.QgsSettings().remove("geoduck/workspace")
+    """Preferencias de presentación como en una instalación limpia: las de G5 y las de Workspace Pro (G9),
+    y los cuadernos abiertos de G7."""
+    settings = qgis_core.QgsSettings()
+    for group in ("geoduck/workspace", "geoduck/pro", "geoduck/notebooks/open", "geoduck/notebooks/active"):
+        settings.remove(group)
 
 
 @pytest.fixture

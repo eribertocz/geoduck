@@ -101,12 +101,30 @@ def mode_text(mode: LoadMode) -> str:
     return tr("Connected") if mode is LoadMode.CONNECTED else tr("Copy (mode)")
 
 
-def finished_text(report: LoadReport) -> str:
+def finished_title(report: LoadReport) -> str:
+    """La capa (o capas), cómo se cargó y cuántas entidades."""
     rows = f"{report.rows:,}".replace(",", " ")
-    if len(report.layers) > 1:
+    if len(report.layers) > 1:  # una capa por geometría (spatial-spec §7)
         names = ", ".join(f"«{name}»" for _, name in report.layers)
-        return tr("Layers {} loaded · {}").format(names, mode_text(report.mode))
+        text = (
+            tr("Layers {} loaded · {} · {} features each")
+            if report.rows_each
+            else tr("Layers {} loaded · {} · {} features in total")
+        )
+        return text.format(names, mode_text(report.mode), rows)
     return tr("Layer «{}» loaded · {} · {} features").format(report.layer_name, mode_text(report.mode), rows)
+
+
+def finished_text(report: LoadReport) -> str:
+    """El aviso completo (en el pie): además, el origen y el acceso (decisión del 2026-11-02) y los avisos."""
+    parts = [finished_title(report)]
+    if report.origin:
+        parts.append(tr("Source: {}").format(report.origin))
+        if report.access:
+            parts.append(tr("Access: ") + report.access)
+    if report.warnings:
+        parts.append("⚠ " + "; ".join(report.warnings))
+    return " · ".join(parts)
 
 
 class _Row(QFrame):
@@ -277,6 +295,8 @@ class QuickLoad:
         self._loads: set[int] = set()
         self._starting = False
         self.last_report: LoadReport | None = None
+        #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»).
+        self.on_loaded: Callable[[LoadReport], None] | None = None
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
     def start(
@@ -376,6 +396,8 @@ class QuickLoad:
             self._loads.discard(event.load_id)
             self.last_report = event.report
             self._notify(finished_text(event.report))
+            if self.on_loaded is not None:
+                self.on_loaded(event.report)
             QTimer.singleShot(0, self._next)  # cuando la sesión ya volvió a estar lista
         elif isinstance(event, LoadFailed) and event.load_id in self._loads:
             self._loads.discard(event.load_id)

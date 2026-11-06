@@ -64,6 +64,9 @@ def coordinator(qgis_app, iface):
 
     plugin = GeoDuckPlugin(iface)  # el coordinador del complemento, con su cargador de capas
     plugin.initGui()
+    # el GeoDuck del complemento también escucha el guardado del proyecto (con su ventana modal): aquí
+    # solo pregunta el workspace de cada prueba
+    plugin.content.project_copies.detach()
     coordinator = plugin.coordinator
     coordinator.start_memory_session()
     assert wait_for(lambda: coordinator.state is SessionState.READY and coordinator.catalog is not None)
