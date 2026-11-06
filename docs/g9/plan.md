@@ -32,11 +32,12 @@ pendiente); regresiones G0–G8. Tag y release `v0.10.0a1` solo con autorizació
 | **E6** | Cambio a la interfaz nueva y retiro de la anterior (workspace, editor y cuadernos); idioma, teclado, accesibilidad, panel estrecho | AT-WSP-010, 011; regresión completa reescrita |
 | **E7** | Aceptación: `docs/g9/acceptance.md`, rendimiento, guía de Windows (con la de G8), versión `0.10.0a1` | Gate |
 
-## 3. Preguntas para el propietario (E0)
+## 3. Respuestas del propietario a las preguntas del E0 (2026-11-05)
 
-1. **Filas por página** en la pestaña de tabla: propuesta, **100** (como la maqueta), sin selector.
-2. **Recientes y favoritos entre reinicios de QGIS:** propuesta, **sí** (solo nombres en las opciones).
-3. **Copia de recuperación** de consultas sin guardar (como los cuadernos, ADR-0014): propuesta, **sí, activada**.
+Las tres, «sí»:
+1. **100 filas por página** en la pestaña de tabla, sin selector.
+2. **Recientes y favoritos se recuerdan entre reinicios** de QGIS (solo nombres en las opciones).
+3. **Copia de recuperación** de consultas sin guardar, **activada** por defecto (como ADR-0014).
 
 ## 4. Avance
 

@@ -1395,7 +1395,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o
     cada chip se quita con ×. Se combinan con Y. **«Ver SQL»** muestra la consulta equivalente y la abre en una
     pestaña de consulta.
   - **Buscar** en la tabla (texto en las columnas de texto).
-  - **Paginación:** «1–100 de 48 312», ‹ ›; el total se cuenta aparte, sin bloquear.
+  - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «1–100 de 48 312», ‹ ›; el
+    total se cuenta aparte, sin bloquear.
   - **Detalle de fila** (panel derecho, plegable): cada campo con su tipo y su valor completo; la geometría
     resumida (tipo, SRC, número de vértices); copiar valor.
 - **Estructura:** columnas (nombre, tipo, nulos, clave), filas, tamaño aproximado y la sentencia `CREATE`.
@@ -1410,8 +1411,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o
 - **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una), con «N filas · X ms»;
   **Mensajes** con el registro (OK, errores con línea y columna).
 - «Exportar ▾» y «Cargar en QGIS ▾» del resultado.
-- **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación (ADR-0014, ahora por
-  consulta). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
+- **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación activada por defecto
+  (ADR-0014, ahora por consulta; propietario, 2026-11-05). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
   como comentario).
 
 ## 6. Ctrl+K (GD-WSP-005)
@@ -1431,7 +1432,7 @@ Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hast
 ## 8. Recientes y favoritos (GD-WSP-007)
 - **Recientes:** las tablas y consultas abiertas hace poco (máximo 10), en esta y en sesiones anteriores.
 - **★ Favoritos:** el usuario marca tablas y consultas; aparecen arriba.
-- Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
+- Se recuerdan entre reinicios de QGIS (propietario, 2026-11-05). Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
   objeto ya no existe, se muestra atenuado con su motivo.
 
 ## 9. Enviar a DuckDB (GD-WSP-008; qgis-import-spec)
