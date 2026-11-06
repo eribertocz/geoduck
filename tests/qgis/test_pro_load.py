@@ -21,6 +21,7 @@ from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadMode
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
+from geoduck.qgis_bridge import copies as copies_module
 from geoduck.qgis_bridge.copies import is_copy, target_for
 from geoduck.ui.pro.load import CONNECTED, COPY, copy_mode
 from geoduck.ui.pro.places import TABLE, Place
@@ -96,6 +97,7 @@ def workspace(coordinator, *, crs=None, save=True, paths=()):
         ask_crs=ask_crs,
         ask_save_copies=lambda layers, target, _p: asked.append(("save", [x.name() for x in layers])) or save,
         ask_path=lambda *_a: answers.pop(0) if answers else "",
+        copies_bridge=copies_module,
     )
     ws.asked = asked
     _CREATED.append(ws)

@@ -6,6 +6,9 @@ spike E0b), un aviso ofrece en un clic **«Guardar las copias junto al proyecto�
 `.qgz`; cada capa pasa a leerlo y el proyecto se vuelve a guardar. Con «No, gracias» no se vuelve a preguntar
 por esas capas en esta sesión de QGIS. Al abrir un proyecto con copias que no se guardaron, se dice cuáles y
 por qué están vacías o no disponibles: nunca rotas sin explicación.
+
+Las capas y el GeoPackage los maneja `qgis_bridge.copies` (ADR-0010: la interfaz no lo importa); el
+complemento lo pasa como `bridge`, con `copies`, `is_copy`, `save_copies` y `target_for`.
 """
 
 from __future__ import annotations
@@ -19,7 +22,6 @@ from qgis.core import QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QObject, Qt, QTimer
 from qgis.PyQt.QtWidgets import QDialog, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from geoduck.qgis_bridge.copies import copies, is_copy, save_copies, target_for
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.widgets import button, label
@@ -87,10 +89,12 @@ class ProjectCopies(QObject):
         self,
         parent: QWidget,
         notify: Callable[[str], None],
+        bridge: Any,
         ask: Ask | None = None,
         project: QgsProject | None = None,
     ) -> None:
         super().__init__(parent)
+        self._bridge = bridge
         self._parent = parent
         self._notify = notify
         self._ask = ask or SaveCopiesDialog.ask
@@ -106,15 +110,15 @@ class ProjectCopies(QObject):
             QTimer.singleShot(0, self._saved)
 
     def _saved(self) -> None:
-        target = target_for(self._project)
-        layers = [layer for layer in copies(self._project) if layer.id() not in self._declined]
+        target = self._bridge.target_for(self._project)
+        layers = [layer for layer in self._bridge.copies(self._project) if layer.id() not in self._declined]
         if target is None or not layers:
             return
         if not self._ask(layers, target, self._parent):
             self._declined.update(layer.id() for layer in layers)
             self._notify(tr("The copies stay in memory: they will not be there when you reopen the project."))
             return
-        saved, errors = save_copies(self._project, layers)
+        saved, errors = self._bridge.save_copies(self._project, layers)
         self._saving = True  # el segundo guardado, el nuestro, no vuelve a preguntar
         try:
             self._project.write()
@@ -130,7 +134,7 @@ class ProjectCopies(QObject):
 
     def _explain_lost(self) -> None:
         """Copias de un proyecto guardado sin ellas: vacías (memoria) o no disponibles (`/vsimem`)."""
-        lost = [layer.name() for layer in self._project.mapLayers().values() if is_copy(layer)]
+        lost = [layer.name() for layer in self._project.mapLayers().values() if self._bridge.is_copy(layer)]
         if lost:
             self._notify(
                 tr(

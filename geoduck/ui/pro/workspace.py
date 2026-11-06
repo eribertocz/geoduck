@@ -138,6 +138,7 @@ class ProWorkspace(QWidget):
         recovery: Any = None,
         ask_crs: Any = None,
         ask_save_copies: Any = None,
+        copies_bridge: Any = None,
     ) -> None:
         super().__init__()
         self._pending_query: tuple[str, str | None] | None = None
@@ -157,7 +158,13 @@ class ProWorkspace(QWidget):
         self.sidebar = Sidebar(self.colors, self.places)
         self.recovery = QueryRecovery(self, recovery)
         self.loader = QuickLoad(coordinator, self, self.notify, ask_crs)
-        self.project_copies = ProjectCopies(self, self.notify, ask_save_copies)
+        #: «Guardar las copias junto al proyecto»: solo con `copies_bridge` (`qgis_bridge.copies`, que pasa el
+        #: complemento; la interfaz no importa el puente, ADR-0010).
+        self.project_copies = (
+            ProjectCopies(self, self.notify, copies_bridge, ask_save_copies)
+            if copies_bridge is not None
+            else None
+        )
         self.tabs = TabArea(self.colors, page_factory or self._make_page, self)
         self.tabs.can_close = self._ask_save
         outer = QHBoxLayout(self)
@@ -709,4 +716,5 @@ class ProWorkspace(QWidget):
                 page.close_page()  # una consulta con archivo guarda lo pendiente
         self.recovery.stop()
         self.loader.detach()
-        self.project_copies.detach()
+        if self.project_copies is not None:
+            self.project_copies.detach()
