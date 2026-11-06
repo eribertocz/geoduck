@@ -178,7 +178,7 @@ def test_the_history_lists_what_ran_filters_errors_and_opens_without_running(plu
     page.open_row(0)
     query = ws.tabs.page(ws.tabs.bar.currentIndex())
     assert isinstance(query, QueryPage)
-    assert query.editor.text() == "CREATE TABLE t AS SELECT 1 AS x;"
+    assert query.editor.text().rstrip(";") == "CREATE TABLE t AS SELECT 1 AS x"  # 1.5 sin «;», 2.0 con él
     wait_for(lambda: False, 0.3)
     assert len(ws.history.entries) == 4  # abrir no ejecuta
     keys = [k for k in QgsSettings().allKeys() if k.startswith("geoduck/")]
@@ -192,7 +192,8 @@ def test_an_aborted_transaction_offers_roll_back_and_the_session_recovers(plugin
     item = plugin()
     coordinator = start(item)
     ws = item.content
-    run(coordinator, "BEGIN; SELECT * FROM no_existe;")
+    # una clave repetida aborta la transacción con DuckDB 1.5 y 2.0 (un error de catálogo, solo con 2.0)
+    run(coordinator, "CREATE TABLE u (x INTEGER PRIMARY KEY); BEGIN; INSERT INTO u VALUES (1), (1);")
     assert coordinator.state is SessionState.ERROR_RECOVERABLE
     assert coordinator.error_cause is ErrorCause.TRANSACTION_ABORTED
     toast = ws.aborted_toast
