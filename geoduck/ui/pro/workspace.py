@@ -53,6 +53,7 @@ from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
+from geoduck.ui.pro.load import QuickLoad
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     QUERY,
@@ -65,6 +66,7 @@ from geoduck.ui.pro.places import (
     read_tabs,
     save_tabs,
 )
+from geoduck.ui.pro.project_copies import ProjectCopies
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.recovery import QueryRecovery, read_query
 from geoduck.ui.pro.sidebar import Sidebar
@@ -134,6 +136,8 @@ class ProWorkspace(QWidget):
         ask_path: Callable[[str, str, str], str] | None = None,
         confirm_close: Callable[[str], str] | None = None,
         recovery: Any = None,
+        ask_crs: Any = None,
+        ask_save_copies: Any = None,
     ) -> None:
         super().__init__()
         self._pending_query: tuple[str, str | None] | None = None
@@ -152,6 +156,8 @@ class ProWorkspace(QWidget):
 
         self.sidebar = Sidebar(self.colors, self.places)
         self.recovery = QueryRecovery(self, recovery)
+        self.loader = QuickLoad(coordinator, self, self.notify, ask_crs)
+        self.project_copies = ProjectCopies(self, self.notify, ask_save_copies)
         self.tabs = TabArea(self.colors, page_factory or self._make_page, self)
         self.tabs.can_close = self._ask_save
         outer = QHBoxLayout(self)
@@ -444,13 +450,27 @@ class ProWorkspace(QWidget):
     def _make_page(self, place: Place) -> QWidget:
         """La página de cada pestaña: la de tabla para tablas y vistas (E3), la de consulta (E4)."""
         if not place.is_query:
-            return TablePage(place, self._coordinator, self.colors, view_sql=self.open_sql)
+            return TablePage(
+                place,
+                self._coordinator,
+                self.colors,
+                view_sql=self.open_sql,
+                loader=self.loader.start,
+                ask_path=self._ask_path,
+                notify=self.notify,
+            )
         sql, database = self._pending_query or ("", None)
         self._pending_query = None
         if place.path and not sql:
             sql, database = read_query(place.path)
         page = QueryPage(
-            place, self._coordinator, self.colors, sql=sql, database=database, ask_path=self._ask_path
+            place,
+            self._coordinator,
+            self.colors,
+            sql=sql,
+            database=database,
+            ask_path=self._ask_path,
+            loader=self.loader.start,
         )
         page.changed.connect(lambda p=page: self._query_changed(p))
         page.renamed.connect(lambda old, p=page: self._query_renamed(p, old))
@@ -688,3 +708,5 @@ class ProWorkspace(QWidget):
             if hasattr(page, "close_page"):
                 page.close_page()  # una consulta con archivo guarda lo pendiente
         self.recovery.stop()
+        self.loader.detach()
+        self.project_copies.detach()

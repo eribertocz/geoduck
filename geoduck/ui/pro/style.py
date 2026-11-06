@@ -197,6 +197,8 @@ def stylesheet(c: Colors) -> str:
 {r} QScrollArea[pro="plain"] {{ background: transparent; border: 0; }}
 {r} QScrollArea[pro="plain"] > QWidget > QWidget {{ background: transparent; }}
 {r} QFrame[pro="popup"] {{ background: {c.bg}; border: 1px solid {c.border}; }}
+{r} QFrame[pro="menu-row"] {{ border-radius: {m.radius_sm}px; }}
+{r} QFrame[pro="menu-row"]:hover {{ background: {c.accent_soft}; }}
 {r} QFrame[pro="palette"] {{ background: {c.bg}; border: 1px solid {c.border};
     border-radius: {m.radius_lg}px; }}
 {r} QFrame[pro="palette"] QLineEdit {{ border: 0; background: transparent; font-size: {m.font_title}px;

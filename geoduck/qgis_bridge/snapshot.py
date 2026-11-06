@@ -29,6 +29,7 @@ from geoduck.domain.i18n import tr
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
 from geoduck.qgis_bridge.convert import crs_from_field, strip_unreadable
+from geoduck.qgis_bridge.copies import mark_copy
 from geoduck.qgis_bridge.memory import LoadCancelledError
 from geoduck.qgis_bridge.reproject import Reprojector
 from geoduck.qgis_bridge.vsimem import PREFIX, VsimemRegistry, unlink
@@ -414,6 +415,8 @@ class SnapshotLoad:
                     )
                 )
             self._registry.track(self._path)
+            for item in layers:
+                mark_copy(item)  # «Guardar las copias junto al proyecto» (G9) la reconoce
             self._project.addMapLayers(layers)  # todas o ninguna (§8)
         except BaseException as exc:
             unlink(self._path)
