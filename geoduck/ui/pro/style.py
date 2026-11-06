@@ -104,6 +104,9 @@ def stylesheet(c: Colors) -> str:
 {r} QPushButton[pro="ghost"] {{ border: 1px solid transparent; background: transparent; color: {c.muted}; }}
 {r} QPushButton[pro="ghost"]:hover {{ background: {c.segment}; color: {c.text}; }}
 {r} QPushButton[pro="ghost"]:disabled {{ color: {c.null}; }}
+{r} QProgressBar[pro="thin"] {{ border: 0; border-radius: 2px; background: {c.segment}; max-height: 4px;
+    min-height: 4px; }}
+{r} QProgressBar[pro="thin"]::chunk {{ border-radius: 2px; background: {c.accent}; }}
 {r} QPushButton[pro="add-chip"] {{ border: 1px dashed {c.null}; border-radius: {m.pill}px;
     background: transparent; color: {c.muted}; padding: 0 11px; }}
 {r} QPushButton[pro="segment"] {{ border: 0; border-radius: {m.radius_sm}px; background: transparent;

@@ -26,6 +26,8 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QProgressBar,
+    QPushButton,
     QShortcut,
     QStackedWidget,
     QVBoxLayout,
@@ -53,6 +55,7 @@ from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
+from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
 from geoduck.ui.pro.load import QuickLoad
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
@@ -69,11 +72,12 @@ from geoduck.ui.pro.places import (
 from geoduck.ui.pro.project_copies import ProjectCopies
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.recovery import QueryRecovery, read_query
+from geoduck.ui.pro.send import QuickSend
 from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
-from geoduck.ui.pro.widgets import button, icon_button, label
+from geoduck.ui.pro.widgets import Toast, button, icon_button, label
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
 STATE, TABS, WELCOME = 0, 1, 2
@@ -158,6 +162,10 @@ class ProWorkspace(QWidget):
         self.sidebar = Sidebar(self.colors, self.places)
         self.recovery = QueryRecovery(self, recovery)
         self.loader = QuickLoad(coordinator, self, self.notify, ask_crs)
+        #: Capas de QGIS soltadas sobre GeoDuck (E5): sin diálogo si no hay nada que decidir.
+        self.quick_send = QuickSend(coordinator, self)
+        self.last_toast: Toast | None = None
+        self.setAcceptDrops(True)
         #: «Guardar las copias junto al proyecto»: solo con `copies_bridge` (`qgis_bridge.copies`, que pasa el
         #: complemento; la interfaz no importa el puente, ADR-0010).
         self.project_copies = (
@@ -314,7 +322,76 @@ class ProWorkspace(QWidget):
         self.notice.setFont(style.ui_font(METRICS.font_small))
         self.notice.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         row.addWidget(self.notice, 1)
+        # E5: progreso del envío en el pie, con «Cancelar»; sin otra ventana
+        self.progress = QProgressBar()
+        self.progress.setProperty("pro", "thin")
+        self.progress.setTextVisible(False)
+        self.progress.setFixedWidth(140)
+        self.progress.setVisible(False)
+        row.addWidget(self.progress)
+        self.progress_cancel = QPushButton(tr("Cancel"))
+        self.progress_cancel.setProperty("pro", "ghost")
+        self.progress_cancel.setVisible(False)
+        self.progress_cancel.clicked.connect(self.quick_send.cancel)
+        row.addWidget(self.progress_cancel)
         return foot
+
+    # -- envío desde QGIS (E5) ---------------------------------------------------------------------------
+
+    def show_progress(self, text: str, total: int) -> None:
+        self.notify(text)
+        self.progress.setRange(0, max(0, total))  # 0 = indeterminado: DuckDB copia sin informar entidades
+        self.progress.setValue(0)
+        self.progress.setVisible(True)
+        self.progress_cancel.setVisible(True)
+
+    def set_progress(self, rows: int) -> None:
+        if self.progress.maximum() > 0:
+            self.progress.setValue(min(self.progress.maximum(), rows))
+
+    def hide_progress(self) -> None:
+        self.progress.setVisible(False)
+        self.progress_cancel.setVisible(False)
+
+    def toast(self, text: str, actions: list[tuple[str, Callable[[], None]]], seconds: int) -> None:
+        if self.last_toast is not None:
+            with contextlib.suppress(RuntimeError):
+                self.last_toast.dismiss()
+        toast = Toast(self, text, kind="ok", seconds=seconds)
+        for name, callback in actions:
+            toast.add_action(name, callback)
+        toast.show_at_corner(bottom=40)
+        self.last_toast = toast
+
+    def open_table(self, table: Any) -> None:
+        """«Abrir» del aviso: la tabla (o vista) recién enviada."""
+        kind = ObjectKind.VIEW if table.view else ObjectKind.TABLE
+        self.open_place(place_of(table.database, table.schema, table.name, kind))
+
+    def send_layers(self, layer_ids_: list[str], destination: tuple[str, str] | None = None) -> None:
+        """Capas de QGIS soltadas sobre una base (o, sin `destination`, sobre la base actual)."""
+        self.quick_send.send(
+            layer_ids_, destination if destination is not None else self.sidebar.current_target()
+        )
+
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        """Capas soltadas en cualquier parte de GeoDuck (también en el panel): a la base actual."""
+        if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
+            event.acceptProposedAction()
+            target = self.sidebar.current_target()
+            where = target[0] if target else tr("the current database")
+            count = len(layer_ids(event.mimeData()))
+            self.notify(tr("Drop to send {0} layer(s) to «{1}»").format(count, where))
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        ids = layer_ids(event.mimeData())
+        if not ids:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self.send_layers(ids)
 
     def _connect_sidebar(self) -> None:
         side = self.sidebar
@@ -328,6 +405,8 @@ class ProWorkspace(QWidget):
         side.send_layers_requested.connect(self.send_layers_requested.emit)
         side.diagnostics_requested.connect(self.show_diagnostics)
         side.about_requested.connect(self.show_about)
+        side.tree.layers_dropped.connect(self.send_layers)
+        side.tree.drop_hint.connect(lambda text: self.notify(text) if text else None)
 
     def _shortcut(self, keys: str, slot: Callable[[], object]) -> None:
         shortcut = QShortcut(QKeySequence(keys), self)
@@ -716,5 +795,6 @@ class ProWorkspace(QWidget):
                 page.close_page()  # una consulta con archivo guarda lo pendiente
         self.recovery.stop()
         self.loader.detach()
+        self.quick_send.detach()
         if self.project_copies is not None:
             self.project_copies.detach()
