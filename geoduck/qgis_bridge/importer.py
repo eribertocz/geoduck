@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 from qgis.core import (
     QgsApplication,
     QgsCoordinateReferenceSystem,
@@ -165,6 +164,22 @@ def _ogr_geometry_column(source: str) -> str:
     return str(lyr.GetGeometryColumn() or "") if lyr is not None else ""
 
 
+def _parquet_metadata(path: str) -> dict[bytes, bytes] | None:
+    """Metadatos de un Parquet, o None si este PyArrow no trae Parquet (F-130).
+
+    `pyarrow.parquet` se importa aquí y no al cargar GeoDuck: en algunos QGIS de Windows (OSGeo4W) su DLL no
+    carga («not built with support for the Parquet file format») y GeoDuck no debe dejar de abrir por eso.
+    Sin él, una capa GeoParquet se envía por el camino general (QGIS la lee), igual de correcta."""
+    try:
+        import pyarrow.parquet as pq  # noqa: PLC0415 - opcional; ver arriba
+    except ImportError:
+        return None
+    try:
+        return pq.read_schema(path).metadata or {}
+    except (OSError, ValueError):
+        return None
+
+
 def geoparquet_path(layer: QgsVectorLayer) -> str | None:
     """Ruta del archivo si la capa es un GeoParquet que DuckDB lee directo (§5.2)."""
     if layer.providerType() != "ogr":
@@ -172,8 +187,8 @@ def geoparquet_path(layer: QgsVectorLayer) -> str | None:
     path = QgsProviderRegistry.instance().decodeUri("ogr", layer.source()).get("path", "")
     if not path.lower().endswith(".parquet") or not Path(path).is_file():
         return None
-    metadata = pq.read_schema(path).metadata or {}
-    return path if b"geo" in metadata else None
+    metadata = _parquet_metadata(path)
+    return path if metadata is not None and b"geo" in metadata else None
 
 
 def plan_layer(
@@ -307,7 +322,7 @@ def _parquet_sql(path: str, geometry: ImportGeometry | None) -> str:
     source = f"read_parquet({quote_string_literal(path)})"
     if geometry is None:
         return f"SELECT * FROM {source}"
-    geo = json.loads(pq.read_schema(path).metadata[b"geo"])
+    geo = json.loads((_parquet_metadata(path) or {})[b"geo"])
     column = quote_identifier(str(geo.get("primary_column") or "geometry"))
     value = f"ST_SetCRS({column}, {quote_string_literal(geometry.crs)})" if geometry.crs else column
     return f"SELECT * EXCLUDE ({column}), {value} AS {quote_identifier(geometry.name)} FROM {source}"
