@@ -163,13 +163,25 @@ def import_batches(  # noqa: PLR0912, PLR0915 - una transacción, paso a paso (d
         handle.execute("COMMIT")
     except BaseException as exc:
         channel.abandon()  # el productor deja de leer la capa
-        with contextlib.suppress(Exception):  # el worker verifica la conexión después de cada operación
-            handle.execute("ROLLBACK")
+        _roll_back(handle)
         if token.cancelled and not isinstance(exc, OperationCancelledError):
             # Cancelado a mitad de una sentencia: la interrupción llega como un error de DuckDB
             raise OperationCancelledError(tr("Sending cancelled")) from exc
         raise
     return ImportReport(tuple(tables), tuple(crs_lost))
+
+
+def _roll_back(handle: ConnectionHandle, attempts: int = 3) -> None:
+    """ROLLBACK que resiste una interrupción tardía. Al cancelar, `cancel()` marca el token y después
+    interrumpe DuckDB: si el worker ya vio el token y está revirtiendo, la interrupción cae sobre el ROLLBACK
+    y lo hace fallar, y la transacción quedaba abierta y abortada. Se repite hasta que no quede transacción.
+    Si aun así queda, el worker lo detecta al verificar la conexión después de la operación."""
+    for _ in range(attempts):
+        with contextlib.suppress(Exception):
+            handle.execute("ROLLBACK")
+        with contextlib.suppress(Exception):
+            if not probe_transaction(handle).is_open:
+                return
 
 
 def _geometry_without_crs(handle: ConnectionHandle, jobs: list[ImportJob]) -> list[str]:

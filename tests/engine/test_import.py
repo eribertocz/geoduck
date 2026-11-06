@@ -367,3 +367,29 @@ def test_undo_drops_only_new_tables_and_views(worker):
     with pytest.raises(GeoDuckError):
         worker.drop_imported(list(replaced.tables)).result(TIMEOUT)
     assert "origen" in {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}
+
+
+def test_a_late_interrupt_during_the_rollback_still_leaves_no_transaction(worker, monkeypatch):
+    """Al cancelar, `cancel()` marca el token y después interrumpe DuckDB. Si el worker ya vio el token y está
+    revirtiendo, la interrupción cae sobre el ROLLBACK, que falla. Antes eso dejaba la transacción abortada y
+    la sesión no aceptaba nada más (CI de #118); ahora el ROLLBACK se repite."""
+    import duckdb
+
+    from geoduck.engine import worker as worker_module
+
+    original = worker_module.ConnectionHandle.execute
+    calls = {"rollback": 0}
+
+    def execute(self, text, *args, **kwargs):
+        if text == "ROLLBACK":
+            calls["rollback"] += 1
+            if calls["rollback"] == 1:
+                raise duckdb.InterruptException("INTERRUPT Error: Interrupted!")
+        return original(self, text, *args, **kwargs)
+
+    monkeypatch.setattr(worker_module.ConnectionHandle, "execute", execute)
+    result, finished, _ = send(worker, [job("t")], [(0, batch(0, 10)), (0, batch(10, 10))], fail_at=1)
+    assert isinstance(result, BaseException) and finished
+    assert calls["rollback"] >= 2
+    assert sql(worker, "SELECT 1") == ((1,),)  # sin transacción abortada
+    assert "t" not in {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}
