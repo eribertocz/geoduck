@@ -32,7 +32,7 @@ from tests.qgis.conftest import FakeIface
 plugin = geoduck.classFactory(FakeIface()); plugin.initGui()
 assert plugin.content is not None
 plugin.unload()
-print("OK")
+print("OK", flush=True)
 os._exit(0)
 """
     root = str(Path(__file__).resolve().parents[2])
