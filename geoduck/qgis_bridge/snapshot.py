@@ -68,6 +68,12 @@ def unavailable_reason() -> str | None:
     return None
 
 
+def _crs_from_text(text: str) -> QgsCoordinateReferenceSystem:
+    crs = QgsCoordinateReferenceSystem()
+    crs.createFromUserInput(text)
+    return crs
+
+
 def _last_error(default: str) -> str:
     return gdal.GetLastErrorMsg() or default
 
@@ -85,6 +91,8 @@ class _Writer:
         self.nulls = 0
         self.geom_codes: set[int] = set()
         self.has_crs = False
+        #: El SRC escrito en el GeoPackage, como texto para QGIS (`createFromUserInput`); "" sin SRC.
+        self.crs_text = ""
 
     def _srs(self, schema: pa.Schema | None) -> Any:
         if self.crs_override is not None:
@@ -96,6 +104,7 @@ class _Writer:
                     tr("CRS not recognized: {0}").format(self.crs_override), code=ErrorCode.INVALID_ARGUMENT
                 )
             srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            self.crs_text = self.crs_override
             return srs
         info = None
         if schema is not None and self.plan.geometry is not None:
@@ -108,9 +117,11 @@ class _Writer:
             info = self.plan.geometry.declared_crs
         if not info:
             return None
+        text = json.dumps(info) if isinstance(info, dict) else str(info)
         srs = osr.SpatialReference()
-        if srs.SetFromUserInput(json.dumps(info) if isinstance(info, dict) else str(info)) != 0:
+        if srs.SetFromUserInput(text) != 0:
             return None
+        self.crs_text = text
         srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)  # C4: sin reordenar ejes
         return srs
 
@@ -363,6 +374,9 @@ class SnapshotLoad:
             if self._writer is not None and not self._writer.has_crs and layer.isSpatial():
                 # Sin CRS en los datos: QGIS 3.34 asigna uno en silencio al abrir el GeoPackage (C4).
                 layer.setCrs(QgsCoordinateReferenceSystem())
+            elif self._writer is not None and self._writer.has_crs and not layer.crs().isValid():
+                # F-122: con tipo de geometría «desconocido» (colecciones), QGIS no toma el SRC del archivo
+                layer.setCrs(_crs_from_text(self._writer.crs_text))
             layers.append(layer)
         return layers
 

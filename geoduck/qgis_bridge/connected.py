@@ -342,6 +342,8 @@ class ConnectedLoad:
             "count": meta["count"],
             "columns": meta["columns"],
         }
+        #: SRC de los datos (inválido si no lo traen): se fija también en la capa (F-122)
+        params_crs = QgsCoordinateReferenceSystem()
         if plan.geometry is not None:
             type_name, note = wkb_type_name(meta["headers"])
             params["type"] = type_name
@@ -350,6 +352,7 @@ class ConnectedLoad:
             if meta.get("unreadable"):
                 warnings.append(unreadable_warning(plan.geometry, meta["unreadable"]))
             crs = self._crs(meta, plan)
+            params_crs = crs
             if crs.isValid():
                 params["crs"] = crs.authid() or crs.toWkt()
             else:
@@ -369,7 +372,9 @@ class ConnectedLoad:
                     )
                 )
             if plan.geometry is not None and not layer.crs().isValid():
-                layer.setCrs(QgsCoordinateReferenceSystem())  # sin CRS asignado en silencio (C4)
+                # F-122: con tipos mixtos o colecciones (tipo «desconocido»), QGIS no toma el SRC del
+                # proveedor; se fija el de los datos. Sin SRC en los datos, ninguno (C4: nunca se inventa)
+                layer.setCrs(params_crs)
             layers.append(layer)
         self._finished = True  # antes de publicar: un error al dibujar no es un fallo de la carga
         self._project.addMapLayers(layers)  # todas o ninguna
