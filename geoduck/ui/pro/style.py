@@ -188,6 +188,11 @@ def stylesheet(c: Colors) -> str:
     border-bottom: 1px solid {c.line}; padding: 0 10px 0 0; font-size: {m.font_small}px; }}
 {r} QTableView[pro="grid"] QTableCornerButton::section {{ background: {c.head}; border: 0;
     border-bottom: 1px solid {c.border}; }}
+{r} QHeaderView::section {{ background: {c.head}; color: {c.muted}; border: 0;
+    border-bottom: 1px solid {c.border}; padding: 4px 8px; font-weight: 600; }}
+{r} QTreeWidget {{ background: {c.bg}; border: 1px solid {c.border}; border-radius: {m.radius}px;
+    outline: 0; }}
+{r} QTreeWidget QLineEdit {{ min-height: {m.control - 8}px; border-color: {c.line}; }}
 {r} QTableWidget[pro="list"] {{ background: {c.bg}; border: 0; outline: 0; gridline-color: {c.line}; }}
 {r} QTableWidget[pro="list"]::item {{ padding: 0 10px; border-bottom: 1px solid {c.line}; }}
 {r} QTableWidget[pro="list"] QHeaderView::section {{ background: {c.head}; color: {c.muted}; border: 0;

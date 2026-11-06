@@ -139,18 +139,26 @@ class _Row(QFrame):
             self.picked.emit()
 
 
-def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None]) -> QMenu:
-    """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea."""
+def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None], *, title: str = "") -> QMenu:
+    """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea. Con `title`
+    (tablas soltadas en el mapa, E5), una cabecera arriba («3 tablas · ¿cómo cargarlas?»)."""
     menu = QMenu(parent)
     menu.setProperty("pro", "load-menu")
-    for kind, icon, title, text in (
+    if title:
+        head = QWidgetAction(menu)
+        caption = label(title, "section")
+        caption.setContentsMargins(10, 6, 10, 4)
+        head.setDefaultWidget(caption)
+        head.setEnabled(False)
+        menu.addAction(head)
+    for kind, icon, name, text in (
         (COPY, "layers", tr("Copy (mode)"), tr("Fast and independent of DuckDB")),
         (CONNECTED, "database", tr("Connected"), tr("Live and editable in DuckDB")),
     ):
-        row = _Row(icon, title, text, colors)
+        row = _Row(icon, name, text, colors)
         action = QWidgetAction(menu)
         action.setDefaultWidget(row)
-        action.setText(title)
+        action.setText(name)
         action.triggered.connect(lambda _c=False, k=kind: pick(k))
         row.picked.connect(action.trigger)
         row.picked.connect(menu.close)

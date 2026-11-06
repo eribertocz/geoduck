@@ -41,7 +41,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from geoduck.domain.catalog import AccessMode, CatalogSnapshot
+from geoduck.domain.catalog import AccessMode, CatalogSnapshot, catalog_key
 from geoduck.domain.importing import (
     PATH_CONNECTED,
     PATH_QGIS,
@@ -136,7 +136,18 @@ class RowState:
     mode: ImportMode = ImportMode.CREATE
 
 
+#: Papel de G5–G8 (`geoduck`) → papel de Workspace Pro (`pro`), para el mismo widget (G9 · E5).
+_PRO_ROLES = {"muted": "muted", "primary": "primary", "error-text": "error", "secondary": None}
+
+
 class SendDialog(QDialog):
+    def _role(self, widget: QWidget, role: str) -> None:
+        widget.setProperty("geoduck", role)
+        if getattr(self, "pro", False):
+            widget.setProperty("pro", _PRO_ROLES.get(role))
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
     def __init__(  # noqa: PLR0915 - el diálogo se construye en un solo lugar, de arriba abajo
         self,
         candidates: list[SendCandidate],
@@ -145,13 +156,22 @@ class SendDialog(QDialog):
         parent: QWidget | None = None,
         *,
         checked: set[str] | None = None,
+        destination: tuple[str, str] | None = None,
+        pro: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Send to DuckDB"))
-        self.setObjectName("geoduckSendDialog")
         self.setMinimumWidth(600)  # cabe en una pantalla pequeña; las columnas se ajustan
         self.resize(780, 540)
-        self.setStyleSheet(theme.stylesheet(theme.palette_for(self)))
+        #: G9 · E5: con `pro`, el sistema de diseño de Workspace Pro; el comportamiento no cambia.
+        self.pro = pro
+        if pro:
+            from geoduck.ui.pro import style as pro_style  # noqa: PLC0415
+
+            pro_style.apply(self)
+        else:
+            self.setObjectName("geoduckSendDialog")
+            self.setStyleSheet(theme.stylesheet(theme.palette_for(self)))
         self._candidates = candidates
         self._read_target = read_target
         self._target: ImportTarget | None = None
@@ -226,7 +246,7 @@ class SendDialog(QDialog):
         self.without_crs = QCheckBox(tr("Send without CRS"))
         self.without_crs.setVisible(False)
         self.crs_note = QLabel()
-        self.crs_note.setProperty("geoduck", "muted")
+        self._role(self.crs_note, "muted")
         self.crs_note.setWordWrap(True)
         self.crs_note.setVisible(False)
         layout.addWidget(self.only_selected)
@@ -249,10 +269,10 @@ class SendDialog(QDialog):
         footer.addWidget(self.open_after)
         footer.addStretch(1)
         self.cancel_button = QPushButton(tr("Cancel"))
-        self.cancel_button.setProperty("geoduck", "secondary")
+        self._role(self.cancel_button, "secondary")
         self.cancel_button.clicked.connect(self.reject)
         self.send_button = QPushButton(tr("Send"))
-        self.send_button.setProperty("geoduck", "primary")
+        self._role(self.send_button, "primary")
         self.send_button.setDefault(True)
         self.send_button.setToolTip(tr("Ctrl+Enter"))
         self.send_button.clicked.connect(self.accept)
@@ -267,6 +287,11 @@ class SendDialog(QDialog):
         for box in (self.only_selected, self.as_view, self.reproject, self.without_crs):
             box.toggled.connect(self.refresh)
         self._select_default_destination(catalog)
+        if destination is not None:  # G9 · E5: capas soltadas sobre una base de la barra lateral
+            keys = [(catalog_key(d), s) for d, s in self.destinations]
+            wanted = (catalog_key(destination[0]), destination[1])
+            if wanted in keys:
+                self.destination.setCurrentIndex(keys.index(wanted))
         self._destination_changed()
 
     # -- construcción ------------------------------------------------------------------------------
@@ -491,7 +516,7 @@ class SendDialog(QDialog):
             )
             self.conflicts[i].setVisible(bool(exists))
             self.states[i].setText(state.text)
-            self.states[i].setProperty("geoduck", "error-text" if state.kind == "blocked" else "muted")
+            self._role(self.states[i], "error-text" if state.kind == "blocked" else "muted")
             self.states[i].style().unpolish(self.states[i])
             self.states[i].style().polish(self.states[i])
         for i, row in enumerate(self.geometry_rows):  # el SRC con que llegará (reproyectado o sin SRC)
