@@ -36,7 +36,11 @@ class Reprojector:
         source: QgsCoordinateReferenceSystem,
         target: str,
         context: QgsCoordinateTransformContext | None = None,
+        *,
+        sending: bool = False,
     ) -> None:
+        #: «Enviar a DuckDB» (G8): el error dice que no se envió nada (no que no se cargó).
+        self._sending = sending
         if not source.isValid():
             raise GeoDuckError(
                 tr("To reproject, the layer needs a source CRS: choose one or turn off «Reproject to…»"),
@@ -91,6 +95,13 @@ class Reprojector:
         return pa.RecordBatch.from_arrays(arrays, schema=batch.schema.set(index, field))
 
     def _error(self, row: int, detail: str) -> GeoDuckError:
+        if self._sending:
+            return GeoDuckError(
+                tr("Feature {0} could not be reprojected from {1} to {2}: nothing was sent ({3})").format(
+                    row, _label(self.source), _label(self.target), detail
+                ),
+                code=ErrorCode.INVALID_ARGUMENT,
+            )
         return GeoDuckError(
             tr(
                 "The geometry of row {0} could not be reprojected from {1} to {2}: nothing was loaded ({3})"

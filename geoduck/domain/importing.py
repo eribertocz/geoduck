@@ -314,7 +314,11 @@ class SendCandidate:
         """«Vista en vez de copia»: solo un GeoParquet sin filtro (y sin selección, que decide el envío)."""
         return self.path == PATH_PARQUET and not self.filtered
 
-    def path_for(self, only_selected: bool) -> str:
+    def path_for(self, only_selected: bool, reproject: bool = False) -> str:
+        """Camino efectivo (§5): reproyectar un GeoParquet o enviar una selección suya obliga a leer con QGIS
+        (sin `spatial`, DuckDB no transforma coordenadas). Una capa Conectada no se reproyecta."""
+        if self.path == PATH_PARQUET and reproject and self.geometry is not None:
+            return PATH_QGIS
         if self.path == PATH_PARQUET and only_selected and self.selected:
             return PATH_QGIS
         return self.path
@@ -342,6 +346,8 @@ class SendRequest:
     as_view: bool = False
     #: Geometría sin SRC, elegido por el usuario (base que no lo guarda, F-120, o SRC no expresable).
     without_crs: bool = False
+    #: «Reproyectar a…» (§3): definición del SRC destino (`EPSG:…` o WKT) para QGIS/PROJ; None = no.
+    reproject_to: str | None = None
 
 
 @dataclass(frozen=True)

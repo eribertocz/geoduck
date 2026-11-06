@@ -19,7 +19,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from qgis.core import QgsSettings
+from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsSettings
+from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import QModelIndex, QRect, QSize, Qt
 from qgis.PyQt.QtGui import QFont, QKeySequence, QPainter, QPalette
 from qgis.PyQt.QtWidgets import (
@@ -42,8 +43,10 @@ from qgis.PyQt.QtWidgets import (
 
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot
 from geoduck.domain.importing import (
+    PATH_CONNECTED,
     PATH_QGIS,
     Conflict,
+    ImportGeometry,
     ImportMode,
     ImportTarget,
     SendCandidate,
@@ -138,7 +141,8 @@ class SendDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Send to DuckDB"))
         self.setObjectName("geoduckSendDialog")
-        self.setMinimumWidth(720)
+        self.setMinimumWidth(600)  # cabe en una pantalla pequeña; las columnas se ajustan
+        self.resize(780, 540)
         self.setStyleSheet(theme.stylesheet(theme.palette_for(self)))
         self._candidates = candidates
         self._read_target = read_target
@@ -189,16 +193,36 @@ class SendDialog(QDialog):
         selected = sum(c.selected for c in candidates if c.problem is None)
         self.only_selected = QCheckBox(tr("Only selected features ({0})").format(_count(selected)))
         self.only_selected.setVisible(selected > 0)
+        self.only_selected.setAccessibleName(tr("Send only the selected features"))
         self.as_view = QCheckBox(tr("View instead of copy (GeoParquet: no data is copied)"))
         self.as_view.setVisible(any(c.can_view for c in candidates))
+        # «Reproyectar a…» (§3): con QGIS/PROJ al leer, nunca con DuckDB (sin `spatial`)
+        self.reproject = QCheckBox(tr("Reproject to…"))
+        self.reproject.setToolTip(tr("Transforms the coordinates while copying, with QGIS/PROJ."))
+        self.reproject_crs = QgsProjectionSelectionWidget()
+        self.reproject_crs.setAccessibleName(tr("Target CRS"))
+        self.reproject_crs.setEnabled(False)
+        project_crs = QgsProject.instance().crs()
+        if project_crs.isValid():  # por defecto, el SRC del proyecto
+            self.reproject_crs.setCrs(project_crs)
+        self.reproject_row = QWidget()
+        reproject_layout = QHBoxLayout(self.reproject_row)
+        reproject_layout.setContentsMargins(0, 0, 0, 0)
+        reproject_layout.addWidget(self.reproject)
+        reproject_layout.addWidget(self.reproject_crs, 1)
+        self.reproject_row.setVisible(any(c.geometry is not None for c in candidates))
+        self.reproject.toggled.connect(self.reproject_crs.setEnabled)
+        self.reproject_crs.crsChanged.connect(lambda _crs: self.refresh())
         self.without_crs = QCheckBox(tr("Send without CRS"))
         self.without_crs.setVisible(False)
         self.crs_note = QLabel()
         self.crs_note.setProperty("geoduck", "muted")
         self.crs_note.setWordWrap(True)
         self.crs_note.setVisible(False)
-        for box in (self.only_selected, self.as_view, self.without_crs):
-            layout.addWidget(box)
+        layout.addWidget(self.only_selected)
+        layout.addWidget(self.as_view)
+        layout.addWidget(self.reproject_row)
+        layout.addWidget(self.without_crs)
         layout.addWidget(self.crs_note)
 
         # 4. Resumen
@@ -230,7 +254,7 @@ class SendDialog(QDialog):
 
         self.tree.itemChanged.connect(lambda *_: self.refresh())
         self.destination.currentIndexChanged.connect(self._destination_changed)
-        for box in (self.only_selected, self.as_view, self.without_crs):
+        for box in (self.only_selected, self.as_view, self.reproject, self.without_crs):
             box.toggled.connect(self.refresh)
         self._select_default_destination(catalog)
         self._destination_changed()
@@ -365,12 +389,34 @@ class SendDialog(QDialog):
             self.names[i].selectAll()
         self.refresh()
 
+    @property
+    def reproject_to(self) -> str | None:
+        """Definición del SRC destino de «Reproyectar a…» (`EPSG:…` o WKT2), o None si no se reproyecta."""
+        if not self.reproject.isChecked():
+            return None
+        crs = self.reproject_crs.crs()
+        if not crs.isValid():
+            return None
+        return crs.authid() or crs.toWkt(QgsCoordinateReferenceSystem.WktVariant.WKT2_2019)
+
+    def _geometry_for(self, c: SendCandidate) -> ImportGeometry | None:
+        """La geometría como llegará a DuckDB: con el SRC destino si se reproyecta; sin SRC si se pidió."""
+        if c.geometry is None:
+            return None
+        if self.without_crs.isChecked():
+            return ImportGeometry(c.geometry.name, None)
+        target = self.reproject_to
+        if target is not None:
+            return ImportGeometry(c.geometry.name, target)
+        return c.geometry
+
     def _needs_without_crs(self, c: SendCandidate) -> bool:
         if c.geometry is None:
             return False
-        if c.crs_problem:
+        if c.crs_problem and self.reproject_to is None:
             return True
-        return bool(c.geometry.crs) and self._target is not None and not self._target.stores_crs
+        crs = self.reproject_to if self.reproject_to is not None else c.geometry.crs
+        return bool(crs) and self._target is not None and not self._target.stores_crs
 
     def row_state(self, i: int) -> RowState:  # noqa: PLR0911, PLR0912 - una regla por caso, en orden
         c = self._candidates[i]
@@ -388,6 +434,12 @@ class SendDialog(QDialog):
         ]
         if name.lower() in others:
             return RowState("blocked", tr("Cannot: another layer uses this name"))
+        if self.reproject_to is not None and c.geometry is not None and c.path == PATH_CONNECTED:
+            return RowState(
+                "blocked", tr("Cannot: a Connected layer is sent with its CRS, without reprojecting")
+            )
+        if self.reproject_to is not None and c.geometry is not None and c.crs_label is None:
+            return RowState("blocked", tr("Cannot: the layer has no CRS to reproject from"))
         if self._needs_without_crs(c) and not self.without_crs.isChecked():
             return RowState("blocked", tr("Cannot: the CRS cannot be stored (see below)"))
         if self._target_error:
@@ -397,7 +449,12 @@ class SendDialog(QDialog):
         key = name.lower()
         if key in self._target.views:
             return RowState("blocked", tr("Cannot: a view has this name; choose another name"))
-        view = self.as_view.isChecked() and c.can_view and not (self.only_selected.isChecked() and c.selected)
+        view = (
+            self.as_view.isChecked()
+            and c.can_view
+            and self.reproject_to is None
+            and not (self.only_selected.isChecked() and c.selected)
+        )
         if key not in self._target.tables:
             return RowState("send", tr("New view") if view else tr("New table"))
         choice = self.conflicts[i].currentData()
@@ -406,10 +463,7 @@ class SendDialog(QDialog):
         if choice is Conflict.APPEND:
             if view:
                 return RowState("blocked", tr("Cannot: rows cannot be added as a view"))
-            geometry = c.geometry
-            if geometry is not None and self.without_crs.isChecked():
-                geometry = type(geometry)(geometry.name, None)
-            problem = append_problem(c.columns, geometry, self._target.tables[key])
+            problem = append_problem(c.columns, self._geometry_for(c), self._target.tables[key])
             if problem is not None:
                 return RowState("blocked", tr("Cannot add rows: {0}").format(problem))
             return RowState("send", tr("Already exists: rows will be added"), ImportMode.APPEND)
@@ -435,7 +489,10 @@ class SendDialog(QDialog):
         self.crs_note.setVisible(bool(needs))
         if any(c.crs_problem for c in needs):
             self.crs_note.setText(
-                tr("A layer has a CRS that cannot be expressed: it can be sent without CRS.")
+                tr(
+                    "A layer has a CRS that cannot be expressed: "
+                    "reproject it («Reproject to…») or send it without CRS."
+                )
             )
         elif needs:
             self.crs_note.setText(
@@ -447,11 +504,16 @@ class SendDialog(QDialog):
         self.summary.setText(self._summary(states))
         sending = [s for s in states if s.kind == "send"]
         blocked = [s for i, s in enumerate(states) if s.kind == "blocked" and self._checked(i)]
-        self.send_button.setEnabled(bool(sending) and not blocked and self._target is not None)
+        crs_missing = self.reproject.isChecked() and self.reproject_to is None
+        self.send_button.setEnabled(
+            bool(sending) and not blocked and self._target is not None and not crs_missing
+        )
 
     def _summary(self, states: list[RowState]) -> str:
         if self._target is None and not self._target_error:
             return tr("Checking the destination…")
+        if self.reproject.isChecked() and self.reproject_to is None:
+            return tr("Choose the target CRS of «Reproject to…».")
         sending = [(i, s) for i, s in enumerate(states) if s.kind == "send"]
         if not sending:
             return tr("Nothing to send: check at least one layer.")
@@ -468,12 +530,17 @@ class SendDialog(QDialog):
         if added:
             parts.append(tr("{0} with more rows").format(added))
         lines = [f"<b>{' · '.join(parts)}</b> · " + tr("{0} rows").format(_count(rows))]
-        paths = sorted({self._candidates[i].path_for(only) for i, _ in sending})
+        reproject = self.reproject_to is not None
+        paths = sorted({self._candidates[i].path_for(only, reproject) for i, _ in sending})
         lines.append(tr("How: {0}").format(", ".join(path_label(p) for p in paths)))
+        if reproject:
+            crs = self.reproject_crs.crs()
+            label = crs.authid() or crs.description()
+            lines.append(tr("Reprojected to {0} with QGIS/PROJ.").format(label))
         slow = sum(
             self._candidates[i].rows_for(only)
             for i, _ in sending
-            if self._candidates[i].path_for(only) == PATH_QGIS
+            if self._candidates[i].path_for(only, reproject) == PATH_QGIS
         )
         if is_large(slow):
             minutes = max(2, round(estimated_seconds(slow) / 60))
@@ -502,7 +569,10 @@ class SendDialog(QDialog):
         total = 0
         for i in range(len(self.items)):
             c = self._candidates[i]
-            if self.row_state(i).kind == "send" and c.path_for(only) == PATH_QGIS:
+            if (
+                self.row_state(i).kind == "send"
+                and c.path_for(only, self.reproject_to is not None) == PATH_QGIS
+            ):
                 total += c.rows_for(only)
         return total
 
@@ -520,6 +590,7 @@ class SendDialog(QDialog):
             schema,
             self.temporary,
             only_selected=self.only_selected.isChecked(),
-            as_view=self.as_view.isChecked(),
+            as_view=self.as_view.isChecked() and self.reproject_to is None,
             without_crs=self.without_crs.isChecked(),
+            reproject_to=self.reproject_to,
         )
