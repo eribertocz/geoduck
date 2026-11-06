@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""«Cargar en QGIS ▾» y «Guardar las copias junto al proyecto» de Workspace Pro (G9 · E4b;
+"""«Cargar en QGIS ▾» (con «Más opciones…», E6b) y «Guardar las copias junto al proyecto» (G9 · E4b;
 workspace-pro-spec §7; AT-WSP-007).
 
 PyQGIS real con una sesión real de DuckDB: «Copia» (la rápida o, si GDAL no la permite, la de memoria) y
@@ -13,7 +13,7 @@ import contextlib
 import gc
 
 import pytest
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QCoreApplication, QEvent
 
 from geoduck.domain.browse import GT, Filter
@@ -23,7 +23,7 @@ from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
 from geoduck.qgis_bridge import copies as copies_module
 from geoduck.qgis_bridge.copies import is_copy, target_for
-from geoduck.ui.pro.load import CONNECTED, COPY, copy_mode
+from geoduck.ui.pro.load import CONNECTED, COPY, OPTIONS, copy_mode
 from geoduck.ui.pro.places import TABLE, Place
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.table_page import GRID, TablePage
@@ -50,7 +50,8 @@ def clean(tmp_path, monkeypatch):
     while _CREATED:
         widget = _CREATED.pop()
         with contextlib.suppress(RuntimeError):
-            widget.detach_coordinator()
+            if hasattr(widget, "detach_coordinator"):
+                widget.detach_coordinator()
             widget.close()
             widget.deleteLater()
     QgsProject.instance().clear()
@@ -240,3 +241,106 @@ def test_no_thanks_is_not_asked_again_and_reopening_explains_the_lost_copies(coo
     project.clear()
     assert project.read(str(path))
     assert wait_for(lambda: "«puntos»" in ws.notice.text())
+
+
+# -- «Más opciones…» (E6b) ----------------------------------------------------------------------------------
+
+
+def options_workspace(coordinator, answer, *, crs=None):
+    """Un workspace cuya ventana «Más opciones…» responde `answer(dialog)` (None = cancelar)."""
+    from geoduck.ui.pro.load_options import LoadOptionsDialog
+
+    seen: list = []
+
+    def ask_options(plan, name, kind_index, parent):
+        dialog = LoadOptionsDialog(plan, name, kind_index, parent)
+        _CREATED.append(dialog)
+        seen.append(dialog)
+        return answer(dialog)
+
+    ws = workspace(coordinator, crs=crs)
+    ws.loader._ask_options = ask_options
+    ws.seen = seen
+    return ws
+
+
+def test_more_options_is_the_last_quiet_row_of_the_menu(coordinator):
+    ws = workspace(coordinator)
+    page = open_table(ws, "puntos")
+    actions = page.load_menu.actions()
+    assert actions[-1].text() == tr("More options…") and actions[-2].isSeparator()
+
+
+def test_the_dialog_shows_only_what_applies_and_says_what_will_happen(coordinator):
+    coordinator.execute_sql(
+        "CREATE TABLE crudo AS SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY('OGC:CRS84') AS geom,"
+        " 'POINT (3 4)' AS wkt_origen;",
+        RunScope.ALL,
+    )
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "crudo" for o in coordinator.catalog.objects))
+    ws = options_workspace(coordinator, lambda _d: None)
+    open_table(ws, "puntos").load_in_qgis(OPTIONS)
+    assert wait_for(lambda: ws.seen)
+    simple = ws.seen[0]
+    assert (
+        simple.geometry_checks == {} and simple.candidate_checks == {}
+    )  # una sola geometría: nada que elegir
+    assert simple.reproject_row.isVisibleTo(simple) and not simple.separate_row.isVisibleTo(simple)
+    assert simple.summary.text() == tr("It will load 1 layer · {}").format(tr("Copy (mode)"))
+    simple.mode.set_current(1)
+    simple._refresh()
+    assert not simple.reproject_row.isVisibleTo(simple) and simple.separate_row.isVisibleTo(simple)
+    assert not layers_named("puntos")  # canceló: nada se cargó
+    open_table(ws, "crudo").load_in_qgis(OPTIONS)
+    assert wait_for(lambda: len(ws.seen) == 2)
+    assert list(ws.seen[1].candidate_checks) == ["wkt_origen"]
+
+
+def test_reproject_to_on_a_copy(coordinator):
+    def answer(dialog):
+        dialog.reproject.setChecked(True)
+        dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3857"))
+        return dialog.choice()
+
+    ws = options_workspace(coordinator, answer)
+    open_table(ws, "puntos").load_in_qgis(OPTIONS)
+    assert wait_for(lambda: layers_named("puntos") and coordinator.state is SessionState.READY, 30)
+    layer = layers_named("puntos")[0]
+    assert layer.crs().authid() == "EPSG:3857" and is_copy(layer)
+    assert layer.extent().xMaximum() > 1000  # metros, no grados
+
+
+def test_a_text_column_loads_as_geometry_with_the_crs_asked_once(coordinator):
+    coordinator.execute_sql(
+        "CREATE TABLE texto AS SELECT range AS id, 'POINT (' || range || ' 1)' AS wkt FROM range(4);",
+        RunScope.ALL,
+    )
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "texto" for o in coordinator.catalog.objects))
+
+    def answer(dialog):
+        dialog.candidate_checks["wkt"][0].setChecked(True)
+        assert dialog.summary.text() == tr("It will load 1 layer · {}").format(tr("Copy (mode)"))
+        return dialog.choice()
+
+    ws = options_workspace(coordinator, answer, crs={"wkt": "EPSG:32719"})
+    open_table(ws, "texto").load_in_qgis(OPTIONS)
+    assert wait_for(lambda: layers_named("texto") and coordinator.state is SessionState.READY, 30)
+    layer = layers_named("texto")[0]
+    assert ws.asked == [["wkt"]]
+    assert layer.isSpatial() and layer.featureCount() == 4 and layer.crs().authid() == "EPSG:32719"
+
+
+def test_choosing_one_of_two_geometries_loads_one_layer(coordinator):
+    def answer(dialog):
+        dialog.geometry_checks["b"].setChecked(False)
+        assert dialog.summary.text() == tr("It will load 1 layer · {}").format(tr("Copy (mode)"))
+        return dialog.choice()
+
+    ws = options_workspace(coordinator, answer)
+    open_table(ws, "dos").load_in_qgis(OPTIONS)
+    assert wait_for(lambda: layers_named("dos") and coordinator.state is SessionState.READY, 30)
+    assert len(layers_named("dos")) == 1 and layers_named("dos")[0].geometryType() == 0  # puntos

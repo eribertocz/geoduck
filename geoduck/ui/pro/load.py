@@ -48,9 +48,13 @@ from geoduck.ui.pro.tokens import Colors
 from geoduck.ui.pro.widgets import button, label
 
 COPY, CONNECTED = "copy", "connected"
+#: «Más opciones…» (E6b): la misma carga, con la ventana de opciones antes.
+OPTIONS = "options"
 
 #: Columna → SRC elegido (authid o WKT; "" = sin SRC). `None`: el usuario canceló.
 AskCrs = Callable[[list[str], QWidget], "dict[str, str] | None"]
+#: (plan, nombre, modo inicial, ventana) → lo elegido en «Más opciones…» o None (canceló).
+AskOptions = Callable[[LoadPlan, str, int, QWidget], "dict[str, Any] | None"]
 
 
 def copy_mode(availability: dict[LoadMode, str | None]) -> LoadMode:
@@ -78,9 +82,13 @@ def build_request(
     source: tuple[str, str, str] | None = None,
     source_kind: str | None = None,
     database: str | None = None,
+    options: dict[str, Any] | None = None,
 ) -> LoadRequest:
-    """La carga de un clic: todas las geometrías, con el SRC elegido donde faltaba."""
+    """La carga de un clic: todas las geometrías, con el SRC elegido donde faltaba. Con `options` («Más
+    opciones…»), las geometrías elegidas, las columnas WKB/WKT, «Reproyectar a…» y «Separar por tipo»."""
     columns = [c.name for c in (plan.geometries or ((plan.geometry,) if plan.geometry is not None else ()))]
+    if options is not None:
+        columns = list(options["geometries"])
     geometry = columns[0] if columns else None
     return LoadRequest(
         sql=sql,
@@ -94,6 +102,9 @@ def build_request(
         geometries=tuple(columns) if len(columns) > 1 else (),
         crs_overrides=tuple(overrides.items()),
         split_families=True,
+        formats=tuple(options["formats"]) if options else (),
+        reproject_to=options["reproject_to"] if options else None,
+        separate_types=bool(options and options["separate_types"]),
     )
 
 
@@ -157,9 +168,17 @@ class _Row(QFrame):
             self.picked.emit()
 
 
-def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None], *, title: str = "") -> QMenu:
+def load_menu(
+    parent: QWidget,
+    colors: Colors,
+    pick: Callable[[str], None],
+    *,
+    title: str = "",
+    more: bool = False,
+) -> QMenu:
     """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea. Con `title`
-    (tablas soltadas en el mapa, E5), una cabecera arriba («3 tablas · ¿cómo cargarlas?»)."""
+    (tablas soltadas en el mapa, E5), una cabecera arriba («3 tablas · ¿cómo cargarlas?»). Con `more` (E6b),
+    al final una línea discreta «Más opciones…» que llama a `pick(OPTIONS)`."""
     menu = QMenu(parent)
     menu.setProperty("pro", "load-menu")
     if title:
@@ -181,6 +200,12 @@ def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None], *, t
         row.picked.connect(action.trigger)
         row.picked.connect(menu.close)
         menu.addAction(action)
+    if more:
+        menu.addSeparator()
+        extra = menu.addAction(tr("More options…"))
+        extra.setObjectName("geoduckLoadOptions")
+        extra.setToolTip(tr("Choose geometries, use a WKB/WKT column, reproject or separate by type"))
+        extra.triggered.connect(lambda _c=False: pick(OPTIONS))
     return menu
 
 
@@ -272,6 +297,12 @@ class CrsDialog(QDialog):
         return dialog.choice() if dialog.exec() == QDialog.DialogCode.Accepted else None
 
 
+def _ask_options(plan: LoadPlan, name: str, kind_index: int, parent: QWidget) -> dict[str, Any] | None:
+    from geoduck.ui.pro.load_options import LoadOptionsDialog  # noqa: PLC0415 - solo al pedirla
+
+    return LoadOptionsDialog.ask(plan, name, kind_index, parent)
+
+
 class QuickLoad:
     """Carga de un clic: pide el plan, pregunta el SRC solo si falta y carga. Avisa por `notify`.
 
@@ -284,8 +315,10 @@ class QuickLoad:
         parent: QWidget,
         notify: Callable[[str], None],
         ask_crs: AskCrs | None = None,
+        ask_options: AskOptions | None = None,
     ) -> None:
         self._coordinator = coordinator
+        self._ask_options = ask_options
         self._parent = parent
         self._notify = notify
         self._ask_crs = ask_crs or CrsDialog.ask
@@ -316,14 +349,20 @@ class QuickLoad:
 
     def start_many(self, jobs: list[dict[str, Any]], kind: str) -> None:
         """Varias cargas con el mismo modo. Cada `job`: `sql`, `name` y, opcionales, `source`, `source_kind`
-        y `database` (como en `start`)."""
+        y `database` (como en `start`). Con `OPTIONS` (una sola carga), la ventana «Más opciones…» elige."""
         modes = self._coordinator.load_modes()
         mode = LoadMode.CONNECTED if kind == CONNECTED else copy_mode(modes)
         reason = modes.get(mode)
-        if reason is not None:
+        if reason is not None and kind != OPTIONS:
             self._notify(tr("Cannot load: ") + reason)
             return
-        batch: dict[str, Any] = {"jobs": jobs, "mode": mode, "plans": [None] * len(jobs), "waiting": 0}
+        batch: dict[str, Any] = {
+            "jobs": jobs,
+            "mode": mode,
+            "plans": [None] * len(jobs),
+            "waiting": 0,
+            "options": kind == OPTIONS,
+        }
         for index, job in enumerate(jobs):
             try:
                 token = self._coordinator.prepare_load(job["sql"], database=job.get("database"))
@@ -342,10 +381,27 @@ class QuickLoad:
         ready = [(job, found) for job, found in zip(batch["jobs"], batch["plans"], strict=True) if found]
         if not ready:
             return
+        options: dict[str, Any] | None = None
+        if batch["options"]:  # «Más opciones…»: primero la ventana, con el plan ya leído
+            job, found = ready[0]
+            ask = self._ask_options or _ask_options
+            options = ask(found, job["name"], 1 if batch["mode"] is LoadMode.CONNECTED else 0, self._parent)
+            if options is None:
+                return  # canceló
+            modes = self._coordinator.load_modes()
+            batch["mode"] = LoadMode.CONNECTED if options["kind"] == CONNECTED else copy_mode(modes)
+            reason = modes.get(batch["mode"])
+            if reason is not None:
+                self._notify(tr("Cannot load: ") + reason)
+                return
         # el SRC que falte, una sola vez para todas («tabla · columna» si hay varias tablas)
         missing: list[tuple[int, str, str]] = []
         for i, (job, found) in enumerate(ready):
-            for column in unknown_crs(found):
+            unknown = unknown_crs(found)
+            if options is not None:  # solo las elegidas; una columna WKB/WKT nunca trae SRC
+                unknown = [c for c in unknown if c in options["geometries"]]
+                unknown += [name for name, _fmt in options["formats"]]
+            for column in unknown:
                 missing.append((i, column, column if len(ready) == 1 else f"{job['name']} · {column}"))
         answer: dict[str, str] = {}
         if missing:
@@ -365,6 +421,7 @@ class QuickLoad:
                     source=job.get("source"),
                     source_kind=job.get("source_kind"),
                     database=job.get("database"),
+                    options=options,
                 )
             )
         self._next()
