@@ -1,0 +1,378 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""«Cargar en QGIS ▾» de Workspace Pro (workspace-pro-spec §7; GD-WSP-006; AT-WSP-007).
+
+Dos opciones, en lenguaje simple: **Copia** (rápida, independiente de DuckDB) y **Conectada** (en vivo,
+editable en DuckDB). Un clic carga; solo se pregunta lo que falta (propietario, 2026-11-06):
+
+- La «Copia» es la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); si GDAL no la permite, la Copia en
+  memoria, sin preguntar. El usuario nunca elige entre las dos.
+- Todas las geometrías de la consulta se cargan (una capa por columna, spatial-spec §7); con varias familias
+  en una Copia, una capa por familia.
+- El SRC sale de la columna (`GEOMETRY('EPSG:4326')`). **Solo si a alguna le falta**, una ventana pequeña
+  pide uno para todas (con la opción de elegir por columna); cancelarla no carga nada.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from qgis.core import QgsCoordinateReferenceSystem
+from qgis.PyQt.QtCore import QPoint, Qt, pyqtSignal
+from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QVBoxLayout,
+    QWidget,
+    QWidgetAction,
+)
+
+from geoduck.app.events import (
+    AppEvent,
+    LoadFailed,
+    LoadFinished,
+    LoadPrepared,
+    LoadPrepareFailed,
+    LoadStarted,
+)
+from geoduck.domain.bridge_types import LoadPlan
+from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
+from geoduck.ui.i18n import tr
+from geoduck.ui.pro import icons, style
+from geoduck.ui.pro.style import ui_font
+from geoduck.ui.pro.tokens import Colors
+from geoduck.ui.pro.widgets import button, label
+
+COPY, CONNECTED = "copy", "connected"
+
+#: Columna → SRC elegido (authid o WKT; "" = sin SRC). `None`: el usuario canceló.
+AskCrs = Callable[[list[str], QWidget], "dict[str, str] | None"]
+
+
+def copy_mode(availability: dict[LoadMode, str | None]) -> LoadMode:
+    """La «Copia»: la rápida si GDAL la permite; si no, la de memoria (respaldo automático, §7)."""
+    return LoadMode.SNAPSHOT if availability.get(LoadMode.SNAPSHOT) is None else LoadMode.MEMORY
+
+
+def unknown_crs(plan: LoadPlan) -> list[str]:
+    """Columnas de geometría sin SRC declarado, o con uno que QGIS no reconoce."""
+    columns = plan.geometries or ((plan.geometry,) if plan.geometry is not None else ())
+    return [
+        column.name
+        for column in columns
+        if not column.declared_crs or not QgsCoordinateReferenceSystem(column.declared_crs).isValid()
+    ]
+
+
+def build_request(
+    plan: LoadPlan,
+    sql: str,
+    name: str,
+    mode: LoadMode,
+    overrides: dict[str, str],
+    *,
+    source: tuple[str, str, str] | None = None,
+    source_kind: str | None = None,
+    database: str | None = None,
+) -> LoadRequest:
+    """La carga de un clic: todas las geometrías, con el SRC elegido donde faltaba."""
+    columns = [c.name for c in (plan.geometries or ((plan.geometry,) if plan.geometry is not None else ()))]
+    geometry = columns[0] if columns else None
+    return LoadRequest(
+        sql=sql,
+        mode=mode,
+        layer_name=name,
+        geometry=geometry,
+        crs_override=overrides.get(geometry) if geometry is not None else None,
+        source=source,
+        source_kind=source_kind,
+        database=database,
+        geometries=tuple(columns) if len(columns) > 1 else (),
+        crs_overrides=tuple(overrides.items()),
+        split_families=True,
+    )
+
+
+def mode_text(mode: LoadMode) -> str:
+    return tr("Connected") if mode is LoadMode.CONNECTED else tr("Copy (mode)")
+
+
+def finished_text(report: LoadReport) -> str:
+    rows = f"{report.rows:,}".replace(",", " ")
+    if len(report.layers) > 1:
+        names = ", ".join(f"«{name}»" for _, name in report.layers)
+        return tr("Layers {} loaded · {}").format(names, mode_text(report.mode))
+    return tr("Layer «{}» loaded · {} · {} features").format(report.layer_name, mode_text(report.mode), rows)
+
+
+class _Row(QFrame):
+    """Una opción del menú: icono, título y una línea que la explica; clic o Intro la eligen."""
+
+    picked = pyqtSignal()
+
+    def __init__(self, icon: str, title: str, text: str, colors: Colors) -> None:
+        super().__init__()
+        self.setProperty("pro", "menu-row")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName(f"{title}: {text}")
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 8, 14, 8)
+        row.setSpacing(10)
+        glyph = QLabel()
+        glyph.setPixmap(icons.pixmap(icon, colors.muted, 18))
+        row.addWidget(glyph)
+        texts = QVBoxLayout()
+        texts.setSpacing(1)
+        name = label(title)
+        name.setFont(ui_font(bold=True))
+        texts.addWidget(name)
+        texts.addWidget(label(text, "muted"))
+        row.addLayout(texts, 1)
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.picked.emit()
+
+
+def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None]) -> QMenu:
+    """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea."""
+    menu = QMenu(parent)
+    menu.setProperty("pro", "load-menu")
+    for kind, icon, title, text in (
+        (COPY, "layers", tr("Copy (mode)"), tr("Fast and independent of DuckDB")),
+        (CONNECTED, "database", tr("Connected"), tr("Live and editable in DuckDB")),
+    ):
+        row = _Row(icon, title, text, colors)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(row)
+        action.setText(title)
+        action.triggered.connect(lambda _c=False, k=kind: pick(k))
+        row.picked.connect(action.trigger)
+        row.picked.connect(menu.close)
+        menu.addAction(action)
+    return menu
+
+
+def popup_under(menu: QMenu, anchor: QWidget) -> None:
+    menu.popup(anchor.mapToGlobal(QPoint(0, anchor.height() + 2)))
+
+
+class CrsDialog(QDialog):
+    """«N capas sin SRC»: un SRC para todas, o uno por columna si se despliega."""
+
+    def __init__(self, columns: list[str], parent: QWidget | None = None) -> None:
+        from qgis.gui import QgsProjectionSelectionWidget  # noqa: PLC0415
+
+        super().__init__(parent)
+        style.apply(self)
+        self.setWindowTitle(tr("GeoDuck"))
+        self.columns = columns
+        box = QVBoxLayout(self)
+        box.setContentsMargins(20, 18, 20, 16)
+        box.setSpacing(10)
+        title = (
+            tr("1 geometry has no CRS")
+            if len(columns) == 1
+            else tr("{} geometries have no CRS").format(len(columns))
+        )
+        box.addWidget(label(title, "title"))
+        note = label(
+            tr("Choose one so that QGIS places them on the map. Without a CRS they load anyway."), "muted"
+        )
+        note.setWordWrap(True)
+        box.addWidget(note)
+
+        def selector() -> Any:
+            widget = QgsProjectionSelectionWidget()
+            widget.setOptionVisible(QgsProjectionSelectionWidget.CrsOption.CrsNotSet, True)
+            widget.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+            return widget
+
+        self.common = selector()
+        box.addWidget(self.common)
+        self.each: dict[str, Any] = {}
+        if len(columns) > 1:
+            self.one_by_one = button(tr("Choose one per geometry…"), "ghost")
+            self.per_column = QWidget()
+            grid = QVBoxLayout(self.per_column)
+            grid.setContentsMargins(0, 0, 0, 0)
+            for column in columns:
+                row = QHBoxLayout()
+                row.addWidget(label(column, "mono"))
+                widget = selector()
+                self.each[column] = widget
+                row.addWidget(widget, 1)
+                grid.addLayout(row)
+            self.per_column.hide()
+            self.one_by_one.clicked.connect(self._one_by_one)
+            box.addWidget(self.one_by_one, 0, Qt.AlignmentFlag.AlignLeft)
+            box.addWidget(self.per_column)
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        cancel = button(tr("Cancel"))
+        cancel.clicked.connect(self.reject)
+        load = button(tr("Load"), "primary")
+        load.setDefault(True)
+        load.clicked.connect(self.accept)
+        actions.addWidget(cancel)
+        actions.addWidget(load)
+        box.addLayout(actions)
+        self.setMinimumWidth(460)
+
+    def _one_by_one(self) -> None:
+        crs = self.common.crs()
+        for widget in self.each.values():
+            widget.setCrs(crs)
+        self.common.hide()
+        self.one_by_one.hide()
+        self.per_column.show()
+
+    def choice(self) -> dict[str, str]:
+        found = {}
+        for column in self.columns:
+            widget = self.each[column] if self.each and self.per_column.isVisible() else self.common
+            crs = widget.crs()
+            found[column] = (crs.authid() or crs.toWkt()) if crs.isValid() else ""
+        return found
+
+    @staticmethod
+    def ask(columns: list[str], parent: QWidget) -> dict[str, str] | None:
+        dialog = CrsDialog(columns, parent)
+        return dialog.choice() if dialog.exec() == QDialog.DialogCode.Accepted else None
+
+
+class QuickLoad:
+    """Carga de un clic: pide el plan, pregunta el SRC solo si falta y carga. Avisa por `notify`."""
+
+    def __init__(
+        self,
+        coordinator: Any,
+        parent: QWidget,
+        notify: Callable[[str], None],
+        ask_crs: AskCrs | None = None,
+    ) -> None:
+        self._coordinator = coordinator
+        self._parent = parent
+        self._notify = notify
+        self._ask_crs = ask_crs or CrsDialog.ask
+        self._pending: dict[int, dict[str, Any]] = {}
+        self._loads: set[int] = set()
+        self._starting = False
+        self.last_report: LoadReport | None = None
+        self._unsubscribe = coordinator.subscribe(self._on_event)
+
+    def start(
+        self,
+        sql: str,
+        name: str,
+        kind: str,
+        *,
+        source: tuple[str, str, str] | None = None,
+        source_kind: str | None = None,
+        database: str | None = None,
+    ) -> None:
+        """«Copia» o «Conectada» de `sql` (una tabla o vista con su `source`, o el resultado de una consulta
+        con su `database`), con el nombre de capa `name`."""
+        modes = self._coordinator.load_modes()
+        mode = LoadMode.CONNECTED if kind == CONNECTED else copy_mode(modes)
+        reason = modes.get(mode)
+        if reason is not None:
+            self._notify(tr("Cannot load: ") + reason)
+            return
+        try:
+            token = self._coordinator.prepare_load(sql, database=database)
+        except GeoDuckError as exc:
+            self._notify(tr("Cannot load: ") + exc.message)
+            return
+        self._pending[token] = {
+            "sql": sql,
+            "name": name,
+            "mode": mode,
+            "source": source,
+            "source_kind": source_kind,
+            "database": database,
+        }
+
+    def _prepared(self, token: int, plan: LoadPlan) -> None:
+        job = self._pending.pop(token)
+        overrides: dict[str, str] = {}
+        missing = unknown_crs(plan)
+        if missing:
+            answer = self._ask_crs(missing, self._parent)
+            if answer is None:
+                return  # canceló: no se carga nada
+            overrides = answer
+        request = build_request(
+            plan,
+            job["sql"],
+            job["name"],
+            job["mode"],
+            overrides,
+            source=job["source"],
+            source_kind=job["source_kind"],
+            database=job["database"],
+        )
+        self._starting = True  # `LoadStarted` llega antes de que `load` devuelva su id
+        try:
+            self._loads.add(self._coordinator.load(request))
+        except GeoDuckError as exc:
+            self._notify(tr("Cannot load: ") + exc.message)
+        finally:
+            self._starting = False
+
+    def _on_event(self, event: AppEvent) -> None:
+        if isinstance(event, LoadPrepared) and event.token in self._pending:
+            self._prepared(event.token, event.plan)
+        elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
+            self._pending.pop(event.token)
+            self._notify(tr("Cannot load: ") + event.message)
+        elif isinstance(event, LoadStarted) and (self._starting or event.load_id in self._loads):
+            self._loads.add(event.load_id)
+            self._notify(tr("Loading «{}»…").format(event.request.layer_name))
+        elif isinstance(event, LoadFinished) and event.load_id in self._loads:
+            self._loads.discard(event.load_id)
+            self.last_report = event.report
+            self._notify(finished_text(event.report))
+        elif isinstance(event, LoadFailed) and event.load_id in self._loads:
+            self._loads.discard(event.load_id)
+            self._notify(
+                tr("Loading cancelled.") if event.cancelled else tr("Loading error: ") + event.message
+            )
+
+    def detach(self) -> None:
+        self._unsubscribe()
+
+
+def export_query(  # noqa: PLR0917 - una acción con su contexto completo
+    coordinator: Any,
+    sql: str,
+    database: str | None,
+    name: str,
+    fmt: Any,
+    ask_path: Callable[[str, str, str], str],
+    notify: Callable[[str], None],
+) -> None:
+    """«Exportar ▾»: la consulta completa (no la vista previa) a CSV o Parquet, en el worker."""
+    from pathlib import Path  # noqa: PLC0415
+
+    from geoduck.domain.export import ExportFormat, ExportRequest  # noqa: PLC0415
+
+    suffix = fmt.suffix
+    pattern = tr("CSV files (*.csv)") if fmt is ExportFormat.CSV else tr("Parquet files (*.parquet)")
+    cleaned = "".join("_" if ch in '<>:"/\\|?*' else ch for ch in name).strip(" .") or "datos"
+    path = ask_path(tr("Export"), Path(cleaned).stem + suffix, pattern)
+    if not path:
+        return
+    if not path.lower().endswith(suffix):
+        path += suffix
+    try:
+        coordinator.export(ExportRequest(sql, path, fmt, database))
+    except GeoDuckError as exc:
+        notify(tr("Cannot export: ") + exc.message)
+        return
+    notify(tr("Exporting the full query to {0}…").format(Path(path).name))

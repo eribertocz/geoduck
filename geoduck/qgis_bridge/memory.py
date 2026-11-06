@@ -30,6 +30,7 @@ from geoduck.qgis_bridge.convert import (
     geometry_from_wkb,
     strip_unreadable,
 )
+from geoduck.qgis_bridge.copies import mark_copy
 from geoduck.qgis_bridge.families import FamilyLayers
 from geoduck.qgis_bridge.reproject import Reprojector
 
@@ -199,6 +200,8 @@ class MemoryLoad:
             )
         self._timer.stop()
         self._finished = True
+        for item in layers:
+            mark_copy(item)  # «Guardar las copias junto al proyecto» (G9) la reconoce
         self._project.addMapLayers(layers)  # todas o ninguna (§8)
         layer = layers[0]
         warnings = (*plan.warnings, *notes)

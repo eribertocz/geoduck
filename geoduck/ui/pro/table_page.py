@@ -27,6 +27,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
+    QMenu,
     QPlainTextEdit,
     QScrollArea,
     QShortcut,
@@ -59,10 +60,12 @@ from geoduck.domain.browse import (
 )
 from geoduck.domain.catalog import ColumnInfo
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.export import ExportFormat
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
+from geoduck.ui.pro.load import export_query, load_menu, popup_under
 from geoduck.ui.pro.places import VIEW, Place
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -465,13 +468,24 @@ class TablePage(QWidget):
     """La pestaña de una tabla o vista. `view_sql(texto)` abre «Ver SQL» en una consulta nueva."""
 
     def __init__(
-        self, place: Place, coordinator: Any, colors: Colors, view_sql: Callable[[str], object] | None = None
+        self,
+        place: Place,
+        coordinator: Any,
+        colors: Colors,
+        view_sql: Callable[[str], object] | None = None,
+        *,
+        loader: Callable[..., None] | None = None,
+        ask_path: Callable[[str, str, str], str] | None = None,
+        notify: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         self.place = place
         self.colors = colors
         self._coordinator = coordinator
         self._view_sql = view_sql
+        self._loader = loader
+        self._ask_path = ask_path
+        self._notify = notify or (lambda _text: None)
         self.source = (place.database, place.schema, place.name)
         self.is_view = place.kind == VIEW
         self.browse: Browse | None = None
@@ -607,7 +621,44 @@ class TablePage(QWidget):
         row.addWidget(self.prev_button)
         row.addWidget(self.next_button)
         row.addStretch(1)
+        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
+        self.export_button.setToolTip(tr("Exports the table with its filters, search and order"))
+        self.export_menu = QMenu(self)
+        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
+        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
+        self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
+        row.addWidget(self.export_button)
+        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
+        self.load_button.setToolTip(tr("Loads the table into QGIS (with its filters and search, if any)"))
+        self.load_menu = load_menu(self, self.colors, self.load_in_qgis)
+        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
+        row.addWidget(self.load_button)
         return foot
+
+    def _query_sql(self) -> str:
+        """La consulta de «Cargar en QGIS» y «Exportar»: la tabla con sus filtros, búsqueda y orden."""
+        return self.browse.display_sql() if self.browse is not None else ""
+
+    def load_in_qgis(self, kind: str) -> None:
+        """«Cargar en QGIS ▾». Sin filtros ni búsqueda, la tabla misma (una «Conectada» se puede editar);
+        con filtros o búsqueda, solo esas filas."""
+        if self.browse is None or self._loader is None:
+            return
+        whole = not self.browse.filters and not self.browse.search
+        self._loader(
+            self._query_sql(),
+            self.place.name,
+            kind,
+            source=self.source if whole else None,
+            source_kind=("view" if self.is_view else "table") if whole else None,
+        )
+
+    def export(self, fmt: ExportFormat) -> None:
+        if self.browse is None or self._ask_path is None:
+            return
+        export_query(
+            self._coordinator, self._query_sql(), None, self.place.name, fmt, self._ask_path, self._notify
+        )
 
     # -- lecturas -------------------------------------------------------------------------------------
 

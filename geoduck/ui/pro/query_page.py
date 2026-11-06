@@ -51,11 +51,12 @@ from geoduck.app.events import (
 )
 from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
-from geoduck.domain.export import ExportFormat, ExportRequest
+from geoduck.domain.export import ExportFormat
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, StatementResult, StatementStatus, result_title
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
+from geoduck.ui.pro.load import export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.table_page import PageModel, TypeHeader, fit_columns
 from geoduck.ui.pro.tokens import DARK, METRICS, Colors
@@ -104,12 +105,15 @@ class QueryPage(QWidget):
         sql: str = "",
         database: str | None = None,
         ask_path: Callable[[str, str, str], str] | None = None,
+        loader: Callable[..., None] | None = None,
     ) -> None:
         super().__init__()
         self.place = place
         self.colors = colors
         self._coordinator = coordinator
         self._ask_path = ask_path or self._file_dialog
+        self._loader = loader
+        self.run_text = ""
         self._closed = False
         self.run: Run | None = None
         self.results: list[StatementResult] = []
@@ -230,6 +234,11 @@ class QueryPage(QWidget):
             )
         )
         row.addWidget(self.export_button)
+        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
+        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
+        self.load_menu = load_menu(self, self.colors, self.load_in_qgis)
+        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
+        row.addWidget(self.load_button)
         box.addWidget(head)
         self.result_tabs = QTabBar()
         self.result_tabs.setProperty("pro", "tabs")
@@ -348,6 +357,7 @@ class QueryPage(QWidget):
             self.results = []
             self._messages(run.text, [], event.message, None)
         self.run = None
+        self.run_text = run.text
         self._show_results(run.text)
         self._render_state()
 
@@ -376,6 +386,7 @@ class QueryPage(QWidget):
             self.stack.setCurrentWidget(self.messages)
             self.result_tabs.hide()
             self.export_button.setEnabled(False)
+            self.load_button.setEnabled(False)
             self._summarize_messages()
         else:
             self.result_tabs.setVisible(len(getattr(self, "_tabular", [])) > 1)
@@ -390,6 +401,7 @@ class QueryPage(QWidget):
             self.stack.setCurrentWidget(self.empty)
             self.summary.setText("")
             self.export_button.setEnabled(False)
+            self.load_button.setEnabled(False)
             return
         result = tabular[index]
         preview = result.preview
@@ -405,9 +417,9 @@ class QueryPage(QWidget):
         self.stack.setCurrentWidget(self.grid if preview.rows else self.empty)
         if not preview.rows:
             self.empty.setText(tr("The query returned no rows."))
-        self.export_button.setEnabled(
-            result.statement.replayable and self._coordinator.state is SessionState.READY
-        )
+        usable = result.statement.replayable and self._coordinator.state is SessionState.READY
+        self.export_button.setEnabled(usable)
+        self.load_button.setEnabled(usable and self._loader is not None)
 
     @property
     def current_result(self) -> StatementResult | None:
@@ -496,19 +508,23 @@ class QueryPage(QWidget):
         result = self.current_result
         if result is None or not result.statement.replayable:
             return
-        suffix = fmt.suffix
-        pattern = tr("CSV files (*.csv)") if fmt is ExportFormat.CSV else tr("Parquet files (*.parquet)")
-        path = self._ask_path(tr("Export"), _file_name(self.place.name) + suffix, pattern)
-        if not path:
+        export_query(
+            self._coordinator,
+            result.statement.text,
+            result.database,
+            self.place.name,
+            fmt,
+            self._ask_path,
+            self.notice.emit,
+        )
+
+    def load_in_qgis(self, kind: str) -> None:
+        """«Cargar en QGIS ▾»: el resultado elegido como «Copia» o «Conectada» (repite la consulta)."""
+        result = self.current_result
+        if result is None or not result.statement.replayable or self._loader is None:
             return
-        if not path.lower().endswith(suffix):
-            path += suffix
-        try:
-            self._coordinator.export(ExportRequest(result.statement.text, path, fmt, result.database))
-        except GeoDuckError as exc:
-            self.notice.emit(tr("Cannot export: ") + exc.message)
-            return
-        self.notice.emit(tr("Exporting the full query to {0}…").format(Path(path).name))
+        name = result_title(self.run_text, result.statement) if self.run_text else self.place.name
+        self._loader(result.statement.text, name, kind, database=result.database)
 
     # -- archivo --------------------------------------------------------------------------------------
 
@@ -578,10 +594,14 @@ class QueryPage(QWidget):
         for widget in (self.run_button, self.all_button, self.base):
             widget.setEnabled(ready and self.run is None)
         self.cancel_button.setEnabled(self.run is not None and state is SessionState.BUSY)
-        if self.current_result is not None and self.view.current == RESULT:
-            self.export_button.setEnabled(ready and self.current_result.statement.replayable)
-        else:
-            self.export_button.setEnabled(False)
+        usable = (
+            self.current_result is not None
+            and self.view.current == RESULT
+            and ready
+            and self.current_result.statement.replayable
+        )
+        self.export_button.setEnabled(usable)
+        self.load_button.setEnabled(usable and self._loader is not None)
 
     def _on_event(self, event: AppEvent) -> None:
         if self._closed:
