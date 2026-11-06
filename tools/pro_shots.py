@@ -164,9 +164,23 @@ def main() -> None:  # noqa: PLR0915 - todas las capturas, en orden
         ws.resize(1440, 900)
         ws.show()
         shoot(ws, out / f"sin-sesion-claro-{qt}.png")
+        ws.detach_coordinator()
+        ws.close()
+        ws.deleteLater()
     settings.remove("locale/overrideFlag")
     settings.remove("locale/userLocale")
+    # los widgets se borran antes de cerrar QGIS: si no, Python los destruye al salir y Qt 5 se cae
+    from qgis.PyQt.QtCore import QCoreApplication, QEvent
+
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    import gc
+
+    gc.collect()
     app.exitQgis()
+    # Al volver de `main`, Python destruiría sus objetos de QGIS en mal orden y Qt 5 se cae (no afecta a
+    # las capturas, ya escritas): se sale aquí, sin esa limpieza.
+    sys.stdout.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":
