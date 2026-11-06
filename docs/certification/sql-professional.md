@@ -1,5 +1,8 @@
 # Prueba manual en Windows · G6 SQL Professional
 
+> **Retirada en G9.** La interfaz de G6 (SQL profesional) se retiró en 0.10.0a1. La prueba manual vigente es
+> [`workspace-pro.md`](workspace-pro.md). Se conserva como registro de lo probado en su momento.
+
 Complementa la CI (Linux) para lo que solo se ve en Windows: teclado, ratón, idioma y empaquetado. Unos 15
 minutos. Requisitos: Windows 10/11, QGIS 3.34+ (o 4.x), DuckDB y PyArrow como en
 `docs/certification/workspace.md` §1. Instale el ZIP del PR (Complementos → Instalar a partir de ZIP).
