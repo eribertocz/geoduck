@@ -17,6 +17,8 @@ pendiente); regresiones G0–G8. Tag y release `v0.10.0a1` solo con autorizació
 | Cargar en QGIS | Una sola «Copia» (rápida por dentro; memoria como respaldo automático) y «Conectada»; prioridad al rendimiento |
 | Enviar a DuckDB | «Reproyectar a…» global para todo el envío |
 | G8 | La prueba manual de Windows de G8 se hace durante G9 |
+| Estilo (E0b) | Aprobado el aspecto del spike (pestaña de tabla en Qt Widgets, claro y oscuro, Qt 5 y Qt 6) |
+| «Copia» y proyecto (E0b) | Al guardar el proyecto, ofrecer «Guardar las copias junto al proyecto» (GeoPackage junto al `.qgz`); si no, «no disponible» con su motivo al reabrir |
 
 ## 2. Entregas (un PR cada una)
 
@@ -43,4 +45,5 @@ Las tres, «sí»:
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, ADR-0016, roadmap, AT-WSP y plan | En revisión | — |
+| E0 SPEC, ADR-0016, roadmap, AT-WSP y plan | Fusionado | #114 |
+| E0b Spike visual y «Copia» | En revisión: pestaña de tabla en Qt Widgets frente a la maqueta (claro/oscuro, Qt 5/Qt 6), 1 millón de filas (primera página < 25 ms), F-123 (fuente con hojas de estilo); la «Copia» no sobrevive a reabrir el proyecto → propuesta «Guardar las copias junto al proyecto». `docs/evidence/g9/spike/` | — |

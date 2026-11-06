@@ -76,7 +76,11 @@ con la base y el tipo de cada resultado. Intro abre; Esc cierra.
 Dos opciones, en lenguaje simple:
 - **«Copia»:** independiente de DuckDB. Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
   Copia en memoria solo como **respaldo automático** si GDAL no permite la rápida. El usuario nunca elige entre
-  las dos. Antes de unificar, E0b comprueba guardar y reabrir un proyecto con una «Copia».
+  las dos.
+- **Al guardar el proyecto** con alguna «Copia» (decisión del propietario, 2026-11-05, tras el spike E0b: ninguna
+  copia sobrevive a reabrir el proyecto), GeoDuck lo avisa y ofrece en un clic **«Guardar las copias junto al
+  proyecto»**: un GeoPackage al lado del `.qgz`, y cada capa pasa a leer ese archivo y sobrevive. Con «No, gracias»,
+  al reabrir la capa se muestra «no disponible» con su motivo, nunca rota sin explicación.
 - **«Conectada»:** en vivo, editable en DuckDB (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
 
