@@ -507,7 +507,10 @@ class ProWorkspace(QWidget):
         aborted = self.transaction_aborted()
         if aborted and self.aborted_toast is None:
             toast = Toast(
-                self, tr("The transaction failed: roll it back to keep using DuckDB"), kind="error", seconds=0
+                self,
+                tr("The transaction failed. «Roll back» discards its changes and DuckDB is ready again."),
+                kind="error",
+                seconds=0,
             )
             toast.add_action(tr("Roll back"), self.rollback)
             toast.show_at_corner(bottom=40)
@@ -536,7 +539,7 @@ class ProWorkspace(QWidget):
             failing = [c.title for c in checks if c.status is CheckStatus.FAIL]
             self.state_title.setText(tr("The environment is not ready for GeoDuck"))
             self.state_text.setText(
-                ", ".join(failing) + ". " + tr("Open «Environment diagnostics» to see what to do.")
+                tr("Missing: {}. Press «Diagnostics» to see how to install it.").format(", ".join(failing))
             )
         else:
             self.state_title.setText(tr("DuckDB is not started"))
