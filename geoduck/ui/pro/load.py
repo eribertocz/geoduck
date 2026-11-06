@@ -18,7 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 from qgis.core import QgsCoordinateReferenceSystem
-from qgis.PyQt.QtCore import QPoint, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFrame,
@@ -139,18 +139,26 @@ class _Row(QFrame):
             self.picked.emit()
 
 
-def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None]) -> QMenu:
-    """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea."""
+def load_menu(parent: QWidget, colors: Colors, pick: Callable[[str], None], *, title: str = "") -> QMenu:
+    """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea. Con `title`
+    (tablas soltadas en el mapa, E5), una cabecera arriba («3 tablas · ¿cómo cargarlas?»)."""
     menu = QMenu(parent)
     menu.setProperty("pro", "load-menu")
-    for kind, icon, title, text in (
+    if title:
+        head = QWidgetAction(menu)
+        caption = label(title, "section")
+        caption.setContentsMargins(10, 6, 10, 4)
+        head.setDefaultWidget(caption)
+        head.setEnabled(False)
+        menu.addAction(head)
+    for kind, icon, name, text in (
         (COPY, "layers", tr("Copy (mode)"), tr("Fast and independent of DuckDB")),
         (CONNECTED, "database", tr("Connected"), tr("Live and editable in DuckDB")),
     ):
-        row = _Row(icon, title, text, colors)
+        row = _Row(icon, name, text, colors)
         action = QWidgetAction(menu)
         action.setDefaultWidget(row)
-        action.setText(title)
+        action.setText(name)
         action.triggered.connect(lambda _c=False, k=kind: pick(k))
         row.picked.connect(action.trigger)
         row.picked.connect(menu.close)
@@ -247,7 +255,10 @@ class CrsDialog(QDialog):
 
 
 class QuickLoad:
-    """Carga de un clic: pide el plan, pregunta el SRC solo si falta y carga. Avisa por `notify`."""
+    """Carga de un clic: pide el plan, pregunta el SRC solo si falta y carga. Avisa por `notify`.
+
+    Varias tablas a la vez (soltadas en el mapa, E5): se piden todos los planes, el SRC que falte se pregunta
+    **una sola vez** para todas, y se cargan una tras otra (la sesión carga de a una)."""
 
     def __init__(
         self,
@@ -260,7 +271,9 @@ class QuickLoad:
         self._parent = parent
         self._notify = notify
         self._ask_crs = ask_crs or CrsDialog.ask
-        self._pending: dict[int, dict[str, Any]] = {}
+        #: token del plan → (lote, posición en el lote)
+        self._pending: dict[int, tuple[dict[str, Any], int]] = {}
+        self._queue: list[LoadRequest] = []
         self._loads: set[int] = set()
         self._starting = False
         self.last_report: LoadReport | None = None
@@ -278,50 +291,75 @@ class QuickLoad:
     ) -> None:
         """«Copia» o «Conectada» de `sql` (una tabla o vista con su `source`, o el resultado de una consulta
         con su `database`), con el nombre de capa `name`."""
+        job = {"sql": sql, "name": name, "source": source, "source_kind": source_kind, "database": database}
+        self.start_many([job], kind)
+
+    def start_many(self, jobs: list[dict[str, Any]], kind: str) -> None:
+        """Varias cargas con el mismo modo. Cada `job`: `sql`, `name` y, opcionales, `source`, `source_kind`
+        y `database` (como en `start`)."""
         modes = self._coordinator.load_modes()
         mode = LoadMode.CONNECTED if kind == CONNECTED else copy_mode(modes)
         reason = modes.get(mode)
         if reason is not None:
             self._notify(tr("Cannot load: ") + reason)
             return
-        try:
-            token = self._coordinator.prepare_load(sql, database=database)
-        except GeoDuckError as exc:
-            self._notify(tr("Cannot load: ") + exc.message)
-            return
-        self._pending[token] = {
-            "sql": sql,
-            "name": name,
-            "mode": mode,
-            "source": source,
-            "source_kind": source_kind,
-            "database": database,
-        }
+        batch: dict[str, Any] = {"jobs": jobs, "mode": mode, "plans": [None] * len(jobs), "waiting": 0}
+        for index, job in enumerate(jobs):
+            try:
+                token = self._coordinator.prepare_load(job["sql"], database=job.get("database"))
+            except GeoDuckError as exc:
+                self._notify(tr("Cannot load: ") + exc.message)
+                continue
+            self._pending[token] = (batch, index)
+            batch["waiting"] += 1
 
-    def _prepared(self, token: int, plan: LoadPlan) -> None:
-        job = self._pending.pop(token)
-        overrides: dict[str, str] = {}
-        missing = unknown_crs(plan)
+    def _prepared(self, token: int, plan: LoadPlan | None) -> None:
+        batch, index = self._pending.pop(token)
+        batch["plans"][index] = plan
+        batch["waiting"] -= 1
+        if batch["waiting"]:
+            return
+        ready = [(job, found) for job, found in zip(batch["jobs"], batch["plans"], strict=True) if found]
+        if not ready:
+            return
+        # el SRC que falte, una sola vez para todas («tabla · columna» si hay varias tablas)
+        missing: list[tuple[int, str, str]] = []
+        for i, (job, found) in enumerate(ready):
+            for column in unknown_crs(found):
+                missing.append((i, column, column if len(ready) == 1 else f"{job['name']} · {column}"))
+        answer: dict[str, str] = {}
         if missing:
-            answer = self._ask_crs(missing, self._parent)
-            if answer is None:
+            chosen = self._ask_crs([text for _, _, text in missing], self._parent)
+            if chosen is None:
                 return  # canceló: no se carga nada
-            overrides = answer
-        request = build_request(
-            plan,
-            job["sql"],
-            job["name"],
-            job["mode"],
-            overrides,
-            source=job["source"],
-            source_kind=job["source_kind"],
-            database=job["database"],
-        )
+            answer = chosen
+        for i, (job, found) in enumerate(ready):
+            overrides = {column: answer[text] for j, column, text in missing if j == i and text in answer}
+            self._queue.append(
+                build_request(
+                    found,
+                    job["sql"],
+                    job["name"],
+                    batch["mode"],
+                    overrides,
+                    source=job.get("source"),
+                    source_kind=job.get("source_kind"),
+                    database=job.get("database"),
+                )
+            )
+        self._next()
+
+    def _next(self) -> None:
+        """La siguiente carga de la cola, si la sesión está libre (las cargas ocupan la sesión)."""
+        if not self._queue or self._loads:
+            return
+        request = self._queue.pop(0)
         self._starting = True  # `LoadStarted` llega antes de que `load` devuelva su id
         try:
             self._loads.add(self._coordinator.load(request))
         except GeoDuckError as exc:
             self._notify(tr("Cannot load: ") + exc.message)
+            QTimer.singleShot(0, self._next)
         finally:
             self._starting = False
 
@@ -329,8 +367,8 @@ class QuickLoad:
         if isinstance(event, LoadPrepared) and event.token in self._pending:
             self._prepared(event.token, event.plan)
         elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
-            self._pending.pop(event.token)
             self._notify(tr("Cannot load: ") + event.message)
+            self._prepared(event.token, None)
         elif isinstance(event, LoadStarted) and (self._starting or event.load_id in self._loads):
             self._loads.add(event.load_id)
             self._notify(tr("Loading «{}»…").format(event.request.layer_name))
@@ -338,13 +376,18 @@ class QuickLoad:
             self._loads.discard(event.load_id)
             self.last_report = event.report
             self._notify(finished_text(event.report))
+            QTimer.singleShot(0, self._next)  # cuando la sesión ya volvió a estar lista
         elif isinstance(event, LoadFailed) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
+            if event.cancelled:
+                self._queue.clear()  # «Cancelar» detiene todo el lote
             self._notify(
                 tr("Loading cancelled.") if event.cancelled else tr("Loading error: ") + event.message
             )
+            QTimer.singleShot(0, self._next)
 
     def detach(self) -> None:
+        self._queue.clear()
         self._unsubscribe()
 
 

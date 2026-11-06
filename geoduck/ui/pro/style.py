@@ -104,6 +104,9 @@ def stylesheet(c: Colors) -> str:
 {r} QPushButton[pro="ghost"] {{ border: 1px solid transparent; background: transparent; color: {c.muted}; }}
 {r} QPushButton[pro="ghost"]:hover {{ background: {c.segment}; color: {c.text}; }}
 {r} QPushButton[pro="ghost"]:disabled {{ color: {c.null}; }}
+{r} QProgressBar[pro="thin"] {{ border: 0; border-radius: 2px; background: {c.segment}; max-height: 4px;
+    min-height: 4px; }}
+{r} QProgressBar[pro="thin"]::chunk {{ border-radius: 2px; background: {c.accent}; }}
 {r} QPushButton[pro="add-chip"] {{ border: 1px dashed {c.null}; border-radius: {m.pill}px;
     background: transparent; color: {c.muted}; padding: 0 11px; }}
 {r} QPushButton[pro="segment"] {{ border: 0; border-radius: {m.radius_sm}px; background: transparent;
@@ -188,6 +191,11 @@ def stylesheet(c: Colors) -> str:
     border-bottom: 1px solid {c.line}; padding: 0 10px 0 0; font-size: {m.font_small}px; }}
 {r} QTableView[pro="grid"] QTableCornerButton::section {{ background: {c.head}; border: 0;
     border-bottom: 1px solid {c.border}; }}
+{r} QHeaderView::section {{ background: {c.head}; color: {c.muted}; border: 0;
+    border-bottom: 1px solid {c.border}; padding: 4px 8px; font-weight: 600; }}
+{r} QTreeWidget {{ background: {c.bg}; border: 1px solid {c.border}; border-radius: {m.radius}px;
+    outline: 0; }}
+{r} QTreeWidget QLineEdit {{ min-height: {m.control - 8}px; border-color: {c.line}; }}
 {r} QTableWidget[pro="list"] {{ background: {c.bg}; border: 0; outline: 0; gridline-color: {c.line}; }}
 {r} QTableWidget[pro="list"]::item {{ padding: 0 10px; border-bottom: 1px solid {c.line}; }}
 {r} QTableWidget[pro="list"] QHeaderView::section {{ background: {c.head}; color: {c.muted}; border: 0;

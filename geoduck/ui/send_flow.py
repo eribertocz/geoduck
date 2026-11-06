@@ -70,7 +70,12 @@ class SendFlow:
 
     # -- entrada ---------------------------------------------------------------------------------
 
-    def open(self, layer_ids: list[str] | None, checked: list[str] | None = None) -> SendDialog | None:
+    def open(
+        self,
+        layer_ids: list[str] | None,
+        checked: list[str] | None = None,
+        destination: tuple[str, str] | None = None,
+    ) -> SendDialog | None:
         """Prepara el diálogo. `layer_ids`: las capas elegidas en el panel de capas (todas marcadas); None =
         el «+» del workspace: todas las capas del proyecto, marcadas solo las de `checked`."""
         if self._coordinator.state is not SessionState.READY:
@@ -101,12 +106,19 @@ class SendFlow:
             self._coordinator.read_import_target,
             self._parent,
             checked=set(layer_ids if layer_ids is not None else checked or []),
+            **({"destination": destination} if destination is not None else {}),
         )
         return dialog
 
-    def run(self, layer_ids: list[str] | None, checked: list[str] | None = None) -> None:
-        """Menú de capa o «+»: el diálogo y, si el usuario confirma, el envío."""
-        dialog = self.open(layer_ids, checked)
+    def run(
+        self,
+        layer_ids: list[str] | None,
+        checked: list[str] | None = None,
+        destination: tuple[str, str] | None = None,
+    ) -> None:
+        """Menú de capa, «+» o capas soltadas sobre una base (G9 · E5, con su `destination`): el diálogo y,
+        si el usuario confirma, el envío."""
+        dialog = self.open(layer_ids, checked, destination)
         if dialog is None or not dialog.exec():
             return
         self.send(dialog)

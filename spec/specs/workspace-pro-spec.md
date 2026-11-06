@@ -102,8 +102,17 @@ DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decis
 
 **Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5). Lo mínimo: se pregunta solo lo que falta.
 - **QGIS → DuckDB:** soltar una o varias capas del panel de capas en una base de la barra lateral (en el panel
-  acoplado, en cualquier parte: la base actual) abre el diálogo de envío con la base y las capas elegidas; un
-  clic en «Enviar». Cada tabla guarda el SRC de su capa.
+  acoplado, en cualquier parte: la base actual). Cada tabla guarda el SRC de su capa. Simplificaciones
+  (propietario, 2026-11-06: «Tú decide»):
+  1. **Sin diálogo si no hay nada que decidir:** si todas serán tablas nuevas, sin selección y con SRC, se
+     envían directamente y el pie avisa «N capas enviadas a db · Abrir · Deshacer». El diálogo (con la base y
+     las capas elegidas) solo se abre si hay algo que decidir: una tabla que ya existe, una capa que no se
+     puede, una selección o el SRC.
+  2. **Diálogo más limpio:** sin la columna «Qué pasará» si todo es una tabla nueva; «Reproyectar a…» y «Vista
+     en vez de copia», plegados bajo «Más opciones».
+  3. **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
+     «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
+  4. **Progreso en el pie:** una barra fina y «Cancelar»; sin otra ventana.
 - **DuckDB → QGIS:** soltar una o varias tablas o vistas en el mapa o en el panel de capas abre un **mini
   menú** «Copia» / «Conectada»: un clic carga todo lo soltado; Esc cancela. El SRC sale de la columna de
   geometría (`GEOMETRY('EPSG:4326')`); **solo si a alguna le falta**, una sola ventana pequeña pide uno para

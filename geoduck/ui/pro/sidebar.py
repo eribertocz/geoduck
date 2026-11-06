@@ -10,9 +10,13 @@ workspace.
 
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QModelIndex, QObject, QPoint, QRect, QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter
+from collections.abc import Callable
+from typing import Any
+
+from qgis.PyQt.QtCore import QMimeData, QModelIndex, QObject, QPoint, QRect, QRectF, QSize, Qt, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen
 from qgis.PyQt.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QMenu,
@@ -30,6 +34,7 @@ from geoduck import __version__
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ObjectKind, catalog_key
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import fuzzy, icons
+from geoduck.ui.pro.drag import LAYERS_MIME, PLACES_MIME, layer_ids, places_mime
 from geoduck.ui.pro.places import Place, Places, icon_name, missing_reason, place_of
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -39,6 +44,8 @@ from geoduck.ui.pro.widgets import ElidedLabel, SearchField, StatusDot, icon_but
 ROLE = Qt.ItemDataRole.UserRole
 #: Texto secundario de una fila, en gris a la derecha («db», «solo lectura»).
 META = Qt.ItemDataRole.UserRole + 1
+#: (base, esquema) donde se envían las capas soltadas sobre esta fila (solo bases y esquemas escribibles).
+TARGET = Qt.ItemDataRole.UserRole + 2
 SECTION, DATABASE, SCHEMA, GROUP, PLACE = "section", "database", "schema", "group", "place"
 
 
@@ -57,6 +64,19 @@ class _NavDelegate(QStyledItemDelegate):
         self.small = ui_font(METRICS.font_small)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        self._paint(painter, option, index)
+        tree = option.widget  # type: ignore[attr-defined]
+        target = getattr(tree, "drop_item", None)
+        if target is not None and tree.itemFromIndex(index) is target:  # E5: la base donde se soltarán
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            pen = QPen(QColor(self.colors.accent))
+            pen.setWidthF(1.5)
+            painter.setPen(pen)
+            painter.drawRoundedRect(QRectF(option.rect).adjusted(1, 1, -1, -1), 5, 5)  # type: ignore[attr-defined]
+            painter.restore()
+
+    def _paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
         meta = index.data(META)
         if not meta:
             super().paint(painter, option, index)
@@ -86,6 +106,105 @@ class _NavDelegate(QStyledItemDelegate):
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:  # noqa: N802
         hint = super().sizeHint(option, index)
         return QSize(hint.width(), max(hint.height(), 28))
+
+
+class NavTree(QTreeWidget):
+    """El árbol de la barra lateral, con arrastre en los dos sentidos (E5, workspace-pro-spec §9):
+    capas de QGIS soltadas sobre una base (resaltada con un borde) y tablas arrastradas hacia QGIS."""
+
+    #: (ids de capas, (base, esquema) o None = la base actual)
+    layers_dropped = pyqtSignal(list, object)
+    #: Texto para el pie mientras se arrastra («Suelta para enviar 3 capas a «db»»); "" al salir.
+    drop_hint = pyqtSignal(str)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.drop_item: QTreeWidgetItem | None = None
+        self.current_target: Callable[[], tuple[str, str] | None] = lambda: None
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
+
+    # -- hacia QGIS -----------------------------------------------------------------------------------
+
+    def mimeTypes(self) -> list[str]:  # noqa: N802 - API de Qt
+        return [PLACES_MIME]
+
+    def mimeData(self, items: Any) -> QMimeData:  # noqa: N802 - API de Qt
+        places = []
+        for item in items:
+            data = item.data(0, ROLE)
+            if data and data[0] == PLACE and not data[1].is_query:
+                places.append(data[1])
+        return places_mime(places)
+
+    def startDrag(self, actions: Any) -> None:  # noqa: N802 - API de Qt
+        if any((d := i.data(0, ROLE)) and d[0] == PLACE and not d[1].is_query for i in self.selectedItems()):
+            super().startDrag(Qt.DropAction.CopyAction)
+
+    # -- desde QGIS -----------------------------------------------------------------------------------
+
+    def target_item(self, pos: QPoint) -> QTreeWidgetItem | None:
+        """La base (o el esquema) bajo `pos` donde se puede escribir; una tabla cuenta como su base."""
+        item = self.itemAt(pos)
+        while item is not None:
+            if item.data(0, TARGET):
+                return item
+            item = item.parent()
+        return None
+
+    def _target(self, pos: QPoint) -> tuple[QTreeWidgetItem | None, tuple[str, str] | None]:
+        item = self.target_item(pos)
+        if item is not None:
+            return item, tuple(item.data(0, TARGET))
+        return None, self.current_target()
+
+    def _set_drop(self, item: QTreeWidgetItem | None) -> None:
+        if item is not self.drop_item:
+            self.drop_item = item
+            self.viewport().update()
+
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        if event.mimeData().hasFormat(LAYERS_MIME) and self.isEnabled():
+            event.acceptProposedAction()
+            self.dragMoveEvent(event)
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        if not event.mimeData().hasFormat(LAYERS_MIME):
+            event.ignore()
+            return
+        item, target = self._target(_pos(event))
+        self._set_drop(item)
+        count = len(layer_ids(event.mimeData()))
+        where = target[0] if target else tr("the current database")
+        self.drop_hint.emit(tr("Drop to send {0} layer(s) to «{1}»").format(count, where))
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+
+    def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        self._set_drop(None)
+        self.drop_hint.emit("")
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        ids = layer_ids(event.mimeData())
+        _item, target = self._target(_pos(event))
+        self._set_drop(None)
+        self.drop_hint.emit("")
+        if not ids:
+            event.ignore()
+            return
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        self.layers_dropped.emit(ids, target)
+
+
+def _pos(event: Any) -> QPoint:
+    """Posición de un evento de arrastre en Qt5 (`pos`) y Qt6 (`position`)."""
+    return event.position().toPoint() if hasattr(event, "position") else event.pos()
 
 
 class Sidebar(QFrame):
@@ -180,8 +299,9 @@ class Sidebar(QFrame):
         row.addWidget(self.add_button)
         return row
 
-    def _build_tree(self) -> QTreeWidget:
-        tree = QTreeWidget()
+    def _build_tree(self) -> NavTree:
+        tree = NavTree()
+        tree.current_target = self.current_target
         tree.setProperty("pro", "nav")
         tree.setColumnCount(1)
         tree.setHeaderHidden(True)
@@ -245,6 +365,15 @@ class Sidebar(QFrame):
         for widget in (self.search, self.tree, self.session_button):
             widget.setEnabled(started)
 
+    def current_target(self) -> tuple[str, str] | None:
+        """La base actual para capas soltadas fuera de una base: la de la fila elegida, si es escribible."""
+        item = self.tree.currentItem()
+        while item is not None:
+            if item.data(0, TARGET):
+                return tuple(item.data(0, TARGET))
+            item = item.parent()
+        return None
+
     def render(self, catalog: CatalogSnapshot | None) -> None:
         """Rehace el árbol (recientes, favoritos y bases) conservando lo plegado y el filtro."""
         self.catalog = catalog
@@ -261,7 +390,8 @@ class Sidebar(QFrame):
             tree.addTopLevelItem(hint)
         else:
             for db in catalog.databases:
-                self._add_database(catalog, db.name, _access_text(db.access, db.in_memory))
+                writable = db.in_memory or db.access is not AccessMode.READ_ONLY
+                self._add_database(catalog, db.name, _access_text(db.access, db.in_memory), writable)
             if catalog.temporaries:
                 temp = self._node(None, tr("Temporary"), (GROUP, "temp"), GROUP, bold=True)
                 for obj in sorted(catalog.temporaries, key=lambda o: o.name.casefold()):
@@ -321,16 +451,20 @@ class Sidebar(QFrame):
         self._quiet = False
         return item
 
-    def _add_database(self, catalog: CatalogSnapshot, name: str, access: str) -> None:
+    def _add_database(self, catalog: CatalogSnapshot, name: str, access: str, writable: bool = True) -> None:
         db = self._node(None, name, (DATABASE, catalog_key(name)), DATABASE, bold=True)
         db.setIcon(0, icons.icon("database", self.colors.muted, 14))
         db.setData(0, META, access)
         db.setToolTip(0, f"{name} · {access}")
         schemas = catalog.schemas_of(name)
+        if writable and schemas:  # capas soltadas sobre la base: a `main` o a su único esquema
+            db.setData(0, TARGET, (name, "main" if "main" in schemas else schemas[0]))
         for schema in schemas:
             parent = db
             if len(schemas) > 1 or schema != "main":
                 parent = self._node(db, schema, (SCHEMA, catalog_key(name), schema), SCHEMA)
+                if writable:
+                    parent.setData(0, TARGET, (name, schema))
             objects = sorted(catalog.objects_in(name, schema), key=lambda o: o.name.casefold())
             for obj in objects:
                 if obj.kind is ObjectKind.TABLE:

@@ -41,7 +41,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from geoduck.domain.catalog import AccessMode, CatalogSnapshot
+from geoduck.domain.catalog import AccessMode, CatalogSnapshot, catalog_key
 from geoduck.domain.importing import (
     PATH_CONNECTED,
     PATH_QGIS,
@@ -136,7 +136,18 @@ class RowState:
     mode: ImportMode = ImportMode.CREATE
 
 
+#: Papel de G5–G8 (`geoduck`) → papel de Workspace Pro (`pro`), para el mismo widget (G9 · E5).
+_PRO_ROLES = {"muted": "muted", "primary": "primary", "error-text": "error", "secondary": None}
+
+
 class SendDialog(QDialog):
+    def _role(self, widget: QWidget, role: str) -> None:
+        widget.setProperty("geoduck", role)
+        if getattr(self, "pro", False):
+            widget.setProperty("pro", _PRO_ROLES.get(role))
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
     def __init__(  # noqa: PLR0915 - el diálogo se construye en un solo lugar, de arriba abajo
         self,
         candidates: list[SendCandidate],
@@ -145,18 +156,29 @@ class SendDialog(QDialog):
         parent: QWidget | None = None,
         *,
         checked: set[str] | None = None,
+        destination: tuple[str, str] | None = None,
+        pro: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Send to DuckDB"))
-        self.setObjectName("geoduckSendDialog")
         self.setMinimumWidth(600)  # cabe en una pantalla pequeña; las columnas se ajustan
         self.resize(780, 540)
-        self.setStyleSheet(theme.stylesheet(theme.palette_for(self)))
+        #: G9 · E5: con `pro`, el sistema de diseño de Workspace Pro; el comportamiento no cambia.
+        self.pro = pro
+        if pro:
+            from geoduck.ui.pro import style as pro_style  # noqa: PLC0415
+
+            pro_style.apply(self)
+        else:
+            self.setObjectName("geoduckSendDialog")
+            self.setStyleSheet(theme.stylesheet(theme.palette_for(self)))
         self._candidates = candidates
         self._read_target = read_target
         self._target: ImportTarget | None = None
         self._target_error = ""
         self._asked: tuple[str, str] | None = None
+        #: G9 · E5: se llama al llegar el destino leído (para enviar sin diálogo si no hay nada que decidir).
+        self.on_target: Callable[[], None] | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(10)
@@ -226,10 +248,24 @@ class SendDialog(QDialog):
         self.without_crs = QCheckBox(tr("Send without CRS"))
         self.without_crs.setVisible(False)
         self.crs_note = QLabel()
-        self.crs_note.setProperty("geoduck", "muted")
+        self._role(self.crs_note, "muted")
         self.crs_note.setWordWrap(True)
         self.crs_note.setVisible(False)
         layout.addWidget(self.only_selected)
+        self.more_button: QPushButton | None = None
+        if pro:  # G9 · E5: «Reproyectar a…» y «Vista en vez de copia», plegados bajo «Más opciones»
+            self.more_button = QPushButton(tr("More options"))
+            self.more_button.setProperty("pro", "ghost")
+            self.more_button.setCheckable(True)
+            self._optional = (
+                any(c.geometry is not None for c in candidates),
+                any(c.can_view for c in candidates),
+            )
+            self.more_button.setVisible(any(self._optional))
+            self.reproject_row.setVisible(False)
+            self.as_view.setVisible(False)
+            self.more_button.toggled.connect(self._show_more)
+            layout.addWidget(self.more_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.as_view)
         layout.addWidget(self.reproject_row)
         layout.addWidget(self.without_crs)
@@ -249,10 +285,10 @@ class SendDialog(QDialog):
         footer.addWidget(self.open_after)
         footer.addStretch(1)
         self.cancel_button = QPushButton(tr("Cancel"))
-        self.cancel_button.setProperty("geoduck", "secondary")
+        self._role(self.cancel_button, "secondary")
         self.cancel_button.clicked.connect(self.reject)
         self.send_button = QPushButton(tr("Send"))
-        self.send_button.setProperty("geoduck", "primary")
+        self._role(self.send_button, "primary")
         self.send_button.setDefault(True)
         self.send_button.setToolTip(tr("Ctrl+Enter"))
         self.send_button.clicked.connect(self.accept)
@@ -267,6 +303,11 @@ class SendDialog(QDialog):
         for box in (self.only_selected, self.as_view, self.reproject, self.without_crs):
             box.toggled.connect(self.refresh)
         self._select_default_destination(catalog)
+        if destination is not None:  # G9 · E5: capas soltadas sobre una base de la barra lateral
+            keys = [(catalog_key(d), s) for d, s in self.destinations]
+            wanted = (catalog_key(destination[0]), destination[1])
+            if wanted in keys:
+                self.destination.setCurrentIndex(keys.index(wanted))
         self._destination_changed()
 
     # -- construcción ------------------------------------------------------------------------------
@@ -372,6 +413,11 @@ class SendDialog(QDialog):
             database, schema, lambda result, asked=(database, schema): self.set_target(asked, result)
         )
 
+    @property
+    def target_ready(self) -> bool:
+        """Ya se leyó el destino (o falló la lectura)."""
+        return self._target is not None or bool(self._target_error)
+
     def set_target(self, asked: tuple[str, str], result: ImportTarget | BaseException) -> None:
         """Respuesta de `read_target`; se descarta si el destino cambió mientras tanto."""
         if asked != self._asked:
@@ -381,6 +427,8 @@ class SendDialog(QDialog):
         else:
             self._target = result
         self.refresh()
+        if self.on_target is not None:
+            self.on_target()
 
     # -- filas ------------------------------------------------------------------------------------
 
@@ -491,7 +539,7 @@ class SendDialog(QDialog):
             )
             self.conflicts[i].setVisible(bool(exists))
             self.states[i].setText(state.text)
-            self.states[i].setProperty("geoduck", "error-text" if state.kind == "blocked" else "muted")
+            self._role(self.states[i], "error-text" if state.kind == "blocked" else "muted")
             self.states[i].style().unpolish(self.states[i])
             self.states[i].style().polish(self.states[i])
         for i, row in enumerate(self.geometry_rows):  # el SRC con que llegará (reproyectado o sin SRC)
@@ -517,12 +565,39 @@ class SendDialog(QDialog):
                 )
             )
         self.summary.setText(self._summary(states))
+        if self.pro:
+            self._tidy(states)
         sending = [s for s in states if s.kind == "send"]
         blocked = [s for i, s in enumerate(states) if s.kind == "blocked" and self._checked(i)]
         crs_missing = self.reproject.isChecked() and self.reproject_to is None
         self.send_button.setEnabled(
             bool(sending) and not blocked and self._target is not None and not crs_missing
         )
+
+    def _show_more(self, shown: bool) -> None:
+        reproject, view = self._optional
+        self.reproject_row.setVisible(shown and reproject)
+        self.as_view.setVisible(shown and view)
+
+    def needs_decision(self) -> bool:
+        """G9 · E5: hay algo que el usuario debe decidir antes de enviar (una tabla que ya existe, una fila
+        que no se puede, una selección, el SRC). Si no, las capas soltadas se envían sin abrir el diálogo."""
+        if self._target is None or not self.send_button.isEnabled():
+            return True
+        for i in range(len(self.items)):
+            if not self._checked(i):
+                continue
+            state = self.row_state(i)
+            if state.kind != "send" or state.mode is not ImportMode.CREATE:
+                return True
+        return self.only_selected.isVisibleTo(self) or self.without_crs.isVisibleTo(self)
+
+    def _tidy(self, states: list[RowState]) -> None:
+        """Estilo nuevo (G9 · E5): sin la columna «Qué pasará» si todo es una tabla nueva."""
+        news = all(
+            s.kind == "send" and s.mode is ImportMode.CREATE for i, s in enumerate(states) if self._checked(i)
+        )
+        self.tree.setColumnHidden(2, news and self._target is not None)
 
     def _summary(self, states: list[RowState]) -> str:
         if self._target is None and not self._target_error:
