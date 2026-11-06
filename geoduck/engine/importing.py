@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 
 from geoduck.domain.bridge_types import is_geometry_type
-from geoduck.domain.errors import EngineError, InvalidArgumentError, TransactionError
+from geoduck.domain.errors import EngineError, InvalidArgumentError, OperationCancelledError, TransactionError
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import (
     BATCH_VIEW,
@@ -84,7 +84,7 @@ def _count(handle: ConnectionHandle, job: ImportJob) -> int:
     return int(str(rows[0][0]))
 
 
-def import_batches(
+def import_batches(  # noqa: PLR0912, PLR0915 - una transacción, paso a paso (docstring del módulo)
     handle: ConnectionHandle,
     token: CancelToken,
     jobs: list[ImportJob],
@@ -161,10 +161,13 @@ def import_batches(
             )
         crs_lost = _geometry_without_crs(handle, jobs)
         handle.execute("COMMIT")
-    except BaseException:
+    except BaseException as exc:
         channel.abandon()  # el productor deja de leer la capa
         with contextlib.suppress(Exception):  # el worker verifica la conexión después de cada operación
             handle.execute("ROLLBACK")
+        if token.cancelled and not isinstance(exc, OperationCancelledError):
+            # Cancelado a mitad de una sentencia: la interrupción llega como un error de DuckDB
+            raise OperationCancelledError(tr("Sending cancelled")) from exc
         raise
     return ImportReport(tuple(tables), tuple(crs_lost))
 

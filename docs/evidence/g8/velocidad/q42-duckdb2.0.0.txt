@@ -1,0 +1,5 @@
+# QGIS 4.2.3-Belém do Pará · DuckDB 2.0.0
+general 100000 0.66 152,126
+conectada 100000 0.06 1,745,872
+general 1000000 5.88 170,111
+conectada 1000000 0.05 19,313,777

@@ -389,3 +389,106 @@ def test_reproject_needs_a_source_crs(session):
     layer.setCrs(QgsCoordinateReferenceSystem())  # la capa en memoria trae EPSG:4326 por defecto
     with pytest.raises(GeoDuckError):
         plan_layer(layer, table="x", reproject_to="EPSG:32719")
+
+
+# -- aceptación (E5): Shapefile, listas y mapas, geometrías de todo tipo y vuelta a QGIS -----------------
+
+
+def test_shapefile_has_no_geometry_name_so_it_is_geom(session, tmp_path):
+    ds = ogr.GetDriverByName("ESRI Shapefile").CreateDataSource(str(tmp_path / "rios.shp"))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(32719)
+    lyr = ds.CreateLayer("rios", srs, ogr.wkbLineString)
+    lyr.CreateField(ogr.FieldDefn("nombre", ogr.OFTString))
+    for i in range(3):
+        f = ogr.Feature(lyr.GetLayerDefn())
+        f.SetField("nombre", f"río {i}")
+        f.SetGeometry(ogr.CreateGeometryFromWkt(f"LINESTRING({i} 0, {i} 10)"))
+        lyr.CreateFeature(f)
+    ds = None
+    layer = QgsVectorLayer(str(tmp_path / "rios.shp"), "rios", "ogr")
+    plan = plan_layer(layer, table="rios")
+    assert plan.path == PATH_QGIS and plan.job.geometry.name == "geom"
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    assert rows(session, "SELECT typeof(geom), count(*) FROM rios GROUP BY 1") == (
+        ("GEOMETRY('EPSG:32719')", 3),
+    )
+
+
+def test_lists_and_maps(session):
+    uri = "None?field=tags:stringlist&field=enteros:integerlist&field=reales:doublelist&field=datos:map"
+    layer = QgsVectorLayer(uri, "listas", "memory")
+    f = QgsFeature(layer.fields())
+    f.setAttributes([["a", "b"], [1, 2], [1.5], {"k": 1}])
+    empty = QgsFeature(layer.fields())
+    empty.setAttributes([None, None, None, None])
+    layer.dataProvider().addFeatures([f, empty])
+    plan = plan_layer(layer, table="listas")
+    assert any("datos" in w for w in plan.warnings)  # el mapa va como JSON, con aviso (§6)
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    types = dict(
+        rows(session, "SELECT column_name, data_type FROM duckdb_columns() WHERE table_name = 'listas'")
+    )
+    assert types == {"tags": "VARCHAR[]", "enteros": "BIGINT[]", "reales": "DOUBLE[]", "datos": "JSON"}
+    got = rows(session, "SELECT tags, enteros, reales, datos::VARCHAR FROM listas ORDER BY tags NULLS LAST")
+    assert got[0][:3] == (["a", "b"], [1, 2], [1.5]) and json.loads(got[0][3]) == {"k": 1}
+    assert got[1] == (None, None, None, None)
+
+
+def test_z_m_collections_null_and_invalid_go_and_come_back(session, tmp_path):
+    """AT-IMP-007: el WKB llega tal cual (Z/M, colecciones, inválidas) y vuelve a QGIS igual, con su SRC."""
+    path = tmp_path / "mezcla.gpkg"
+    ds = ogr.GetDriverByName("GPKG").CreateDataSource(str(path))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(32719)
+    lyr = ds.CreateLayer("mezcla", srs, ogr.wkbUnknown)
+    lyr.CreateField(ogr.FieldDefn("n", ogr.OFTInteger))
+    wkts = [
+        "POINT Z (500000 8000000 3500)",
+        "LINESTRING M (0 0 1, 10 10 2)",
+        "POINT ZM (1 2 3 4)",
+        "GEOMETRYCOLLECTION (POINT (1 1), LINESTRING (0 0, 1 1))",
+        "POLYGON ((0 0, 10 10, 10 0, 0 10, 0 0))",  # inválida (pajarita): se copia tal cual
+        None,
+    ]
+    for i, wkt in enumerate(wkts):
+        f = ogr.Feature(lyr.GetLayerDefn())
+        f.SetField("n", i)
+        if wkt:
+            f.SetGeometry(ogr.CreateGeometryFromWkt(wkt))
+        lyr.CreateFeature(f)
+    ds = None
+    layer = QgsVectorLayer(f"{path}|layername=mezcla", "mezcla", "ogr")
+    report, _ = send(session, [plan_layer(layer, table="mezcla")])
+    assert isinstance(report, ImportReport), report
+    # Lo que QGIS entrega de cada entidad (con tipo «desconocido», QGIS puede ajustar Z/M al tipo de la capa)
+    original = {f["n"]: f.geometry() for f in layer.getFeatures()}
+    assert rows(session, "SELECT DISTINCT typeof(geom) FROM mezcla") == (("GEOMETRY('EPSG:32719')",),)
+    # El WKB guardado es el mismo que da QGIS, byte a byte (Z, M, ZM, colección, inválida y NULL)
+    batches = session.engine.read_table("SELECT n, geom FROM mezcla ORDER BY n").future.result(TIMEOUT)
+    stored = {}
+    for b in batches:
+        stored.update(zip(b.column("n").to_pylist(), b.column("geom").to_pylist(), strict=True))
+    for n, g in original.items():
+        assert stored[n] == (None if g.isNull() else bytes(g.asWkb())), n
+    # Y vuelve a QGIS con su SRC y su Z. Una capa de QGIS tiene un solo tipo: se prueba con uno (POINT Z);
+    # con tipos mixtos, la capa Conectada pierde el SRC (F-122, aparte de G8)
+    session.sql("CREATE TABLE puntos_z AS SELECT * FROM mezcla WHERE n = 0")
+    _, back = session.load("SELECT * FROM puntos_z", name="vuelta")
+    assert back.crs().authid() == "EPSG:32719"
+    for f in back.getFeatures():
+        assert bytes(f.geometry().asWkb()) == bytes(original[f["n"]].asWkb()), f["n"]
+
+
+def test_a_forced_count_mismatch_rolls_back(session):
+    """AT-IMP-004 «conteo distinto forzado»: una consulta que no da las mismas filas dos veces."""
+    from geoduck.domain.importing import ImportJob
+    from geoduck.qgis_bridge.importer import LayerPlan
+
+    source = "SELECT range AS id FROM range(100000) WHERE random() < 0.5"
+    job = ImportJob("azar", "azar", ImportMode.CREATE, (), None, source_sql=source)
+    result, _ = send(session, [LayerPlan(points("azar", 1), job, PATH_CONNECTED)])
+    assert isinstance(result, GeoDuckError), result
+    assert "azar" not in tables(session)
