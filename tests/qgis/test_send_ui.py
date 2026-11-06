@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from qgis.core import (
     QgsApplication,
+    QgsCoordinateReferenceSystem,
     QgsFeature,
     QgsGeometry,
     QgsPointXY,
@@ -307,7 +308,6 @@ def test_failure_says_nothing_changed(env):
 
 
 def test_reproject_from_the_dialog(env):
-    from qgis.core import QgsCoordinateReferenceSystem
 
     layer = points("geo")
     dialog = env.dialog([layer.id()])
@@ -321,7 +321,6 @@ def test_reproject_from_the_dialog(env):
 
 
 def test_reproject_without_source_crs_is_blocked(env):
-    from qgis.core import QgsCoordinateReferenceSystem
 
     layer = QgsVectorLayer("Point?field=id:integer", "sin src", "memory")
     layer.setCrs(QgsCoordinateReferenceSystem())  # la capa en memoria trae EPSG:4326 por defecto
@@ -333,7 +332,6 @@ def test_reproject_without_source_crs_is_blocked(env):
 
 
 def test_custom_crs_is_announced(env):
-    from qgis.core import QgsCoordinateReferenceSystem
 
     layer = points("propio")
     proj = (
@@ -347,7 +345,6 @@ def test_custom_crs_is_announced(env):
 
 
 def test_append_after_reprojecting_compares_the_target_crs(env):
-    from qgis.core import QgsCoordinateReferenceSystem
 
     env.rows(
         "CREATE TABLE utm AS SELECT 1 AS id, 'x' AS nombre, "
@@ -365,7 +362,6 @@ def test_append_after_reprojecting_compares_the_target_crs(env):
 
 
 def test_reproject_without_target_crs_cannot_send(env):
-    from qgis.core import QgsCoordinateReferenceSystem
 
     layer = points("geo")
     dialog = env.dialog([layer.id()])
@@ -373,3 +369,13 @@ def test_reproject_without_target_crs_cannot_send(env):
     dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem())
     assert dialog.reproject_to is None
     assert not dialog.send_button.isEnabled() and "SRC de destino" in dialog.summary.text()
+
+
+def test_the_folded_geometry_row_shows_the_crs_it_will_have(env):
+    layer = points("geo")
+    dialog = env.dialog([layer.id()])
+    row = dialog.geometry_rows[0]
+    assert row.text(0).endswith("GEOMETRY(EPSG:4326)")
+    dialog.reproject.setChecked(True)
+    dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32719"))
+    assert row.text(0).endswith("GEOMETRY(EPSG:32719)")

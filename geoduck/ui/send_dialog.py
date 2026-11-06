@@ -84,6 +84,14 @@ def _bold(label: QLabel) -> QLabel:
     return label
 
 
+def _geometry_text(geometry: ImportGeometry) -> str:
+    """«geom  →  GEOMETRY(EPSG:32719)»; un SRC largo (PROJJSON) se resume como «personalizado»."""
+    crs = geometry.crs or ""
+    if len(crs) > 40:
+        crs = tr("custom")
+    return f"{geometry.name}  →  GEOMETRY{f'({crs})' if crs else ''}"
+
+
 def _count(n: int) -> str:
     return f"{n:,}".replace(",", " ")
 
@@ -185,6 +193,8 @@ class SendDialog(QDialog):
         self.names: list[QLineEdit] = []
         self.conflicts: list[QComboBox] = []
         self.states: list[QLabel] = []
+        #: Fila plegada con la geometría de cada capa (None sin geometría): muestra el SRC con que llegará.
+        self.geometry_rows: list[QTreeWidgetItem | None] = []
         for c in candidates:
             self._add_row(c, checked)
         layout.addWidget(self.tree, 1)
@@ -305,11 +315,12 @@ class SendDialog(QDialog):
             child = QTreeWidgetItem([f"{column.name}  →  {column.duck_type}"])
             child.setFlags(Qt.ItemFlag.ItemIsEnabled)
             item.addChild(child)
+        geometry_row = None
         if c.geometry is not None:
-            crs = c.geometry.crs if c.geometry.crs and len(c.geometry.crs) < 40 else ""
-            child = QTreeWidgetItem([f"{c.geometry.name}  →  GEOMETRY{f'({crs})' if crs else ''}"])
-            child.setFlags(Qt.ItemFlag.ItemIsEnabled)
-            item.addChild(child)
+            geometry_row = QTreeWidgetItem([_geometry_text(c.geometry)])
+            geometry_row.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            item.addChild(geometry_row)
+        self.geometry_rows.append(geometry_row)
         for warning in c.warnings:
             child = QTreeWidgetItem([f"⚠ {warning}"])
             child.setFlags(Qt.ItemFlag.ItemIsEnabled)
@@ -483,6 +494,10 @@ class SendDialog(QDialog):
             self.states[i].setProperty("geoduck", "error-text" if state.kind == "blocked" else "muted")
             self.states[i].style().unpolish(self.states[i])
             self.states[i].style().polish(self.states[i])
+        for i, row in enumerate(self.geometry_rows):  # el SRC con que llegará (reproyectado o sin SRC)
+            geometry = self._geometry_for(self._candidates[i])
+            if row is not None and geometry is not None:
+                row.setText(0, _geometry_text(geometry))
         checked = [c for i, c in enumerate(self._candidates) if self._checked(i)]
         needs = [c for c in checked if self._needs_without_crs(c)]
         self.without_crs.setVisible(bool(needs) or self.without_crs.isChecked())
