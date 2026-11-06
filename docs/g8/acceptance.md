@@ -55,6 +55,8 @@ Archivos en `tests/`: `qgis/test_send_ui.py` (S), `qgis/test_import_layers.py` (
 | 2026-11-05 | F-121 se corrige en un PR aparte (#107), antes de E2 |
 | 2026-11-05 | E3 y E4 en el estilo actual de la interfaz; se rehacen en G9 (interfaz nueva desde cero, Qt Widgets con sistema de diseño propio, sin motor web; facilidad máxima sin perder detalle) |
 | 2026-11-05 | «Reproyectar a…» global para todo el envío; por capa, solo como opción avanzada si G9 lo pide |
+| 2026-11-05 | F-122 se corrige en un PR aparte antes de cerrar G8 |
+| 2026-11-05 | Para G9: una sola «Copia» (por dentro la Copia rápida; la Copia en memoria solo como respaldo automático si GDAL no permite la rápida), además de «Conectada»; antes, comprobar en el spike de G9 guardar y reabrir el proyecto |
 
 ## 5. Velocidad
 
@@ -69,6 +71,7 @@ Ver [`docs/evidence/g8/velocidad/README.md`](../evidence/g8/velocidad/README.md)
 | F-122 | Al cargar en QGIS una columna `GEOMETRY('EPSG:32719')`, la capa queda **sin SRC** si es **Conectada** con tipos de geometría mixtos o con `GEOMETRYCOLLECTION`, o si es **Copia rápida** (Instantánea) con `GEOMETRYCOLLECTION`. «Copia en memoria» y una sola familia simple, bien (verificado en QGIS 3.44, DuckDB 2.0.0). Previo a G8 (G4); la tabla enviada sí guarda el SRC | **Abierto**: corrección propuesta en un PR aparte, a decisión del propietario |
 | — | PyQGIS pierde el `run` de una `QgsTask` sin referencia de Python, y QGIS la borra al terminar | La tarea se guarda viva y no se toca después (E2) |
 | — | Qt 5 da el nombre del tipo de un campo como `QByteArray`; Qt 6 como `bytes` (subtipo `None`) | `type_name` cubre los dos (E2) |
+| — | Cancelar a mitad de una sentencia: la interrupción de DuckDB llegaba como error y no como cancelación (1 vez en la suite de QGIS 3.44) | El envío la informa como cancelación (E5) |
 | — | Reproyectar una capa Conectada de la misma sesión bloquearía el worker (QGIS le pediría páginas mientras escribe el envío) | Se rechaza con su motivo (E4) |
 
 ## 7. Limitaciones conocidas
