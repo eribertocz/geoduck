@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from qgis.core import (
     QgsApplication,
+    QgsCoordinateReferenceSystem,
     QgsFeature,
     QgsGeometry,
     QgsPointXY,
@@ -301,3 +302,80 @@ def test_failure_says_nothing_changed(env):
     assert isinstance(event, SendFailed) and not event.cancelled
     messages = [w.text() for w in env.bar.items()]
     assert any("DuckDB no cambió" in t for t in messages)
+
+
+# -- «Reproyectar a…» y SRC personalizados (E4; AT-IMP-003, AT-IMP-007) ------------------------------------
+
+
+def test_reproject_from_the_dialog(env):
+
+    layer = points("geo")
+    dialog = env.dialog([layer.id()])
+    assert dialog.reproject_row.isVisibleTo(dialog)
+    dialog.reproject.setChecked(True)
+    dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32719"))
+    assert dialog.reproject_to == "EPSG:32719"
+    assert "EPSG:32719" in dialog.summary.text()
+    assert isinstance(env.send(dialog), SendFinished)
+    assert env.rows("SELECT DISTINCT typeof(geom) FROM geo") == (("GEOMETRY('EPSG:32719')",),)
+
+
+def test_reproject_without_source_crs_is_blocked(env):
+
+    layer = QgsVectorLayer("Point?field=id:integer", "sin src", "memory")
+    layer.setCrs(QgsCoordinateReferenceSystem())  # la capa en memoria trae EPSG:4326 por defecto
+    QgsProject.instance().addMapLayer(layer)
+    dialog = env.dialog([layer.id()])
+    dialog.reproject.setChecked(True)
+    dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32719"))
+    assert state(dialog, 0).kind == "blocked" and "no tiene SRC" in state(dialog, 0).text
+
+
+def test_custom_crs_is_announced(env):
+
+    layer = points("propio")
+    proj = (
+        "+proj=tmerc +lat_0=0 +lon_0=-63.5 +k=0.9996 +x_0=500000 +y_0=10000000 +ellps=WGS84 +units=m +no_defs"
+    )
+    layer.setCrs(QgsCoordinateReferenceSystem.fromProj(proj))
+    dialog = env.dialog([layer.id()])
+    warnings = dialog._candidates[0].warnings
+    assert any("PROJJSON" in w for w in warnings)
+    assert state(dialog, 0).kind == "send"
+
+
+def test_append_after_reprojecting_compares_the_target_crs(env):
+
+    env.rows(
+        "CREATE TABLE utm AS SELECT 1 AS id, 'x' AS nombre, "
+        "ST_SetCRS('POINT(0 0)'::GEOMETRY, 'EPSG:32719') AS geom"
+    )
+    layer = points("utm")
+    dialog = env.dialog([layer.id()])
+    dialog.conflicts[0].setCurrentIndex(dialog.conflicts[0].findData(Conflict.APPEND))
+    assert state(dialog, 0).kind == "blocked"  # la capa está en EPSG:4326
+    dialog.reproject.setChecked(True)
+    dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32719"))
+    assert state(dialog, 0).mode is ImportMode.APPEND, state(dialog, 0).text
+    assert isinstance(env.send(dialog), SendFinished)
+    assert env.rows("SELECT count(*) FROM utm") == ((6,),)
+
+
+def test_reproject_without_target_crs_cannot_send(env):
+
+    layer = points("geo")
+    dialog = env.dialog([layer.id()])
+    dialog.reproject.setChecked(True)
+    dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem())
+    assert dialog.reproject_to is None
+    assert not dialog.send_button.isEnabled() and "SRC de destino" in dialog.summary.text()
+
+
+def test_the_folded_geometry_row_shows_the_crs_it_will_have(env):
+    layer = points("geo")
+    dialog = env.dialog([layer.id()])
+    row = dialog.geometry_rows[0]
+    assert row.text(0).endswith("GEOMETRY(EPSG:4326)")
+    dialog.reproject.setChecked(True)
+    dialog.reproject_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32719"))
+    assert row.text(0).endswith("GEOMETRY(EPSG:32719)")

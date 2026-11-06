@@ -349,3 +349,43 @@ def test_geoparquet_copy_and_view(session, tmp_path):
     assert plan_layer(layer, table="uno").path == PATH_QGIS
     with pytest.raises(GeoDuckError):
         plan_layer(layer, table="uno", as_view=True)
+
+
+# -- «Reproyectar a…» (E4; qgis-import-spec §3; AT-IMP-003, spatial-spec §8: 0,01 m) -------------------
+
+
+def test_reproject_transforms_with_qgis_and_labels_the_target_crs(session):
+    from qgis.core import QgsCoordinateTransform, QgsPointXY
+
+    layer = points("geo", 3)
+    plan = plan_layer(layer, table="utm", reproject_to="EPSG:32719")
+    assert plan.path == PATH_QGIS and plan.job.geometry.crs == "EPSG:32719"
+    assert any("EPSG:32719" in w for w in plan.warnings)
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    got = rows(session, "SELECT typeof(geom), geom::VARCHAR FROM utm ORDER BY id")
+    assert {g[0] for g in got} == {"GEOMETRY('EPSG:32719')"}
+    transform = QgsCoordinateTransform(
+        QgsCoordinateReferenceSystem("EPSG:4326"),
+        QgsCoordinateReferenceSystem("EPSG:32719"),
+        QgsProject.instance(),
+    )
+    for i, (_, wkt) in enumerate(got):
+        expected = transform.transform(QgsPointXY(-68 + i / 1000, -16))
+        x, y = (float(v) for v in wkt.removeprefix("POINT (").removesuffix(")").split())
+        assert abs(x - expected.x()) < 0.01 and abs(y - expected.y()) < 0.01
+
+
+def test_a_connected_layer_of_this_session_is_not_reprojected(session):
+    """Leerla con QGIS pediría páginas al worker que escribe el envío: se rechaza antes de empezar."""
+    session.sql(TABLE)
+    _, layer = session.load("SELECT * FROM puntos", name="P")
+    with pytest.raises(GeoDuckError, match="Conectada"):
+        plan_layer(layer, table="copia_utm", reproject_to="EPSG:32719")
+
+
+def test_reproject_needs_a_source_crs(session):
+    layer = QgsVectorLayer("Point?field=id:integer", "sin src", "memory")
+    layer.setCrs(QgsCoordinateReferenceSystem())  # la capa en memoria trae EPSG:4326 por defecto
+    with pytest.raises(GeoDuckError):
+        plan_layer(layer, table="x", reproject_to="EPSG:32719")

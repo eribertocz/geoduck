@@ -57,6 +57,7 @@ from geoduck.domain.importing import (
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
 from geoduck.qgis_bridge.provider import FID, KEY, id_columns, key_alias
+from geoduck.qgis_bridge.reproject import Reprojector
 
 #: Entidades por lote Arrow (spike G8-A, F-114).
 BATCH = 50_000
@@ -100,6 +101,8 @@ class LayerPlan:
     warnings: list[str] = field(default_factory=list)
     #: Columnas con su tipo en DuckDB, también en el camino SQL: para el diálogo y «Añadir filas».
     columns: tuple[ImportColumn, ...] = ()
+    #: «Reproyectar a…»: transforma cada geometría al leerla (camino general).
+    reprojector: Reprojector | None = None
 
 
 def type_name(type_id: Any) -> str:
@@ -184,15 +187,22 @@ def plan_layer(
     only_selected: bool = False,
     as_view: bool = False,
     without_crs: bool = False,
+    reproject_to: str | None = None,
 ) -> LayerPlan:
-    """El envío de una capa a `table`. `without_crs`: el usuario eligió enviar sin SRC (F-120, §7)."""
+    """El envío de una capa a `table`. `without_crs`: el usuario eligió enviar sin SRC (F-120, §7).
+    `reproject_to`: «Reproyectar a…» (§3), con QGIS/PROJ al leer; obliga al camino general (§5.3)."""
     fids = sorted(layer.selectedFeatureIds()) if only_selected else None
     features = len(fids) if fids is not None else layer.featureCount()
     warnings: list[str] = []
     geometry = None
+    reprojector = None
+    if layer.isSpatial() and reproject_to:
+        # Sin SRC de origen, Reprojector explica que hace falta uno (nunca se inventa: C4)
+        reprojector = Reprojector(layer.crs(), reproject_to, sending=True)
     if layer.isSpatial():
-        crs = None if without_crs else crs_text(layer.crs())
-        if crs is None and not without_crs and layer.crs().isValid():
+        source_crs = reprojector.target if reprojector is not None else layer.crs()
+        crs = None if without_crs else crs_text(source_crs)
+        if crs is None and not without_crs and source_crs.isValid():
             raise InvalidArgumentError(
                 tr("The CRS of «{0}» cannot be expressed: reproject the layer or send it without CRS").format(
                     layer.name()
@@ -211,10 +221,23 @@ def plan_layer(
         columns.append(ImportColumn(names[len(taken) + i], f"c{i}", duck))
     common: dict[str, Any] = {"database": database, "schema": schema, "temporary": temporary}
 
-    # Camino 1: capa Conectada de esta sesión → SQL dentro de DuckDB (§5.1)
     provider = layer.dataProvider()
     same_session = layer.providerType() == KEY and provider.engine() is not None
-    if same_session and provider.engine() is sessions.current():
+    connected = same_session and provider.engine() is sessions.current()
+    if reprojector is not None and connected:
+        # Leerla con QGIS pediría páginas al mismo worker que está escribiendo el envío: se bloquearía
+        raise InvalidArgumentError(
+            tr("A Connected layer of this session is sent with its CRS: it cannot be reprojected")
+        )
+    if reprojector is not None:  # DuckDB no transforma sin `spatial`: lee QGIS (§5.3)
+        if as_view:
+            raise InvalidArgumentError(tr("A view cannot be reprojected: it is sent as a copy"))
+        job = ImportJob(layer.name(), table, mode, tuple(columns), geometry, **common)
+        warnings.append(reprojector.note)
+        return LayerPlan(layer, job, PATH_QGIS, fids, features, warnings, tuple(columns), reprojector)
+
+    # Camino 1: capa Conectada de esta sesión → SQL dentro de DuckDB (§5.1)
+    if connected:
         sql, selection = _connected_sql(provider, columns, geometry, fids)
         job = ImportJob(
             layer.name(),
@@ -340,7 +363,9 @@ class LayerReader(QgsTask):  # type: ignore[misc]
     ) -> None:
         super().__init__(tr("GeoDuck: send layers to DuckDB"), QgsTask.Flag.CanCancel)
         # Las fuentes se crean aquí, en el hilo principal; se leen en el hilo de la tarea (F-117)
-        self._sources = [(i, p.job, p.fids, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans]
+        self._sources = [
+            (i, p.job, p.fids, p.reprojector, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans
+        ]
         self._channel = channel
         self._on_read = on_read
         self._total = max(sum(max(p.features, 0) for _, p in plans), 1)
@@ -348,8 +373,8 @@ class LayerReader(QgsTask):  # type: ignore[misc]
 
     def run(self) -> bool:
         try:
-            for index, job, fids, source in self._sources:
-                self._read(index, job, fids, source)
+            for index, job, fids, reprojector, source in self._sources:
+                self._read(index, job, fids, reprojector, source)
             self._channel.finish()
         except ConsumerGoneError:
             return False  # el motor ya terminó (error o cancelación) e informa él
@@ -358,7 +383,9 @@ class LayerReader(QgsTask):  # type: ignore[misc]
             return False
         return True
 
-    def _read(self, index: int, job: ImportJob, fids: list[int] | None, source: Any) -> None:
+    def _read(
+        self, index: int, job: ImportJob, fids: list[int] | None, reprojector: Reprojector | None, source: Any
+    ) -> None:
         request = QgsFeatureRequest()
         if fids is not None:
             request.setFilterFids(fids)
@@ -377,6 +404,8 @@ class LayerReader(QgsTask):  # type: ignore[misc]
             rows.append([_value(attrs[k]) for k in indexes])
             if job.geometry is not None:
                 g = f.geometry()
+                if reprojector is not None and not g.isNull() and not g.isEmpty():
+                    g = reprojector.geometry(g, f.id())  # el FID: la entidad que falla, para buscarla en QGIS
                 wkbs.append(None if g.isNull() else bytes(g.asWkb()))
             if len(rows) == BATCH:
                 self._put(index, job, rows, wkbs)
@@ -540,6 +569,15 @@ def describe_layer(layer: Any, table: str) -> SendCandidate:
         plan = plan_layer(layer, table=table, without_crs=True)
         crs_problem = True
     geometry_type = QgsWkbTypes.displayString(layer.wkbType()) if layer.isSpatial() else None
+    warnings = list(plan.warnings)
+    crs = layer.crs()
+    if (
+        layer.isSpatial()
+        and crs.isValid()
+        and not crs_problem
+        and crs.authid().split(":", 1)[0] not in _AUTHORITIES
+    ):
+        warnings.append(tr("Custom CRS: it is stored with its full definition (PROJJSON)"))
     return SendCandidate(
         layer.id(),
         name,
@@ -552,7 +590,7 @@ def describe_layer(layer: Any, table: str) -> SendCandidate:
         plan.path,
         plan.columns,
         plan.job.geometry,
-        tuple(plan.warnings),
+        tuple(warnings),
         table,
         crs_problem=crs_problem,
     )
@@ -603,10 +641,12 @@ class LayerSender:
                     temporary=request.temporary,
                     only_selected=request.only_selected and layer.selectedFeatureCount() > 0,
                     as_view=request.as_view
+                    and not request.reproject_to
                     and parquet
                     and not layer.subsetString()
                     and not (request.only_selected and layer.selectedFeatureCount() > 0),
                     without_crs=request.without_crs,
+                    reproject_to=request.reproject_to,
                 )
             )
         job = LayerImport(engine, plans, on_progress=on_progress, on_done=on_done)

@@ -153,6 +153,23 @@ def test_candidate_view_rows_and_path():
     assert parquet.path_for(only_selected=False) == PATH_PARQUET
     assert parquet.rows_for(True) == 2 and parquet.rows_for(False) == 10
     assert candidate(selected=0).rows_for(True) == 10  # sin selección, toda la capa
+    with_geometry = SendCandidate(
+        "L",
+        "capa",
+        "Parquet",
+        10,
+        0,
+        "Point",
+        "EPSG:4326",
+        False,
+        PATH_PARQUET,
+        (),
+        ImportGeometry("geom", "EPSG:4326"),
+        (),
+        "capa",
+    )
+    assert with_geometry.path_for(False, reproject=True) == PATH_QGIS  # DuckDB no reproyecta sin `spatial`
+    assert with_geometry.path_for(False) == PATH_PARQUET
 
 
 def test_only_new_tables_can_be_undone():
