@@ -2,7 +2,7 @@
 
 **Estado:** Propuesto para aceptación (E7). La aceptación la da el propietario; el tag y la release `v0.10.0a1`
 también los hace él. Versión en `metadata.txt` y `geoduck/__init__.py`: `0.10.0a1` (en este PR).
-**Base verificada:** E0–E6b (#114–#124) y la corrección G8 de cancelar (#119). Las cifras de la CI de este PR se
+**Base verificada:** E0–E6b (#114–#124), la corrección G8 de cancelar (#119) y F-130 (#126). Las cifras de la CI de este PR se
 anotan en un comentario del PR. **Contrato:** `docs/g9/plan.md`, `spec/specs/workspace-pro-spec.md`
 (GD-WSP-001..012), ADR-0016, `spec/qa/test-strategy.md`.
 
@@ -115,6 +115,7 @@ Ver [`docs/evidence/g9/rendimiento/README.md`](../evidence/g9/rendimiento/README
 | F-127 | El autocompletado de la consulta nueva no se refrescaba al llegar las columnas | Se refresca con `ColumnsListed` y `VocabularyChanged` (E6) |
 | F-128 | DuckDB 1.5 no aborta la transacción por un error de catálogo (2.0 sí); el texto de la sentencia lleva «;» solo en 2.0 | Las pruebas usan una clave repetida, que aborta en las dos (E6) |
 | F-129 | En QGIS 3.34, dos pruebas de `test_pro_load` fallan **corridas solas** (la capa queda sin SRC); dentro de la suite pasan. También en `main` antes de E6 | Abierto: se revisa en G10. No afecta a QGIS real (la base de SRC ya está iniciada) — por confirmar en la prueba de Windows, paso 4b |
+| F-130 | En la prueba de Windows (QGIS 3.44.7 de OSGeo4W), GeoDuck no abría: la DLL de `pyarrow._parquet` no cargaba y `initGui` importaba `pyarrow.parquet` | `pyarrow.parquet` solo al mirar si una capa es GeoParquet; sin él, el camino general (#126) |
 | — | Las capturas de la CI (`pro_shots`) se caían al cerrar Qt 5 tras escribirlas | Salen sin la limpieza de PyQt5 (E6) |
 
 ## 8. Limitaciones conocidas
