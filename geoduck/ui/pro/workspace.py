@@ -138,7 +138,7 @@ class ProWorkspace(QWidget):
         self.places = Places(self._settings)
 
         self.sidebar = Sidebar(self.colors, self.places)
-        self.tabs = TabArea(self.colors, page_factory)
+        self.tabs = TabArea(self.colors, page_factory, self)
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)

@@ -48,8 +48,13 @@ class TabArea(QObject):
     #: Cambió el conjunto, el orden o la pestaña activa (para recordarlas).
     changed = pyqtSignal()
 
-    def __init__(self, colors: Colors, page_factory: Callable[[Place], QWidget] | None = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        colors: Colors,
+        page_factory: Callable[[Place], QWidget] | None = None,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)  # con padre: Qt la borra en el hilo de la interfaz, nunca el recolector
         self.colors = colors
         self.page_factory = page_factory or (lambda place: PlacePage(place, colors))
         self._queries = 0

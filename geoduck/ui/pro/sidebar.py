@@ -453,5 +453,5 @@ class Sidebar(QFrame):
             menu.addAction(tr("Close database"), lambda: self.detach_requested.emit(db.name))
         else:
             return
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         menu.popup(self.tree.viewport().mapToGlobal(pos))
-        self.context_menu = menu  # para las pruebas

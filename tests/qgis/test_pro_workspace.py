@@ -7,10 +7,12 @@ filtro), pestañas, Ctrl+K y ventana ↔ panel. Las preferencias van a un diccio
 
 from __future__ import annotations
 
+import contextlib
+import gc
 import time
 
 import pytest
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QPushButton, QShortcut
@@ -36,6 +38,23 @@ class Store(dict):
 
     def setValue(self, key, value):
         self[key] = value
+
+
+#: Workspaces creados en la prueba: se borran al final en el hilo principal. Si los recogiera el recolector
+#: de ciclos de Python, podría hacerlo en el hilo del motor, y Qt falla al destruir widgets fuera de su hilo.
+_CREATED: list = []
+
+
+@pytest.fixture(autouse=True)
+def delete_widgets_in_the_main_thread():
+    yield
+    while _CREATED:
+        widget = _CREATED.pop()
+        with contextlib.suppress(RuntimeError):  # ya borrado (p. ej. con su ventana)
+            widget.close()
+            widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
 
 
 @pytest.fixture
@@ -70,6 +89,7 @@ def has(name):
 
 def workspace(coordinator, store=None):
     ws = ProWorkspace(coordinator, lambda: None, store if store is not None else Store())
+    _CREATED.append(ws)
     ws.resize(1200, 800)
     ws.show()
     return ws
@@ -255,7 +275,7 @@ def test_window_and_panel_share_the_same_tabs_and_the_sidebar_choice_is_remember
     assert [p.kind for p in ws.tabs.places()] == [TABLE, QUERY]  # nada se pierde
     assert not ws.sidebar.isVisible() and not ws.dock_button.isVisible()
     assert controller.dock.header.status.text() == ws.status()[1]
-    assert controller.dock.header.minimumSizeHint().width() < 360  # el estado se recorta: el panel cabe estrecho
+    assert controller.dock.header.minimumSizeHint().width() < 360  # el estado se recorta: cabe estrecho
     controller.dock.header.window_button.click()
     assert controller.mode is Mode.WINDOW and controller.window.isVisible()
     assert ws.parent() is controller.window.slot and ws.sidebar.isVisible()
