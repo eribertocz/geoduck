@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Idioma de la interfaz con el catálogo real de Qt (G6 · E4, GD-I18N-001, AT-I18N-001; ui-ux-spec §5).
+"""Idioma de la interfaz con el catálogo real de Qt (G6 · E4, GD-I18N-001, AT-I18N-001; AT-WSP-010).
 
 Cada caso arranca QGIS en un proceso aparte: los textos de los módulos se traducen al importarse, y el idioma
 se elige una vez, al cargar el complemento (como en QGIS real)."""
@@ -38,15 +38,12 @@ from tests.qgis.conftest import FakeIface
 import geoduck
 iface = FakeIface()
 plugin = geoduck.classFactory(iface); plugin.initGui()
-panel = plugin.content.sql_panel
+ws = plugin.content
 out = {
-    "run": panel.run_all_button.accessibleName(),
-    "load": plugin.content.sql_panel.load_button.accessibleName(),
-    "state": plugin.content.state_label.text(),
-    "tab": panel.editor_tabs.tabText(0),
-    "notebook": [
-        panel.notebook_list.names()[0], panel.cell.run_button.toolTip(), panel.notebook_view.add_button.text()
-    ],
+    "start": ws.start_button.text(),
+    "state": ws.state_title.text(),
+    "status": ws.sidebar.status.text(),
+    "dock": ws.dock_button.text(),
     "after": [QgsApplication.locale(), QLocale().name()],
     "before": list(before),
 }
@@ -83,25 +80,31 @@ def run_qgis(locale: str, tmp_path: Path) -> dict:
 
 def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
     out = run_qgis("en_US", tmp_path)
-    assert (out["run"], out["tab"], out["state"]) == ("Run all", "Query 1", "No session")
-    assert out["notebook"] == ["Query 1", "Run the cell (Ctrl+Enter)", "＋ Add cell"]  # G7
-    assert "Load into QGIS" in out["load"]
+    assert (out["start"], out["state"], out["status"]) == (
+        "Start DuckDB",
+        "DuckDB is not started",
+        "Not started",
+    )
+    assert out["dock"] == "Dock to QGIS"
     assert "cannot be empty" in out["error"]  # también los mensajes del motor
     assert out["after"] == out["before"]  # el idioma de QGIS no cambia
 
 
 def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
     out = run_qgis("es_ES", tmp_path)
-    assert (out["run"], out["tab"], out["state"]) == ("Ejecutar todo", "Consulta 1", "Sin sesión")
-    assert out["notebook"] == ["Consulta 1", "Ejecutar la celda (Ctrl+Intro)", "＋ Añadir celda"]  # G7
-    assert "Cargar en QGIS" in out["load"]
+    assert (out["start"], out["state"], out["status"]) == (
+        "Iniciar DuckDB",
+        "DuckDB no está iniciado",
+        "No iniciado",
+    )
+    assert out["dock"] == "Acoplar a QGIS"
     assert "no puede estar vacío" in out["error"]
     assert out["after"] == out["before"]
 
 
 def test_another_language_falls_back_to_english(tmp_path):
     out = run_qgis("de_DE", tmp_path)
-    assert out["run"] == "Run all" and out["after"] == out["before"]
+    assert out["start"] == "Start DuckDB" and out["after"] == out["before"]
 
 
 def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, monkeypatch):
@@ -120,6 +123,6 @@ def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, mon
         worker.start()
         worker.join(5)
         assert results == [spanish_catalog()["Operation cancelled"]]
-        assert i18n.tr("Run all") == "Ejecutar todo"
+        assert i18n.tr("Start DuckDB") == "Iniciar DuckDB"
     finally:
         ui_i18n.uninstall()

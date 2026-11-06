@@ -19,7 +19,7 @@ def test_every_module_imports(qgis_app):
     names = [m.name for m in pkgutil.walk_packages(geoduck.__path__, "geoduck.")]
     for name in names:
         importlib.import_module(name)
-    assert "geoduck.ui.workspace" in names and "geoduck.engine.worker" in names
+    assert "geoduck.ui.pro.workspace" in names and "geoduck.engine.worker" in names
 
 
 def test_init_gui_registers_and_unload_removes(iface):
@@ -38,22 +38,23 @@ def test_init_gui_registers_and_unload_removes(iface):
 def test_start_and_close_memory_session_from_the_dock(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    dock, coordinator = plugin.content, plugin.coordinator
-    assert dock.start_button.isEnabled()
-    assert not dock.close_button.isEnabled()
+    ws, coordinator = plugin.content, plugin.coordinator
+    side = ws.sidebar
+    assert ws.start_button.isEnabled()
+    assert not side.close_action.isEnabled()
 
-    dock.start_button.click()
+    ws.start_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY)
-    assert dock.state_label.text() == "Lista"
-    assert "DuckDB" in dock.engine_label.text()
-    assert not dock.start_button.isEnabled() and dock.close_button.isEnabled()
+    assert side.status.text().startswith("Lista")
+    assert "DuckDB" in side.title.text()
+    assert side.close_action.isEnabled()
 
     worker_thread = plugin.coordinator._engine.thread
     assert worker_thread is not threading.current_thread()
 
-    dock.close_button.click()
+    side.close_action.trigger()
     assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
-    assert dock.state_label.text() == "Sin sesión"
+    assert ws.start_button.isEnabled() and not side.close_action.isEnabled()
     worker_thread.join(5)
     assert not worker_thread.is_alive()
     plugin.unload()
@@ -68,10 +69,10 @@ def test_invalidated_session_is_shown_once_and_new_session_recovers(iface):
 
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    dock, coordinator = plugin.content, plugin.coordinator
+    ws, coordinator = plugin.content, plugin.coordinator
     notices = []
     coordinator.subscribe(lambda e: notices.append(e) if isinstance(e, SessionInvalidated) else None)
-    dock.start_button.click()
+    ws.start_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY)
     first_engine = coordinator._engine
 
@@ -82,14 +83,14 @@ def test_invalidated_session_is_shown_once_and_new_session_recovers(iface):
     assert wait_for(lambda: coordinator.state is SessionState.ERROR_RECOVERABLE)
     assert coordinator.error_cause is ErrorCause.SESSION_INVALIDATED
     assert len(notices) == 1
-    assert "Sesión invalidada" in dock.message_label.text()
-    assert "SESSION_INVALIDATED" in dock.message_label.text()
-    assert dock.start_button.isEnabled() and dock.close_button.isEnabled()
+    assert "Sesión invalidada" in ws.notice.text()
+    assert "SESSION_INVALIDATED" in ws.notice.text()
+    assert coordinator.can_start and ws.start_button.isEnabled()  # se puede iniciar una sesión nueva
 
-    dock.start_button.click()
+    ws.start()
     assert wait_for(lambda: coordinator.state is SessionState.READY)
     assert coordinator._engine is not first_engine
-    dock.close_button.click()
+    ws.close_session()
     assert wait_for(lambda: coordinator.state is SessionState.DISCONNECTED)
     assert len(notices) == 1
     plugin.unload()
@@ -150,9 +151,11 @@ def test_broken_environment_disables_start(iface, monkeypatch):
     monkeypatch.setattr(plugin_module, "run_diagnostics", lambda: collect(import_module=missing_duckdb))
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
-    assert not plugin.content.start_button.isEnabled()
-    assert not plugin.content.env_banner.isHidden()
-    assert "DuckDB" in plugin.content.env_label.text()
+    ws = plugin.content
+    assert not ws.start_button.isEnabled() and not ws.open_button.isEnabled()
+    assert ws.state_title.text() == "El entorno no está listo para GeoDuck"
+    assert "DuckDB" in ws.state_text.text()
+    assert ws.diagnostics_button.isVisibleTo(ws)
     plugin.unload()
 
 

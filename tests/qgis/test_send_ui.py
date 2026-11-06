@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""«Enviar a DuckDB»: diálogo, puntos de entrada y aviso final (G8 · E3; AT-IMP-001, AT-IMP-002, AT-IMP-006).
+"""«Enviar a DuckDB»: diálogo, puntos de entrada y avisos (G8 · E3; AT-IMP-001, AT-IMP-002, AT-IMP-006).
 
-QGIS, coordinador, worker DuckDB y barra de mensajes reales; sin `spatial`.
+QGIS, coordinador y worker DuckDB reales; sin `spatial`. Desde G9 · E6 los avisos van en el pie de GeoDuck
+(`ui/pro/send`); el diálogo es el mismo.
 """
 
 from __future__ import annotations
@@ -18,19 +19,18 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QPushButton
 
 import geoduck
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import SendFailed, SendFinished, SendUndone
+from geoduck.app.events import SendFailed, SendFinished
 from geoduck.domain.importing import Conflict, ImportMode
 from geoduck.domain.session import SessionState
 from geoduck.engine.worker import SessionWorker
 from geoduck.qgis_bridge.importer import LayerSender
 from geoduck.qgis_bridge.loader import BridgeLoader
 from geoduck.ui.dispatcher import QtDispatcher
+from geoduck.ui.pro.workspace import ProWorkspace
 from geoduck.ui.send_dialog import OPEN_AFTER_SETTING, SendDialog
-from geoduck.ui.send_flow import SendFlow
 from tests.qgis.conftest import wait_for
 
 pytestmark = pytest.mark.qgis
@@ -51,6 +51,14 @@ def points(name, n=5, *, crs="EPSG:4326", fields="field=id:integer&field=nombre:
     return layer
 
 
+class Store(dict):
+    def value(self, key, defaultValue=None):  # noqa: N803
+        return self.get(key, defaultValue)
+
+    def setValue(self, key, value):
+        self[key] = value
+
+
 class Env:
     def __init__(self, iface):
         from qgis.core import QgsSettings
@@ -64,22 +72,25 @@ class Env:
         assert wait_for(lambda: self.coordinator.state is SessionState.READY, TIMEOUT)
         assert wait_for(lambda: self.coordinator.catalog is not None, TIMEOUT)
         self.engine = self.coordinator._engine
-        self.opened = []
-        self.bar = iface.messageBar()
-        self.flow = SendFlow(self.coordinator, self.bar, iface.window, open_table=self.opened.append)
+        self.parent = iface.window
 
     def rows(self, text):
         return self.engine.submit(lambda h, t: h.execute(text, max_rows=1000)).future.result(TIMEOUT).rows
 
     def dialog(self, layer_ids, checked=None) -> SendDialog:
-        dialog = self.flow.open(layer_ids, checked)
-        assert dialog is not None
+        dialog = SendDialog(
+            self.coordinator.send_candidates(layer_ids),
+            self.coordinator.catalog,
+            self.coordinator.read_import_target,
+            self.parent,
+            checked=set(layer_ids if layer_ids is not None else checked or []),
+        )
         assert wait_for(lambda: dialog._target is not None or dialog._target_error, TIMEOUT)
         return dialog
 
     def send(self, dialog):
         before = len(self.events)
-        self.flow.send(dialog)
+        self.coordinator.send_layers(dialog.request())
 
         def ended():
             return [e for e in self.events[before:] if isinstance(e, (SendFinished, SendFailed))]
@@ -90,7 +101,6 @@ class Env:
         return ended()[0]
 
     def close(self):
-        self.flow.detach()
         self.coordinator.shutdown()
         self.loader.shutdown()
 
@@ -247,12 +257,9 @@ def test_without_session_it_explains_what_to_do(iface):
     plugin.initGui()
     try:
         layer = points("sin sesión")
-        iface.selected_layers = (layer,)
-        assert plugin.send_flow.open([layer.id()]) is None
-        messages = [w.text() for w in iface.messageBar().items()]
-        assert any("Inicia una sesión" in t for t in messages)
+        plugin.content.send_layers([layer.id()])
+        assert "Inicia DuckDB" in plugin.content.notice.text()
     finally:
-        iface.selected_layers = ()
         plugin.unload()
         QgsProject.instance().removeAllMapLayers()
 
@@ -262,46 +269,26 @@ def test_plugin_registers_the_layer_action_and_the_plus_entry(iface):
     plugin.initGui()
     actions = {a.objectName() for a in iface.layer_actions}
     assert "geoduckSendToDuckDB" in actions
-    menu = plugin.content.add_button.menu()
-    assert any(a.objectName() == "geoduckImportLayers" for a in menu.actions())
+    assert plugin.content.sidebar.send_action in plugin.content.sidebar.add_menu.actions()
     plugin.unload()
     assert "geoduckSendToDuckDB" not in {a.objectName() for a in iface.layer_actions}
-
-
-# -- aviso final: «Abrir» y «Deshacer» (§4) --------------------------------------------------------------
-
-
-def _button(bar, name):
-    for item in bar.items():
-        for button in item.findChildren(QPushButton):
-            if button.objectName() == name:
-                return button
-    return None
-
-
-def test_open_and_undo_from_the_message_bar(env):
-    layer = points("nueva")
-    dialog = env.dialog([layer.id()])
-    assert isinstance(env.send(dialog), SendFinished)
-    open_button = _button(env.bar, "geoduckSendOpen")
-    undo = _button(env.bar, "geoduckSendUndo")
-    assert open_button is not None and undo is not None
-    open_button.click()
-    assert [t.name for t in env.opened] == ["nueva"]
-    before = len(env.events)
-    undo.click()
-    assert wait_for(lambda: any(isinstance(e, SendUndone) for e in env.events[before:]), TIMEOUT)
-    assert "nueva" not in {r[0] for r in env.rows("SELECT table_name FROM duckdb_tables()")}
 
 
 def test_failure_says_nothing_changed(env):
     layer = points("t")
     dialog = env.dialog([layer.id()])
     env.rows("CREATE TABLE t AS SELECT 1 AS x")  # aparece después de abrir el diálogo
-    event = env.send(dialog)
-    assert isinstance(event, SendFailed) and not event.cancelled
-    messages = [w.text() for w in env.bar.items()]
-    assert any("DuckDB no cambió" in t for t in messages)
+    ws = ProWorkspace(env.coordinator, lambda: None, Store())
+    try:
+        before = len(env.events)
+        ws.quick_send._send(dialog)  # el envío de GeoDuck, con su aviso en el pie
+        assert wait_for(lambda: any(isinstance(e, SendFailed) for e in env.events[before:]), TIMEOUT)
+        event = next(e for e in env.events[before:] if isinstance(e, SendFailed))
+        assert not event.cancelled
+        assert "DuckDB no cambió" in ws.notice.text()
+    finally:
+        ws.detach_coordinator()
+        ws.deleteLater()
 
 
 # -- «Reproyectar a…» y SRC personalizados (E4; AT-IMP-003, AT-IMP-007) ------------------------------------

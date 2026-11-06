@@ -9,6 +9,7 @@ geometría de la ventana, la zona del panel y si la barra lateral está abierta 
 
 from __future__ import annotations
 
+import json
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ from qgis.PyQt.QtWidgets import QDockWidget, QFrame, QHBoxLayout, QMainWindow, Q
 
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import style
-from geoduck.ui.pro.places import PREFIX
+from geoduck.ui.pro.places import PREFIX, QUERY, Place, save_tabs
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS
 from geoduck.ui.pro.widgets import ElidedLabel, StatusDot, button, icon_button, label
@@ -158,6 +159,47 @@ class ProDock(QDockWidget):
         self.visibilityChanged.connect(self.shown_changed)
 
 
+#: Preferencias de la interfaz anterior (G5), que se conservan al cambiar (workspace-pro-spec §12).
+OLD_PREFIX = "geoduck/workspace/"
+#: Cuadernos de G7 abiertos al cerrar QGIS (lista JSON de rutas) y el activo: vuelven como consultas.
+OLD_NOTEBOOKS = "geoduck/notebooks/open"
+OLD_ACTIVE_NOTEBOOK = "geoduck/notebooks/active"
+
+
+def migrate_settings(settings: Any) -> None:
+    """Primera vez con la interfaz nueva (AT-WSP-011): trae el modo (ventana o panel), la zona del panel, si
+    la barra lateral estaba abierta y, como pestañas de consulta, los cuadernos guardados que estaban
+    abiertos. No borra nada y no se repite: solo copia lo que la nueva aún no tiene."""
+    if settings.value(PREFIX + "tabs", None) is None:
+        _migrate_notebooks(settings)
+    if settings.value(PREFIX + "mode", None) is not None:
+        return
+    mode = settings.value(OLD_PREFIX + "mode", None)
+    if mode in (Mode.WINDOW.value, Mode.DOCK.value):
+        settings.setValue(PREFIX + "mode", mode)
+    area = settings.value(OLD_PREFIX + "dock/area", None)
+    if area in ("left", "right") and settings.value(PREFIX + "dock/area", None) is None:
+        settings.setValue(PREFIX + "dock/area", area)
+    sidebar = settings.value(OLD_PREFIX + "sidebar_open", None)
+    if sidebar is not None and settings.value(PREFIX + "sidebar", None) is None:
+        settings.setValue(PREFIX + "sidebar", 0 if str(sidebar) in ("0", "false") else 1)
+
+
+def _migrate_notebooks(settings: Any) -> None:
+    try:
+        paths = json.loads(str(settings.value(OLD_NOTEBOOKS, "[]") or "[]"))
+    except ValueError:
+        return
+    if not isinstance(paths, list):
+        return
+    paths = [p for p in paths if isinstance(p, str) and p and Path(p).is_file()]
+    if not paths:
+        return
+    tabs = [Place(QUERY, Path(p).stem, path=p) for p in paths]
+    active = str(settings.value(OLD_ACTIVE_NOTEBOOK, "") or "")
+    save_tabs(settings, tabs, paths.index(active) if active in paths else 0)
+
+
 class ProController:
     """Muestra, oculta y alterna la presentación del workspace. Nunca toca la sesión."""
 
@@ -165,6 +207,7 @@ class ProController:
         self.iface = iface
         self.workspace = workspace
         self._settings = settings if settings is not None else QgsSettings()
+        migrate_settings(self._settings)
         main = iface.mainWindow()
         self.window = ProWindow(main)
         self.dock = ProDock(main, workspace)
@@ -214,6 +257,12 @@ class ProController:
         shell.show()
         shell.raise_()
         shell.activateWindow()
+
+    def minimize_for_map(self) -> None:
+        """«Ver en el mapa» en la ventana propia: GeoDuck se minimiza para dejar ver el mapa. En el panel
+        acoplado no se minimiza nada."""
+        if self.mode is Mode.WINDOW and self.window.isVisible():
+            self.window.showMinimized()
 
     def set_mode(self, mode: Mode) -> None:
         """Traslada el contenido al otro shell y lo muestra; el de origen se oculta (AT-WSP-002)."""

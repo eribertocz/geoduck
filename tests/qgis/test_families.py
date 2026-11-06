@@ -12,12 +12,10 @@ import math
 import pytest
 from qgis.core import QgsFeatureRequest, QgsGeometry, QgsProject, QgsRectangle, QgsWkbTypes
 
-from geoduck.app.events import LoadFailed, LoadFinished, LoadPrepared
+from geoduck.app.events import LoadFailed, LoadFinished
 from geoduck.domain.load import LoadMode
 from geoduck.qgis_bridge.provider import decode_uri
-from geoduck.ui.load_dialog import LoadDialog
-from geoduck.ui.load_flow import finished_message
-from tests.qgis.conftest import wait_for
+from geoduck.ui.pro.load import finished_text as finished_message
 from tests.qgis.test_multi_geometry import Session
 
 pytestmark = pytest.mark.qgis
@@ -238,21 +236,3 @@ def test_editing_a_separated_layer_stays_in_its_family(session):
     assert session.rows("SELECT ST_AsText(g) FROM mixta WHERE id = 30")[0][0] == "POINT (30 5)"
     poly.reload()
     assert poly.featureCount() == before
-
-
-# -- diálogo -------------------------------------------------------------------------------------------
-
-
-def test_dialog_shows_the_mixed_types_option_of_each_mode(session):
-    token = session.coordinator.prepare_load("SELECT * FROM mixta")
-    assert wait_for(lambda: any(isinstance(e, LoadPrepared) and e.token == token for e in session.events))
-    plan = next(e for e in session.events if isinstance(e, LoadPrepared) and e.token == token).plan
-    dialog = LoadDialog("SELECT * FROM mixta", "m", plan, session.coordinator.load_modes())
-    dialog.mode_buttons[LoadMode.MEMORY].setChecked(True)
-    assert not dialog.split_check.isHidden() and dialog.separate_check.isHidden()
-    assert dialog.request().split_families and not dialog.request().separate_types
-    dialog.mode_buttons[LoadMode.CONNECTED].setChecked(True)
-    assert dialog.split_check.isHidden() and not dialog.separate_check.isHidden()
-    assert not dialog.request().separate_types
-    dialog.separate_check.setChecked(True)
-    assert dialog.request().separate_types

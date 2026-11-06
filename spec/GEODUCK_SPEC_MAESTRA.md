@@ -1490,7 +1490,25 @@ DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decis
 La interfaz nueva se construye en paralelo (E1–E5) y sustituye a la actual en E6, cuando cubre todas sus
 funciones. Entonces se retiran el workspace de G5, el editor de G6 y los cuadernos de G7 (la lista de cuadernos,
 las celdas y su selector). Los cuadernos guardados que estaban abiertos vuelven como consultas. Las
-preferencias de presentación (ventana o panel, barra lateral) se conservan.
+preferencias de presentación (ventana o panel, zona del panel, barra lateral) se conservan.
+
+Al cambiar (E6, propietario 2026-11-06: «Tú decide»), lo que la interfaz anterior hacía y la nueva aún no:
+- **Revertir una transacción abortada:** un aviso que no se va solo, «La transacción falló · Revertir», y
+  Ctrl+K › «Revertir transacción». Sin él la sesión no se puede volver a usar salvo cerrándola.
+- **Ver en el mapa:** el aviso de cada carga lleva «Ver en el mapa» (selecciona la capa y hace zoom; en la
+  ventana, GeoDuck se minimiza).
+- **Historial de ejecución:** Ctrl+K › «Historial de ejecución» abre una pestaña con cada sentencia (hora,
+  estado, sentencia, duración, mensaje), «Todo / OK / Error» y «Limpiar»; doble clic la abre en una consulta
+  nueva sin ejecutarla. Solo en memoria: no se guarda en disco ni entre reinicios.
+- El aviso de carga conserva el origen, el acceso y los avisos (decisión del 2026-11-02).
+- **Entorno incompleto** (sin DuckDB o PyArrow): la pantalla de inicio lo explica, «Iniciar» queda en gris y
+  ofrece «Diagnóstico» (AT-BOOT-002).
+- El menú de capa «Enviar a DuckDB…» hace lo mismo que soltar las capas (§9); «+» y Ctrl+K abren el diálogo
+  para elegir.
+
+Se retiran con la ventana «Cargar en QGIS…» de G4 sus opciones avanzadas: «Reproyectar a…» al cargar, usar
+una columna WKB o de texto como geometría y «Separar por tipo» en una Conectada (cargar en un clic, §7). Las
+columnas en el árbol del explorador se ven en «Estructura» de la pestaña de tabla (§4).
 
 ## 13. Rendimiento (GD-WSP-012)
 Objetivos en la máquina de referencia (benchmarks.md), verificados en E3–E6:
