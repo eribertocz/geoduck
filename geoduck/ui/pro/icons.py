@@ -28,6 +28,7 @@ PATHS: dict[str, str] = {
     "close": '<path d="M6 6l12 12M18 6L6 18"/>',
     "filter": '<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>',
     "dock": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+    "sidebar": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
     "window": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
     "layers": '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
     "map": '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',

@@ -58,6 +58,9 @@ def stylesheet(c: Colors) -> str:
     family = first_family(FONT_FAMILIES)
     mono = first_family(MONO_FAMILIES)
     arrow = icons.file("chevron-down", c.muted)
+    closed = icons.file("chevron-right", c.faint)
+    opened = icons.file("chevron-down", c.faint)
+    close = icons.file("close", c.muted, 7)
     r = f"#{ROOT}"
     return f"""
 {r}, {r} QWidget {{ font-family: "{family}"; font-size: {m.font}px; color: {c.text}; }}
@@ -67,6 +70,7 @@ def stylesheet(c: Colors) -> str:
 {r} *[pro="rule-bottom"] {{ border-bottom: 1px solid {c.border}; }}
 {r} *[pro="rule-top"] {{ border-top: 1px solid {c.border}; }}
 {r} *[pro="rule-right"] {{ border-right: 1px solid {c.border}; }}
+{r} QFrame[pro="divider"] {{ background: {c.border}; border: 0; }}
 {r} *[pro="rule-left"] {{ border-left: 1px solid {c.border}; }}
 
 {r} QLabel {{ background: transparent; }}
@@ -105,6 +109,7 @@ def stylesheet(c: Colors) -> str:
 {r} QPushButton[pro="icon"] {{ border: 1px solid transparent; background: transparent; padding: 0;
     min-width: {m.control - 2}px; max-width: {m.control - 2}px; }}
 {r} QPushButton[pro="icon"]:hover {{ background: {c.segment}; }}
+{r} QPushButton[pro="search-button"] {{ text-align: left; color: {c.muted}; padding: 0 {m.space_sm + 1}px; }}
 
 {r} QFrame[pro="segmented"] {{ background: {c.segment}; border-radius: {m.radius}px; }}
 {r} QFrame[pro="chip"] {{ background: {c.chip_bg}; border: 1px solid {c.chip_border};
@@ -140,6 +145,40 @@ def stylesheet(c: Colors) -> str:
 {r} QScrollBar::add-page, {r} QScrollBar::sub-page {{ background: transparent; }}
 
 {r} QToolTip {{ background: {c.toast}; color: {c.toast_text}; border: 0; padding: 4px 8px; }}
+
+{r} QSplitter::handle {{ background: {c.border}; }}
+{r} QMenu {{ background: {c.bg}; border: 1px solid {c.border}; padding: 4px; }}
+{r} QMenu::item {{ padding: 6px 28px 6px 10px; border-radius: {m.radius_sm}px; }}
+{r} QMenu::item:selected {{ background: {c.accent_soft}; color: {c.text}; }}
+{r} QMenu::item:disabled {{ color: {c.null}; }}
+{r} QMenu::separator {{ height: 1px; background: {c.line}; margin: 4px 6px; }}
+
+{r} QTreeWidget[pro="nav"] {{ background: transparent; border: 0; outline: 0; show-decoration-selected: 1; }}
+{r} QTreeWidget[pro="nav"]::item {{ min-height: 28px; border: 0; padding: 0 2px; }}
+{r} QTreeWidget[pro="nav"]::item:hover {{ background: {c.segment}; }}
+{r} QTreeWidget[pro="nav"]::item:selected {{ background: {c.accent_soft}; color: {c.text}; }}
+{r} QTreeWidget[pro="nav"]::branch {{ background: transparent; }}
+{r} QTreeWidget[pro="nav"]::branch:has-children:closed {{ image: url("{closed}"); }}
+{r} QTreeWidget[pro="nav"]::branch:has-children:open {{ image: url("{opened}"); }}
+
+{r} QTabBar[pro="tabs"] {{ background: transparent; }}
+{r} QTabBar[pro="tabs"]::tab {{ height: {m.bar - 16}px; padding: 0 6px 0 12px; margin-right: 2px;
+    color: {c.muted}; background: transparent; border: 1px solid transparent; border-bottom: 0;
+    border-top-left-radius: {m.radius_lg}px; border-top-right-radius: {m.radius_lg}px; }}
+{r} QTabBar[pro="tabs"]::tab:selected {{ color: {c.text}; background: {c.bg}; border-color: {c.border};
+    font-weight: 600; }}
+{r} QTabBar[pro="tabs"]::tab:hover:!selected {{ color: {c.text}; }}
+{r} QTabBar[pro="tabs"]::close-button {{ image: url("{close}"); subcontrol-position: right; width: 16px;
+    height: 16px; border-radius: 4px; }}
+{r} QTabBar[pro="tabs"]::close-button:hover {{ background: {c.segment}; }}
+{r} QTabBar[pro="tabs"] QToolButton {{ background: {c.head}; border: 0; }}
+
+{r} QFrame[pro="palette"] {{ background: {c.bg}; border: 1px solid {c.border};
+    border-radius: {m.radius_lg}px; }}
+{r} QFrame[pro="palette"] QLineEdit {{ border: 0; background: transparent; font-size: {m.font_title}px;
+    min-height: 44px; padding: 0; }}
+{r} QListWidget[pro="palette-list"] {{ background: transparent; border: 0; border-top: 1px solid {c.line};
+    outline: 0; }}
 """
 
 

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QPainter
+from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QPainter, QPalette
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -33,6 +33,39 @@ def label(text: str, kind: str | None = None) -> QLabel:
     if kind:
         widget.setProperty("pro", kind)
     return widget
+
+
+class ElidedLabel(QLabel):
+    """Texto de una línea que se recorta con «…» si no cabe, sin ensanchar su contenedor (la cabecera del
+    panel acoplado, el estado de la sesión). El texto completo queda en la ayuda."""
+
+    def __init__(self, text: str = "", kind: str | None = None) -> None:
+        super().__init__(text)
+        if kind:
+            self.setProperty("pro", kind)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - API de Qt
+        super().setText(text)
+        self.setToolTip(text)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(0, super().minimumSizeHint().height())
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802
+        painter = QPainter(self)
+        rect = self.contentsRect()
+        text = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, rect.width())
+        self.style().drawItemText(
+            painter,
+            rect,
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            self.palette(),
+            self.isEnabled(),
+            text,
+            QPalette.ColorRole.WindowText,
+        )
+        painter.end()
 
 
 def button(
