@@ -1511,8 +1511,12 @@ Al cambiar (E6, propietario 2026-11-06: «Tú decide»), lo que la interfaz ante
 - El menú de capa «Enviar a DuckDB…» hace lo mismo que soltar las capas (§9); «+» y Ctrl+K abren el diálogo
   para elegir.
 
-Se retiran con la ventana «Cargar en QGIS…» de G4 sus opciones avanzadas: «Reproyectar a…» al cargar, usar
-una columna WKB o de texto como geometría y «Separar por tipo» en una Conectada (cargar en un clic, §7). Las
+Las opciones avanzadas de la ventana «Cargar en QGIS…» de G4 no se pierden (propietario, 2026-11-06): van en
+«Cargar en QGIS ▾» › **«Más opciones…»** (E6b), la última línea, discreta, del menú. Abre una ventana corta:
+Copia / Conectada; «Qué geometrías» solo si hay varias o una columna WKB/WKT («Usar «x» como geometría»);
+«Reproyectar a…» solo en una Copia y «Separar por tipo de geometría» solo en una Conectada, cada una con una
+línea que dice qué pasará; abajo, «Se cargarán N capas · Copia». El SRC que falte se pregunta después, una
+vez (también el de una columna WKB/WKT). Las
 columnas en el árbol del explorador se ven en «Estructura» de la pestaña de tabla (§4).
 
 ## 13. Rendimiento (GD-WSP-012)

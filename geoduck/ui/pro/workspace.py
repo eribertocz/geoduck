@@ -143,6 +143,7 @@ class ProWorkspace(QWidget):
         confirm_close: Callable[[str], str] | None = None,
         recovery: Any = None,
         ask_crs: Any = None,
+        ask_load_options: Any = None,
         ask_save_copies: Any = None,
         copies_bridge: Any = None,
     ) -> None:
@@ -163,7 +164,7 @@ class ProWorkspace(QWidget):
 
         self.sidebar = Sidebar(self.colors, self.places)
         self.recovery = QueryRecovery(self, recovery)
-        self.loader = QuickLoad(coordinator, self, self.notify, ask_crs)
+        self.loader = QuickLoad(coordinator, self, self.notify, ask_crs, ask_load_options)
         #: Lo ejecutado en la sesión (E6): la pestaña «Historial» lo muestra.
         self.history = History(coordinator, self)
         #: «Ver en el mapa» (E6): selecciona las capas y hace zoom; lo pone el complemento (necesita `iface`).

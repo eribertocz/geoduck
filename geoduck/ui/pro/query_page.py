@@ -239,7 +239,7 @@ class QueryPage(QWidget):
         row.addWidget(self.export_button)
         self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
         self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
-        self.load_menu = load_menu(self, self.colors, self.load_in_qgis)
+        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
         self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
         row.addWidget(self.load_button)
         box.addWidget(head)

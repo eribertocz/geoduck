@@ -76,6 +76,31 @@ def main() -> None:  # noqa: PLR0915 - todas las capturas, en orden
     settle()
     shoot(menu, out / f"cargar-menu-{qt}.png")
     menu.close()
+    # «Más opciones…» (E6b): Copia con «Reproyectar a…» y Conectada con «Separar por tipo»
+    from geoduck.app.events import LoadPrepared
+    from geoduck.ui.pro.load_options import LoadOptionsDialog
+
+    coordinator.execute_sql(
+        "CREATE TABLE predios AS SELECT range AS id,"
+        " 'POLYGON ((0 0, 1 0, 1 1, 0 0))'::GEOMETRY('OGC:CRS84') AS geom,"
+        " 'POINT (0.5 0.5)'::GEOMETRY AS centro, 'POINT (1 2)' AS wkt_origen FROM range(10);",
+        RunScope.ALL,
+    )
+    wait(lambda: coordinator.state is SessionState.READY)
+    plans: list = []
+    unsubscribe = coordinator.subscribe(
+        lambda e: plans.append(e.plan) if isinstance(e, LoadPrepared) else None
+    )
+    coordinator.prepare_load('SELECT * FROM "predios"')
+    wait(lambda: plans)
+    unsubscribe()
+    for index, name in ((0, "copia"), (1, "conectada")):
+        dialog = LoadOptionsDialog(plans[0], "predios", index, ws)
+        dialog.show()
+        (dialog.reproject if index == 0 else dialog.separate).setChecked(True)
+        settle()
+        shoot(dialog, out / f"cargar-opciones-{name}-{qt}.png")
+        dialog.close()
     crs = CrsDialog(["geom", "geom_centro"], ws)
     crs.show()
     shoot(crs, out / f"cargar-src-{qt}.png")
