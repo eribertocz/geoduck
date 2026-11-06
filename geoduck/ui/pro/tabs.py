@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from qgis.PyQt.QtCore import QEvent, QObject, Qt, pyqtSignal
-from qgis.PyQt.QtWidgets import QStackedWidget, QTabBar, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import QPlainTextEdit, QStackedWidget, QTabBar, QVBoxLayout, QWidget
 
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
@@ -23,7 +23,8 @@ from geoduck.ui.pro.widgets import label
 
 
 class PlacePage(QWidget):
-    """Página de presentación de un lugar (E2): icono, nombre y dónde está. E3 y E4 la sustituyen."""
+    """Página de presentación de una consulta (E2, E3): icono, nombre y, si llega de «Ver SQL», su texto. La
+    pestaña de consulta llega en E4."""
 
     def __init__(self, place: Place, colors: Colors) -> None:
         super().__init__()
@@ -40,6 +41,16 @@ class PlacePage(QWidget):
         where.setAlignment(Qt.AlignmentFlag.AlignCenter)
         for widget in (glyph, name, where):
             box.addWidget(widget)
+        self.sql = QPlainTextEdit()
+        self.sql.setProperty("pro", "code")
+        self.sql.setReadOnly(True)
+        self.sql.setMinimumSize(520, 160)
+        self.sql.hide()
+        box.addWidget(self.sql, 0, Qt.AlignmentFlag.AlignHCenter)
+
+    def set_sql(self, text: str) -> None:
+        self.sql.setPlainText(text)
+        self.sql.setVisible(bool(text))
 
 
 class TabArea(QObject):
@@ -118,20 +129,25 @@ class TabArea(QObject):
             self.bar.setCurrentIndex(index)
         return self.page(index)
 
-    def new_query(self) -> QWidget:
-        """«+»: una consulta nueva, «Consulta N»."""
+    def new_query(self, sql: str = "") -> QWidget:
+        """«+»: una consulta nueva, «Consulta N» (con `sql`, el de «Ver SQL»)."""
         names = {p.name for p in self.places() if p.kind == QUERY}
         while True:
             self._queries += 1
             name = tr("Query {}").format(self._queries)
             if name not in names:
                 break
-        return self.open_place(Place(QUERY, name))
+        page = self.open_place(Place(QUERY, name))
+        if sql and hasattr(page, "set_sql"):
+            page.set_sql(sql)
+        return page
 
     def close_tab(self, index: int) -> None:
         if not 0 <= index < self.bar.count():
             return
         page = self.page(index)
+        if hasattr(page, "close_page"):
+            page.close_page()  # deja de escuchar a la sesión antes de borrarse
         self.bar.removeTab(index)
         self.stack.removeWidget(page)
         page.deleteLater()

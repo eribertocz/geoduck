@@ -173,6 +173,24 @@ def stylesheet(c: Colors) -> str:
 {r} QTabBar[pro="tabs"]::close-button:hover {{ background: {c.segment}; }}
 {r} QTabBar[pro="tabs"] QToolButton {{ background: {c.head}; border: 0; }}
 
+{r} QTableView[pro="grid"] {{ background: {c.bg}; border: 0; outline: 0; gridline-color: {c.line};
+    selection-background-color: {c.row_selected}; selection-color: {c.text}; }}
+{r} QTableView[pro="grid"]::item {{ padding: 0 10px; border-bottom: 1px solid {c.line}; }}
+{r} QTableView[pro="grid"]::item:selected {{ background: {c.row_selected}; color: {c.text}; }}
+{r} QTableView[pro="grid"] QHeaderView {{ background: {c.head}; }}
+{r} QTableView[pro="grid"] QHeaderView::section:vertical {{ background: {c.bg}; color: {c.faint}; border: 0;
+    border-bottom: 1px solid {c.line}; padding: 0 10px 0 0; font-size: {m.font_small}px; }}
+{r} QTableView[pro="grid"] QTableCornerButton::section {{ background: {c.head}; border: 0;
+    border-bottom: 1px solid {c.border}; }}
+{r} QTableWidget[pro="list"] {{ background: {c.bg}; border: 0; outline: 0; gridline-color: {c.line}; }}
+{r} QTableWidget[pro="list"]::item {{ padding: 0 10px; border-bottom: 1px solid {c.line}; }}
+{r} QTableWidget[pro="list"] QHeaderView::section {{ background: {c.head}; color: {c.muted}; border: 0;
+    border-bottom: 1px solid {c.border}; padding: 0 10px; height: {m.header}px; font-weight: 600; }}
+{r} QPlainTextEdit[pro="code"] {{ background: {c.side}; border: 1px solid {c.border};
+    border-radius: {m.radius}px; font-family: "{mono}"; font-size: {m.font_small}px; padding: 8px; }}
+{r} QScrollArea[pro="plain"] {{ background: transparent; border: 0; }}
+{r} QScrollArea[pro="plain"] > QWidget > QWidget {{ background: transparent; }}
+{r} QFrame[pro="popup"] {{ background: {c.bg}; border: 1px solid {c.border}; }}
 {r} QFrame[pro="palette"] {{ background: {c.bg}; border: 1px solid {c.border};
     border-radius: {m.radius_lg}px; }}
 {r} QFrame[pro="palette"] QLineEdit {{ border: 0; background: transparent; font-size: {m.font_title}px;

@@ -120,6 +120,13 @@ class SessionEngine(Protocol):
 
     def cancel(self, op_id: int) -> bool: ...
 
+    def query(
+        self, sql: str, *, max_rows: int = ..., priority: bool = ..., database: str | None = None
+    ) -> OperationHandle:
+        """Consulta corta de solo lectura que GeoDuck construye (una página de la pestaña de tabla, su total,
+        su estructura): columnas, tipos y como mucho `max_rows` filas (`StatementOutcome`)."""
+        ...
+
     def spatial_state(self) -> Future[Any]:
         """Estado de la extensión `spatial` en la sesión (`SpatialState`)."""
         ...
