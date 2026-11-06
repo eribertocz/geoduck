@@ -70,6 +70,18 @@
 | GD-IMP-005 | P0 | Conversión de tipos explícita; nombres que chocan sin distinguir mayúsculas se renombran con aviso; «Añadir filas» solo con columnas compatibles | AT-IMP-006 |
 | GD-IMP-006 | P0 | Geometría con su SRC (`ST_SetCRS`, sin `spatial`), Z/M, colecciones y `NULL`; nunca un SRC inventado | AT-IMP-007 |
 | GD-IMP-007 | P0 | Sin regresión G0–G7 | AT-IMP-008 |
+| GD-WSP-001 | P0 | Interfaz nueva con Qt Widgets y sistema de diseño propio, sin motor web (ADR-0016) | AT-WSP-001 |
+| GD-WSP-002 | P0 | Ventana y panel con la misma sesión; barra lateral con Recientes, ★ y Bases; pestañas de tabla y de consulta | AT-WSP-002 |
+| GD-WSP-003 | P0 | Pestaña de tabla: grilla por páginas, orden, filtros en chips, búsqueda, detalle de fila, «Estructura»; doble clic la abre | AT-WSP-003, AT-WSP-004 |
+| GD-WSP-004 | P0 | Pestaña de consulta: editor, ejecutar sentencia o todo, resultado, mensajes, abrir y guardar `.sql` | AT-WSP-005 |
+| GD-WSP-005 | P0 | Ctrl+K: tablas, consultas y acciones | AT-WSP-006 |
+| GD-WSP-006 | P0 | «Cargar en QGIS»: «Copia» (rápida por dentro, memoria como respaldo automático) y «Conectada» | AT-WSP-007 |
+| GD-WSP-007 | P1 | Recientes y favoritos (solo nombres en las opciones) | AT-WSP-008 |
+| GD-WSP-008 | P0 | «Enviar a DuckDB» en el estilo nuevo; arrastrar capas a una base | AT-WSP-009 |
+| GD-WSP-009 | P0 | Sistema de diseño: tokens, temas claro y oscuro, componentes, solo dentro de GeoDuck | AT-WSP-001 |
+| GD-WSP-010 | P0 | Teclado, accesibilidad, inglés y español, estados obligatorios, panel estrecho | AT-WSP-010 |
+| GD-WSP-011 | P0 | Retiro de la interfaz anterior y de los cuadernos; los guardados vuelven como consultas | AT-WSP-011 |
+| GD-WSP-012 | P1 | Objetivos de rendimiento de la interfaz | AT-WSP-012 |
 | GD-NB-006 | P0 | Sin regresión: autocompletado, historial, atajos, ventana ↔ panel e idioma (G5–G6) en cada celda | AT-NB-008..010 |
 | GD-I18N-001 | P1 | Interfaz con textos en inglés y traducción al español (catálogo `.ts` de Qt Linguist) según el idioma de QGIS (issue #68) | AT-I18N-001 |
 | GD-SEC-001 | P0 | Configuración de extensiones seguras y acceso explícito | AT-SEC-001 |

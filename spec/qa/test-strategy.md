@@ -91,6 +91,18 @@
 | AT-IMP-006 | todos los tipos de §6; `ID` e `id`; añadir con columnas incompatibles | tipos de la tabla; renombrado con aviso; «No se puede» con la columna que falla |
 | AT-IMP-007 | EPSG:4326, EPSG:32719, SRC personalizado, sin SRC; Z/M, colección, `NULL`, inválida | `GEOMETRY('<SRC>')` que vuelve a QGIS con el mismo SRC y coordenadas; personalizado: aviso y decisión; sin `spatial` cargada |
 | AT-IMP-008 | regresión G0–G7 | todas pasan |
+| AT-WSP-001 | tema claro y oscuro de QGIS, Qt 5 y Qt 6; estilos de QGIS antes y después | GeoDuck legible y con su diseño; QGIS no cambia (ADR-0011); sin módulos web |
+| AT-WSP-002 | ventana ↔ panel con pestañas abiertas y una consulta en curso; barra lateral plegada | nada se pierde; Ctrl+B se recuerda |
+| AT-WSP-003 | abrir una tabla de 1 millón de filas; ordenar; filtrar con dos chips; buscar; paginar; «Ver SQL» | primera página < 0,5 s; resultados correctos frente a SQL; la UI responde |
+| AT-WSP-004 | detalle de fila con geometría y texto largo; «Estructura» de tabla y vista | valores completos; columnas, tipos, nulos, clave y `CREATE` |
+| AT-WSP-005 | ejecutar sentencia, selección y todo; error con línea; cancelar; abrir y guardar `.sql`; un cuaderno de G7 | resultado y registro correctos; el cuaderno se abre como una consulta |
+| AT-WSP-006 | Ctrl+K con 1 000 objetos; teclear sin acentos; Intro y Esc | encuentra la tabla o acción; < 50 ms por tecla |
+| AT-WSP-007 | «Copia» y «Conectada»; GDAL sin `WriteArrow`; guardar y reabrir un proyecto con una «Copia» | copia rápida o respaldo automático sin preguntar; comportamiento al reabrir según E0b |
+| AT-WSP-008 | recientes y ★ tras reiniciar QGIS; objeto borrado | vuelven; el borrado aparece atenuado con motivo; solo nombres en las opciones |
+| AT-WSP-009 | enviar desde el diálogo nuevo; arrastrar una capa a una base; Ctrl+K | mismo comportamiento que AT-IMP-001..007; el destino es la base soltada |
+| AT-WSP-010 | solo teclado; inglés y español; sin sesión, cargando, vacío y error; panel estrecho | todo alcanzable; textos traducidos; estados visibles; ninguna acción desaparece |
+| AT-WSP-011 | actualizar desde 0.9.0a1 con cuadernos guardados abiertos | vuelven como consultas; preferencias de presentación conservadas |
+| AT-WSP-012 | medidas de §13 de workspace-pro-spec en QGIS 3.44 y 4.2 | dentro de los objetivos |
 | AT-SEC-001 | extensiones externas y RO | restricciones y advertencias funcionan |
 | AT-CFG-001 | reiniciar plugin | configuración sí, datos/capas no persistidos por GeoDuck |
 | AT-COMP-001 | matriz QGIS/Python/Qt/PyArrow | reportes reproducibles por celda |
