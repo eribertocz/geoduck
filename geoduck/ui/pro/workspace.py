@@ -58,7 +58,7 @@ from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_title
+from geoduck.ui.pro.load import QuickLoad, finished_text
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,
@@ -375,12 +375,14 @@ class ProWorkspace(QWidget):
         toast.show_at_corner(bottom=40)
         self.last_toast = toast
 
-    def _loaded(self, report: Any) -> None:
-        """Capa cargada: el aviso con «Ver en el mapa» (si el complemento sabe mostrarla)."""
+    def _loaded(self, report: Any) -> bool:
+        """Capa cargada: un solo aviso, con «Ver en el mapa» (si el complemento sabe mostrarla), el origen, el
+        acceso y las advertencias. Devuelve si lo mostró."""
         if self.on_view_map is None:
-            return
+            return False
         ids = [layer_id for layer_id, _ in report.layers] or [report.layer_id]
-        self.toast(finished_title(report), [(tr("View on map"), lambda: self.view_map(ids))], 10)
+        self.toast(finished_text(report), [(tr("View on map"), lambda: self.view_map(ids))], 12)
+        return True
 
     def view_map(self, layer_ids: list[str]) -> None:
         if self.on_view_map is not None:

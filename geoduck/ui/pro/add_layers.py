@@ -485,7 +485,9 @@ class AddLayers:
         self._host.hide_progress()
         self._refresh()
         text = self.done_text()
-        self._host.notify(text)
+        # un solo aviso: el resumen del paso 3 o, con la ventana cerrada, el aviso con «×»; nada en el pie,
+        # que quedaría desactualizado (observación del propietario, 2026-11-06)
+        self._host.notify("")
         if self.window is None or not self.window.isVisible():
             actions: list[tuple[str, Callable[[], None]]] = []
             if self.tables:

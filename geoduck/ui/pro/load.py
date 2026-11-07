@@ -328,8 +328,9 @@ class QuickLoad:
         self._loads: set[int] = set()
         self._starting = False
         self.last_report: LoadReport | None = None
-        #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»).
-        self.on_loaded: Callable[[LoadReport], None] | None = None
+        #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»). Si devuelve True, ya avisó
+        #: (y el pie no repite el mensaje, que quedaría desactualizado).
+        self.on_loaded: Callable[[LoadReport], bool] | None = None
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
     def start(
@@ -452,9 +453,8 @@ class QuickLoad:
         elif isinstance(event, LoadFinished) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
             self.last_report = event.report
-            self._notify(finished_text(event.report))
-            if self.on_loaded is not None:
-                self.on_loaded(event.report)
+            shown = self.on_loaded(event.report) if self.on_loaded is not None else False
+            self._notify("" if shown else finished_text(event.report))
             QTimer.singleShot(0, self._next)  # cuando la sesión ya volvió a estar lista
         elif isinstance(event, LoadFailed) and event.load_id in self._loads:
             self._loads.discard(event.load_id)

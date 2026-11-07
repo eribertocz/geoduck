@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QPainter, QPalette
+from qgis.PyQt.QtGui import QColor, QPainter, QPalette, QTextDocument
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -246,6 +246,13 @@ class Toast(QFrame):
         row.addWidget(dot)
         self.text = QLabel(text)
         self.text.setTextFormat(Qt.TextFormat.RichText)
+        # un aviso corto, en una línea; uno largo (origen, acceso, advertencias) baja de línea a los 520 px
+        self.text.setWordWrap(True)
+        plain = QTextDocument()
+        plain.setHtml(text)
+        width = self.text.fontMetrics().horizontalAdvance(plain.toPlainText()) + 4
+        self.text.setMinimumWidth(min(width, 520))
+        self.text.setMaximumWidth(520)
         row.addWidget(self.text)
         self.actions: list[QPushButton] = []
         self.seconds = seconds
