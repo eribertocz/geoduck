@@ -325,7 +325,6 @@ class ProWorkspace(QWidget):
         row.addStretch(1)
         column = QWidget()
         column.setMaximumWidth(560)  # cabe la fila de botones más larga (con «Diagnóstico»)
-        column.setMinimumWidth(200)  # el texto baja de línea: en el panel angosto no fija el ancho
         box = QVBoxLayout(column)
         box.setContentsMargins(16, 0, 16, 0)
         box.setSpacing(8)
@@ -334,15 +333,19 @@ class ProWorkspace(QWidget):
         title = label("", "title")
         text = label("", "muted")
         text.setWordWrap(True)
+        title.setWordWrap(True)
+        for wrapped in (title, text):
+            wrapped.setMinimumWidth(160)  # bajan de línea: en el panel angosto no fijan el ancho
         for widget in (glyph, title, text):
             widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
             box.addWidget(widget)
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.setContentsMargins(0, 10, 0, 0)
+        actions.addStretch(1)
         for widget in buttons:
             actions.addWidget(widget)
-        actions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        actions.addStretch(1)
         self._action_rows.append(actions)  # en el modo compacto, los botones uno debajo de otro
         box.addLayout(actions)
         row.addWidget(column, 1)
