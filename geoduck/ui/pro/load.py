@@ -118,12 +118,12 @@ def finished_title(report: LoadReport) -> str:
     if len(report.layers) > 1:  # una capa por geometría (spatial-spec §7)
         names = ", ".join(f"«{name}»" for _, name in report.layers)
         text = (
-            tr("Layers {} loaded · {} · {} features each")
+            tr("Layers {} added to QGIS from DuckDB · {} · {} features each")
             if report.rows_each
-            else tr("Layers {} loaded · {} · {} features in total")
+            else tr("Layers {} added to QGIS from DuckDB · {} · {} features in total")
         )
         return text.format(names, mode_text(report.mode), rows)
-    return tr("Layer «{}» loaded · {} · {} features").format(report.layer_name, mode_text(report.mode), rows)
+    return tr("Layer «{}» added to QGIS from DuckDB · {} · {} features").format(report.layer_name, mode_text(report.mode), rows)
 
 
 def finished_text(report: LoadReport) -> str:

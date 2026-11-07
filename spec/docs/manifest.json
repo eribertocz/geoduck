@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 179193,
-      "sha256": "9f64c02e6d6a0c2db932169686862c73d715c5b9603458a063d41ad5e4934d5f"
+      "bytes": 179214,
+      "sha256": "2629eea7ad7ce44ee47433fc4c2425be12cb4ea1d004a39b6a97db3163b9c839"
     },
     {
       "path": "README.md",
@@ -186,8 +186,8 @@
     },
     {
       "path": "specs/workspace-pro-spec.md",
-      "bytes": 15669,
-      "sha256": "2532f8a78d650d2e25bc4b70c707d979826d7f223a6ec98c758853adfb8f02e9"
+      "bytes": 15690,
+      "sha256": "bb27503ff4420b4c96810536e24b856a52629f53f7cce25ad259cb37f87c5cbd"
     }
   ]
 }

@@ -127,7 +127,7 @@ def test_two_geometries_make_two_complete_layers(session, mode):
     assert by_id[7].boundingBox() == QgsRectangle(7, 0, 8, 1)
     assert {f["id"]: f.geometry().asPoint().x() for f in centro.getFeatures()}[7] == 7
     text = finished_message(ev.report)
-    assert "Capas «zonas · centro», «zonas · poligono» cargadas" in text and "300 entidades cada una" in text
+    assert "Capas «zonas · centro», «zonas · poligono» añadidas a QGIS desde DuckDB" in text and "300 entidades cada una" in text
 
 
 def test_connected_filters_each_layer_by_its_own_column(session):

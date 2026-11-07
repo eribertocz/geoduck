@@ -60,7 +60,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | # | Haga | Debe pasar |
 |---|---|---|
 | 4a | Cree una tabla con geometría: `CREATE TABLE prueba.pozos AS SELECT range AS id, ('POINT (' \|\| (-68 - range / 100) \|\| ' -16)')::GEOMETRY('OGC:CRS84') AS geom FROM range(500);` | Aparece en «prueba» |
-| 4b | Ábrala → «Cargar en QGIS ▾» → «Copia» | La capa aparece en QGIS con su SRC y sin preguntas; aviso «Capa … cargada · Copia · 500 entidades · Origen … · Acceso …» con «Ver en el mapa» |
+| 4b | Ábrala → «Cargar en QGIS ▾» → «Copia» | La capa aparece en QGIS con su SRC y sin preguntas; aviso «Capa … añadida a QGIS desde DuckDB · Copia · 500 entidades · Origen … · Acceso …» con «Ver en el mapa» |
 | 4c | «Ver en el mapa» | La capa queda elegida y el mapa hace zoom a ella; la ventana de GeoDuck se minimiza |
 | 4d | «Cargar en QGIS ▾» → «Conectada» | Capa editable en DuckDB; edite un valor en QGIS y guárdelo: la pestaña de tabla lo muestra al recargar |
 | 4e | «Cargar en QGIS ▾» → «Más opciones…» | Ventana corta: Copia / Conectada, «Reproyectar a…» solo en Copia, «Separar por tipo» solo en Conectada, cada una con su línea de ayuda y el resumen «Se cargará 1 capa · Copia». Con «Reproyectar a… EPSG:3857», la capa cae en su sitio |

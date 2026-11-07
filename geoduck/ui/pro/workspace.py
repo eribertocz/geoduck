@@ -345,6 +345,7 @@ class ProWorkspace(QWidget):
         self.progress_button = QPushButton()
         self.progress_button.setProperty("pro", "ghost")
         self.progress_button.setToolTip(tr("Show the progress"))
+        self.progress_button.setAccessibleName(tr("Show the progress"))
         self.progress_button.setVisible(False)
         self.progress_button.clicked.connect(self.to_duckdb.show_window)
         row.addWidget(self.progress_button)

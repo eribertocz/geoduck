@@ -44,7 +44,7 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   «Diagnóstico», «Acerca de» y la versión.
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
   Ctrl+W), reordenar y recordar las abiertas.
-- **Pie:** el último aviso (p. ej. «Capa «consumidores» cargada · Conectada · Ver en el mapa»).
+- **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde DuckDB · Conectada · Ver en el mapa»).
 - **Panel acoplado:** pestañas en una fila compacta, sin barra lateral (Ctrl+K y el menú de la pestaña la
   sustituyen); ninguna acción desaparece, se compacta.
 
