@@ -110,7 +110,46 @@ acción explica que hay que iniciar una.
 ## 8. Fuera de alcance de G8
 Sincronización o capas vinculadas; enviar estilos, uniones o campos virtuales calculados como expresión
 (se envía su valor); capas ráster; GeoPackage/Shapefile leídos directo por DuckDB (necesitan extensiones:
-ADR-0011); editar la tabla desde el diálogo.
+ADR-0011; en G9 sí, con consentimiento: §10); editar la tabla desde el diálogo.
 
 ## 9. Sin regresión (GD-IMP-007)
 Las cargas DuckDB → QGIS (G3–G4), el workspace, el SQL, los cuadernos y las protecciones de sesión siguen igual; un envío en curso bloquea `DETACH` y el cierre de la base destino igual que una operación propia.
+
+
+## 10. Archivos → DuckDB (GD-IMP-008; G9, decisión del propietario, 2026-11-07)
+Importar archivos de datos a tablas de DuckDB **siempre con el motor de DuckDB** (nunca con QGIS; el
+rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-exportar.png`.
+
+- **Puntos de entrada:** «+» de la barra lateral › «Importar archivos…»; clic derecho en una base o un esquema
+  › «Importar archivos aquí…»; Ctrl+K › «Importar archivos…»; **arrastrar** uno o varios archivos desde el
+  escritorio, el Explorador de archivos o el Navegador de QGIS a GeoDuck (con el «pato al lago», §3 de
+  workspace-pro-spec). Soltar un archivo **en el editor SQL** escribe su consulta de lectura
+  (`SELECT * FROM read_parquet('…')`, `ST_Read('…')`…) en el cursor, sin ejecutarla.
+- **Selector de archivos:** filtro «Todos los compatibles» y uno por formato, con ⚡ en los más rápidos.
+- **Formatos y lector** (verificado con DuckDB 2.0.0):
+
+  | Formato | Extensiones | Lector |
+  |---|---|---|
+  | ⚡ Parquet / GeoParquet | `.parquet` | `read_parquet` (incluido) |
+  | ⚡ Arrow / Feather | `.arrow` `.feather` `.ipc` | PyArrow (`pyarrow.dataset`, por flujo) |
+  | ⚡ CSV / TSV | `.csv` `.tsv` | `read_csv` (incluido) |
+  | JSON / NDJSON | `.json` `.ndjson` `.jsonl` | `read_json` (incluido) |
+  | ⚡ FlatGeobuf, GeoPackage, Shapefile (`.shp` o `.zip`), GeoJSON (`.geojson` `.geojsonl`), KML/KMZ, Geodatabase de ArcGIS (`.gdb`), OpenStreetMap (`.osm.pbf`, solo importar), Excel (`.xlsx`) | | `ST_Read` de `spatial` (GDAL de DuckDB) |
+
+- **`spatial` con consentimiento (ADR-0011):** si hace falta y no está cargada, el paso 1 lo dice en una nota
+  («… se leen con la extensión «spatial» de DuckDB. No está instalada: GeoDuck la instalará al pulsar
+  «Instalar y continuar» (una sola vez, ~40 MB)»). Sin ese clic, GeoDuck no instala ni carga nada; los archivos
+  que no la necesitan se pueden importar igual. No hay lector alternativo.
+- **Paso 1 (Archivos):** una fila por capa u hoja (un GeoPackage o una Geodatabase muestran sus capas; un Excel,
+  sus hojas), agrupadas en puntos, líneas, polígonos y tablas sin geometría, con el formato, el SRC y las
+  filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).
+  Las que no se pueden leer, en gris con el motivo.
+- **Pasos 2 y 3:** los de §3 y §4 (destino, «si ya existe», progreso, «Deshacer»), con el título
+  «Archivos → DuckDB». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
+  transacción, con el conteo de §4.
+- **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
+  archivo (p. ej. SpatiaLite) aparece en gris con «Formato no compatible: ábrelo primero en QGIS y luego añade
+  la capa a DuckDB». **Sin SpatiaLite ni SQLite** en la lista (decisión del propietario, 2026-11-07): GeoPackage es el formato
+  moderno sobre SQLite; el GDAL de DuckDB no escribe SpatiaLite.
+- **Geometría y SRC:** la que da el lector (`GEOMETRY('EPSG:…')`); un GeoParquet sin `spatial` toma el SRC
+  de sus metadatos `geo` (F-118). Una base que no guarda el SRC (F-120) sigue la regla de §7.

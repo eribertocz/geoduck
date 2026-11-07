@@ -244,7 +244,8 @@ class SendDialog(QDialog):
         reproject_layout.setContentsMargins(0, 0, 0, 0)
         reproject_layout.addWidget(self.reproject)
         reproject_layout.addWidget(self.reproject_crs, 1)
-        self.reproject_row.setVisible(any(c.geometry is not None for c in candidates))
+        # Un archivo lo copia DuckDB tal cual (qgis-import-spec §10): no se reproyecta con QGIS
+        self.reproject_row.setVisible(any(c.geometry is not None and c.file is None for c in candidates))
         self.reproject.toggled.connect(self.reproject_crs.setEnabled)
         self.reproject_crs.crsChanged.connect(lambda _crs: self.refresh())
         self.without_crs = QCheckBox(tr("Send without CRS"))
@@ -260,7 +261,7 @@ class SendDialog(QDialog):
             self.more_button.setProperty("pro", "ghost")
             self.more_button.setCheckable(True)
             self._optional = (
-                any(c.geometry is not None for c in candidates),
+                any(c.geometry is not None and c.file is None for c in candidates),
                 any(c.can_view for c in candidates),
             )
             self.more_button.setVisible(any(self._optional))

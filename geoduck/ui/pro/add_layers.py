@@ -27,6 +27,7 @@ from qgis.core import QgsIconUtils, QgsProject
 from qgis.PyQt.QtCore import QSize, Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -39,14 +40,36 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from geoduck.app.events import AppEvent, SendFailed, SendFinished, SendProgressed, SendUndoFailed, SendUndone
+from geoduck.app.events import (
+    AppEvent,
+    SendFailed,
+    SendFinished,
+    SendProgressed,
+    SendUndoFailed,
+    SendUndone,
+    SpatialActivated,
+    SpatialActivationFailed,
+    SpatialChecked,
+)
 from geoduck.domain.errors import GeoDuckError, SessionStateError
-from geoduck.domain.importing import PATH_QGIS, ImportedTable, SendCandidate, SendRequest
+from geoduck.domain.files import candidate_for, file_formats_needing_spatial, size_label
+from geoduck.domain.importing import (
+    PATH_QGIS,
+    ImportedTable,
+    SendCandidate,
+    SendRequest,
+    table_name_for,
+    unique_name,
+)
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import style
 from geoduck.ui.pro.widgets import LogoBar, button, label, lines_html
 from geoduck.ui.send_dialog import SendDialog
+from geoduck.ui.theme import palette_for
+
+#: Motivo de un archivo de GDAL sin `spatial` cargada (`geoduck.engine.files.NEEDS_SPATIAL`).
+NEEDS_SPATIAL = "needs-spatial"
 
 CHOOSE, WHERE, PROGRESS = 0, 1, 2
 #: Estado de cada capa en el paso 3.
@@ -60,9 +83,11 @@ def _count(n: int) -> str:
 
 
 def group_of(candidate: SendCandidate) -> int:
-    """0 puntos, 1 líneas, 2 polígonos, 3 tablas sin geometría, 4 no se puede."""
-    if candidate.problem is not None:
+    """0 puntos, 1 líneas, 2 polígonos, 3 tablas sin geometría, 4 esperan `spatial`, 5 no se puede."""
+    if candidate.problem == NEEDS_SPATIAL:
         return 4
+    if candidate.problem is not None:
+        return 5
     kind = (candidate.geometry_type or "").lower()
     if not kind:
         return 3
@@ -74,7 +99,14 @@ def group_of(candidate: SendCandidate) -> int:
 
 
 def group_titles() -> list[str]:
-    return [tr("Points"), tr("Lines"), tr("Polygons"), tr("Tables without geometry"), tr("Cannot be added")]
+    return [
+        tr("Points"),
+        tr("Lines"),
+        tr("Polygons"),
+        tr("Tables without geometry"),
+        tr("Need «spatial»"),
+        tr("Cannot be added"),
+    ]
 
 
 class AddLayersWindow(QDialog):
@@ -133,6 +165,23 @@ class AddLayersWindow(QDialog):
         self.empty.setWordWrap(True)
         self.empty.setVisible(False)
         column.addWidget(self.empty)
+        # Archivos → DuckDB (§10): `spatial`, solo con el permiso del usuario (spatial-spec §10, ADR-0011)
+        self.note = QFrame()
+        self.note.setObjectName("geoduckNote")
+        brand = palette_for(self)
+        self.note.setStyleSheet(
+            f"#geoduckNote {{ background: {brand.note_bg}; border-left: 3px solid {brand.amber}; }}"
+        )
+        note_row = QHBoxLayout(self.note)
+        note_row.setContentsMargins(10, 8, 10, 8)
+        self.note_text = label("", "muted")
+        self.note_text.setWordWrap(True)
+        note_row.addWidget(self.note_text, 1)
+        self.spatial_button = button("", "primary")
+        self.spatial_button.clicked.connect(lambda _c=False: self.flow.activate_spatial())
+        note_row.addWidget(self.spatial_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.note.setVisible(False)
+        column.addWidget(self.note)
         return page
 
     def fill(self, candidates: list[SendCandidate], checked: set[str]) -> None:
@@ -140,7 +189,7 @@ class AddLayersWindow(QDialog):
         self.tree.clear()
         self.rows: dict[str, QTreeWidgetItem] = {}
         titles = group_titles()
-        for group in range(5):
+        for group in range(6):
             members = [c for c in candidates if group_of(c) == group]
             if not members:
                 continue
@@ -151,10 +200,9 @@ class AddLayersWindow(QDialog):
             head.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.tree.addTopLevelItem(head)
             for c in members:
-                detail = c.problem if c.problem else tr("{0} features").format(_count(max(c.features, 0)))
-                if c.problem is None and c.crs_label:
-                    detail += f" · {c.crs_label}"
-                item = QTreeWidgetItem([c.name, detail])
+                item = QTreeWidgetItem([c.name, self._detail(c)])
+                if c.file is not None:
+                    item.setToolTip(0, c.file.path)
                 layer = QgsProject.instance().mapLayer(c.layer_id)
                 if layer is not None:
                     item.setIcon(0, QgsIconUtils.iconForLayer(layer))
@@ -169,8 +217,38 @@ class AddLayersWindow(QDialog):
                 self.tree.addTopLevelItem(item)
                 self.rows[c.layer_id] = item
         self.tree.blockSignals(False)
+        header = self.tree.header()
+        files = any(c.file is not None for c in candidates)
+        # Archivos: el nombre entero y el detalle, que es largo, se recorta (su texto completo, en la ayuda)
+        header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents if files else QHeaderView.ResizeMode.Stretch
+        )
+        header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch if files else QHeaderView.ResizeMode.ResizeToContents
+        )
+        for item in self.rows.values():
+            item.setToolTip(1, item.text(1))
         self.tree.setVisible(bool(candidates))
         self.empty.setVisible(not any(c.problem is None for c in candidates))
+
+    @staticmethod
+    def _detail(c: SendCandidate) -> str:
+        """«12 000 entidades · EPSG:32719»; para un archivo, «⚡ Parquet · 2 400 000 filas · EPSG:4326»."""
+        if c.file is None:
+            detail = c.problem if c.problem else tr("{0} features").format(_count(max(c.features, 0)))
+            return detail + (f" · {c.crs_label}" if c.problem is None and c.crs_label else "")
+        if c.problem and c.file.file_format.key == "other":
+            return c.problem  # «Formato no compatible: ábrelo primero en QGIS…»
+        parts = [c.source]
+        if c.problem and c.problem != NEEDS_SPATIAL:
+            parts.append(c.problem)
+        else:
+            parts.append(
+                tr("{0} rows").format(_count(c.features)) if c.features >= 0 else size_label(c.file.size)
+            )
+            if c.crs_label:
+                parts.append(c.crs_label)
+        return " · ".join(p for p in parts if p)
 
     def chosen(self) -> list[str]:
         return [
@@ -183,7 +261,8 @@ class AddLayersWindow(QDialog):
 
     def set_step(self, step: int, subtitle: str) -> None:
         self.stack.setCurrentIndex(step)
-        self.title.setText(tr("QGIS layers → DuckDB") + f"  ·  {step + 1} " + tr("of") + " 3")
+        head = tr("Files → DuckDB") if self.flow.files else tr("QGIS layers → DuckDB")
+        self.title.setText(head + f"  ·  {step + 1} " + tr("of") + " 3")
         self.subtitle.setText(subtitle)
 
     def set_footer(self, left: list[QWidget], right: list[QWidget]) -> None:
@@ -229,6 +308,12 @@ class AddLayers:
         self._undoing = False
         self.tables: list[ImportedTable] = []
         self.running = False
+        #: Archivos → DuckDB (qgis-import-spec §10) en vez de capas de QGIS.
+        self.files = False
+        self._paths: list[str] = []
+        self._scanning = False
+        self._spatial_installed: bool | None = None
+        self._activating = False
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
     # -- abrir ------------------------------------------------------------------------------------------
@@ -250,6 +335,7 @@ class AddLayers:
         if coordinator.state is not SessionState.READY or coordinator.catalog is None:
             self._host.notify(tr("Start DuckDB to add layers."))
             return
+        self.files = False
         self._candidates = coordinator.send_candidates(layer_ids)
         self._destination = destination
         marked = set(layer_ids) if layer_ids is not None else set(checked or [])
@@ -259,6 +345,108 @@ class AddLayers:
         window.show()
         window.raise_()
         window.activateWindow()
+
+    def open_files(self, paths: list[str], destination: tuple[str, str] | None = None) -> None:
+        """«Importar archivos…», soltar archivos o «Importar archivos aquí…» (qgis-import-spec §10): el paso 1
+        con lo que DuckDB lee de cada archivo (solo metadatos), todo marcado."""
+        if self.running:
+            self.show_window()
+            self._host.notify(tr("Finish or cancel these layers to add more."))
+            return
+        coordinator = self._coordinator
+        if coordinator.state is not SessionState.READY or coordinator.catalog is None:
+            self._host.notify(tr("Start DuckDB to import files."))
+            return
+        if not paths:
+            return
+        self.files = True
+        self._paths = list(paths)
+        self._destination = destination
+        self._candidates = []
+        window = self._window()
+        window.fill([], set())
+        window.empty.setText(tr("Reading the files…"))
+        window.empty.setVisible(True)
+        window.note.setVisible(False)
+        self._show_choose()
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        self._scan()
+
+    def _scan(self) -> None:
+        self._scanning = True
+        try:
+            self._coordinator.scan_files(self._paths, self._scanned)
+        except GeoDuckError as exc:
+            self._scanning = False
+            self._host.notify(exc.message)
+
+    def _scanned(self, result: Any) -> None:
+        self._scanning = False
+        window = self.window
+        if window is None or not self.files:
+            return
+        if isinstance(result, BaseException):
+            window.empty.setText(tr("The files could not be read: ") + str(result))
+            window.empty.setVisible(True)
+            return
+        taken: list[str] = []
+        candidates = []
+        for i, item in enumerate(result):
+            table = unique_name(table_name_for(item.name), taken)
+            taken.append(table)
+            candidates.append(candidate_for(item, i, table))
+        self._candidates = candidates
+        window.fill(candidates, {c.layer_id for c in candidates if c.problem is None})
+        window.empty.setText(tr("None of these files can be read."))
+        window.empty.setVisible(not any(c.problem is None for c in candidates))
+        if any(c.problem == NEEDS_SPATIAL for c in candidates):
+            window.empty.setVisible(False)
+            self._show_spatial_note()
+            self._coordinator.check_spatial()
+        else:
+            window.note.setVisible(False)
+        self.choice_changed()
+
+    def _show_spatial_note(self, error: str = "") -> None:
+        window = self._window()
+        formats = file_formats_needing_spatial(
+            [c.file for c in self._candidates if c.problem == NEEDS_SPATIAL]
+        )
+        installed = self._spatial_installed
+        if installed:
+            action = tr("It is installed but not loaded: GeoDuck will load it when you press «{0}».")
+            label_text = tr("Load and continue")
+        else:
+            action = tr(
+                "It is not installed: GeoDuck will install it when you press «{0}» (only once, about 40 MB)."
+            )
+            label_text = tr("Install and continue")
+        text = tr("{0} are read with DuckDB's «spatial» extension (the fastest).").format(formats)
+        text += " " + action.format(label_text)
+        if error:
+            text += "\n" + tr("It could not be activated: ") + error
+        window.note_text.setText(text)
+        window.spatial_button.setText(label_text)
+        window.spatial_button.setEnabled(not self._activating)
+        window.note.setVisible(True)
+
+    def activate_spatial(self) -> None:
+        """«Instalar y continuar» o «Cargar y continuar»: el único lugar donde GeoDuck instala o carga
+        `spatial`, porque el usuario lo pidió (spatial-spec §10)."""
+        if self._activating:
+            return
+        self._activating = True
+        try:
+            self._coordinator.activate_spatial(install=not self._spatial_installed)
+        except GeoDuckError as exc:
+            self._activating = False
+            self._show_spatial_note(exc.message)
+            return
+        window = self._window()
+        window.spatial_button.setEnabled(False)
+        window.spatial_button.setText(tr("Installing…") if not self._spatial_installed else tr("Loading…"))
 
     def _window(self) -> AddLayersWindow:
         if self.window is None:
@@ -282,7 +470,9 @@ class AddLayers:
         window = self._window()
         window.set_step(
             CHOOSE,
-            tr("Choose the layers to add to DuckDB. The ones selected in QGIS are already checked."),
+            tr("Choose what to add to DuckDB. Each layer or sheet becomes a table.")
+            if self.files
+            else tr("Choose the layers to add to DuckDB. The ones selected in QGIS are already checked."),
         )
         self.count_label = label("", "muted")
         cancel = button(tr("Cancel"))
@@ -377,6 +567,11 @@ class AddLayers:
         request = dialog.request()
         only = request.only_selected
         by_id = {c.layer_id: c for c in self._candidates}
+        if self.files:  # cada fila lleva su archivo hasta el motor
+            request = dataclasses.replace(
+                request,
+                items=tuple(dataclasses.replace(i, file=by_id[i.layer_id].file) for i in request.items),
+            )
         self.request = request
         self.states = []
         for item in request.items:
@@ -449,6 +644,24 @@ class AddLayers:
         self._refresh()
 
     def _on_event(self, event: AppEvent) -> None:
+        if self.files and isinstance(event, SpatialChecked):
+            self._spatial_installed = event.installed
+            if event.loaded:  # alguien la cargó (p. ej. con SQL): basta con volver a leer
+                self._scan()
+            elif self.window is not None and self.window.note.isVisible():
+                self._show_spatial_note()
+            return
+        if self.files and isinstance(event, SpatialActivated) and self._activating:
+            self._activating = False
+            self._spatial_installed = True
+            if self.window is not None:
+                self.window.note.setVisible(False)
+            self._scan()
+            return
+        if self.files and isinstance(event, SpatialActivationFailed) and self._activating:
+            self._activating = False
+            self._show_spatial_note(event.message)
+            return
         index = self._current
         if isinstance(event, SendProgressed) and self._mine and index is not None:
             self.states[index]["rows"] = event.rows
@@ -501,7 +714,13 @@ class AddLayers:
         added = sum(1 for s in self.states if s["state"] == DONE)
         database = self.request.database if self.request is not None else ""
         schema = self.request.schema if self.request is not None else ""
-        if added == 1:
+        if self.files:
+            lines = [
+                tr("1 table added to DuckDB from files")
+                if added == 1
+                else tr("{0} tables added to DuckDB from files").format(added)
+            ]
+        elif added == 1:
             lines = [tr("1 QGIS layer added to DuckDB")]
         else:
             lines = [tr("{0} QGIS layers added to DuckDB").format(added)]
@@ -563,7 +782,7 @@ class AddLayers:
             mark = QLabel()
             grid.addWidget(mark, i, 0)
             icon = QLabel()
-            layer = QgsProject.instance().mapLayer(item.layer_id)
+            layer = None if item.file is not None else QgsProject.instance().mapLayer(item.layer_id)
             if layer is not None:
                 icon.setPixmap(QgsIconUtils.iconForLayer(layer).pixmap(18, 18))
             grid.addWidget(icon, i, 1)

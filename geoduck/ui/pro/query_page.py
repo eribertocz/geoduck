@@ -62,7 +62,7 @@ from geoduck.domain.sql_text import load_sql
 from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
-from geoduck.ui.pro.load import export_query, load_menu, popup_under
+from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns, tighten
 from geoduck.ui.pro.tokens import DARK, METRICS, Colors
@@ -307,9 +307,7 @@ class QueryPage(QWidget):
         row.addStretch(1)
         self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
         self.export_button.setToolTip(tr("Exports the full query of this result"))
-        self.export_menu = QMenu(self)
-        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
-        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
+        self.export_menu = export_menu(self, self.export)
         self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
         row.addWidget(self.export_button)
         self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)

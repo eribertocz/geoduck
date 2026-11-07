@@ -486,6 +486,50 @@ class QuickLoad:
         self._unsubscribe()
 
 
+def export_menu(parent: QWidget, on_pick: Callable[[Any], None]) -> QMenu:
+    """«Exportar ▾» (maqueta aprobada, 2026-11-07): Parquet, GeoPackage, CSV y FlatGeobuf a la vista; el resto
+    en «Más formatos ▸». Cada opción dice en su ayuda qué pasará. Todo lo escribe DuckDB, nunca QGIS."""
+    from geoduck.domain.export import ExportFormat  # noqa: PLC0415
+
+    menu = QMenu(parent)
+    menu.setToolTipsVisible(True)
+    more = QMenu(tr("More formats"), menu)
+    more.setToolTipsVisible(True)
+    for fmt in ExportFormat:
+        target = menu if fmt.main else more
+        text = ("⚡ " if fmt.fast else "") + fmt.label + "…"
+        action = target.addAction(text, lambda f=fmt: on_pick(f))
+        action.setData(fmt.value)
+        action.setToolTip(fmt.note)
+    menu.addSeparator()
+    menu.addMenu(more)
+    return menu
+
+
+def confirm_spatial(label_text: str, installed: bool) -> bool:
+    """Permiso para instalar o cargar `spatial` antes de exportar a un formato de GDAL (spatial-spec §10)."""
+    from qgis.PyQt.QtWidgets import QApplication, QMessageBox  # noqa: PLC0415
+
+    box = QMessageBox(QApplication.activeWindow())
+    box.setWindowTitle(tr("GeoDuck"))
+    text = tr("«{0}» is written with DuckDB's «spatial» extension (the fastest).").format(label_text)
+    if installed:
+        text += " " + tr("It is installed but not loaded: GeoDuck will load it now, for this session.")
+        go = box.addButton(tr("Load and export"), QMessageBox.ButtonRole.AcceptRole)
+    else:
+        text += " " + tr("It is not installed: GeoDuck will install it now (only once, about 40 MB).")
+        go = box.addButton(tr("Install and export"), QMessageBox.ButtonRole.AcceptRole)
+    box.setText(text)
+    box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(go)
+    box.exec()
+    return box.clickedButton() is go
+
+
+#: Pregunta de `spatial` antes de exportar (las pruebas la reemplazan).
+ASK_SPATIAL: Callable[[str, bool], bool] = confirm_spatial
+
+
 def export_query(  # noqa: PLR0917 - una acción con su contexto completo
     coordinator: Any,
     sql: str,
@@ -495,21 +539,54 @@ def export_query(  # noqa: PLR0917 - una acción con su contexto completo
     ask_path: Callable[[str, str, str], str],
     notify: Callable[[str], None],
 ) -> None:
-    """«Exportar ▾»: la consulta completa (no la vista previa) a CSV o Parquet, en el worker."""
+    """«Exportar ▾»: la consulta completa (no la vista previa), en el worker, siempre con DuckDB. Un formato
+    de GDAL sin `spatial` cargada pide permiso antes (spatial-spec §10); sin ese sí, no se instala nada."""
+    if not fmt.needs_spatial:
+        _export(coordinator, sql, database, name, fmt, ask_path, notify, allow_spatial=False)
+        return
+
+    def checked(out: Any) -> None:
+        if isinstance(out, BaseException):
+            notify(tr("Cannot export: ") + str(out))
+            return
+        row = out.rows[0] if out.rows else (False, False)
+        installed, loaded = bool(row[0]), bool(row[1])
+        if not loaded and not ASK_SPATIAL(fmt.label, installed):
+            return
+        _export(coordinator, sql, database, name, fmt, ask_path, notify, allow_spatial=not loaded)
+
+    try:
+        coordinator.read_rows(
+            "SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'", 1, checked
+        )
+    except GeoDuckError as exc:
+        notify(tr("Cannot export: ") + exc.message)
+
+
+def _export(  # noqa: PLR0917 - una acción con su contexto completo
+    coordinator: Any,
+    sql: str,
+    database: str | None,
+    name: str,
+    fmt: Any,
+    ask_path: Callable[[str, str, str], str],
+    notify: Callable[[str], None],
+    *,
+    allow_spatial: bool,
+) -> None:
     from pathlib import Path  # noqa: PLC0415
 
-    from geoduck.domain.export import ExportFormat, ExportRequest  # noqa: PLC0415
+    from geoduck.domain.export import ExportRequest  # noqa: PLC0415
 
     suffix = fmt.suffix
-    pattern = tr("CSV files (*.csv)") if fmt is ExportFormat.CSV else tr("Parquet files (*.parquet)")
     cleaned = "".join("_" if ch in '<>:"/\\|?*' else ch for ch in name).strip(" .") or "datos"
-    path = ask_path(tr("Export"), Path(cleaned).stem + suffix, pattern)
+    path = ask_path(tr("Export"), Path(cleaned).stem + suffix, fmt.pattern)
     if not path:
         return
     if not path.lower().endswith(suffix):
         path += suffix
     try:
-        coordinator.export(ExportRequest(sql, path, fmt, database))
+        coordinator.export(ExportRequest(sql, path, fmt, database, allow_spatial=allow_spatial))
     except GeoDuckError as exc:
         notify(tr("Cannot export: ") + exc.message)
         return

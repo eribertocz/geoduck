@@ -40,7 +40,7 @@ def leftovers(folder):
     return [p.name for p in folder.iterdir() if p.name.startswith(".")]
 
 
-@pytest.mark.parametrize("fmt", list(ExportFormat))
+@pytest.mark.parametrize("fmt", [ExportFormat.CSV, ExportFormat.PARQUET])
 def test_the_whole_query_is_exported_not_the_preview(worker, tmp_path, fmt):
     target = tmp_path / f"millon{fmt.suffix}"
     report = export(worker, MILLION + ";\n-- fin", target, fmt)  # como la sentencia del editor
@@ -127,3 +127,76 @@ def test_the_cell_script_is_not_repeated(worker, tmp_path):
     select = run.results[-1].statement
     export(worker, select.text, tmp_path / "c.csv", ExportFormat.CSV)
     assert run_sql(worker, "SELECT count(*) FROM c").rows == ((1,),)  # el INSERT no se repitió
+
+
+# -- G9: más formatos, siempre con el motor de DuckDB (qgis-import-spec §10) -----------------------------
+
+
+def test_json_and_arrow_need_nothing_installed(worker, tmp_path):
+    from pyarrow import feather
+
+    sql = "SELECT 1 AS id, ST_SetCRS('POINT(1 2)'::GEOMETRY, 'EPSG:4326') AS g"
+    export(worker, sql, tmp_path / "a.ndjson", ExportFormat.JSON)
+    assert (tmp_path / "a.ndjson").read_text().strip() == '{"id":1,"g":"POINT (1 2)"}'
+    report = export(worker, sql, tmp_path / "a.arrow", ExportFormat.ARROW)
+    table = feather.read_table(str(tmp_path / "a.arrow"))
+    assert report.rows == 1 and table.num_rows == 1
+    assert table.schema.field("g").metadata[b"ARROW:extension:name"] == b"geoarrow.wkb"
+    assert leftovers(tmp_path) == []
+    assert run_sql(
+        worker, "SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'"
+    ).rows in (
+        (),
+        ((False,),),
+    )
+
+
+def test_a_gdal_format_without_permission_does_not_load_spatial(worker, tmp_path):
+    with pytest.raises(GeoDuckError, match="spatial"):
+        export(worker, "SELECT 1 AS id", tmp_path / "a.gpkg", ExportFormat.GPKG)
+    assert not (tmp_path / "a.gpkg").exists() and leftovers(tmp_path) == []
+
+
+def _spatial_available():
+    import duckdb
+
+    try:
+        duckdb.connect().execute("LOAD spatial")
+    except duckdb.Error:
+        return False
+    return True
+
+
+GEO = (
+    "SELECT range AS id, ST_SetCRS(('POINT(' || range || ' 1)')::GEOMETRY, 'EPSG:32719') AS geom "
+    "FROM range(50)"
+)
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+@pytest.mark.parametrize("fmt", [f for f in ExportFormat if f.needs_spatial])
+def test_gdal_formats_keep_rows_and_crs_and_leave_the_axis_setting_alone(worker, tmp_path, fmt):
+    target = tmp_path / f"pozos{fmt.suffix}"
+    request = ExportRequest(GEO, str(target), fmt, None, allow_spatial=True)
+    report = worker.export_query(request).future.result(TIMEOUT)
+    assert report.rows == 50 and target.exists()
+    assert leftovers(tmp_path) == []
+    # el ajuste quedó como estaba: sin fijar
+    rows = run_sql(worker, "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'").rows
+    assert rows == ((None,),)
+    source = quote_string_literal(str(target))
+    back = run_sql(worker, f"SELECT count(*) FROM ST_Read({source})").rows
+    assert back == ((50,),)
+    if fmt in (ExportFormat.GPKG, ExportFormat.FGB, ExportFormat.GDB, ExportFormat.SHP):
+        kinds = run_sql(worker, f"DESCRIBE SELECT * FROM ST_Read({source})").rows
+        assert any("EPSG:32719" in str(k[1]) for k in kinds), kinds
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_an_axis_setting_chosen_by_the_user_is_not_touched(worker, tmp_path):
+    run_sql(worker, "LOAD spatial")
+    run_sql(worker, "SET geometry_always_xy = true")
+    request = ExportRequest(GEO, str(tmp_path / "a.gpkg"), ExportFormat.GPKG, None, allow_spatial=True)
+    worker.export_query(request).future.result(TIMEOUT)
+    rows = run_sql(worker, "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'").rows
+    assert rows == (("true",),)

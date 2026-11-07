@@ -27,7 +27,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
-    QMenu,
     QPlainTextEdit,
     QScrollArea,
     QShortcut,
@@ -65,7 +64,7 @@ from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
-from geoduck.ui.pro.load import export_query, load_menu, popup_under
+from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import VIEW, Place
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -630,9 +629,7 @@ class TablePage(QWidget):
         row.addStretch(1)
         self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
         self.export_button.setToolTip(tr("Exports the table with its filters, search and order"))
-        self.export_menu = QMenu(self)
-        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
-        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
+        self.export_menu = export_menu(self, self.export)
         self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
         row.addWidget(self.export_button)
         self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)

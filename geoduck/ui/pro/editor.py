@@ -12,10 +12,11 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-from qgis.PyQt.QtCore import QEvent, QObject
+from qgis.PyQt.QtCore import QEvent, QObject, Qt
 from qgis.PyQt.QtGui import QColor, QFont
 
-from geoduck.ui.pro.drag import LAYERS_MIME
+from geoduck.domain.files import OTHER, editor_sql_for_path, format_for
+from geoduck.ui.pro.drag import LAYERS_MIME, file_paths
 from geoduck.ui.pro.tokens import Colors
 
 #: Estilos del lexer SQL que se colorean (los demás quedan con el color del texto).
@@ -101,11 +102,41 @@ class _LayerDrops(QObject):
 
     _KINDS = (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop)
 
+    def __init__(self, editor: Any) -> None:
+        super().__init__(editor)
+        self._editor = editor
+
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
-        if event.type() in self._KINDS and event.mimeData().hasFormat(LAYERS_MIME):
+        if event.type() not in self._KINDS:
+            return False
+        data = event.mimeData()
+        if data.hasFormat(LAYERS_MIME):
             event.ignore()  # sin aceptar: Qt la pasa al contenedor (el área de trabajo)
             return True
-        return False
+        paths = file_paths(data)
+        if not paths:
+            return False
+        # Archivos soltados en el editor (qgis-import-spec §10): su lectura en el cursor, sin ejecutarla.
+        # Uno que DuckDB no lee con SQL (Arrow) o no compatible sigue al área de trabajo, que lo importa.
+        sqls = [editor_sql_for_path(p) for p in paths]
+        if not all(sqls) or any(format_for(p) is OTHER for p in paths):
+            event.ignore()
+            return True
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        if event.type() == QEvent.Type.Drop:
+            insert_sql(self._editor, ";\n".join(sqls))
+        return True
+
+
+def insert_sql(editor: Any, text: str) -> None:
+    """Escribe `text` en el cursor, en su propia línea si la del cursor ya tiene texto."""
+    line, index = editor.getCursorPosition()
+    current = editor.text(line) if line < editor.lines() else ""
+    if current.strip() and index > 0:
+        text = "\n" + text
+    editor.insert(text)
+    editor.setFocus()
 
 
 #: Marcador (QScintilla) de la sentencia que correrá «Ejecutar», en un margen fino a la izquierda del texto.

@@ -34,7 +34,15 @@ from geoduck import __version__
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ObjectKind, catalog_key
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import fuzzy, icons
-from geoduck.ui.pro.drag import LAYERS_MIME, PLACES_MIME, drag_pixmap, layer_ids, places_mime
+from geoduck.ui.pro.drag import (
+    PLACES_MIME,
+    accepts,
+    drag_pixmap,
+    drop_hint,
+    file_paths,
+    layer_ids,
+    places_mime,
+)
 from geoduck.ui.pro.places import Place, Places, icon_name, missing_reason, place_of
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -87,8 +95,17 @@ class _NavDelegate(QStyledItemDelegate):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(box, 5, 5)
             side = 16
-            logo = QIcon(LOGO).pixmap(side, side)
-            painter.drawPixmap(int(box.right()) - side - 6, int(box.center().y()) - side // 2, logo)
+            x = int(box.right()) - side - 6
+            y = int(box.center().y()) - side // 2 - 1
+            ripple = QColor(self.colors.accent)  # la onda bajo el pato
+            for k, alpha in ((0, 150), (1, 80)):
+                ripple.setAlpha(alpha)
+                wave = QPen(ripple)
+                wave.setWidthF(1.2)
+                painter.setPen(wave)
+                grow = 4 + 5 * k
+                painter.drawArc(QRectF(x - grow, y + side - 3, side + 2 * grow, 6), 200 * 16, 140 * 16)
+            painter.drawPixmap(x, y, QIcon(LOGO).pixmap(side, side))
             painter.restore()
 
     def _paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
@@ -131,6 +148,8 @@ class NavTree(QTreeWidget):
 
     #: (ids de capas, (base, esquema) o None = la base actual)
     layers_dropped = pyqtSignal(list, object)
+    #: Archivos soltados (qgis-import-spec §10): rutas y la base donde se soltaron.
+    files_dropped = pyqtSignal(list, object)
     #: Texto para el pie mientras se arrastra («Suelta para enviar 3 capas a «db»»); "" al salir.
     drop_hint = pyqtSignal(str)
 
@@ -191,21 +210,20 @@ class NavTree(QTreeWidget):
             self.viewport().update()
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
-        if event.mimeData().hasFormat(LAYERS_MIME) and self.isEnabled():
+        if accepts(event.mimeData()) and self.isEnabled():
             event.acceptProposedAction()
             self.dragMoveEvent(event)
         else:
             event.ignore()
 
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
-        if not event.mimeData().hasFormat(LAYERS_MIME):
+        if not accepts(event.mimeData()):
             event.ignore()
             return
         item, target = self._target(_pos(event))
         self._set_drop(item)
-        count = len(layer_ids(event.mimeData()))
         where = target[0] if target else tr("the current database")
-        self.drop_hint.emit(tr("Drop to send {0} layer(s) to «{1}»").format(count, where))
+        self.drop_hint.emit(drop_hint(event.mimeData(), where))
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
 
@@ -216,15 +234,19 @@ class NavTree(QTreeWidget):
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         ids = layer_ids(event.mimeData())
+        files = file_paths(event.mimeData())
         _item, target = self._target(_pos(event))
         self._set_drop(None)
         self.drop_hint.emit("")
-        if not ids:
+        if not ids and not files:
             event.ignore()
             return
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
-        self.layers_dropped.emit(ids, target)
+        if files:
+            self.files_dropped.emit(files, target)
+        else:
+            self.layers_dropped.emit(ids, target)
 
 
 def _pos(event: Any) -> QPoint:
@@ -245,6 +267,8 @@ class Sidebar(QFrame):
     open_database_requested = pyqtSignal()
     create_database_requested = pyqtSignal()
     send_layers_requested = pyqtSignal()
+    #: «Importar archivos…» (qgis-import-spec §10): (base, esquema) donde, o None = la base actual.
+    import_files_requested = pyqtSignal(object)
     diagnostics_requested = pyqtSignal()
     about_requested = pyqtSignal()
     start_requested = pyqtSignal()
@@ -336,6 +360,8 @@ class Sidebar(QFrame):
         self.create_db_action = self.add_menu.addAction(tr("Create database…"))
         self.create_db_action.triggered.connect(self.create_database_requested.emit)
         self.add_menu.addSeparator()
+        self.import_action = self.add_menu.addAction(tr("Import files…"))
+        self.import_action.triggered.connect(lambda: self.import_files_requested.emit(None))
         self.send_action = self.add_menu.addAction(tr("Add QGIS layers to DuckDB…"))
         self.send_action.triggered.connect(self.send_layers_requested.emit)
         self.add_button.clicked.connect(lambda: self._popup(self.add_menu, self.add_button))
@@ -631,6 +657,7 @@ class Sidebar(QFrame):
     def _context_menu(self, pos: QPoint) -> None:
         item = self.tree.itemAt(pos)
         data = item.data(0, ROLE) if item is not None else None
+        target = item.data(0, TARGET) if item is not None else None
         if not data:
             return
         menu = QMenu(self)
@@ -653,11 +680,15 @@ class Sidebar(QFrame):
                     tr("Remove from favorites") if self.places.is_favorite(place) else tr("Add to favorites")
                 )
                 menu.addAction(text, lambda: self.favorite_requested.emit(place))
-        elif data[0] == DATABASE and self.catalog is not None:
-            db = self.catalog.get(item.text(0))
-            if db is None or self.catalog.is_root(db.name):
+        elif data[0] in (DATABASE, SCHEMA) and self.catalog is not None:
+            if target:  # una base o un esquema en escritura (qgis-import-spec §10)
+                where = tuple(target)
+                menu.addAction(tr("Import files here…"), lambda: self.import_files_requested.emit(where))
+            db = self.catalog.get(item.text(0)) if data[0] == DATABASE else None
+            if db is not None and not self.catalog.is_root(db.name):
+                menu.addAction(tr("Close database"), lambda: self.detach_requested.emit(db.name))
+            if menu.isEmpty():
                 return
-            menu.addAction(tr("Close database"), lambda: self.detach_requested.emit(db.name))
         else:
             return
         menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
