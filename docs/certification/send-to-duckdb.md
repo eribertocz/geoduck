@@ -1,5 +1,8 @@
 # Prueba manual en Windows · G8 Enviar capas de QGIS a DuckDB
 
+> **G9:** la interfaz de este envío (barra de mensajes de QGIS, «Importar capas de QGIS…») cambió en 0.10.0a1.
+> La prueba vigente, con la interfaz nueva, está en [`workspace-pro.md`](workspace-pro.md) §5.
+
 Complementa la CI (Linux) para lo que solo se ve en Windows: el menú de capa de QGIS, la barra de mensajes,
 el diálogo, archivos con rutas de Windows, idioma y aspecto. Unos 20 minutos. Requisitos: Windows 10/11,
 QGIS 3.34+ (o 4.x), DuckDB y PyArrow como en `docs/certification/workspace.md` §1. Instale el ZIP del PR
