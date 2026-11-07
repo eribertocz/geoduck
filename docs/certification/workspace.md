@@ -1,5 +1,8 @@
 # Prueba manual de G5 (Workspace UX) en Windows
 
+> **Retirada en G9.** La interfaz de G5 (Workspace UX) se retiró en 0.10.0a1. La prueba manual vigente es
+> [`workspace-pro.md`](workspace-pro.md). Se conserva como registro de lo probado en su momento.
+
 **Qué es.** Un recorrido guiado de lo que la CI no puede ver: la ventana y el panel en Windows real, con
 monitores, escala de pantalla (DPI) y tema. Las funciones están probadas en la CI (`docs/g5/acceptance.md`).
 **No sustituye** a la certificación de [`windows.md`](windows.md) (#10). Duración aproximada: 30–40 minutos.

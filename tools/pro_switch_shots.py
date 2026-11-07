@@ -114,6 +114,8 @@ def main() -> None:  # noqa: PLR0915 - todas las capturas, en orden
     settings.remove("locale/overrideFlag")
     settings.remove("locale/userLocale")
     app.exitQgis()
+    sys.stdout.flush()
+    os._exit(0)  # como pro_shots: sin la limpieza de PyQt5 al salir (Qt 5 se cae)
 
 
 if __name__ == "__main__":

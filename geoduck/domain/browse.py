@@ -222,13 +222,14 @@ def size_sql(database: str, schema: str, name: str) -> str:
 
 
 def page_label(offset: int, shown: int, total: int | None) -> str:
-    """«1–100 de 48 312» (el total, si ya se contó)."""
+    """«Filas 1–100 de 48 312»; «Filas 1–100 de …» mientras se cuenta. El mismo texto en la pestaña de tabla
+    y en el resultado de una consulta (propietario, 2026-11-06)."""
     if shown == 0:
         return tr("No rows")
     span = f"{offset + 1:,}–{offset + shown:,}".replace(",", " ")
     if total is None:
-        return span
-    return tr("{} of {}").format(span, f"{total:,}".replace(",", " "))
+        return tr("Rows {} of …").format(span)
+    return tr("Rows {} of {}").format(span, f"{total:,}".replace(",", " "))
 
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")

@@ -471,5 +471,5 @@ def test_messages_name_the_origin_and_access(session):
     )
     assert (view.origin, view.access) == ("vista memory.main.vp", "solo lectura")
     text = finished_text(report)
-    first = f"Capa «capa» cargada · Conectada · {N:,} entidades".replace(",", " ")
+    first = f"Capa «capa» añadida a QGIS desde DuckDB · Conectada · {N:,} entidades".replace(",", " ")
     assert text == first + " · Origen: tabla memory.main.puntos · Acceso: lectura y escritura"

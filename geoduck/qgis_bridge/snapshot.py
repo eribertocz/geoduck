@@ -79,6 +79,14 @@ def _last_error(default: str) -> str:
     return gdal.GetLastErrorMsg() or default
 
 
+def fid_column(names: set[str]) -> str:
+    """El identificador que pide el GeoPackage: `fid`; si la tabla ya tiene una columna `fid`, `geoduck_fid`;
+    si también la tiene (vuelta de una copia a DuckDB), `geoduck_fid_2`, `_3`… Nunca choca con una columna."""
+    candidates = ["fid", "geoduck_fid"]
+    candidates += [f"geoduck_fid_{n}" for n in range(2, len(names) + 3)]
+    return next(name for name in candidates if name not in names)
+
+
 class _Writer:
     """Escritor GDAL. Solo se usa en el hilo del worker (creación, lotes y cierre)."""
 
@@ -132,7 +140,7 @@ class _Writer:
         if self.ds is None:
             raise GeoDuckError(_last_error(tr("GDAL could not create the GeoPackage")))
         names = {f.name.lower() for f in self.plan.fields}
-        fid = "fid" if "fid" not in names else "geoduck_fid"
+        fid = fid_column(names)
         geom = self.plan.geometry
         options = [f"FID={fid}", "SPATIAL_INDEX=YES"]
         if geom is not None:

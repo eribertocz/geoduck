@@ -19,7 +19,7 @@ from collections.abc import Callable
 from typing import Any
 
 from qgis.PyQt.QtCore import QAbstractTableModel, QModelIndex, QPoint, QRect, QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QGuiApplication, QKeySequence, QPainter
+from qgis.PyQt.QtGui import QColor, QGuiApplication, QIcon, QKeySequence, QPainter
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -27,7 +27,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
-    QMenu,
     QPlainTextEdit,
     QScrollArea,
     QShortcut,
@@ -65,7 +64,7 @@ from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
-from geoduck.ui.pro.load import export_query, load_menu, popup_under
+from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import VIEW, Place
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -496,6 +495,7 @@ class TablePage(QWidget):
         self._closed = False
         self._structure_loaded = False
         self.detail_open = True
+        self.compact = False
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(0)
@@ -540,6 +540,12 @@ class TablePage(QWidget):
         self.sql_button.setToolTip(tr("Opens the equivalent query in a new query tab"))
         self.sql_button.clicked.connect(self.view_sql)
         row.addWidget(self.sql_button)
+        # «Estructura» como ícono, solo en el modo compacto (el pie no tiene sitio para «Datos | Estructura»)
+        self.structure_button = icon_button("info", tr("Structure: columns, types and keys"), self.colors)
+        self.structure_button.setCheckable(True)
+        self.structure_button.toggled.connect(self._structure_toggled)
+        self.structure_button.hide()
+        row.addWidget(self.structure_button)
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
         self.detail_button.setCheckable(True)
         self.detail_button.setChecked(True)
@@ -623,9 +629,7 @@ class TablePage(QWidget):
         row.addStretch(1)
         self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
         self.export_button.setToolTip(tr("Exports the table with its filters, search and order"))
-        self.export_menu = QMenu(self)
-        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
-        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
+        self.export_menu = export_menu(self, self.export)
         self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
         row.addWidget(self.export_button)
         self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
@@ -872,9 +876,40 @@ class TablePage(QWidget):
             rows.setdefault(index.row(), []).append("" if value is None else str(value))
         QGuiApplication.clipboard().setText("\n".join("\t".join(cells) for cells in rows.values()))
 
+    def _structure_toggled(self, on: bool) -> None:
+        index = 1 if on else 0
+        if self.mode.current != index:
+            self.mode.set_current(index)
+        if self.views.currentIndex() != index:
+            self.show_mode(index)
+
+    def set_compact(self, compact: bool) -> None:
+        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): las mismas opciones, con
+        ícono y tooltip donde no cabe el texto; «Estructura» pasa a un ícono arriba; el detalle, cerrado."""
+        self.compact = compact
+        self.add_filter_button.setText("" if compact else "+ " + tr("Filter"))
+        self.add_filter_button.setIcon(icons.icon("filter", self.colors.muted, 14) if compact else QIcon())
+        self.add_filter_button.setAccessibleName(tr("Filter"))
+        self.search.setFixedWidth(120 if compact else 260)
+        for widget, text in (
+            (self.sql_button, tr("View SQL")),
+            (self.export_button, tr("Export")),
+            (self.load_button, tr("Load in QGIS")),
+        ):
+            widget.setText("" if compact else text)
+            widget.setAccessibleName(text)
+        self.mode.setVisible(not compact)
+        self.structure_button.setVisible(compact)
+        self.structure_button.setChecked(self.mode.current == 1)
+        self.detail_button.setChecked(not compact)
+        tighten(self.range_label.parentWidget().layout(), compact, (16, 0, 16, 0), 10)
+        tighten(self.detail_button.parentWidget().layout(), compact, (16, 10, 12, 10), 8)
+
     def show_mode(self, index: int) -> None:
         """«Datos» o «Estructura»."""
         self.views.setCurrentIndex(index)
+        if self.structure_button.isChecked() != (index == 1):
+            self.structure_button.setChecked(index == 1)
         for widget in (self.add_filter_button, self.search, self.sql_button, self.detail_button):
             widget.setVisible(index == 0)
         for i in range(self.chips.count()):
@@ -988,3 +1023,14 @@ class TablePage(QWidget):
 
 def _key_text(kind: str) -> str:
     return {"PRIMARY KEY": tr("primary"), "UNIQUE": tr("unique")}.get(kind, kind.lower())
+
+
+def tighten(layout: Any, compact: bool, margins: tuple[int, int, int, int], spacing: int) -> None:
+    """En el modo compacto, márgenes y separaciones más cortos (el panel baja a 340 px sin montar nada)."""
+    left, top, right, bottom = margins
+    if compact:
+        layout.setContentsMargins(8, top, 8, bottom)
+        layout.setSpacing(4)
+    else:
+        layout.setContentsMargins(left, top, right, bottom)
+        layout.setSpacing(spacing)

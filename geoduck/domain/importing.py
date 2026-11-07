@@ -76,6 +76,11 @@ class ImportJob:
     as_view: bool = False
     #: Camino SQL con selección: tabla Arrow de identificadores que `source_sql` une como `SELECTION_VIEW`.
     selection: Any = None
+    #: Archivo Arrow/Feather (qgis-import-spec §10): el motor lo registra como `ARROW_VIEW` con PyArrow.
+    source_arrow: str | None = None
+    #: Filas que muestra QGIS con el filtro de la capa (§5.4): si DuckDB da otra cantidad, no se escribe
+    #: nada y el envío falla con `FILTER_MISMATCH` (la capa se copia entonces por QGIS).
+    expected_rows: int | None = None
 
     @property
     def by_sql(self) -> bool:
@@ -269,6 +274,10 @@ def is_large(features: int) -> bool:
 PATH_CONNECTED = "connected"
 PATH_PARQUET = "parquet"
 PATH_QGIS = "qgis"
+#: Archivo leído por DuckDB (qgis-import-spec §10).
+PATH_FILE = "file"
+#: Capa de QGIS que viene de un archivo que el GDAL de DuckDB lee (`ST_Read`, §5.4): DuckDB la copia sin QGIS.
+PATH_GDAL = "gdal"
 
 
 def path_label(path: str) -> str:
@@ -276,6 +285,8 @@ def path_label(path: str) -> str:
         return tr("inside DuckDB (Connected layer)")
     if path == PATH_PARQUET:
         return tr("read directly by DuckDB (GeoParquet)")
+    if path in (PATH_FILE, PATH_GDAL):
+        return tr("read directly by DuckDB")
     return tr("read by QGIS in the background")
 
 
@@ -308,15 +319,23 @@ class SendCandidate:
     problem: str | None = None
     #: El SRC de la capa no se puede expresar (§7): solo se envía «sin SRC».
     crs_problem: bool = False
+    #: Archivos → DuckDB (§10): la capa del archivo (`domain.files.FileLayer`); None = capa de QGIS.
+    file: Any = None
+    #: De dónde viene, para la trazabilidad del paso 3: «file», «database», «web», «memory», «duckdb» u
+    #: «other»; y su formato corto («GPKG», «SHP», «POSTGIS», «WFS»…).
+    source_kind: str = "other"
+    source_format: str = ""
 
     @property
     def can_view(self) -> bool:
         """«Vista en vez de copia»: solo un GeoParquet sin filtro (y sin selección, que decide el envío)."""
         return self.path == PATH_PARQUET and not self.filtered
 
-    def path_for(self, only_selected: bool, reproject: bool = False) -> str:
+    def path_for(self, only_selected: bool, reproject: bool = False, duckdb: bool = True) -> str:
         """Camino efectivo (§5): reproyectar un GeoParquet o enviar una selección suya obliga a leer con QGIS
         (sin `spatial`, DuckDB no transforma coordenadas). Una capa Conectada no se reproyecta."""
+        if self.path == PATH_GDAL and (not duckdb or reproject or (only_selected and self.selected)):
+            return PATH_QGIS  # sin `spatial` cargada, con selección o reproyectando: lee QGIS (§5.4)
         if self.path == PATH_PARQUET and reproject and self.geometry is not None:
             return PATH_QGIS
         if self.path == PATH_PARQUET and only_selected and self.selected:
@@ -332,6 +351,8 @@ class SendItem:
     layer_id: str
     table: str
     mode: ImportMode
+    #: Archivos → DuckDB (§10): la capa del archivo; None = capa de QGIS (`layer_id`).
+    file: Any = None
 
 
 @dataclass(frozen=True)
@@ -348,6 +369,8 @@ class SendRequest:
     without_crs: bool = False
     #: «Reproyectar a…» (§3): definición del SRC destino (`EPSG:…` o WKT) para QGIS/PROJ; None = no.
     reproject_to: str | None = None
+    #: `spatial` cargada: una capa que viene de un archivo la copia DuckDB con `ST_Read` (§5.4).
+    duckdb_reads: bool = False
 
 
 @dataclass(frozen=True)

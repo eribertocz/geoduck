@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 from qgis.core import (
     QgsApplication,
     QgsCoordinateReferenceSystem,
@@ -35,9 +35,12 @@ from qgis.PyQt.QtCore import QMetaType, QTimer, QVariant
 
 from geoduck.domain.channel import BatchChannel, ConsumerGoneError
 from geoduck.domain.errors import InvalidArgumentError, OperationCancelledError
+from geoduck.domain.files import OTHER, FileLayer, Reader, file_job, format_for, select_sql, vsi_path
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import (
     PATH_CONNECTED,
+    PATH_FILE,
+    PATH_GDAL,
     PATH_PARQUET,
     PATH_QGIS,
     SELECTION_VIEW,
@@ -48,6 +51,7 @@ from geoduck.domain.importing import (
     ImportMode,
     ImportReport,
     SendCandidate,
+    SendItem,
     SendRequest,
     column_names,
     duck_type_for,
@@ -56,6 +60,7 @@ from geoduck.domain.importing import (
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
+from geoduck.qgis_bridge.copies import is_copy
 from geoduck.qgis_bridge.provider import FID, KEY, id_columns, key_alias
 from geoduck.qgis_bridge.reproject import Reprojector
 
@@ -91,7 +96,8 @@ _ARROW: dict[str, pa.DataType] = {
 class LayerPlan:
     """Lo que se enviará de una capa. `job` va al motor; el resto lo usan el lector y el diálogo."""
 
-    layer: QgsVectorLayer
+    #: None para un archivo (Archivos → DuckDB, §10).
+    layer: QgsVectorLayer | None
     job: ImportJob
     path: str
     #: Solo estas entidades (la selección); None = todas las que muestra la capa (con su filtro).
@@ -138,6 +144,20 @@ def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
     return str(srs.ExportToPROJJSON()) or None
 
 
+def copy_fid_fields(layer: Any) -> set[int]:
+    """El identificador que el GeoPackage de una «Copia» de GeoDuck añadió (`fid`, `geoduck_fid`…): no es un
+    dato de la tabla y no vuelve a DuckDB (si volviera, cada ida y vuelta sumaría una columna y la tercera
+    carga fallaría; observación del propietario, 2026-11-06). Las columnas de la tabla se envían todas."""
+    if not is_copy(layer) or layer.providerType() != "ogr":
+        return set()
+    fields = layer.fields()
+    return {
+        i
+        for i in layer.primaryKeyAttributes()
+        if fields.at(i).name() == "fid" or fields.at(i).name().startswith("geoduck_fid")
+    }
+
+
 def geometry_column_name(layer: QgsVectorLayer) -> str:
     """El nombre que la capa da a su geometría (`geom`, `geometry`, `shape`…); `geom` si no trae ninguno."""
     provider = layer.providerType()
@@ -165,6 +185,22 @@ def _ogr_geometry_column(source: str) -> str:
     return str(lyr.GetGeometryColumn() or "") if lyr is not None else ""
 
 
+def _parquet_metadata(path: str) -> dict[bytes, bytes] | None:
+    """Metadatos de un Parquet, o None si este PyArrow no trae Parquet (F-130).
+
+    `pyarrow.parquet` se importa aquí y no al cargar GeoDuck: en algunos QGIS de Windows (OSGeo4W) su DLL no
+    carga («not built with support for the Parquet file format») y GeoDuck no debe dejar de abrir por eso.
+    Sin él, una capa GeoParquet se envía por el camino general (QGIS la lee), igual de correcta."""
+    try:
+        import pyarrow.parquet as pq  # noqa: PLC0415 - opcional; ver arriba
+    except ImportError:
+        return None
+    try:
+        return pq.read_schema(path).metadata or {}
+    except (OSError, ValueError):
+        return None
+
+
 def geoparquet_path(layer: QgsVectorLayer) -> str | None:
     """Ruta del archivo si la capa es un GeoParquet que DuckDB lee directo (§5.2)."""
     if layer.providerType() != "ogr":
@@ -172,11 +208,26 @@ def geoparquet_path(layer: QgsVectorLayer) -> str | None:
     path = QgsProviderRegistry.instance().decodeUri("ogr", layer.source()).get("path", "")
     if not path.lower().endswith(".parquet") or not Path(path).is_file():
         return None
-    metadata = pq.read_schema(path).metadata or {}
-    return path if b"geo" in metadata else None
+    metadata = _parquet_metadata(path)
+    return path if metadata is not None and b"geo" in metadata else None
 
 
-def plan_layer(
+def gdal_source(layer: Any) -> tuple[str, str | None] | None:
+    """La capa viene de un archivo de la lista de GeoDuck que el GDAL de DuckDB lee (GeoPackage, Shapefile,
+    FlatGeobuf, GeoJSON, KML, Geodatabase, Excel…): su ruta para `ST_Read` y la capa de adentro (§5.4)."""
+    if layer.providerType() != "ogr":
+        return None
+    parts = QgsProviderRegistry.instance().decodeUri("ogr", layer.source())
+    path = str(parts.get("path") or "")
+    if not path or not (os.path.isfile(path) or path.lower().endswith(".gdb")):
+        return None
+    fmt = format_for(path)
+    if fmt is OTHER or fmt.reader is not Reader.GDAL:
+        return None
+    return vsi_path(path), (str(parts.get("layerName") or "") or None)
+
+
+def plan_layer(  # noqa: PLR0912 - un camino por rama (§5)
     layer: QgsVectorLayer,
     *,
     table: str,
@@ -188,6 +239,7 @@ def plan_layer(
     as_view: bool = False,
     without_crs: bool = False,
     reproject_to: str | None = None,
+    duckdb_reads: bool = False,
 ) -> LayerPlan:
     """El envío de una capa a `table`. `without_crs`: el usuario eligió enviar sin SRC (F-120, §7).
     `reproject_to`: «Reproyectar a…» (§3), con QGIS/PROJ al leer; obliga al camino general (§5.3)."""
@@ -209,16 +261,17 @@ def plan_layer(
                 )
             )
         geometry = ImportGeometry(geometry_column_name(layer), crs)
-    fields = list(layer.fields())
+    skipped = copy_fid_fields(layer)
+    fields = [(i, f) for i, f in enumerate(layer.fields()) if i not in skipped]
     taken = [geometry.name] if geometry is not None else []
-    names, renamed = column_names([*taken, *(f.name() for f in fields)])
+    names, renamed = column_names([*taken, *(f.name() for _i, f in fields)])
     warnings += renamed
     columns: list[ImportColumn] = []
-    for i, f in enumerate(fields):
+    for k, (i, f) in enumerate(fields):
         duck, note = duck_type_for(type_name(f.type()), type_name(f.subType()) or None)
         if note:
             warnings.append(f"«{f.name()}»: {note}")
-        columns.append(ImportColumn(names[len(taken) + i], f"c{i}", duck))
+        columns.append(ImportColumn(names[len(taken) + k], f"c{i}", duck))
     common: dict[str, Any] = {"database": database, "schema": schema, "temporary": temporary}
 
     provider = layer.dataProvider()
@@ -268,9 +321,49 @@ def plan_layer(
             tr("A view is only possible for a GeoParquet layer without selection or filter")
         )
 
+    # Camino 4: archivo que el GDAL de DuckDB lee → `ST_Read`, sin pasar por QGIS (§5.4; hasta 23× más
+    # rápido, medido 2026-11-07). El filtro de la capa va como `WHERE` y se comprueba con las filas que
+    # muestra QGIS. Sin selección ni «Añadir filas» (las columnas de GDAL pueden no ser las de QGIS).
+    if duckdb_reads and mode is not ImportMode.APPEND and fids is None:
+        job_gdal = _gdal_job(layer, table, mode, geometry, without_crs, common)
+        if job_gdal is not None:
+            return LayerPlan(layer, job_gdal, PATH_GDAL, None, features, warnings, tuple(columns))
+
     # Camino 3: lectura de QGIS por lotes Arrow (§5.3)
     job = ImportJob(layer.name(), table, mode, tuple(columns), geometry, **common)
     return LayerPlan(layer, job, PATH_QGIS, fids, features, warnings, tuple(columns))
+
+
+def _gdal_job(  # noqa: PLR0917 - lo que ya decidió `plan_layer`
+    layer: QgsVectorLayer,
+    table: str,
+    mode: ImportMode,
+    geometry: ImportGeometry | None,
+    without_crs: bool,
+    common: dict[str, Any],
+) -> ImportJob | None:
+    source = gdal_source(layer)
+    if source is None:
+        return None
+    path, inner = source
+    item = FileLayer(
+        path,
+        format_for(path).key,
+        layer.name(),
+        layer=inner,
+        gdal_source=path,
+        geometry_column=geometry.name if geometry is not None else None,
+        crs=geometry.crs if geometry is not None else None,
+    )
+    sql = select_sql(item, without_crs=without_crs)
+    subset = layer.subsetString().strip()
+    expected = None
+    if subset:  # el filtro de QGIS, como lo escribió el usuario; si DuckDB da otras filas, falla (§5.4)
+        sql = f"SELECT * FROM ({sql}) AS __geoduck_layer WHERE {subset}"
+        expected = int(layer.featureCount())
+    return ImportJob(
+        layer.name(), table, mode, (), geometry, source_sql=sql, expected_rows=expected, **common
+    )
 
 
 def _connected_sql(
@@ -307,7 +400,7 @@ def _parquet_sql(path: str, geometry: ImportGeometry | None) -> str:
     source = f"read_parquet({quote_string_literal(path)})"
     if geometry is None:
         return f"SELECT * FROM {source}"
-    geo = json.loads(pq.read_schema(path).metadata[b"geo"])
+    geo = json.loads((_parquet_metadata(path) or {})[b"geo"])
     column = quote_identifier(str(geo.get("primary_column") or "geometry"))
     value = f"ST_SetCRS({column}, {quote_string_literal(geometry.crs)})" if geometry.crs else column
     return f"SELECT * EXCLUDE ({column}), {value} AS {quote_identifier(geometry.name)} FROM {source}"
@@ -361,7 +454,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
     def __init__(
         self, plans: list[tuple[int, LayerPlan]], channel: BatchChannel[Any], on_read: Callable[[int], None]
     ) -> None:
-        super().__init__(tr("GeoDuck: send layers to DuckDB"), QgsTask.Flag.CanCancel)
+        super().__init__(tr("GeoDuck: add QGIS layers to DuckDB"), QgsTask.Flag.CanCancel)
         # Las fuentes se crean aquí, en el hilo principal; se leen en el hilo de la tarea (F-117)
         self._sources = [
             (i, p.job, p.fids, p.reprojector, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans
@@ -391,7 +484,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
             request.setFilterFids(fids)
         if job.geometry is None:
             request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
-        indexes = list(range(len(job.columns)))
+        indexes = [int(c.source[1:]) for c in job.columns]  # `c{i}`: el campo i de la capa
         rows: list[list[Any]] = []
         wkbs: list[bytes | None] = []
         sent = False
@@ -514,6 +607,37 @@ def _source_label(layer: Any) -> str:
     return provider
 
 
+#: Proveedores de QGIS que leen de una base de datos o de un servicio web (trazabilidad del paso 3).
+_DATABASES = {
+    "postgres": "POSTGIS",
+    "mssql": "SQL SERVER",
+    "oracle": "ORACLE",
+    "hana": "HANA",
+    "spatialite": "SPATIALITE",
+}
+_WEB = {"wfs": "WFS", "oapif": "OGC API", "arcgisfeatureserver": "ARCGIS"}
+
+
+def source_trace(layer: Any) -> tuple[str, str]:
+    """De dónde viene la capa (tipo y formato corto) para la trazabilidad (workspace-pro-spec §9)."""
+    provider = str(layer.providerType())
+    if provider == KEY:
+        return "duckdb", "DUCKDB"
+    if provider == "memory":
+        return "memory", tr("MEMORY")
+    if provider in _DATABASES:
+        return "database", _DATABASES[provider]
+    if provider in _WEB:
+        return "web", _WEB[provider]
+    if provider in ("ogr", "delimitedtext"):
+        path = str(QgsProviderRegistry.instance().decodeUri(provider, layer.source()).get("path") or "")
+        if path:
+            name = os.path.basename(path.rstrip("/\\")).lower()
+            short = "OSM" if name.endswith(".osm.pbf") else (os.path.splitext(name)[1].lstrip(".") or "OGR")
+            return "file", short.upper()
+    return "other", provider.upper()
+
+
 def _crs_label(layer: QgsVectorLayer) -> str | None:
     crs = layer.crs()
     if not layer.isSpatial() or not crs.isValid():
@@ -568,7 +692,11 @@ def describe_layer(layer: Any, table: str) -> SendCandidate:
     except InvalidArgumentError:  # SRC que no se puede expresar (§7): solo «sin SRC»
         plan = plan_layer(layer, table=table, without_crs=True)
         crs_problem = True
+    path = plan.path
+    if path == PATH_QGIS and gdal_source(layer) is not None:
+        path = PATH_GDAL  # la copia DuckDB si `spatial` está cargada (o el usuario la activa)
     geometry_type = QgsWkbTypes.displayString(layer.wkbType()) if layer.isSpatial() else None
+    kind, short = source_trace(layer)
     warnings = list(plan.warnings)
     crs = layer.crs()
     if (
@@ -587,12 +715,14 @@ def describe_layer(layer: Any, table: str) -> SendCandidate:
         geometry_type,
         _crs_label(layer),
         bool(layer.subsetString()),
-        plan.path,
+        path,
         plan.columns,
         plan.job.geometry,
         tuple(warnings),
         table,
         crs_problem=crs_problem,
+        source_kind=kind,
+        source_format=short,
     )
 
 
@@ -627,6 +757,9 @@ class LayerSender:
     ) -> LayerImport:
         plans = []
         for item in request.items:
+            if item.file is not None:  # Archivos → DuckDB (§10): lo lee y lo copia DuckDB
+                plans.append(self._file_plan(item, request))
+                continue
             layer = self._project.mapLayer(item.layer_id)
             if not _vector_layer(layer):
                 raise InvalidArgumentError(tr("The layer is no longer in the project"))
@@ -647,8 +780,23 @@ class LayerSender:
                     and not (request.only_selected and layer.selectedFeatureCount() > 0),
                     without_crs=request.without_crs,
                     reproject_to=request.reproject_to,
+                    duckdb_reads=request.duckdb_reads,
                 )
             )
         job = LayerImport(engine, plans, on_progress=on_progress, on_done=on_done)
         job.start()
         return job
+
+    @staticmethod
+    def _file_plan(item: SendItem, request: SendRequest) -> LayerPlan:
+        source = item.file
+        job = file_job(
+            source,
+            table=item.table,
+            mode=item.mode,
+            database=request.database,
+            schema=request.schema,
+            temporary=request.temporary,
+            without_crs=request.without_crs,
+        )
+        return LayerPlan(None, job, PATH_FILE, None, max(source.rows, 0), [], ())

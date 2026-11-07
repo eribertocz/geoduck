@@ -20,10 +20,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from qgis.PyQt.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QAction,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -51,16 +52,20 @@ from geoduck.app.events import (
     StatementFinished,
     VocabularyChanged,
 )
-from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
+from geoduck.domain.browse import PAGE, page_label
+from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
+from geoduck.domain.files import create_sql, editor_readable, format_for, gdal_readable
 from geoduck.domain.session import SessionState
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, StatementResult, StatementStatus, result_title
+from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, result_title
+from geoduck.domain.sql_text import load_sql
+from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
-from geoduck.ui.pro.load import export_query, load_menu, popup_under
+from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
-from geoduck.ui.pro.table_page import PageModel, TypeHeader, fit_columns
+from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns, tighten
 from geoduck.ui.pro.tokens import DARK, METRICS, Colors
 from geoduck.ui.pro.widgets import Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
@@ -69,6 +74,8 @@ from geoduck.ui.widgets import line_index_from, offset_from
 AUTOSAVE_MS = 1500
 #: Resultado o mensajes.
 RESULT, MESSAGES = 0, 1
+#: Espera tras mover el cursor o escribir antes de volver a marcar la sentencia que correrá.
+MARK_MS = 60
 
 
 def _seconds(ms: float) -> str:
@@ -97,6 +104,8 @@ class QueryPage(QWidget):
     open_requested = pyqtSignal()
     #: Aviso para el pie del workspace.
     notice = pyqtSignal(str)
+    #: Archivos soltados en el editor que no se leen con SQL (Arrow, no compatibles): al área de trabajo.
+    import_files_requested = pyqtSignal(list)
 
     def __init__(
         self,
@@ -120,6 +129,10 @@ class QueryPage(QWidget):
         self.run: Run | None = None
         self.results: list[StatementResult] = []
         self._epochs: dict[int, int] = {}
+        #: Página de cada resultado con tabla (por `id`): desplazamiento, filas y total (None: sin contar).
+        self._pages: dict[int, dict[str, Any]] = {}
+        self.detail_open = True
+        self.compact = False
         self.saved_text = sql if place.path else None  # lo que hay en el archivo
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
@@ -132,6 +145,8 @@ class QueryPage(QWidget):
         self.editor.setAccessibleName(tr("SQL editor"))
         self.editor.setText(sql)
         self.editor.textChanged.connect(self._text_changed)
+        self.editor.layer_drops.on_files = self.drop_files
+        self._wire_mark()
         self.split.addWidget(self.editor)
         self.split.addWidget(self._build_results())
         self.split.setSizes([360, 400])
@@ -158,6 +173,7 @@ class QueryPage(QWidget):
         self.show_databases(coordinator.catalog, database)
         self._unsubscribe = coordinator.subscribe(self._on_event)
         self._render_state()
+        self.mark_statement()
         self._show_results()
 
     # -- construcción ---------------------------------------------------------------------------------
@@ -168,41 +184,32 @@ class QueryPage(QWidget):
         row = QHBoxLayout(bar)
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(6)
-        self.run_button = button(
-            tr("Run"),
-            "primary",
-            icon="play",
-            tooltip=tr("Runs the statement under the cursor or the selection"),
-        )
+        # Un solo «Ejecutar» (propietario, 2026-11-06): la selección o la sentencia marcada; «Ejecutar todo»
+        # un paso atrás (Ctrl+Mayús+Intro y el menú «⋯»). El texto y la marca dicen qué correrá.
+        self.run_button = button(tr("Run"), "primary", icon="play")
         self.run_button.setIcon(self._icon("play", self.colors.on_accent))
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
-        row.addWidget(label("Ctrl+Intro", "kbd"), 0, Qt.AlignmentFlag.AlignVCenter)
+        self.kbd_label = label("Ctrl+Intro", "kbd")
+        row.addWidget(self.kbd_label, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addSpacing(6)
-        self.all_button = button(tr("All"), tooltip=tr("Runs all the SQL (Ctrl+Shift+Enter)"))
-        self.all_button.clicked.connect(lambda: self.execute(RunScope.ALL))
-        row.addWidget(self.all_button)
         self.cancel_button = button(tr("Cancel"), "ghost", icon="stop", colors=self.colors)
         self.cancel_button.setToolTip(tr("Stops the running SQL"))
         self.cancel_button.clicked.connect(self.cancel)
         row.addWidget(self.cancel_button)
         row.addWidget(spacer(), 1)
-        row.addWidget(label(tr("Database"), "muted"))
+        self.runs_in_label = label(tr("Runs in"), "muted")
+        row.addWidget(self.runs_in_label)
         self.base = QComboBox()
         self.base.setAccessibleName(tr("Database of the query"))
-        self.base.setToolTip(tr("The query runs in this database"))
+        self.base.setToolTip(tr("«Run» runs the SQL in this database"))
         self.base.setMinimumWidth(110)
         self.base.currentIndexChanged.connect(lambda _i: self.changed.emit())
         row.addWidget(self.base)
-        self.file_button = icon_button("more", tr("Open, save, save as…"), self.colors)
-        self.file_menu = QMenu(self)
-        self.file_menu.addAction(tr("Open…") + "\tCtrl+O", self.open_requested.emit)
-        self.file_menu.addAction(tr("Save") + "\tCtrl+S", self.save)
-        self.file_menu.addAction(tr("Save as…"), self.save_as)
-        self.file_button.clicked.connect(
-            lambda: self.file_menu.popup(self.file_button.mapToGlobal(QPoint(0, self.file_button.height())))
-        )
-        row.addWidget(self.file_button)
+        # «Ejecutar todo»: Ctrl+Mayús+Intro y el clic derecho del editor (abrir y guardar están junto a las
+        # pestañas: el archivo arriba, la ejecución aquí; propietario, 2026-11-06)
+        self.run_all_action = QAction(tr("Run all") + "\tCtrl+Shift+Enter", self)
+        self.run_all_action.triggered.connect(lambda: self.execute(RunScope.ALL))
         return bar
 
     def _icon(self, name: str, color: str) -> Any:
@@ -226,22 +233,11 @@ class QueryPage(QWidget):
         self.summary = label("", "muted")
         row.addWidget(self.summary)
         row.addWidget(spacer(), 1)
-        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
-        self.export_button.setToolTip(tr("Exports the full query of this result"))
-        self.export_menu = QMenu(self)
-        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
-        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
-        self.export_button.clicked.connect(
-            lambda: self.export_menu.popup(
-                self.export_button.mapToGlobal(QPoint(0, self.export_button.height()))
-            )
-        )
-        row.addWidget(self.export_button)
-        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
-        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
-        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
-        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
-        row.addWidget(self.load_button)
+        self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
+        self.detail_button.setCheckable(True)
+        self.detail_button.setChecked(True)
+        self.detail_button.toggled.connect(self.set_detail_open)
+        row.addWidget(self.detail_button)
         box.addWidget(head)
         self.result_tabs = QTabBar()
         self.result_tabs.setProperty("pro", "tabs")
@@ -278,14 +274,116 @@ class QueryPage(QWidget):
         self.messages.setProperty("pro", "plain")
         self.messages.setWidgetResizable(True)
         self.stack.addWidget(self.messages)
-        box.addWidget(self.stack, 1)
+        middle = QWidget()
+        side = QHBoxLayout(middle)
+        side.setContentsMargins(0, 0, 0, 0)
+        side.setSpacing(0)
+        side.addWidget(self.stack, 1)
+        # el detalle de la fila a la derecha, plegable, como en la pestaña de tabla (propietario, 2026-11-06)
+        self.detail = DetailPanel(self.colors)
+        self.detail.closed.connect(lambda: self.detail_button.setChecked(False))
+        self.detail.hide()
+        side.addWidget(self.detail)
+        box.addWidget(middle, 1)
+        self.grid.selectionModel().currentRowChanged.connect(
+            lambda current, _p: self._row_changed(current.row())
+        )
+        box.addWidget(self._build_footer())
         return panel
+
+    def _build_footer(self) -> QWidget:
+        """El pie del resultado, igual que el de la pestaña de tabla: «Filas 1–100 de N · tiempo», ‹ ›,
+        «Exportar» y «Cargar en QGIS» (propietario, 2026-11-06)."""
+        foot = QFrame()
+        foot.setProperty("pro", "rule-top")
+        foot.setFixedHeight(METRICS.bar - 4)
+        row = QHBoxLayout(foot)
+        row.setContentsMargins(16, 0, 16, 0)
+        row.setSpacing(10)
+        self.range_label = label("", "muted")
+        row.addWidget(self.range_label)
+        self.prev_button = icon_button("chevron-left", tr("Previous page"), self.colors)
+        self.prev_button.clicked.connect(lambda: self.go(self._offset() - PAGE))
+        self.next_button = icon_button("chevron-right", tr("Next page"), self.colors)
+        self.next_button.clicked.connect(lambda: self.go(self._offset() + PAGE))
+        row.addWidget(self.prev_button)
+        row.addWidget(self.next_button)
+        row.addStretch(1)
+        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
+        self.export_button.setToolTip(tr("Exports the full query of this result"))
+        self.export_menu = export_menu(self, self.export)
+        self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
+        row.addWidget(self.export_button)
+        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
+        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
+        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
+        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
+        row.addWidget(self.load_button)
+        return foot
 
     # -- base de la consulta --------------------------------------------------------------------------
 
     @property
     def database(self) -> str | None:
         return self.base.currentData()
+
+    # -- archivos soltados en el editor (decisión del propietario, 2026-11-07) -------------------------
+
+    def drop_target(self) -> tuple[str, str] | None:
+        """Dónde crear las tablas: la base «Se ejecuta en» (si se escribe); `main` o su primer esquema."""
+        catalog = self._coordinator.catalog
+        if catalog is None:
+            return None
+        name = self.base.currentData() or catalog.default_database.name
+        db = catalog.get(name)
+        if db is None or db.access is not AccessMode.READ_WRITE:
+            writable = [d for d in catalog.databases if d.access is AccessMode.READ_WRITE]
+            if not writable:
+                return None
+            db = writable[0]
+        schemas = catalog.schemas_of(db.name)
+        return db.name, "main" if "main" in schemas or not schemas else schemas[0]
+
+    def drop_files(self, paths: list[str], *, any_format: bool = False) -> bool:
+        """Un `CREATE TABLE … AS SELECT *` por archivo, en el cursor y sin ejecutar; los que no se leen con
+        SQL (Arrow, no compatibles) siguen a «Importar archivos». Con `spatial` sin cargar, la primera línea
+        la carga (visible: lo decide el usuario al ejecutar, ADR-0011)."""
+        readable = [p for p in paths if editor_readable(p) or (any_format and gdal_readable(p))]
+        rest = [p for p in paths if p not in readable]
+        if rest:
+            self.import_files_requested.emit(rest)
+        target = self.drop_target()
+        if not readable or target is None:
+            if readable:
+                self.notice.emit(tr("There is no database in read and write mode to create the tables."))
+            return bool(readable)
+        database, schema = target
+        catalog = self._coordinator.catalog
+        taken = [o.name for o in catalog.objects_in(database, schema)] if catalog is not None else []
+        vocabulary = self._coordinator.vocabulary()
+        reserved = vocabulary.reserved if vocabulary is not None else None
+
+        def write(spatial: str) -> None:
+            text = create_sql(readable, database, schema, taken, spatial=spatial, reserved=reserved)
+            pro_editor.insert_sql(self.editor, text)
+
+        if not any(format_for(p).needs_spatial for p in readable):  # fuera de la lista: también GDAL
+            write("")
+            return True
+
+        def checked(out: Any) -> None:
+            row = out.rows[0] if not isinstance(out, BaseException) and out.rows else (False, False)
+            write("" if row[1] else "load" if row[0] else "install")
+
+        try:
+            self._coordinator.read_rows(
+                "SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'",
+                1,
+                checked,
+            )
+        except GeoDuckError:
+            write("install")
+        return True
 
     def show_databases(self, catalog: CatalogSnapshot | None, chosen: str | None = None) -> None:
         """Las bases de la sesión en el desplegable; conserva la elegida si sigue adjunta."""
@@ -304,7 +402,8 @@ class QueryPage(QWidget):
     # -- ejecutar -------------------------------------------------------------------------------------
 
     def execute(self, scope: RunScope) -> None:
-        """«Ejecutar» (la sentencia bajo el cursor, o la selección si la hay) o «Todo»."""
+        """«Ejecutar» (la selección, o la sentencia marcada) o «Ejecutar todo». Lo marcado es exactamente lo
+        que corre: la sentencia se calcula aquí (`domain.statements`), igual con DuckDB 1.5 y 2.0."""
         if self._coordinator.state is not SessionState.READY or self.run is not None:
             return
         text = self.editor.text()
@@ -312,22 +411,25 @@ class QueryPage(QWidget):
             self.notice.emit(tr("There is no SQL to run"))
             return
         cursor, base = 0, 0
+        sql = text
         if scope is RunScope.CURRENT and self.editor.hasSelectedText():
             scope = RunScope.SELECTION
             line_from, index_from, _l, _i = self.editor.getSelection()
             base = offset_from(text, line_from, index_from)
             sql = self.editor.selectedText()
-        else:
-            line, index = self.editor.getCursorPosition()
-            cursor = offset_from(text, line, index)
-            sql = text
+        elif scope is RunScope.CURRENT:
+            span = self.current_span()
+            if span is None:
+                self.notice.emit(tr("There is no SQL to run"))
+                return
+            scope, base, sql = RunScope.SELECTION, span[0], text[span[0] : span[1]]
         try:
             run_id = self._coordinator.execute_sql(
                 sql,
                 scope,
                 cursor=cursor,
                 base=base,
-                preview_limit=DEFAULT_PREVIEW_LIMIT,
+                preview_limit=PAGE,  # la primera página llega con la ejecución
                 database=self.database,
             )
         except GeoDuckError as exc:
@@ -336,6 +438,74 @@ class QueryPage(QWidget):
         self.run = Run(run_id, text)
         self.summary.setText(tr("Running…"))
         self._render_state()
+
+    def set_compact(self, compact: bool) -> None:
+        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): ▶ sin texto, ■, la base
+        sin «Se ejecuta en»; «Exportar» y «Cargar en QGIS» como íconos; el detalle de la fila, cerrado. Todo
+        sigue ahí, con su tooltip."""
+        self.compact = compact
+        self.kbd_label.setVisible(not compact)
+        self.runs_in_label.setVisible(not compact)
+        self.base.setMinimumWidth(80 if compact else 110)
+        for widget, text in (
+            (self.cancel_button, tr("Cancel")),
+            (self.export_button, tr("Export")),
+            (self.load_button, tr("Load in QGIS")),
+        ):
+            widget.setText("" if compact else text)
+            widget.setAccessibleName(text)
+        self.detail_button.setChecked(not compact)
+        tighten(self.range_label.parentWidget().layout(), compact, (16, 0, 16, 0), 10)
+        tighten(self.run_button.parentWidget().layout(), compact, (12, 8, 12, 8), 6)
+        self.mark_statement()
+        self._update_range(self.current_result if self.view.current == RESULT else None)
+
+    def _wire_mark(self) -> None:
+        """Cada movimiento del cursor, selección o cambio de texto vuelve a marcar (tras `MARK_MS`)."""
+        self._mark_timer = QTimer(self)
+        self._mark_timer.setSingleShot(True)
+        self._mark_timer.setInterval(MARK_MS)
+        self._mark_timer.timeout.connect(self.mark_statement)
+        editor = self.editor
+        for signal in (editor.cursorPositionChanged, editor.selectionChanged, editor.textChanged):
+            signal.connect(lambda *_a: self._mark_timer.start())
+        pro_editor.prepare_mark(editor, self.colors)
+        self._context = _EditorMenu(self)
+        editor.viewport().installEventFilter(self._context)
+
+    def current_span(self) -> tuple[int, int] | None:
+        """(inicio, fin) de la sentencia marcada en el texto del editor."""
+        text = self.editor.text()
+        line, index = self.editor.getCursorPosition()
+        return current_span(text, offset_from(text, line, index))
+
+    def mark_statement(self) -> None:
+        """La barra a la izquierda de la sentencia que correrá «Ejecutar», y el botón que lo dice: «Ejecutar ·
+        línea 5» o «Ejecutar selección». Con selección no hay barra (dos marcas confundirían)."""
+        if self._closed:
+            return
+        text = self.editor.text()
+        count = len(statement_spans(text))
+        span = None if self.editor.hasSelectedText() else self.current_span()
+        lines = None
+        if span is not None:
+            lines = (line_index_from(text, span[0])[0], line_index_from(text, span[1])[0])
+        pro_editor.mark_lines(self.editor, lines)
+        if self.editor.hasSelectedText():
+            what = tr("Run selection")
+        elif lines is not None:
+            what = tr("Run · line {}").format(lines[0] + 1)
+        else:
+            what = tr("Run")
+        # en el modo compacto, solo el ícono ▶ (propietario, 2026-11-07); el texto va al tooltip
+        self.run_button.setText("" if self.compact else what)
+        self.run_button.setAccessibleName(what)
+        tips = [
+            tr("Ctrl+Enter: runs the selection or, without one, the marked statement"),
+            tr("Ctrl+Shift+Enter: runs all ({} statements)").format(count),
+        ]
+        self.run_button.setToolTip("\n".join([what, *tips] if self.compact else tips))
+        self.run_all_action.setText(tr("Run all ({} statements)").format(count) + "\tCtrl+Shift+Enter")
 
     def cancel(self) -> None:
         if self.run is not None:
@@ -368,6 +538,7 @@ class QueryPage(QWidget):
         """Una pestaña por sentencia con tabla (sin pestañas si es una); si ninguna tiene tabla, los
         mensajes."""
         tabular = [r for r in self.results if r.preview is not None]
+        self._pages = {}
         self.result_tabs.blockSignals(True)
         while self.result_tabs.count():
             self.result_tabs.removeTab(0)
@@ -390,7 +561,9 @@ class QueryPage(QWidget):
             self.result_tabs.hide()
             self.export_button.setEnabled(False)
             self.load_button.setEnabled(False)
+            self.detail.hide()
             self._summarize_messages()
+            self._update_range(None)
         else:
             self.result_tabs.setVisible(len(getattr(self, "_tabular", [])) > 1)
             self._show_grid()
@@ -405,24 +578,130 @@ class QueryPage(QWidget):
             self.summary.setText("")
             self.export_button.setEnabled(False)
             self.load_button.setEnabled(False)
+            self.detail.hide()
+            self._update_range(None)
             return
         result = tabular[index]
         preview = result.preview
         assert preview is not None
+        page = self._page_of(result)
         columns = tuple(ColumnInfo(n, t, None) for n, t in zip(preview.columns, preview.types, strict=False))
-        self.model.set_page(columns, preview.rows, 0)
+        self.model.set_page(columns, page["rows"], page["offset"])
         fit_columns(self.grid, self.model)
-        rows = _count(len(preview.rows))
-        text = (tr("first {} rows") if preview.truncated else tr("{} rows")).format(rows)
-        if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
-            text += " · " + tr("may be out of date")
-        self.summary.setText(f"{text} · {_seconds(result.duration_ms)}")
-        self.stack.setCurrentWidget(self.grid if preview.rows else self.empty)
-        if not preview.rows:
+        self.summary.setText("")  # el resumen va en el pie, como en la pestaña de tabla
+        self.stack.setCurrentWidget(self.grid if page["rows"] else self.empty)
+        if not page["rows"]:
             self.empty.setText(tr("The query returned no rows."))
+        else:
+            self.grid.selectRow(0)
+        self._row_changed(0 if page["rows"] else -1)
         usable = result.statement.replayable and self._coordinator.state is SessionState.READY
         self.export_button.setEnabled(usable)
         self.load_button.setEnabled(usable and self._loader is not None)
+        self._update_range(result)
+
+    # -- páginas y total (propietario, 2026-11-06: igual que la pestaña de tabla) ---------------------------
+
+    def _page_of(self, result: StatementResult) -> dict[str, Any]:
+        """La página que se muestra de `result`: la primera llega con la ejecución; el total se cuenta aparte
+        (solo si había más filas que la página y la consulta se puede repetir)."""
+        key = id(result)
+        page = self._pages.get(key)
+        if page is None:
+            preview = result.preview
+            assert preview is not None
+            total = None if preview.truncated else len(preview.rows)
+            page = {"offset": 0, "rows": preview.rows, "total": total}
+            self._pages[key] = page
+            if total is None and result.statement.replayable:
+                self._count(result, page)
+        return page
+
+    def _count(self, result: StatementResult, page: dict[str, Any]) -> None:
+        def counted(outcome: Any) -> None:
+            if self._closed or isinstance(outcome, BaseException):
+                return  # sin total: el pie sigue con «de …»
+            page["total"] = int(outcome.rows[0][0]) if outcome.rows else 0
+            if self.current_result is result:
+                self._update_range(result)
+
+        sql = f"SELECT count(*) FROM ({load_sql(result.statement.text)}) AS geoduck_q"
+        with contextlib.suppress(GeoDuckError):  # DuckDB ocupado: el pie sigue con «de …»
+            self._coordinator.read_rows(sql, 1, counted, database=result.database)
+
+    def _offset(self) -> int:
+        result = self.current_result
+        page = self._pages.get(id(result)) if result is not None else None
+        return page["offset"] if page else 0
+
+    def go(self, offset: int) -> None:
+        """‹ ›: otra página del resultado elegido. Repite la consulta con `LIMIT`/`OFFSET`."""
+        result = self.current_result
+        if result is None or not result.statement.replayable:
+            return
+        page = self._page_of(result)
+        offset = max(0, offset)
+        if page["total"] is not None and offset >= page["total"]:
+            return
+
+        def read(outcome: Any) -> None:
+            if self._closed:
+                return
+            if isinstance(outcome, BaseException):
+                self.notice.emit(getattr(outcome, "message", str(outcome)))
+                return
+            page["offset"], page["rows"] = offset, outcome.rows
+            if self.current_result is result:
+                self._show_grid()
+
+        sql = f"SELECT * FROM ({load_sql(result.statement.text)}) AS geoduck_q LIMIT {PAGE} OFFSET {offset}"
+        try:
+            self._coordinator.read_rows(sql, PAGE, read, database=result.database)
+        except GeoDuckError as exc:
+            self.notice.emit(exc.message)
+
+    def _update_range(self, result: StatementResult | None) -> None:
+        """«Filas 1–100 de 1 000 000 · 0,4 s»; ‹ › solo si hay otra página y la consulta se puede repetir."""
+        page = self._pages.get(id(result)) if result is not None else None
+        if result is None or page is None:
+            self.range_label.setText("")
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            return
+        shown = len(page["rows"])
+        if page["total"] is None and not result.statement.replayable:
+            # una escritura (`DELETE … RETURNING`) no se repite: ni se cuenta ni se pasa de página
+            text = tr("Rows {} of more than {}").format(f"1–{shown}", _count(shown))
+        else:
+            text = page_label(page["offset"], shown, page["total"])
+        if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
+            text += " · " + tr("may be out of date")
+        full = f"{text} · {_seconds(result.duration_ms)}"
+        self.range_label.setText(text if self.compact else full)
+        self.range_label.setToolTip(full)
+        ready = result.statement.replayable and self._coordinator.state is SessionState.READY
+        self.prev_button.setEnabled(ready and page["offset"] > 0)
+        more = shown == PAGE and (page["total"] is None or page["offset"] + shown < page["total"])
+        self.next_button.setEnabled(ready and more)
+
+    # -- detalle de la fila -----------------------------------------------------------------------------
+
+    def set_detail_open(self, open_: bool) -> None:
+        self.detail_open = open_
+        self._row_changed(self.grid.currentIndex().row())
+
+    def _row_changed(self, row: int) -> None:
+        visible = (
+            self.detail_open
+            and 0 <= row < self.model.rowCount()
+            and self.stack.currentWidget() is self.grid
+            and self.view.current == RESULT
+        )
+        if not visible:
+            self.detail.hide()
+            return
+        self.detail.show()
+        self.detail.show_row(self.model.offset + row + 1, self.model.columns, self.model.rows[row])
 
     @property
     def current_result(self) -> StatementResult | None:
@@ -594,8 +873,9 @@ class QueryPage(QWidget):
     def _render_state(self) -> None:
         state = self._coordinator.state
         ready = state is SessionState.READY
-        for widget in (self.run_button, self.all_button, self.base):
+        for widget in (self.run_button, self.base):
             widget.setEnabled(ready and self.run is None)
+        self.run_all_action.setEnabled(ready and self.run is None)
         self.cancel_button.setEnabled(self.run is not None and state is SessionState.BUSY)
         usable = (
             self.current_result is not None
@@ -605,6 +885,8 @@ class QueryPage(QWidget):
         )
         self.export_button.setEnabled(usable)
         self.load_button.setEnabled(usable and self._loader is not None)
+        if hasattr(self, "range_label"):
+            self._update_range(self.current_result if self.view.current == RESULT else None)
 
     def _on_event(self, event: AppEvent) -> None:
         if self._closed:
@@ -633,6 +915,41 @@ class QueryPage(QWidget):
         self._autosave.stop()
         self.save_if_saved()
         self._unsubscribe()
+
+
+class _EditorMenu(QObject):
+    """Clic derecho en el editor: arriba «▶ Ejecutar · línea N» y «Ejecutar todo (N sentencias)»; debajo, el
+    menú de siempre del editor (deshacer, cortar, copiar, pegar…)."""
+
+    def __init__(self, page: QueryPage) -> None:
+        super().__init__(page)
+        self._page = page
+        #: El último menú mostrado (para las pruebas).
+        self.menu: QMenu | None = None
+
+    def build(self) -> QMenu:
+        page = self._page
+        editor = page.editor
+        standard = getattr(editor, "createStandardContextMenu", None)
+        menu = standard() if standard is not None else None
+        if menu is None:
+            menu = QMenu(editor)
+        first = menu.actions()[0] if menu.actions() else None
+        run = QAction(page.run_button.text() + "\tCtrl+Enter", menu)
+        run.setEnabled(page.run_button.isEnabled())
+        run.triggered.connect(lambda: page.execute(RunScope.CURRENT))
+        menu.insertAction(first, run)
+        menu.insertAction(first, page.run_all_action)
+        if first is not None:
+            menu.insertSeparator(first)
+        self.menu = menu
+        return menu
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        if event.type() == QEvent.Type.ContextMenu:
+            self.build().popup(event.globalPos())
+            return True
+        return False
 
 
 def _file_name(title: str) -> str:

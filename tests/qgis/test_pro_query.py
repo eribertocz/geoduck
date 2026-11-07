@@ -28,6 +28,7 @@ from geoduck.ui.dispatcher import QtDispatcher
 from geoduck.ui.notebook_store import RecoveryStore
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.query_page import MESSAGES, RESULT, QueryPage
+from geoduck.ui.pro.trace import TraceView
 from geoduck.ui.pro.workspace import ProWorkspace
 from tests.qgis.conftest import wait_for
 
@@ -108,13 +109,13 @@ def test_run_runs_the_statement_under_the_cursor_and_shows_its_rows(coordinator)
     assert [c.name for c in page.model.columns] == ["n"]
     assert page.model.rowCount() == 5
     assert page.view.current == RESULT and not page.result_tabs.isVisible()
-    assert page.summary.text().startswith(tr("{} rows").format(5) + " · ")
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format("1–5", "5") + " · ")
 
 
 def test_all_shows_one_result_tab_per_statement_with_rows(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "CREATE TABLE t AS SELECT 1 AS a;\nSELECT * FROM t;\nSELECT 2 AS b, 3 AS c;")
-    page.all_button.click()
+    page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 3)
     assert page.result_tabs.isVisible() and page.result_tabs.count() == 2
     assert [c.name for c in page.model.columns] == ["b", "c"]  # la última, elegida
@@ -136,7 +137,7 @@ def test_selection_runs_only_the_selection(coordinator):
 def test_an_error_shows_messages_with_its_line_and_go_moves_the_cursor(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 1;\nSELECT no_existe FROM range(1);\nSELECT 3;")
-    page.all_button.click()
+    page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.view.current == MESSAGES
     assert [ok for ok, _ in page._log] == [True, False]
@@ -252,9 +253,43 @@ def test_export_writes_the_full_query(coordinator, tmp_path):
     page.run_button.click()
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.export_button.isEnabled()
-    page.export_menu.actions()[0].trigger()  # CSV
+    next(a for a in page.export_menu.actions() if a.data() == "csv").trigger()
     assert wait_for(lambda: target.exists() and coordinator.state is SessionState.READY, 20)
     assert len(target.read_text().splitlines()) == 5001  # entera, no la vista previa
+    # la trazabilidad (propietario, 2026-11-07): DuckDB ⚡→ archivo, terminada con ✓
+    traces = [t for t in ws.findChildren(TraceView) if t.dest_kind == "file"]
+    assert wait_for(lambda: traces and traces[-1].state == "done", 20)
+    assert traces[-1].bridge and not traces[-1].qgis and traces[-1].dest_label == "salida.csv"
+
+
+def test_export_menu_shows_four_formats_and_the_rest_one_step_back(coordinator):
+    """Maqueta aprobada (2026-11-07): Parquet, GeoPackage, CSV y FlatGeobuf a la vista; el resto en «Más
+    formatos ▸»; nunca SpatiaLite ni SQLite; cada opción dice qué pasará."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS n;")
+    shown = [a.data() for a in page.export_menu.actions() if a.data()]
+    assert shown == ["parquet", "gpkg", "csv", "fgb"]
+    more = next(a.menu() for a in page.export_menu.actions() if a.menu() is not None)
+    rest = [a.data() for a in more.actions() if a.data()]
+    assert rest == ["arrow", "json", "shp", "geojson", "kml", "gdb", "xlsx"]
+    assert all(a.toolTip() for a in more.actions() if a.data())
+
+
+def test_a_gdal_format_asks_before_loading_spatial_and_cancel_exports_nothing(
+    coordinator, tmp_path, monkeypatch
+):
+    from geoduck.ui.pro import load as load_module
+
+    asked = []
+    monkeypatch.setattr(load_module, "ASK_SPATIAL", lambda label, installed: asked.append(label) or False)
+    target = tmp_path / "salida.gpkg"
+    ws = workspace(coordinator, paths=[str(target)])
+    page = new_query(ws, "SELECT 1 AS n;")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    next(a for a in page.export_menu.actions() if a.data() == "gpkg").trigger()
+    assert wait_for(lambda: asked, 20)
+    assert asked == ["GeoPackage"] and not target.exists()
 
 
 def test_without_duckdb_everything_is_grey_except_start(qgis_app):
@@ -263,8 +298,10 @@ def test_without_duckdb_everything_is_grey_except_start(qgis_app):
     ws = workspace(idle)
     assert ws.start_button.text() == tr("Start DuckDB") and ws.start_button.isEnabled()
     assert ws.open_button.isEnabled() and ws.create_button.isEnabled()
-    for widget in (ws.sidebar.search, ws.sidebar.tree, ws.sidebar.session_button, ws.new_query_button):
+    for widget in (ws.sidebar.search, ws.sidebar.tree, ws.new_query_button):
         assert not widget.isEnabled()
+    # el menú de la sesión sí: sin sesión ofrece «Iniciar DuckDB» (marca, 2026-11-07)
+    assert ws.sidebar.session_button.isEnabled() and ws.sidebar.start_action.isVisible()
     assert ws.sidebar.diagnostics_button.isEnabled() and ws.sidebar.about_button.isEnabled()
     assert ws.state_title.text() == tr("DuckDB is not started")
     idle.shutdown(5)
@@ -280,3 +317,109 @@ def test_run_sql_typed_by_the_user_through_execute_too(coordinator):
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.model.rows == ((5,),)
     assert os.environ["GEODUCK_RECOVERY_DIR"]
+
+
+def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coordinator):
+    """Propietario (2026-11-06): el resultado de una consulta se maneja como la pestaña de tabla: «Filas 1–100
+    de N · tiempo» abajo, ‹ › de 100 filas, el total contado aparte y el detalle de la fila, plegable."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n, 'v' || range AS v FROM range(250);")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.model.rowCount() == 100 and page.model.rows[0] == (0, "v0")
+    assert wait_for(lambda: page.range_label.text().startswith(tr("Rows {} of {}").format("1–100", "250")))
+    assert page.summary.text() == ""  # el resumen está en el pie
+    assert not page.prev_button.isEnabled() and page.next_button.isEnabled()
+    # el detalle: la fila elegida, con su número real
+    assert page.detail.isVisible() and page.detail.title.text() == tr("Row {}").format("1")
+    page.next_button.click()
+    assert wait_for(lambda: page.model.offset == 100)
+    assert page.model.rows[0] == (100, "v100")
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format("101–200", "250"))
+    assert page.detail.title.text() == tr("Row {}").format("101")
+    page.next_button.click()
+    assert wait_for(lambda: page.model.offset == 200)
+    assert page.model.rowCount() == 50 and not page.next_button.isEnabled()
+    page.prev_button.click()
+    assert wait_for(lambda: page.model.offset == 100)
+    # plegar y volver a abrir el detalle
+    page.detail_button.setChecked(False)
+    assert not page.detail.isVisible()
+    page.detail_button.setChecked(True)
+    assert page.detail.isVisible()
+    page.detail.closed.emit()
+    assert not page.detail_button.isChecked() and not page.detail.isVisible()
+    # «Mensajes» no tiene páginas ni detalle
+    page.view.set_current(MESSAGES)
+    page._show_view(MESSAGES)
+    assert page.range_label.text() == "" and not page.next_button.isEnabled()
+
+
+def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n FROM range(5);")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format("1–5", "5"))
+    assert not page.prev_button.isEnabled() and not page.next_button.isEnabled()
+    page.editor.setText("CREATE TABLE w AS SELECT range AS n FROM range(300); DELETE FROM w RETURNING n;")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.model.rowCount() == 100  # el DELETE … RETURNING muestra su primera página
+    assert not page.next_button.isEnabled()  # y nunca se repite para pasar de página
+    assert page.range_label.text().startswith(tr("Rows {} of more than {}").format("1–100", "100"))
+
+
+def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
+    """Propietario (2026-11-06): un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
+    (la sentencia del cursor, también en una línea en blanco, igual con DuckDB 1.5 y 2.0); con selección,
+    «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Mayús+Intro."""
+    from geoduck.ui.pro.editor import MARK
+
+    ws = workspace(coordinator)
+    text = "SELECT 1 AS uno;\n\nSELECT 2 AS dos\nFROM range(1);\n"
+    page = new_query(ws, text)
+    marked = lambda: [ln for ln in range(page.editor.lines()) if page.editor.markersAtLine(ln) & (1 << MARK)]  # noqa: E731
+    page.editor.setCursorPosition(1, 0)  # la línea en blanco entre las dos: la anterior
+    page.mark_statement()
+    assert marked() == [0] and page.run_button.text() == tr("Run · line {}").format(1)
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert [c.name for c in page.model.columns] == ["uno"]
+    page.editor.setCursorPosition(3, 2)
+    page.mark_statement()
+    assert marked() == [2, 3] and page.run_button.text() == tr("Run · line {}").format(3)
+    assert tr("Ctrl+Shift+Enter: runs all ({} statements)").format(2) in page.run_button.toolTip()
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results[0].statement.text.startswith("SELECT 2"))
+    assert [c.name for c in page.model.columns] == ["dos"]
+    page.editor.setSelection(0, 0, 0, 8)
+    page.mark_statement()
+    assert marked() == [] and page.run_button.text() == tr("Run selection")
+    assert page.run_all_action.text().startswith(tr("Run all ({} statements)").format(2))
+    page.editor.setSelection(0, 0, 0, 0)
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)
+
+
+def test_open_and_save_are_by_the_tabs_and_run_all_is_in_the_editor_menu(coordinator, tmp_path):
+    """Propietario (2026-11-06): el archivo arriba (el «⋯» junto a las pestañas), la ejecución en la barra de
+    la consulta («Se ejecuta en»), y «Ejecutar todo» en el clic derecho del editor."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;\nSELECT 2 AS dos;")
+    ws._fill_file_menu()
+    texts = [a.text() for a in ws.file_menu.actions() if not a.isSeparator()]
+    assert texts[0].startswith(tr("Open query…"))
+    assert texts[1].startswith(tr("Save «{}»").format(page.place.name))
+    assert all(a.isEnabled() for a in ws.file_menu.actions())
+    assert not hasattr(page, "file_button")  # la barra de la consulta ya no tiene «⋯»
+    assert any(lab.text() == tr("Runs in") for lab in page.findChildren(type(page.summary)))
+    page.editor.setCursorPosition(0, 2)
+    page.mark_statement()
+    menu = page._context.build()
+    actions = [a for a in menu.actions() if not a.isSeparator()]
+    assert actions[0].text().startswith(tr("Run · line {}").format(1))
+    assert actions[1] is page.run_all_action
+    assert len(actions) > 2  # y debajo, el menú de siempre del editor
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)

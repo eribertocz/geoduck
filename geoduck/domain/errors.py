@@ -35,6 +35,8 @@ class ErrorCode(str, Enum):
     UNSUPPORTED_ENGINE = "UNSUPPORTED_ENGINE"
     ENGINE_ERROR = "ENGINE_ERROR"
     INVALID_ARGUMENT = "INVALID_ARGUMENT"
+    #: qgis-import-spec §5.4: el filtro de la capa leído por DuckDB no da las filas que muestra QGIS.
+    FILTER_MISMATCH = "FILTER_MISMATCH"
 
 
 class GeoDuckError(Exception):

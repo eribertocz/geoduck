@@ -39,10 +39,13 @@ acción explica que hay que iniciar una.
 - «Abrir la tabla al terminar» (recordado). Ctrl+Intro envía; Esc cancela.
 
 ## 4. Garantías (GD-IMP-003)
-- **Todo o nada:** todas las capas del envío en **una transacción** de DuckDB en la base destino; si una
-  falla o se cancela, `ROLLBACK` y no queda ninguna tabla nueva, reemplazada ni ampliada.
+- **Cada capa por separado** (desde G9, propietario 2026-11-06; antes «todo o nada»): cada capa en **su
+  transacción** de DuckDB en la base destino; si una falla o se cancela, `ROLLBACK` de esa capa y no queda su
+  tabla nueva, reemplazada ni ampliada; las que ya terminaron quedan («Deshacer» borra las nuevas).
+  `import_batches` sigue siendo «todo o nada» para lo que recibe; la interfaz le pasa una capa cada vez
+  (workspace-pro-spec §9).
 - **Progreso y cancelación** por capa y en total; la interfaz de QGIS sigue respondiendo.
-- **Conteo:** al terminar, filas en DuckDB = entidades leídas de cada capa; si no, `ROLLBACK` y error.
+- **Conteo:** al terminar cada capa, filas en DuckDB = entidades leídas; si no, `ROLLBACK` de esa capa y error.
 - **Sin pérdidas silenciosas:** un campo que no se puede convertir, una geometría ilegible o un SRC que no se
   puede expresar detienen el envío con su motivo, o se avisan antes de enviar si el diálogo ya lo sabe.
 - La capa de QGIS, su selección y su filtro no cambian.
@@ -64,6 +67,18 @@ acción explica que hay que iniciar una.
    demás usan `INSERT … SELECT` (sin `spatial` no se puede declarar `GEOMETRY('EPSG:…')`: F-115).
    Medido: 1 millón de puntos en 5–7 s (F-114). Contrapresión con el mismo canal acotado que
    las cargas (qgis-bridge-spec §2).
+4. **Capa que viene de un archivo que el GDAL de DuckDB lee** (G9, decisión del propietario, 2026-11-07):
+   GeoPackage, Shapefile, FlatGeobuf, GeoJSON, KML, Geodatabase, Excel… (la lista de §10), sin filtro ni
+   selección, sin «Reproyectar a…» y sin «Añadir filas»: `CREATE TABLE … AS SELECT * FROM ST_Read('ruta',
+   layer = '…')` dentro de DuckDB, con el SRC de la capa (`ST_SetCRS`). Medido (2 núcleos, GeoPackage con
+   EPSG:32719): 1 millón de puntos en 0,3 s contra 6,9 s por el camino 3 (**23×**); 200 000 polígonos en 0,3 s
+   contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
+   «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
+   ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
+   ese clic, el camino 3. El resumen dice «leído directo por DuckDB». **El filtro de la capa** va como `WHERE`
+   y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
+   esa capa se copia por el camino 3, sin error. **Trazabilidad** (paso 3 y «Exportar ▾»): origen (ícono por
+   tipo) → QGIS (capas) → DuckDB; el puente azul «⚡ DuckDB» salta QGIS; el diagrama es también el avance.
 
 ## 6. Columnas y tipos (GD-IMP-005)
 | QGIS (`QMetaType`) | DuckDB |
@@ -107,7 +122,54 @@ acción explica que hay que iniciar una.
 ## 8. Fuera de alcance de G8
 Sincronización o capas vinculadas; enviar estilos, uniones o campos virtuales calculados como expresión
 (se envía su valor); capas ráster; GeoPackage/Shapefile leídos directo por DuckDB (necesitan extensiones:
-ADR-0011); editar la tabla desde el diálogo.
+ADR-0011; en G9 sí, con consentimiento: §10); editar la tabla desde el diálogo.
 
 ## 9. Sin regresión (GD-IMP-007)
 Las cargas DuckDB → QGIS (G3–G4), el workspace, el SQL, los cuadernos y las protecciones de sesión siguen igual; un envío en curso bloquea `DETACH` y el cierre de la base destino igual que una operación propia.
+
+
+## 10. Archivos → DuckDB (GD-IMP-008; G9, decisión del propietario, 2026-11-07)
+Importar archivos de datos a tablas de DuckDB **siempre con el motor de DuckDB** (nunca con QGIS; el
+rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-exportar.png`.
+
+- **Puntos de entrada:** «+» de la barra lateral › «Importar archivos…»; clic derecho en una base o un esquema
+  › «Importar archivos aquí…»; Ctrl+K › «Importar archivos…»; **arrastrar** uno o varios archivos desde el
+  escritorio, el Explorador de archivos o el Navegador de QGIS a GeoDuck (con el «pato al lago», §3 de
+  workspace-pro-spec). Soltar uno o varios archivos **en el editor SQL** es llevarlos a DuckDB
+  escribiendo el SQL, sin ejecutarlo: un `CREATE TABLE base.esquema.nombre AS SELECT * FROM read_parquet('…')`
+  (o `read_csv`, `read_json`, `ST_Read`) por archivo, en la misma pestaña y separados por una línea en blanco.
+  La base es la de «Se ejecuta en» (o la primera en escritura) y el esquema `main`; los nombres no chocan con
+  las tablas que ya existen (nunca `OR REPLACE`). Si hace falta `spatial` y no está cargada, la primera línea
+  es `LOAD spatial;` (o `INSTALL spatial; LOAD spatial;`), visible: lo decide el usuario al ejecutar. Arrow y
+  los no compatibles siguen a «Importar archivos». **Las capas de QGIS soltadas en el editor abren siempre
+  el diálogo** (decisión del propietario, 2026-11-07).
+- **Selector de archivos:** filtro «Todos los compatibles» y uno por formato, con ⚡ en los más rápidos.
+- **Formatos y lector** (verificado con DuckDB 2.0.0):
+
+  | Formato | Extensiones | Lector |
+  |---|---|---|
+  | ⚡ Parquet / GeoParquet | `.parquet` | `read_parquet` (incluido) |
+  | ⚡ Arrow / Feather | `.arrow` `.feather` `.ipc` | PyArrow (`pyarrow.dataset`, por flujo) |
+  | ⚡ CSV / TSV | `.csv` `.tsv` | `read_csv` (incluido) |
+  | JSON / NDJSON | `.json` `.ndjson` `.jsonl` | `read_json` (incluido) |
+  | ⚡ FlatGeobuf, GeoPackage, Shapefile (`.shp` o `.zip`), GeoJSON (`.geojson` `.geojsonl`), KML/KMZ, Geodatabase de ArcGIS (`.gdb`), OpenStreetMap (`.osm.pbf`, solo importar), Excel (`.xlsx`) | | `ST_Read` de `spatial` (GDAL de DuckDB) |
+
+- **`spatial` con consentimiento (ADR-0011):** si hace falta y no está cargada, el paso 1 lo dice en una nota
+  («… se leen con la extensión «spatial» de DuckDB. No está instalada: GeoDuck la instalará al pulsar
+  «Instalar y continuar» (una sola vez, ~40 MB)»). Sin ese clic, GeoDuck no instala ni carga nada; los archivos
+  que no la necesitan se pueden importar igual. No hay lector alternativo.
+- **Paso 1 (Archivos):** una fila por capa u hoja (un GeoPackage o una Geodatabase muestran sus capas; un Excel,
+  sus hojas), agrupadas en puntos, líneas, polígonos y tablas sin geometría, con el formato, el SRC y las
+  filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).
+  Las que no se pueden leer, en gris con el motivo.
+- **Pasos 2 y 3:** los de §3 y §4 (destino, «si ya existe», progreso, «Deshacer»), con el título
+  «Archivos → DuckDB». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
+  transacción, con el conteo de §4.
+- **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
+  archivo (p. ej. SpatiaLite) no entra al diálogo: un aviso claro dice cuáles, qué hacer y si los demás siguen. Si el GDAL de
+  DuckDB lo lee (SpatiaLite, DXF, GML, GPX, MapInfo, ODS…): «Escribir consulta» (una pestaña con su `CREATE
+  TABLE … AS SELECT * FROM ST_Read(…)`, sin ejecutar) y «Abrir en QGIS» (luego se añade la capa); si no son
+  datos: «GeoDuck no puede leer: …», sin acciones. **Sin SpatiaLite ni SQLite** en la lista (decisión del propietario, 2026-11-07): GeoPackage es el formato
+  moderno sobre SQLite; el GDAL de DuckDB no escribe SpatiaLite.
+- **Geometría y SRC:** la que da el lector (`GEOMETRY('EPSG:…')`); un GeoParquet sin `spatial` toma el SRC
+  de sus metadatos `geo` (F-118). Una base que no guarda el SRC (F-120) sigue la regla de §7.

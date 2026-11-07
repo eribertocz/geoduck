@@ -141,6 +141,10 @@ _PRO_ROLES = {"muted": "muted", "primary": "primary", "error-text": "error", "se
 
 
 class SendDialog(QDialog):
+    #: `spatial` cargada: las capas que vienen de un archivo las copia DuckDB (§5.4). Lo pone «Capas de QGIS →
+    #: DuckDB»; el diálogo clásico sigue con QGIS.
+    duckdb_reads = False
+
     def _role(self, widget: QWidget, role: str) -> None:
         widget.setProperty("geoduck", role)
         if getattr(self, "pro", False):
@@ -165,6 +169,8 @@ class SendDialog(QDialog):
         self.resize(780, 540)
         #: G9 · E5: con `pro`, el sistema de diseño de Workspace Pro; el comportamiento no cambia.
         self.pro = pro
+        #: Ocultar «Qué pasará» si todo es nuevo (E5). En «Capas de QGIS → DuckDB» (F-131) siempre se ve.
+        self.tidy_columns = True
         if pro:
             from geoduck.ui.pro import style as pro_style  # noqa: PLC0415
 
@@ -242,7 +248,8 @@ class SendDialog(QDialog):
         reproject_layout.setContentsMargins(0, 0, 0, 0)
         reproject_layout.addWidget(self.reproject)
         reproject_layout.addWidget(self.reproject_crs, 1)
-        self.reproject_row.setVisible(any(c.geometry is not None for c in candidates))
+        # Un archivo lo copia DuckDB tal cual (qgis-import-spec §10): no se reproyecta con QGIS
+        self.reproject_row.setVisible(any(c.geometry is not None and c.file is None for c in candidates))
         self.reproject.toggled.connect(self.reproject_crs.setEnabled)
         self.reproject_crs.crsChanged.connect(lambda _crs: self.refresh())
         self.without_crs = QCheckBox(tr("Send without CRS"))
@@ -258,7 +265,7 @@ class SendDialog(QDialog):
             self.more_button.setProperty("pro", "ghost")
             self.more_button.setCheckable(True)
             self._optional = (
-                any(c.geometry is not None for c in candidates),
+                any(c.geometry is not None and c.file is None for c in candidates),
                 any(c.can_view for c in candidates),
             )
             self.more_button.setVisible(any(self._optional))
@@ -565,7 +572,7 @@ class SendDialog(QDialog):
                 )
             )
         self.summary.setText(self._summary(states))
-        if self.pro:
+        if self.pro and self.tidy_columns:
             self._tidy(states)
         sending = [s for s in states if s.kind == "send"]
         blocked = [s for i, s in enumerate(states) if s.kind == "blocked" and self._checked(i)]
@@ -621,7 +628,7 @@ class SendDialog(QDialog):
             parts.append(tr("{0} with more rows").format(added))
         lines = [f"<b>{' · '.join(parts)}</b> · " + tr("{0} rows").format(_count(rows))]
         reproject = self.reproject_to is not None
-        paths = sorted({self._candidates[i].path_for(only, reproject) for i, _ in sending})
+        paths = sorted({self._candidates[i].path_for(only, reproject, self.duckdb_reads) for i, _ in sending})
         lines.append(tr("How: {0}").format(", ".join(path_label(p) for p in paths)))
         if reproject:
             crs = self.reproject_crs.crs()
@@ -630,7 +637,7 @@ class SendDialog(QDialog):
         slow = sum(
             self._candidates[i].rows_for(only)
             for i, _ in sending
-            if self._candidates[i].path_for(only, reproject) == PATH_QGIS
+            if self._candidates[i].path_for(only, reproject, self.duckdb_reads) == PATH_QGIS
         )
         if is_large(slow):
             minutes = max(2, round(estimated_seconds(slow) / 60))
@@ -661,7 +668,7 @@ class SendDialog(QDialog):
             c = self._candidates[i]
             if (
                 self.row_state(i).kind == "send"
-                and c.path_for(only, self.reproject_to is not None) == PATH_QGIS
+                and c.path_for(only, self.reproject_to is not None, self.duckdb_reads) == PATH_QGIS
             ):
                 total += c.rows_for(only)
         return total
@@ -683,4 +690,5 @@ class SendDialog(QDialog):
             as_view=self.as_view.isChecked() and self.reproject_to is None,
             without_crs=self.without_crs.isChecked(),
             reproject_to=self.reproject_to,
+            duckdb_reads=self.duckdb_reads,
         )
