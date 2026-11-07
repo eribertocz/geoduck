@@ -114,7 +114,7 @@ def test_run_runs_the_statement_under_the_cursor_and_shows_its_rows(coordinator)
 def test_all_shows_one_result_tab_per_statement_with_rows(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "CREATE TABLE t AS SELECT 1 AS a;\nSELECT * FROM t;\nSELECT 2 AS b, 3 AS c;")
-    page.all_button.click()
+    page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 3)
     assert page.result_tabs.isVisible() and page.result_tabs.count() == 2
     assert [c.name for c in page.model.columns] == ["b", "c"]  # la última, elegida
@@ -136,7 +136,7 @@ def test_selection_runs_only_the_selection(coordinator):
 def test_an_error_shows_messages_with_its_line_and_go_moves_the_cursor(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 1;\nSELECT no_existe FROM range(1);\nSELECT 3;")
-    page.all_button.click()
+    page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.view.current == MESSAGES
     assert [ok for ok, _ in page._log] == [True, False]
@@ -331,3 +331,35 @@ def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinato
     assert page.model.rowCount() == 100  # el DELETE … RETURNING muestra su primera página
     assert not page.next_button.isEnabled()  # y nunca se repite para pasar de página
     assert page.range_label.text().startswith(tr("Rows {} of more than {}").format("1–100", "100"))
+
+
+def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
+    """Propietario (2026-11-06): un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
+    (la sentencia del cursor, también en una línea en blanco, igual con DuckDB 1.5 y 2.0); con selección,
+    «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Mayús+Intro."""
+    from geoduck.ui.pro.editor import MARK
+
+    ws = workspace(coordinator)
+    text = "SELECT 1 AS uno;\n\nSELECT 2 AS dos\nFROM range(1);\n"
+    page = new_query(ws, text)
+    marked = lambda: [ln for ln in range(page.editor.lines()) if page.editor.markersAtLine(ln) & (1 << MARK)]  # noqa: E731
+    page.editor.setCursorPosition(1, 0)  # la línea en blanco entre las dos: la anterior
+    page.mark_statement()
+    assert marked() == [0] and page.run_button.text() == tr("Run · line {}").format(1)
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert [c.name for c in page.model.columns] == ["uno"]
+    page.editor.setCursorPosition(3, 2)
+    page.mark_statement()
+    assert marked() == [2, 3] and page.run_button.text() == tr("Run · line {}").format(3)
+    assert tr("Ctrl+Shift+Enter: runs all ({} statements)").format(2) in page.run_button.toolTip()
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results[0].statement.text.startswith("SELECT 2"))
+    assert [c.name for c in page.model.columns] == ["dos"]
+    page.editor.setSelection(0, 0, 0, 8)
+    page.mark_statement()
+    assert marked() == [] and page.run_button.text() == tr("Run selection")
+    assert page.run_all_action.text().startswith(tr("Run all ({} statements)").format(2))
+    page.editor.setSelection(0, 0, 0, 0)
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)

@@ -33,7 +33,8 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | 2a | (Solo si venía de 0.9.0a1) Pulse el botón de GeoDuck | Abre como **panel a la izquierda**, como lo tenía; el cuaderno que estaba abierto aparece como una **pestaña de consulta** con su SQL |
 | 2b | Pulse el botón de GeoDuck (instalación limpia) | Se abre la **ventana propia**, encima de QGIS; todo en gris salvo «Iniciar DuckDB», «Abrir base…», «Crear base…», «Diagnóstico» y «Acerca de» |
 | 2c | «Iniciar DuckDB» | Arriba de la barra lateral: «DuckDB · Lista» con su versión; la barra lateral y Ctrl+K se activan |
-| 2d | «Nueva consulta»; escriba `SELECT 42 AS n;` y Ctrl+Intro | Resultado `42`, «1 fila · X ms» |
+| 2d | «Nueva consulta»; escriba `SELECT 42 AS n;` y Ctrl+Intro | Resultado `42`; abajo «Filas 1–1 de 1 · X ms» |
+| 2d2 | Escriba debajo `SELECT 7 AS m;`; mueva el cursor entre las dos y seleccione un trozo con el ratón | Una barra azul a la izquierda marca la sentencia del cursor y el botón dice «Ejecutar · línea N»; la selección se ve en azul y el botón dice «Ejecutar selección»; «⋯» › «Ejecutar todo (2 sentencias)» corre las dos |
 | 2e | «Acoplar a QGIS» (arriba a la derecha) | Panel con la **misma** consulta y su resultado; la sesión sigue «Lista» |
 | 2f | En el panel, «Abrir en ventana» | Vuelve la ventana, con todo igual |
 | 2g | Cierre la ventana con la X y vuelva a abrirla con el botón | La sesión sigue «Lista» y las pestañas siguen ahí |

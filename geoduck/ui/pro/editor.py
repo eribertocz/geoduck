@@ -60,7 +60,7 @@ def paint(editor: Any, colors: Colors, *, dark: bool) -> None:
     editor.setMarginsForegroundColor(QColor(colors.faint))
     editor.setCaretForegroundColor(text)
     editor.setCaretLineBackgroundColor(QColor(colors.segment))
-    editor.setSelectionBackgroundColor(QColor(colors.accent_soft))
+    editor.setSelectionBackgroundColor(QColor(colors.selection))
     editor.setSelectionForegroundColor(text)
     editor.setFoldMarginColors(QColor(colors.side), QColor(colors.side))
 
@@ -106,6 +106,31 @@ class _LayerDrops(QObject):
             event.ignore()  # sin aceptar: Qt la pasa al contenedor (el área de trabajo)
             return True
         return False
+
+
+#: Marcador (QScintilla) de la sentencia que correrá «Ejecutar», en un margen fino a la izquierda del texto.
+MARK = 20
+_MARK_MARGIN = 1
+
+
+def prepare_mark(editor: Any, colors: Colors) -> None:
+    """Un margen de 4 px con una barra del color de acento (workspace-pro-spec §5)."""
+    from qgis.PyQt.Qsci import QsciScintilla  # noqa: PLC0415
+
+    editor.setMarginType(_MARK_MARGIN, QsciScintilla.MarginType.SymbolMargin)
+    editor.setMarginWidth(_MARK_MARGIN, 4)
+    editor.setMarginMarkerMask(_MARK_MARGIN, editor.marginMarkerMask(_MARK_MARGIN) | (1 << MARK))
+    editor.markerDefine(QsciScintilla.MarkerSymbol.FullRectangle, MARK)
+    editor.setMarkerBackgroundColor(QColor(colors.accent), MARK)
+    editor.setMarkerForegroundColor(QColor(colors.accent), MARK)
+
+
+def mark_lines(editor: Any, lines: tuple[int, int] | None) -> None:
+    """Marca las líneas `lines` (primera y última, incluidas); `None` quita la marca."""
+    editor.markerDeleteAll(MARK)
+    if lines is not None:
+        for line in range(lines[0], lines[1] + 1):
+            editor.markerAdd(line, MARK)
 
 
 def make(colors: Colors, *, dark: bool) -> Any:

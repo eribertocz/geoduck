@@ -28,6 +28,7 @@ class Colors:
     accent_fill: str  # fondo del botón principal (con `on_accent` encima, ≥ 4,5:1)
     accent_hover: str
     accent_soft: str  # elemento elegido en listas
+    selection: str  # texto seleccionado en el editor: se distingue bien (propietario, 2026-11-06)
     on_accent: str  # texto sobre `accent`
     row_selected: str
     chip_bg: str
@@ -57,6 +58,7 @@ LIGHT = Colors(
     accent_fill="#2f5fd0",
     accent_hover="#234aa6",
     accent_soft="#e7ecfa",
+    selection="#bcd0fa",
     on_accent="#ffffff",
     row_selected="#eef2fd",
     chip_bg="#f3f6fe",
@@ -86,6 +88,7 @@ DARK = Colors(
     accent_fill="#3b67d6",
     accent_hover="#4c78e0",
     accent_soft="#22304f",
+    selection="#33508f",
     on_accent="#ffffff",
     row_selected="#1f2a44",
     chip_bg="#1d2740",

@@ -58,6 +58,7 @@ from geoduck.domain.export import ExportFormat
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, result_title
 from geoduck.domain.sql_text import load_sql
+from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
 from geoduck.ui.pro.load import export_query, load_menu, popup_under
@@ -71,6 +72,8 @@ from geoduck.ui.widgets import line_index_from, offset_from
 AUTOSAVE_MS = 1500
 #: Resultado o mensajes.
 RESULT, MESSAGES = 0, 1
+#: Espera tras mover el cursor o escribir antes de volver a marcar la sentencia que correrá.
+MARK_MS = 60
 
 
 def _seconds(ms: float) -> str:
@@ -137,6 +140,7 @@ class QueryPage(QWidget):
         self.editor.setAccessibleName(tr("SQL editor"))
         self.editor.setText(sql)
         self.editor.textChanged.connect(self._text_changed)
+        self._wire_mark()
         self.split.addWidget(self.editor)
         self.split.addWidget(self._build_results())
         self.split.setSizes([360, 400])
@@ -163,6 +167,7 @@ class QueryPage(QWidget):
         self.show_databases(coordinator.catalog, database)
         self._unsubscribe = coordinator.subscribe(self._on_event)
         self._render_state()
+        self.mark_statement()
         self._show_results()
 
     # -- construcción ---------------------------------------------------------------------------------
@@ -173,20 +178,14 @@ class QueryPage(QWidget):
         row = QHBoxLayout(bar)
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(6)
-        self.run_button = button(
-            tr("Run"),
-            "primary",
-            icon="play",
-            tooltip=tr("Runs the statement under the cursor or the selection"),
-        )
+        # Un solo «Ejecutar» (propietario, 2026-11-06): la selección o la sentencia marcada; «Ejecutar todo»
+        # un paso atrás (Ctrl+Mayús+Intro y el menú «⋯»). El texto y la marca dicen qué correrá.
+        self.run_button = button(tr("Run"), "primary", icon="play")
         self.run_button.setIcon(self._icon("play", self.colors.on_accent))
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
         row.addWidget(label("Ctrl+Intro", "kbd"), 0, Qt.AlignmentFlag.AlignVCenter)
         row.addSpacing(6)
-        self.all_button = button(tr("All"), tooltip=tr("Runs all the SQL (Ctrl+Shift+Enter)"))
-        self.all_button.clicked.connect(lambda: self.execute(RunScope.ALL))
-        row.addWidget(self.all_button)
         self.cancel_button = button(tr("Cancel"), "ghost", icon="stop", colors=self.colors)
         self.cancel_button.setToolTip(tr("Stops the running SQL"))
         self.cancel_button.clicked.connect(self.cancel)
@@ -199,8 +198,12 @@ class QueryPage(QWidget):
         self.base.setMinimumWidth(110)
         self.base.currentIndexChanged.connect(lambda _i: self.changed.emit())
         row.addWidget(self.base)
-        self.file_button = icon_button("more", tr("Open, save, save as…"), self.colors)
+        self.file_button = icon_button("more", tr("Run all, open, save, save as…"), self.colors)
         self.file_menu = QMenu(self)
+        self.run_all_action = self.file_menu.addAction(
+            tr("Run all") + "\tCtrl+Shift+Enter", lambda: self.execute(RunScope.ALL)
+        )
+        self.file_menu.addSeparator()
         self.file_menu.addAction(tr("Open…") + "\tCtrl+O", self.open_requested.emit)
         self.file_menu.addAction(tr("Save") + "\tCtrl+S", self.save)
         self.file_menu.addAction(tr("Save as…"), self.save_as)
@@ -344,7 +347,8 @@ class QueryPage(QWidget):
     # -- ejecutar -------------------------------------------------------------------------------------
 
     def execute(self, scope: RunScope) -> None:
-        """«Ejecutar» (la sentencia bajo el cursor, o la selección si la hay) o «Todo»."""
+        """«Ejecutar» (la selección, o la sentencia marcada) o «Ejecutar todo». Lo marcado es exactamente lo
+        que corre: la sentencia se calcula aquí (`domain.statements`), igual con DuckDB 1.5 y 2.0."""
         if self._coordinator.state is not SessionState.READY or self.run is not None:
             return
         text = self.editor.text()
@@ -352,15 +356,18 @@ class QueryPage(QWidget):
             self.notice.emit(tr("There is no SQL to run"))
             return
         cursor, base = 0, 0
+        sql = text
         if scope is RunScope.CURRENT and self.editor.hasSelectedText():
             scope = RunScope.SELECTION
             line_from, index_from, _l, _i = self.editor.getSelection()
             base = offset_from(text, line_from, index_from)
             sql = self.editor.selectedText()
-        else:
-            line, index = self.editor.getCursorPosition()
-            cursor = offset_from(text, line, index)
-            sql = text
+        elif scope is RunScope.CURRENT:
+            span = self.current_span()
+            if span is None:
+                self.notice.emit(tr("There is no SQL to run"))
+                return
+            scope, base, sql = RunScope.SELECTION, span[0], text[span[0] : span[1]]
         try:
             run_id = self._coordinator.execute_sql(
                 sql,
@@ -376,6 +383,48 @@ class QueryPage(QWidget):
         self.run = Run(run_id, text)
         self.summary.setText(tr("Running…"))
         self._render_state()
+
+    def _wire_mark(self) -> None:
+        """Cada movimiento del cursor, selección o cambio de texto vuelve a marcar (tras `MARK_MS`)."""
+        self._mark_timer = QTimer(self)
+        self._mark_timer.setSingleShot(True)
+        self._mark_timer.setInterval(MARK_MS)
+        self._mark_timer.timeout.connect(self.mark_statement)
+        editor = self.editor
+        for signal in (editor.cursorPositionChanged, editor.selectionChanged, editor.textChanged):
+            signal.connect(lambda *_a: self._mark_timer.start())
+        pro_editor.prepare_mark(editor, self.colors)
+
+    def current_span(self) -> tuple[int, int] | None:
+        """(inicio, fin) de la sentencia marcada en el texto del editor."""
+        text = self.editor.text()
+        line, index = self.editor.getCursorPosition()
+        return current_span(text, offset_from(text, line, index))
+
+    def mark_statement(self) -> None:
+        """La barra a la izquierda de la sentencia que correrá «Ejecutar», y el botón que lo dice: «Ejecutar ·
+        línea 5» o «Ejecutar selección». Con selección no hay barra (dos marcas confundirían)."""
+        if self._closed:
+            return
+        text = self.editor.text()
+        count = len(statement_spans(text))
+        span = None if self.editor.hasSelectedText() else self.current_span()
+        lines = None
+        if span is not None:
+            lines = (line_index_from(text, span[0])[0], line_index_from(text, span[1])[0])
+        pro_editor.mark_lines(self.editor, lines)
+        if self.editor.hasSelectedText():
+            self.run_button.setText(tr("Run selection"))
+        elif lines is not None:
+            self.run_button.setText(tr("Run · line {}").format(lines[0] + 1))
+        else:
+            self.run_button.setText(tr("Run"))
+        self.run_button.setToolTip(
+            tr("Ctrl+Enter: runs the selection or, without one, the marked statement")
+            + "\n"
+            + tr("Ctrl+Shift+Enter: runs all ({} statements)").format(count)
+        )
+        self.run_all_action.setText(tr("Run all ({} statements)").format(count) + "\tCtrl+Shift+Enter")
 
     def cancel(self) -> None:
         if self.run is not None:
@@ -741,8 +790,9 @@ class QueryPage(QWidget):
     def _render_state(self) -> None:
         state = self._coordinator.state
         ready = state is SessionState.READY
-        for widget in (self.run_button, self.all_button, self.base):
+        for widget in (self.run_button, self.base):
             widget.setEnabled(ready and self.run is None)
+        self.run_all_action.setEnabled(ready and self.run is None)
         self.cancel_button.setEnabled(self.run is not None and state is SessionState.BUSY)
         usable = (
             self.current_result is not None
