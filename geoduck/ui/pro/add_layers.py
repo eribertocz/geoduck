@@ -499,12 +499,13 @@ class AddLayers:
     def done_lines(self) -> list[str]:
         """El resumen, una idea por línea: cuántas y en qué sentido; en qué base; canceladas; con error."""
         added = sum(1 for s in self.states if s["state"] == DONE)
-        where = self.request.database if self.request is not None else ""
+        database = self.request.database if self.request is not None else ""
+        schema = self.request.schema if self.request is not None else ""
         if added == 1:
             lines = [tr("1 QGIS layer added to DuckDB")]
         else:
             lines = [tr("{0} QGIS layers added to DuckDB").format(added)]
-        lines.append(tr("Database: {0}").format(where))
+        lines.append(tr("Catalog: {0} · Schema: {1}").format(database, schema))
         cancelled = [s["name"] for s in self.states if s["state"] == CANCELLED]
         failed = [s["name"] for s in self.states if s["state"] == FAILED]
         if cancelled:

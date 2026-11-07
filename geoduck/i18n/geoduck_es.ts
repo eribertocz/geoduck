@@ -1714,8 +1714,8 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/about_dialog.py" line="101" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="657" />
-            <location filename="../../geoduck/ui/pro/widgets.py" line="273" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="658" />
+            <location filename="../../geoduck/ui/pro/widgets.py" line="274" />
             <source>Close</source>
             <translation>Cerrar</translation>
         </message>
@@ -1830,7 +1830,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/attach_dialog.py" line="122" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="654" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="655" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="494" />
             <location filename="../../geoduck/ui/pro/sidebar.py" line="582" />
             <source>Open</source>
@@ -1963,17 +1963,17 @@
             <translation>Añadir 1 capa a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="591" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="592" />
             <source>Continue in the background</source>
             <translation>Seguir en segundo plano</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="593" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="594" />
             <source>Cancel all</source>
             <translation>Cancelar todo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="650" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="651" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="496" />
             <source>Undo</source>
             <translation>Deshacer</translation>
@@ -2004,13 +2004,13 @@
             <translation>Atrás</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="504" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="505" />
             <source>1 QGIS layer added to DuckDB</source>
             <translation>1 capa de QGIS añadida a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="582" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="636" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="583" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="637" />
             <source>Remove this layer</source>
             <translation>Quitar esta capa</translation>
         </message>
@@ -2030,17 +2030,17 @@
             <translation>DuckDB está ocupado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="507" />
-            <source>Database: {0}</source>
-            <translation>Base de datos: {0}</translation>
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="508" />
+            <source>Catalog: {0} · Schema: {1}</source>
+            <translation>Catálogo: {0} · Esquema: {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="524" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="525" />
             <source>Adding {0} of {1} to DuckDB</source>
             <translation>Añadiendo {0} de {1} a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="636" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="637" />
             <source>Stop this layer</source>
             <translation>Detener esta capa</translation>
         </message>
@@ -2055,50 +2055,50 @@
             <translation>{0} capas elegidas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="506" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="507" />
             <source>{0} QGIS layers added to DuckDB</source>
             <translation>{0} capas de QGIS añadidas a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="511" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="512" />
             <source>{0} cancelled ({1})</source>
             <translation>{0} canceladas ({1})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="513" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="514" />
             <source>{0} with error ({1})</source>
             <translation>{0} con error ({1})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="541" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="542" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="478" />
             <source>It could not be undone:</source>
             <translation>No se pudo deshacer:</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="639" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="640" />
             <source>Adding {0} layers to DuckDB · {1}…</source>
             <translation>Añadiendo {0} capas a DuckDB · {1}…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="642" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="643" />
             <source>Done:</source>
             <translation>Listo:</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="154" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="626" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="627" />
             <location filename="../../geoduck/ui/send_dialog.py" line="343" />
             <source>{0} features</source>
             <translation>{0} entidades</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="629" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="630" />
             <source>cancelled</source>
             <translation>cancelada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="634" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="635" />
             <source>waiting</source>
             <translation>en espera</translation>
         </message>
@@ -2108,7 +2108,7 @@
             <translation>Deshecho: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="631" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="632" />
             <source>error: {0}</source>
             <translation>error: {0}</translation>
         </message>
