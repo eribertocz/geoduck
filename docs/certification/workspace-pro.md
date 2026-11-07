@@ -50,7 +50,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | 3d | Clic en la cabecera `kwh`; añada dos filtros (chips); busque; pase de página | Cada cosa responde sin congelar QGIS; «Ver SQL» abre la consulta equivalente |
 | 3e | Elija una fila y abra el detalle; pase a «Estructura» | Valores completos; columnas, tipos, nulos y `CREATE` |
 | 3f | Ctrl+K, escriba `medi` (sin acentos ni mayúsculas) e Intro | Abre la tabla; Esc cierra Ctrl+K |
-| 3g | Marque la tabla con ★; reinicie QGIS | Vuelve en «★» y en «Recientes» |
+| 3g | Marque la tabla con ★; reinicie QGIS | Vuelve en «★»; la barra lateral no tiene «Recientes» |
 | 3h | Guarde la consulta con Ctrl+S en la carpeta con acentos; ciérrela; Ctrl+O y ábrala | Vuelve con su texto |
 | 3i | Escriba `BEGIN; CREATE TABLE u (x INTEGER PRIMARY KEY); INSERT INTO u VALUES (1), (1);` y ejecute | Aviso abajo a la derecha que **no se va solo**: «La transacción falló. «Revertir» descarta sus cambios…»; pulse «Revertir» y DuckDB vuelve a estar «Lista» |
 | 3j | Ctrl+K › «Historial de ejecución» | Pestaña con cada sentencia (hora, ✓/✕, duración); «Error» filtra; doble clic abre una consulta nueva **sin ejecutarla** |

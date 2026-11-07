@@ -39,7 +39,7 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   está iniciado) y **«Cerrar DuckDB»** (menú «⋯»); la palabra «sesión» no aparece en la interfaz. Sin DuckDB
   iniciado, **todo está en gris** salvo «Iniciar DuckDB», «Abrir base…», «Crear base…», «Diagnóstico» y
   «Acerca de».
-- **Barra lateral** (plegable, Ctrl+B): búsqueda; **Recientes**; **★ Favoritos**; **Bases** (árbol: bases,
+- **Barra lateral** (plegable, Ctrl+B): búsqueda; **★ Favoritos**; **Bases** (árbol: bases,
   esquemas, tablas, vistas, temporales, con su acceso); «+» (abrir o crear base, importar capas de QGIS); al pie,
   «Diagnóstico», «Acerca de» y la versión.
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
@@ -49,7 +49,7 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   sustituyen); ninguna acción desaparece, se compacta.
 
 ## 4. Pestaña de tabla (GD-WSP-003)
-Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o Ctrl+K). Solo lectura en G9.
+Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
 - **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con
   tipo bajo cada columna y número de fila.
   - **Orden:** clic en el encabezado (ascendente, descendente, sin orden); lo ejecuta DuckDB.
@@ -95,8 +95,10 @@ Dos opciones, en lenguaje simple:
 - **«Conectada»:** en vivo, editable en DuckDB (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
 
-## 8. Recientes y favoritos (GD-WSP-007)
-- **Recientes:** las tablas y consultas abiertas hace poco (máximo 10), en esta y en sesiones anteriores.
+## 8. Favoritos (GD-WSP-007)
+- **Sin «Recientes» en la barra lateral** (propietario, 2026-11-06, tras la prueba en Windows): estorbaba y
+  mostraba tablas que ya no se podían abrir. Lo abierto hace poco solo ordena Ctrl+K, que nunca muestra lo que
+  ya no existe.
 - **★ Favoritos:** el usuario marca tablas y consultas; aparecen arriba.
 - Se recuerdan entre reinicios de QGIS (propietario, 2026-11-05). Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
   objeto ya no existe, se muestra atenuado con su motivo.

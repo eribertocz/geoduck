@@ -2,7 +2,7 @@
 """Barra lateral de Workspace Pro (workspace-pro-spec §3, §8; GD-WSP-002, 007).
 
 De arriba abajo: la sesión (punto de estado, «DuckDB 2.0.0» y «Lista · en memoria»), el filtro y «+» (abrir
-o crear base, enviar capas de QGIS), **Recientes**, **★ Favoritos** y **Bases** (bases, esquemas, tablas,
+o crear base, añadir capas de QGIS), **★ Favoritos** y **Bases** (bases, esquemas, tablas,
 vistas y temporales), y al pie «Diagnóstico», «Acerca de» y la versión. Doble clic o Intro abre una tabla o
 vista; el menú contextual marca favoritos y cierra bases. No ejecuta nada: emite señales que atiende el
 workspace.
@@ -311,7 +311,7 @@ class Sidebar(QFrame):
         tree.setIndentation(14)
         tree.setUniformRowHeights(True)
         tree.setExpandsOnDoubleClick(False)
-        tree.setAccessibleName(tr("Databases, recent and favorites"))
+        tree.setAccessibleName(tr("Databases and favorites"))
         tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         tree.customContextMenuRequested.connect(self._context_menu)
         tree.itemActivated.connect(self._activated)
@@ -375,12 +375,11 @@ class Sidebar(QFrame):
         return None
 
     def render(self, catalog: CatalogSnapshot | None) -> None:
-        """Rehace el árbol (recientes, favoritos y bases) conservando lo plegado y el filtro."""
+        """Rehace el árbol (favoritos y bases; sin «Recientes», 2026-11-06), con lo plegado y el filtro."""
         self.catalog = catalog
         tree = self.tree
         tree.setUpdatesEnabled(False)
         tree.clear()
-        self._add_places(tr("Recent"), "recent", self.places.recents)
         self._add_places("★ " + tr("Favorites"), "favorites", self.places.favorites)
         self._section(tr("Databases"), "databases")
         if catalog is None:
