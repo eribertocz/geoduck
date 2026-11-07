@@ -447,3 +447,31 @@ def test_about_shows_version_license_links_and_components(plugin):
     assert version_text() == f"Versión {__version__} · Alpha"
     footer = " ".join(w.text() for w in item.content.sidebar.findChildren(QLabel))
     assert f"v{__version__}" in footer
+
+
+def test_the_brand_logo_says_the_session_state_and_its_menu_shows_only_what_applies(plugin):
+    """Marca (propietario, 2026-11-07): el logo con un puntito dice el estado y abre el menú de la sesión;
+    sin sesión, «Iniciar DuckDB» y nunca un «Iniciar» en gris con sesión; el botón de QGIS lleva el puntito;
+    «Acerca de» con la raya ámbar y el botón azul."""
+    from geoduck.ui.about_dialog import AboutDialog
+    from geoduck.ui.pro.widgets import LogoBar, logo_icon
+
+    item = plugin()
+    ws = item.content
+    side = ws.sidebar
+    assert side.dot.logo and side.dot.state == "off"
+    assert side.start_action.isVisible() and not side.close_action.isVisible()
+    start(item)
+    assert wait_for(lambda: side.dot.state == "ok")
+    assert not side.start_action.isVisible() and side.close_action.isVisible()
+    assert not logo_icon("ok").isNull() and not logo_icon("off").isNull()
+    dialog = AboutDialog(ws._report, item.coordinator.engine_info, ws)
+    notes = [w for w in dialog.findChildren(QLabel) if w.property("geoduck") == "note"]
+    assert len(notes) == 1
+    bar = LogoBar(ws.colors)
+    bar.setRange(0, 0)
+    bar.resize(160, 20)
+    bar.grab()  # sin avance conocido: se dibuja y anima sin fallar
+    bar.setRange(0, 10)
+    bar.setValue(5)
+    assert not bar.grab().isNull()

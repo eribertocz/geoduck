@@ -1410,6 +1410,17 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   «Cargar en QGIS ▸» / «Cargar N tablas en QGIS ▸»: el mismo menú que al soltarlas en el mapa (§9); con una
   sola, también «Más opciones…».
 
+- **La marca** (propietario, 2026-11-07; `claude/marca.md` en el proyecto): el **logo de GeoDuck dice el estado
+  de la sesión** en la barra lateral y en la cabecera del panel: un puntito en su esquina (verde lista, ámbar
+  trabajando, rojo con error); sin sesión, el logo en gris y sin puntito. Un clic en el logo abre el menú de
+  la sesión, **solo con lo que aplica**: sin sesión «Iniciar DuckDB»; con sesión «Cerrar sesión» (nunca un
+  «Iniciar» en gris; una sola sesión a la vez); además «Abrir base…», «Crear base…», «Diagnóstico del
+  entorno» y «Acerca de GeoDuck». El botón de GeoDuck en la barra de QGIS lleva el mismo puntito. Sin sesión,
+  la pantalla de inicio muestra el logo grande en gris. Los diálogos usan los colores de la marca (botón
+  principal y enlaces en azul `#2F5FD0`, advertencias con raya ámbar `#F2A33A`); «Acerca de» lleva además una
+  franja azul arriba y «Geo**Duck**». En el paso 3 de «Capas de QGIS → DuckDB», la barra de cada capa lleva el
+  logo en su punta.
+
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
 - **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con

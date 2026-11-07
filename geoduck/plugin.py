@@ -16,7 +16,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import LoadFinished, PreviewsInvalidated
+from geoduck.app.events import LoadFinished, PreviewsInvalidated, SessionStateChanged
 from geoduck.app.ports import SessionEngine
 from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
 from geoduck.infra.diagnostics import collect
@@ -25,7 +25,8 @@ from geoduck.ui.i18n import tr
 from geoduck.ui.map_view import MapView
 from geoduck.ui.pro.drag import PlacesDropHandler
 from geoduck.ui.pro.shell import ProController, migrate_settings
-from geoduck.ui.pro.workspace import ProWorkspace
+from geoduck.ui.pro.widgets import logo_icon
+from geoduck.ui.pro.workspace import ProWorkspace, session_parts
 
 _log = logging.getLogger("geoduck")
 
@@ -76,7 +77,7 @@ class GeometryValidity:
         self._on_message = on_message
         self.dialog_factory: Any = ValidityDialog
         self.tasks: list[Any] = []  # referencias vivas mientras corren
-        self.action = QAction(tr("Diagnose geometries…"), iface.mainWindow())
+        self.action = QAction(QIcon(ICON), tr("Diagnose geometries…"), iface.mainWindow())
         self.action.setObjectName("geoduckDiagnoseGeometries")
         self.action.triggered.connect(self.diagnose_active_layer)
         self._project = QgsProject.instance()
@@ -173,7 +174,7 @@ class SendToDuckDB:
 
     def __init__(self, iface: Any, send: Any) -> None:
         self.iface = iface
-        self.action = QAction(tr("Add to DuckDB…"), iface.mainWindow())
+        self.action = QAction(QIcon(ICON), tr("Add to DuckDB…"), iface.mainWindow())
         self.action.setObjectName("geoduckSendToDuckDB")
         self.action.setToolTip(tr("Adds the selected layers to DuckDB as tables (GeoDuck)"))
         self.action.triggered.connect(lambda: send(selected_layer_ids(self.iface)))
@@ -272,6 +273,12 @@ class GeoDuckPlugin:
         if isinstance(event, LoadFinished) and self.validity is not None:
             report = event.report
             self.validity.register([i for i, _ in report.layers] or [report.layer_id])
+        if (
+            isinstance(event, SessionStateChanged)
+            and self.action is not None
+            and self.coordinator is not None
+        ):
+            self.action.setIcon(logo_icon(session_parts(self.coordinator)[0]))  # el puntito de la sesión
         if isinstance(event, PreviewsInvalidated) and self.loader is not None:
             self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import html
 from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextDocument
+from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPalette, QPen, QTextDocument
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -18,6 +20,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QWidget,
@@ -203,14 +206,98 @@ class SearchField(QFrame):
         return False
 
 
-class StatusDot(QWidget):
-    """Punto de estado de la sesión: `ok` (lista), `busy` (ocupada), `error`, `off` (sin sesión)."""
+#: El logo de GeoDuck (claude/marca.md).
+LOGO = str(Path(__file__).resolve().parents[2] / "resources" / "icon.svg")
 
-    def __init__(self, colors: Colors, state: str = "off") -> None:
+
+#: Colores del puntito de estado en el botón de GeoDuck de la barra de QGIS.
+BADGE = {"ok": "#2E9E5B", "busy": "#F2A33A", "error": "#D64545"}
+
+
+def logo_icon(state: str) -> QIcon:
+    """El botón de GeoDuck en la barra de QGIS: el logo y, con sesión, un puntito con su estado (marca,
+    2026-11-07); sin sesión, solo el logo."""
+    if state not in BADGE:
+        return QIcon(LOGO)
+    side = 64
+    image = QIcon(LOGO).pixmap(side, side)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor("#FFFFFF"), 5))
+    painter.setBrush(QColor(BADGE[state]))
+    painter.drawEllipse(38, 38, 24, 24)
+    painter.end()
+    return QIcon(image)
+
+
+class LogoBar(QProgressBar):
+    """La barra del paso 3 de «Capas de QGIS → DuckDB» (marca, 2026-11-07): una línea azul fina y el logo de
+    GeoDuck en su punta, que avanza con la capa; sin avance conocido, el logo va y vuelve."""
+
+    def __init__(self, colors: Colors) -> None:
+        super().__init__()
+        self.colors = colors
+        self.setTextVisible(False)
+        self.setFixedHeight(20)
+        self._phase = 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(40)
+        self._timer.timeout.connect(self._tick)
+
+    def _tick(self) -> None:
+        self._phase = (self._phase + 0.02) % 2.0
+        self.update()
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802 - API de Qt
+        busy = self.maximum() == self.minimum()
+        if busy and not self._timer.isActive() and self.isVisible():
+            self._timer.start()
+        elif not busy and self._timer.isActive():
+            self._timer.stop()
+        width = self.width() - 16
+        if busy:
+            at = self._phase if self._phase <= 1 else 2 - self._phase  # va y vuelve
+        else:
+            span = max(1, self.maximum() - self.minimum())
+            at = (self.value() - self.minimum()) / span
+        head = 8 + int(width * at)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(self.colors.line))
+        painter.drawRoundedRect(8, 15, width, 4, 2, 2)
+        painter.setBrush(QColor(self.colors.accent_fill))
+        start = max(8, head - width // 5) if busy else 8
+        painter.drawRoundedRect(start, 15, max(0, head - start), 4, 2, 2)
+        painter.drawPixmap(head - 7, 0, QIcon(LOGO).pixmap(14, 14))
+        painter.end()
+
+
+class StatusDot(QWidget):
+    """Estado de la sesión: `ok` (lista), `busy` (ocupada), `error`, `off` (sin sesión).
+
+    Con `logo` (marca, 2026-11-07): el logo de GeoDuck con un puntito en la esquina que dice el estado; sin
+    sesión, el logo en gris y sin puntito. Un clic emite `clicked` (abre el menú de la sesión)."""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, colors: Colors, state: str = "off", *, logo: bool = False) -> None:
         super().__init__()
         self.colors = colors
         self.state = state
-        self.setFixedSize(10, 10)
+        self.logo = logo
+        side = 24 if logo else 10
+        self.setFixedSize(side, side)
+        if logo:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setToolTip(tr("Session"))
+            self.setAccessibleName(tr("Session"))
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        if self.logo and event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            return
+        super().mousePressEvent(event)
 
     def set_state(self, state: str) -> None:
         self.state = state
@@ -224,9 +311,18 @@ class StatusDot(QWidget):
         }.get(self.state, self.colors.null)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(color))
-        painter.drawEllipse(1, 1, 8, 8)
+        if not self.logo:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(color))
+            painter.drawEllipse(1, 1, 8, 8)
+            painter.end()
+            return
+        mode = QIcon.Mode.Disabled if self.state == "off" else QIcon.Mode.Normal
+        painter.drawPixmap(0, 0, QIcon(LOGO).pixmap(22, 22, mode))
+        if self.state != "off":
+            painter.setPen(QPen(QColor(self.colors.side), 2))
+            painter.setBrush(QColor(color))
+            painter.drawEllipse(14, 14, 9, 9)
         painter.end()
 
 

@@ -222,6 +222,7 @@ class Sidebar(QFrame):
     send_layers_requested = pyqtSignal()
     diagnostics_requested = pyqtSignal()
     about_requested = pyqtSignal()
+    start_requested = pyqtSignal()
 
     def __init__(self, colors: Colors, places: Places) -> None:
         super().__init__()
@@ -258,7 +259,9 @@ class Sidebar(QFrame):
         row = QHBoxLayout(head)
         row.setContentsMargins(14, 0, 8, 0)
         row.setSpacing(9)
-        self.dot = StatusDot(self.colors)
+        # el logo dice el estado de la sesión, y un clic abre su menú (marca, 2026-11-07)
+        self.dot = StatusDot(self.colors, logo=True)
+        self.dot.clicked.connect(lambda: self._popup(self.session_menu, self.dot))
         row.addWidget(self.dot)
         titles = QVBoxLayout()
         titles.setSpacing(0)
@@ -270,12 +273,23 @@ class Sidebar(QFrame):
         titles.addWidget(self.status)
         row.addLayout(titles, 1)
         self.session_button = icon_button("more", tr("Session"), self.colors)
+        # El menú de la sesión: solo lo que aplica (propietario, 2026-11-07): sin sesión, «Iniciar DuckDB»;
+        # con sesión, «Cerrar sesión»; nunca un «Iniciar» en gris.
         self.session_menu = QMenu(self)
+        self.start_action = self.session_menu.addAction(tr("Start DuckDB"))
+        self.start_action.triggered.connect(self.start_requested.emit)
+        self.session_open_db = self.session_menu.addAction(tr("Open database…"))
+        self.session_open_db.triggered.connect(self.open_database_requested.emit)
+        self.session_create_db = self.session_menu.addAction(tr("Create database…"))
+        self.session_create_db.triggered.connect(self.create_database_requested.emit)
         self.refresh_action = self.session_menu.addAction(tr("Refresh"))
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
         self.session_menu.addSeparator()
-        self.close_action = self.session_menu.addAction(tr("Close DuckDB"))
+        self.close_action = self.session_menu.addAction(tr("Close session"))
         self.close_action.triggered.connect(self.close_session_requested.emit)
+        self.session_menu.addSeparator()
+        self.session_menu.addAction(tr("Environment diagnostics"), self.diagnostics_requested.emit)
+        self.session_menu.addAction(tr("About GeoDuck"), self.about_requested.emit)
         self.session_button.clicked.connect(lambda: self._popup(self.session_menu, self.session_button))
         row.addWidget(self.session_button)
         return head
@@ -361,14 +375,18 @@ class Sidebar(QFrame):
         self.title.setText(engine)
         self.status.setText(text)
         self.refresh_action.setEnabled(ready)
-        self.close_action.setEnabled(dot != "off")
+        self.refresh_action.setVisible(dot != "off")
+        self.close_action.setVisible(dot != "off")
+        self.start_action.setVisible(dot == "off")
+        for action in (self.session_open_db, self.session_create_db):
+            action.setEnabled(ready or dot == "off")
         for action in (self.open_db_action, self.create_db_action):
             action.setEnabled(ready or dot == "off")
         self.send_action.setEnabled(ready)
         # Sin DuckDB, todo en gris salvo iniciar, abrir o crear una base, Diagnóstico y Acerca de
         # (propietario, 2026-11-06)
         started = dot != "off"
-        for widget in (self.search, self.tree, self.session_button):
+        for widget in (self.search, self.tree):
             widget.setEnabled(started)
 
     def current_target(self) -> tuple[str, str] | None:

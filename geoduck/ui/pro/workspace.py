@@ -19,7 +19,7 @@ from typing import Any
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import QEvent, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QKeySequence
+from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -83,7 +83,7 @@ from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
-from geoduck.ui.pro.widgets import Toast, button, icon_button, label, lines_html
+from geoduck.ui.pro.widgets import LOGO, Toast, button, icon_button, label, lines_html
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
 STATE, TABS, WELCOME = 0, 1, 2
@@ -325,24 +325,30 @@ class ProWorkspace(QWidget):
         row.addStretch(1)
         column = QWidget()
         column.setMaximumWidth(560)  # cabe la fila de botones más larga (con «Diagnóstico»)
-        column.setMinimumWidth(200)  # el texto baja de línea: en el panel angosto no fija el ancho
         box = QVBoxLayout(column)
         box.setContentsMargins(16, 0, 16, 0)
         box.setSpacing(8)
         glyph = label("")
-        glyph.setPixmap(icons.pixmap(icon, self.colors.faint, 36))
+        if icon == "logo":  # sin sesión: el logo grande en gris (marca, 2026-11-07)
+            glyph.setPixmap(QIcon(LOGO).pixmap(64, 64, QIcon.Mode.Disabled))
+        else:
+            glyph.setPixmap(icons.pixmap(icon, self.colors.faint, 36))
         title = label("", "title")
         text = label("", "muted")
         text.setWordWrap(True)
+        title.setWordWrap(True)
+        for wrapped in (title, text):
+            wrapped.setMinimumWidth(160)  # bajan de línea: en el panel angosto no fijan el ancho
         for widget in (glyph, title, text):
             widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
             box.addWidget(widget)
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.setContentsMargins(0, 10, 0, 0)
+        actions.addStretch(1)
         for widget in buttons:
             actions.addWidget(widget)
-        actions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        actions.addStretch(1)
         self._action_rows.append(actions)  # en el modo compacto, los botones uno debajo de otro
         box.addLayout(actions)
         row.addWidget(column, 1)
@@ -364,7 +370,7 @@ class ProWorkspace(QWidget):
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
         self.diagnostics_button.setVisible(False)
         page, _, self.state_title, self.state_text = self._empty_page(
-            "database", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
+            "logo", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
         )
         return page
 
@@ -504,6 +510,7 @@ class ProWorkspace(QWidget):
         side.send_layers_requested.connect(self.send_layers_requested.emit)
         side.diagnostics_requested.connect(self.show_diagnostics)
         side.about_requested.connect(self.show_about)
+        side.start_requested.connect(self.start)
         side.tree.layers_dropped.connect(self.send_layers)
         side.tree.drop_hint.connect(lambda text: self.notify(text) if text else None)
 
