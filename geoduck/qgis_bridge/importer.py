@@ -221,7 +221,8 @@ def gdal_source(layer: Any) -> tuple[str, str | None] | None:
     FlatGeobuf, GeoJSON, KML, Geodatabase, Excel…): su ruta para `ST_Read` y la capa de adentro (§5.4)."""
     if layer.providerType() != "ogr":
         return None
-    parts = QgsProviderRegistry.instance().decodeUri("ogr", layer.source())
+    uri = layer.dataProvider().dataSourceUri() or layer.source()  # absoluta: la «Copia» es un .gpkg
+    parts = QgsProviderRegistry.instance().decodeUri("ogr", uri)
     path = str(parts.get("path") or "")
     if not path or not (os.path.isfile(path) or path.lower().endswith(".gdb")):
         return None
