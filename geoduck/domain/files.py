@@ -287,6 +287,11 @@ def candidate_for(item: FileLayer, index: int, table: str) -> SendCandidate:
         table=table,
         problem=item.problem,
         file=item,
+        source_kind="file",
+        source_format=(
+            item.file_format.suffixes[0].lstrip(".").split(".")[0] if item.file_format.suffixes else ""
+        ).upper()
+        or os.path.splitext(item.path)[1].lstrip(".").upper(),
     )
 
 
