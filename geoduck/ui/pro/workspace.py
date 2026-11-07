@@ -55,6 +55,7 @@ from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
+from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
 from geoduck.ui.pro.history import History, HistoryPage
 from geoduck.ui.pro.load import QuickLoad, finished_title
@@ -74,7 +75,6 @@ from geoduck.ui.pro.places import (
 from geoduck.ui.pro.project_copies import ProjectCopies
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.recovery import QueryRecovery, read_query
-from geoduck.ui.pro.send import QuickSend
 from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
@@ -171,7 +171,7 @@ class ProWorkspace(QWidget):
         self.on_view_map: Callable[[list[str]], str | None] | None = None
         self.loader.on_loaded = self._loaded
         #: Capas de QGIS soltadas sobre GeoDuck (E5): sin diálogo si no hay nada que decidir.
-        self.quick_send = QuickSend(coordinator, self)
+        self.to_duckdb = AddLayers(coordinator, self)
         self.last_toast: Toast | None = None
         self.aborted_toast: Toast | None = None
         self.setAcceptDrops(True)
@@ -341,29 +341,29 @@ class ProWorkspace(QWidget):
         self.progress.setFixedWidth(140)
         self.progress.setVisible(False)
         row.addWidget(self.progress)
-        self.progress_cancel = QPushButton(tr("Cancel"))
-        self.progress_cancel.setProperty("pro", "ghost")
-        self.progress_cancel.setVisible(False)
-        self.progress_cancel.clicked.connect(self.quick_send.cancel)
-        row.addWidget(self.progress_cancel)
+        # la línea de progreso: un clic vuelve al paso 3 de «Capas de QGIS → DuckDB» (F-131)
+        self.progress_button = QPushButton()
+        self.progress_button.setProperty("pro", "ghost")
+        self.progress_button.setToolTip(tr("Show the progress"))
+        self.progress_button.setVisible(False)
+        self.progress_button.clicked.connect(self.to_duckdb.show_window)
+        row.addWidget(self.progress_button)
         return foot
 
     # -- envío desde QGIS (E5) ---------------------------------------------------------------------------
 
-    def show_progress(self, text: str, total: int) -> None:
-        self.notify(text)
-        self.progress.setRange(0, max(0, total))  # 0 = indeterminado: DuckDB copia sin informar entidades
-        self.progress.setValue(0)
+    def show_progress(self, text: str, _total: int = 0) -> None:
+        self.progress.setRange(0, 0)  # en marcha; el detalle de cada capa, en el paso 3
         self.progress.setVisible(True)
-        self.progress_cancel.setVisible(True)
+        self.set_progress(text)
+        self.progress_button.setVisible(True)
 
-    def set_progress(self, rows: int) -> None:
-        if self.progress.maximum() > 0:
-            self.progress.setValue(min(self.progress.maximum(), rows))
+    def set_progress(self, text: str) -> None:
+        self.progress_button.setText(text)
 
     def hide_progress(self) -> None:
         self.progress.setVisible(False)
-        self.progress_cancel.setVisible(False)
+        self.progress_button.setVisible(False)
 
     def toast(self, text: str, actions: list[tuple[str, Callable[[], None]]], seconds: int) -> None:
         if self.last_toast is not None:
@@ -394,10 +394,15 @@ class ProWorkspace(QWidget):
         self.open_place(place_of(table.database, table.schema, table.name, kind))
 
     def send_layers(self, layer_ids_: list[str], destination: tuple[str, str] | None = None) -> None:
-        """Capas de QGIS soltadas sobre una base (o, sin `destination`, sobre la base actual)."""
-        self.quick_send.send(
+        """Capas de QGIS arrastradas (o del clic derecho): «Capas de QGIS → DuckDB», paso 1 con esas capas;
+        en el paso 2, la base donde se soltaron o, sin `destination`, la base actual (F-131)."""
+        self.to_duckdb.open(
             layer_ids_, destination if destination is not None else self.sidebar.current_target()
         )
+
+    def add_layers(self, checked: list[str] | None = None) -> None:
+        """«+» o Ctrl+K › «Añadir capas de QGIS a DuckDB…»: paso 1 con todas las capas del proyecto."""
+        self.to_duckdb.open(None, self.sidebar.current_target(), checked=checked)
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         """Capas soltadas en cualquier parte de GeoDuck (también en el panel): a la base actual."""
@@ -810,13 +815,17 @@ class ProWorkspace(QWidget):
         ]
         if self.transaction_aborted():
             found.append(Entry(tr("Roll back transaction"), action, "warning", self.rollback))
+        if self.to_duckdb.running:
+            found.append(
+                Entry(tr("Show progress: QGIS layers → DuckDB"), action, "layers", self.to_duckdb.show_window)
+            )
         if ready:
             found += [
                 Entry(
                     tr("Open database…"), action, "database", lambda: self.attach(OpenAction.OPEN_EXISTING)
                 ),
                 Entry(tr("Create database…"), action, "database", lambda: self.attach(OpenAction.CREATE_NEW)),
-                Entry(tr("Send QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
+                Entry(tr("Add QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),
             ]
         if self.wide:
@@ -880,6 +889,6 @@ class ProWorkspace(QWidget):
         self.recovery.stop()
         self.loader.detach()
         self.history.detach()
-        self.quick_send.detach()
+        self.to_duckdb.detach()
         if self.project_copies is not None:
             self.project_copies.detach()

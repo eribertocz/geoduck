@@ -165,6 +165,8 @@ class SendDialog(QDialog):
         self.resize(780, 540)
         #: G9 · E5: con `pro`, el sistema de diseño de Workspace Pro; el comportamiento no cambia.
         self.pro = pro
+        #: Ocultar «Qué pasará» si todo es nuevo (E5). En «Capas de QGIS → DuckDB» (F-131) siempre se ve.
+        self.tidy_columns = True
         if pro:
             from geoduck.ui.pro import style as pro_style  # noqa: PLC0415
 
@@ -565,7 +567,7 @@ class SendDialog(QDialog):
                 )
             )
         self.summary.setText(self._summary(states))
-        if self.pro:
+        if self.pro and self.tidy_columns:
             self._tidy(states)
         sending = [s for s in states if s.kind == "send"]
         blocked = [s for i, s in enumerate(states) if s.kind == "blocked" and self._checked(i)]

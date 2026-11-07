@@ -22,6 +22,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
 from geoduck.ui.pro.style import colors_for
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -248,6 +249,13 @@ class Toast(QFrame):
         row.addWidget(self.text)
         self.actions: list[QPushButton] = []
         self.seconds = seconds
+        #: F-132: «×» para cerrar el aviso sin hacer nada más; va siempre al final, después de las acciones.
+        self.close_button = icon_button("close", tr("Close"), colors, size=14)
+        self.close_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.close_button.clicked.connect(self.dismiss)
+        #: Se llama al cerrarlo con «×» (p. ej., recordar que no se decidió).
+        self.on_closed: Callable[[], None] | None = None
+        self.close_button.clicked.connect(lambda: self.on_closed() if self.on_closed else None)
         self._effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._effect)
         self._fade = QPropertyAnimation(self._effect, b"opacity", self)
@@ -265,6 +273,7 @@ class Toast(QFrame):
 
     def show_at_corner(self, margin: int = METRICS.space_lg, bottom: int = 64) -> None:
         parent = self.parentWidget()
+        self.layout().addWidget(self.close_button)  # type: ignore[union-attr]
         self.adjustSize()
         if parent is not None:
             self.move(

@@ -3,8 +3,8 @@
 
 QGIS, coordinador, worker DuckDB y panel de capas reales; sin `spatial`:
 
-- capas soltadas sobre una base: sin diálogo si todo es nuevo; con el diálogo (estilo nuevo) si hay algo
-  que decidir; progreso en el pie; aviso con «Abrir» y «Deshacer»;
+- «Capas de QGIS → DuckDB» en tres pasos (F-131): capas, dónde y progreso capa por capa; cada capa por
+  separado; «×» y «Cancelar todo»; en segundo plano, la línea del pie y el aviso con «×» (F-132);
 - tablas arrastradas desde la barra lateral y soltadas en el mapa: mini menú Copia / Conectada y un solo
   SRC para todas las que no lo tienen.
 """
@@ -25,7 +25,6 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
 from qgis.PyQt.QtGui import QDropEvent
-from qgis.PyQt.QtWidgets import QDialog
 
 from geoduck.domain.i18n import tr
 from geoduck.domain.session import SessionState
@@ -34,7 +33,6 @@ from geoduck.ui.pro.drag import PLACES_MIME, PlacesDropHandler, layer_ids, place
 from geoduck.ui.pro.places import TABLE, Place
 from geoduck.ui.pro.sidebar import DATABASE, ROLE, TARGET
 from geoduck.ui.pro.workspace import ProWorkspace
-from geoduck.ui.send_dialog import SendDialog
 from tests.qgis.conftest import wait_for
 
 pytestmark = pytest.mark.qgis
@@ -52,6 +50,14 @@ class Store(dict):
 
     def setValue(self, key, value):
         self[key] = value
+
+
+def points_table(name):
+    from qgis.core import QgsVectorLayer
+
+    layer = QgsVectorLayer("None?field=id:integer", name, "memory")
+    QgsProject.instance().addMapLayer(layer)
+    return layer
 
 
 def points(name, n=5, *, crs="EPSG:4326"):
@@ -143,11 +149,27 @@ def drop(tree, data, pos):
 
 def ended(coordinator, ws):
     return (
-        ws.quick_send.dialog is None
-        and not ws.quick_send._mine
+        not ws.to_duckdb.running
         and QgsApplication.taskManager().countActiveTasks() == 0
         and coordinator.state is SessionState.READY
     )
+
+
+def to_step_two(ws):
+    """Paso 1 → «Siguiente» → paso 2 con el destino ya leído."""
+    flow = ws.to_duckdb
+    window = flow.window
+    assert window.stack.currentIndex() == 0
+    flow.next_button.click()
+    assert wait_for(lambda: window.send_dialog is not None and window.send_dialog.target_ready, TIMEOUT)
+    flow._sync_add()
+    return window.send_dialog
+
+
+def add_all(ws, coordinator):
+    """Paso 2 → «Añadir» → espera a que termine el paso 3."""
+    ws.to_duckdb.add_button.click()
+    assert wait_for(lambda: ended(coordinator, ws), 60)
 
 
 def tables_in_db(coordinator):
@@ -168,9 +190,11 @@ def test_the_layers_panel_format_gives_the_dragged_layer_ids(coordinator):
     assert layer_ids(data) == [b.id(), a.id()]  # en el orden del panel: la última añadida, arriba
 
 
-def test_dropping_on_a_database_sends_without_a_dialog_and_offers_open_and_undo(coordinator):
+def test_dropping_on_a_database_opens_the_three_steps_with_that_database(coordinator):
+    """Arrastrar → paso 1 con esas capas → paso 2 con la base donde se soltaron → paso 3 (F-131)."""
     ws = workspace(coordinator)
     a, b = points("medidores", 12), points("zonas", 3)
+    points("otra", 2)  # en el proyecto, pero no se arrastró
     item = database_item(ws, DB)
     assert tuple(item.data(0, TARGET)) == (DB, "main")
     tree = ws.sidebar.tree
@@ -179,66 +203,142 @@ def test_dropping_on_a_database_sends_without_a_dialog_and_offers_open_and_undo(
     tree.layers_dropped.connect(lambda ids, target: dropped.append((ids, target)))
     drop(tree, data, tree.visualItemRect(item).center())
     assert dropped == [([b.id(), a.id()], (DB, "main"))]
-    assert wait_for(lambda: ws.quick_send.last_report is not None and ended(coordinator, ws), TIMEOUT)
-    assert ws.quick_send.asked is False  # todo era nuevo: sin diálogo
+    window = ws.to_duckdb.window
+    assert window.isVisible() and window.stack.currentIndex() == 0
+    assert set(window.chosen()) == {a.id(), b.id()} and len(window.rows) == 2  # solo las arrastradas
+    dialog = to_step_two(ws)
+    assert dialog.destination_value == (DB, "main")
+    assert not dialog.tree.isColumnHidden(2)  # «Qué pasará» siempre a la vista
+    assert ws.to_duckdb.add_button.text() == tr("Add {0} layers to DuckDB").format(2)
+    add_all(ws, coordinator)
+    assert [s["state"] for s in ws.to_duckdb.states] == ["done", "done"]
     assert has_tables(coordinator, {"medidores", "zonas"})
-    assert ws.notice.text().startswith(tr("{0} layers sent to {1}").format(2, DB))
+    assert window.isVisible() and window.stack.currentIndex() == 2  # el resumen, en el paso 3
+    assert window.subtitle.text() == tr("Done:") + " " + tr("{0} QGIS layers added to DuckDB · {1}").format(
+        2, DB
+    )
+    assert not ws.progress.isVisible()
+
+
+def test_each_layer_is_saved_on_its_own_and_one_can_be_removed(coordinator):
+    ws = workspace(coordinator)
+    layers = [points(name, 5) for name in ("uno", "dos", "tres")]
+    ws.send_layers([x.id() for x in layers], (DB, "main"))
+    to_step_two(ws)
+    ws.to_duckdb.add_button.click()
+    ws.to_duckdb.remove(1)  # «×» en una capa que espera: no se copia y las demás siguen
+    assert wait_for(lambda: ended(coordinator, ws), 60)
+    states = {s["name"]: s["state"] for s in ws.to_duckdb.states}
+    assert list(states.values()).count("cancelled") == 1 and list(states.values()).count("done") == 2
+    removed = next(name for name, state in states.items() if state == "cancelled")
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: set(states) - {removed} <= tables_in_db(coordinator), TIMEOUT)
+    assert removed not in tables_in_db(coordinator)
+    assert tr("{0} cancelled ({1})").format(1, removed) in ws.to_duckdb.done_text()
+
+
+def test_cancel_all_before_it_starts_adds_nothing(coordinator):
+    ws = workspace(coordinator)
+    layers = [points(name, 5) for name in ("a1", "a2")]
+    ws.send_layers([x.id() for x in layers], (DB, "main"))
+    to_step_two(ws)
+    ws.to_duckdb.add_button.click()
+    ws.to_duckdb.cancel_all()
+    assert wait_for(lambda: ended(coordinator, ws), TIMEOUT)
+    assert [s["state"] for s in ws.to_duckdb.states] == ["cancelled", "cancelled"]
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    assert not {"a1", "a2"} & tables_in_db(coordinator)
+
+
+def test_in_the_background_the_footer_brings_it_back_and_the_end_shows_a_closable_notice(coordinator):
+    ws = workspace(coordinator)
+    layer = points("fondo", 20)
+    ws.send_layers([layer.id()], (DB, "main"))
+    to_step_two(ws)
+    ws.to_duckdb.add_button.click()
+    ws.to_duckdb.background.click()  # «Seguir en segundo plano»
+    window = ws.to_duckdb.window
+    assert not window.isVisible()
+    assert tr("Show progress: QGIS layers → DuckDB") in [e.title for e in ws.palette_entries()]
+    assert ws.progress_button.text().startswith("⟳ ")
+    ws.progress_button.click()  # la línea del pie vuelve al paso 3
+    assert window.isVisible() and window.stack.currentIndex() == 2
+    window.hide()
+    assert wait_for(lambda: ended(coordinator, ws), 60)
     toast = ws.last_toast
     assert [b.text() for b in toast.actions] == [tr("Open"), tr("Undo")]
-    assert not ws.progress.isVisible()
-    toast.actions[0].click()  # «Abrir»: la primera tabla, en una pestaña
-    assert ws.tabs.page(ws.tabs.bar.currentIndex()).place.name == "zonas"  # la primera del panel
-    ws.quick_send.undo([t for t in ws.quick_send.last_report.tables if t.can_undo])
+    assert not toast.close_button.isHidden()  # F-132: «×» para cerrarlo
+    toast.actions[0].click()  # «Abrir»
+    assert ws.tabs.page(ws.tabs.bar.currentIndex()).place.name == "fondo"
+    ws.to_duckdb.undo()
     assert wait_for(lambda: tr("Undone: {0}").format("")[:6] in ws.notice.text(), TIMEOUT)
-    assert wait_for(lambda: not {"medidores", "zonas"} & tables_in_db(coordinator), TIMEOUT)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: "fondo" not in tables_in_db(coordinator), TIMEOUT)
 
 
-def test_an_existing_table_opens_the_dialog_with_the_new_style(coordinator, monkeypatch):
+def test_a_layer_that_fails_is_marked_and_the_others_go_on(coordinator):
+    ws = workspace(coordinator)
+    first, second = points("choca", 3), points("sigue", 3)
+    ws.send_layers([first.id(), second.id()], (DB, "main"))
+    to_step_two(ws)
+    coordinator.execute_sql("CREATE TABLE choca AS SELECT 1 AS x", RunScope.ALL)  # aparece después
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    add_all(ws, coordinator)
+    states = {s["name"]: s for s in ws.to_duckdb.states}
+    assert states["choca"]["state"] == "failed" and states["choca"]["message"]
+    assert states["sigue"]["state"] == "done"
+    assert tr("{0} with error ({1})").format(1, "choca") in ws.to_duckdb.done_text()
+
+
+def test_an_existing_table_is_shown_and_skipped_unless_chosen(coordinator):
     ws = workspace(coordinator)
     layer = points("zonas", 3)
     ws.send_layers([layer.id()], (DB, "main"))
-    assert wait_for(lambda: ws.quick_send.last_report is not None and ended(coordinator, ws), TIMEOUT)
-    shown = []
-
-    def fake_exec(dialog):
-        shown.append((dialog.pro, dialog.destination_value, dialog.tree.isColumnHidden(2)))
-        return QDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(SendDialog, "exec", fake_exec)
-    ws.quick_send.last_report = None
+    to_step_two(ws)
+    add_all(ws, coordinator)
     ws.send_layers([layer.id()], (DB, "main"))
-    assert wait_for(lambda: shown and ended(coordinator, ws), TIMEOUT)
-    assert ws.quick_send.asked is True
-    # la tabla ya existe: se ve «Qué pasará» y, cancelado, nada se envía
-    assert shown == [(True, (DB, "main"), False)]
-    assert ws.quick_send.last_report is None
+    dialog = to_step_two(ws)
+    assert not dialog.tree.isColumnHidden(2)
+    assert dialog.row_state(0).kind == "skip"  # ya existe: no se envía hasta elegir qué hacer
+    assert not ws.to_duckdb.add_button.isEnabled()
 
 
-def test_a_selection_is_a_decision_too(coordinator, monkeypatch):
+def test_add_layers_shows_every_layer_grouped_and_an_empty_project_says_so(coordinator):
     ws = workspace(coordinator)
-    layer = points("medidores", 10)
-    layer.selectByIds([1, 2])
-    monkeypatch.setattr(SendDialog, "exec", lambda _d: QDialog.DialogCode.Rejected)
+    ws.add_layers()
+    window = ws.to_duckdb.window
+    assert window.empty.isVisible() and not ws.to_duckdb.next_button.isEnabled()
+    window.hide()
+    point = points("pozos", 2)
+    points_table("clientes")
+    ws.add_layers([point.id()])
+    groups = [window.tree.topLevelItem(i).text(0) for i in range(window.tree.topLevelItemCount())]
+    assert groups == [tr("Points"), "pozos", tr("Tables without geometry"), "clientes"]
+    assert window.chosen() == [point.id()]  # las seleccionadas en QGIS, ya marcadas
+    assert ws.to_duckdb.count_label.text() == tr("1 layer chosen")
+
+
+def test_while_adding_another_drop_shows_the_progress(coordinator):
+    ws = workspace(coordinator)
+    layer = points("ocupada", 5)
     ws.send_layers([layer.id()], (DB, "main"))
-    assert wait_for(lambda: ws.quick_send.asked and ended(coordinator, ws), TIMEOUT)
+    to_step_two(ws)
+    ws.to_duckdb.add_button.click()
+    ws.send_layers([layer.id()], (DB, "main"))
+    assert ws.notice.text() == tr("Finish or cancel these layers to add more.")
+    assert ws.to_duckdb.window.stack.currentIndex() == 2
+    assert wait_for(lambda: ended(coordinator, ws), 60)
 
 
-def test_a_database_that_cannot_store_the_crs_is_a_decision(coordinator, monkeypatch):
+def test_a_database_that_cannot_store_the_crs_says_so_in_step_two(coordinator):
     ws = workspace(coordinator)
     layer = points("medidores", 4)
-    shown = []
-
-    def fake_exec(dialog):
-        shown.append(dialog.without_crs.isVisibleTo(dialog))
-        return QDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(SendDialog, "exec", fake_exec)
     ws.send_layers([layer.id()], ("db", "main"))
-    assert wait_for(lambda: ended(coordinator, ws) and (shown or ws.quick_send.last_report), TIMEOUT)
-    # con DuckDB 1.5 la base nueva en archivo no guarda el SRC: se pregunta, y la razón está a la vista;
-    # con 2.0 sí lo guarda: se envía sin diálogo
-    assert shown in ([], [True])
-    assert ws.quick_send.asked is bool(shown)
+    dialog = to_step_two(ws)
+    # con DuckDB 1.5 la base nueva en archivo no guarda el SRC: «Enviar sin SRC» aparece; con 2.0, no
+    if dialog.without_crs.isVisibleTo(dialog):
+        assert not ws.to_duckdb.add_button.isEnabled()
 
 
 def test_dropping_on_empty_space_goes_to_the_current_database(coordinator):
@@ -251,33 +351,7 @@ def test_dropping_on_empty_space_goes_to_the_current_database(coordinator):
     _model, data = layers_mime([layer])
     drop(tree, data, QPoint(tree.viewport().width() // 2, tree.viewport().height() - 4))
     assert dropped == [(DB, "main")]
-    assert wait_for(lambda: ws.quick_send.last_report is not None and ended(coordinator, ws), TIMEOUT)
-    assert has_tables(coordinator, {"puntos"})
-
-
-def test_the_dialog_hides_what_will_happen_when_all_is_new_and_folds_the_options(coordinator):
-    ws = workspace(coordinator)
-    layer = points("nuevos", 2)
-    dialog = SendDialog(
-        coordinator.send_candidates([layer.id()]),
-        coordinator.catalog,
-        coordinator.read_import_target,
-        ws,
-        checked={layer.id()},
-        destination=(DB, "main"),
-        pro=True,
-    )
-    _CREATED.append(dialog)
-    dialog.show()
-    assert wait_for(lambda: dialog.target_ready, TIMEOUT)
-    assert dialog.tree.isColumnHidden(2)
-    assert not dialog.needs_decision()
-    assert dialog.more_button.isVisible() and not dialog.reproject_row.isVisible()
-    dialog.more_button.click()
-    assert dialog.reproject_row.isVisible()
-
-
-# -- DuckDB → QGIS ------------------------------------------------------------------------------------
+    assert to_step_two(ws).destination_value == (DB, "main")
 
 
 def test_tables_dragged_to_the_map_ask_how_and_ask_the_crs_once(coordinator):

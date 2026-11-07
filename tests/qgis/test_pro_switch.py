@@ -13,7 +13,7 @@ import json
 
 import pytest
 from qgis.core import QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsSettings, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QDialog, QLabel
+from qgis.PyQt.QtWidgets import QLabel
 
 import geoduck
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
@@ -27,7 +27,6 @@ from geoduck.ui.pro.load import COPY
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.shell import Mode
 from geoduck.ui.pro.workspace import ProWorkspace
-from geoduck.ui.send_dialog import SendDialog
 from tests.qgis.conftest import wait_for
 
 pytestmark = pytest.mark.qgis
@@ -235,38 +234,34 @@ def test_view_on_map_after_loading_selects_zooms_and_minimizes_the_window(plugin
 # -- «Enviar a DuckDB» desde QGIS -----------------------------------------------------------------------
 
 
-def test_the_layer_menu_sends_like_dropping_and_shows_geoduck(plugin, iface):
+def test_the_layer_menu_opens_step_one_with_the_selected_layers(plugin, iface):
     item = plugin()
     start(item)
     layer = points("medidores")
+    points("otra")
     iface.selected_layers = (layer,)
     try:
+        assert item.send_action.action.text() == tr("Add to DuckDB…")
         item.send_action.action.trigger()
         ws = item.content
         assert item.workspace.is_visible()
-        assert wait_for(lambda: ws.quick_send.last_report is not None, TIMEOUT)
-        assert ws.quick_send.asked is False  # tabla nueva en la base en memoria: sin diálogo
-        assert ws.last_toast is not None
+        window = ws.to_duckdb.window
+        assert window.stack.currentIndex() == 0 and list(window.rows) == [layer.id()]
     finally:
         iface.selected_layers = ()
 
 
-def test_the_plus_entry_always_opens_the_dialog_to_choose(plugin, iface, monkeypatch):
+def test_the_plus_entry_opens_step_one_with_every_layer(plugin, iface):
     item = plugin()
     start(item)
-    layer = points("zonas")
+    layer, other = points("zonas"), points("otra")
     iface.selected_layers = (layer,)
-    shown = []
-
-    def fake_exec(dialog):
-        shown.append(len(dialog.items))
-        return QDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(SendDialog, "exec", fake_exec)
     try:
+        assert item.content.sidebar.send_action.text() == tr("Add QGIS layers to DuckDB…")
         item.content.sidebar.send_action.trigger()
-        assert wait_for(lambda: shown, TIMEOUT)
-        assert item.content.quick_send.asked and item.content.quick_send.last_report is None
+        window = item.content.to_duckdb.window
+        assert set(window.rows) == {layer.id(), other.id()}
+        assert window.chosen() == [layer.id()]  # las seleccionadas en QGIS, ya marcadas
     finally:
         iface.selected_layers = ()
 
@@ -290,7 +285,7 @@ def test_a_narrow_panel_keeps_every_action_within_reach(plugin):
         tr("Execution history"),
         tr("Open database…"),
         tr("Create database…"),
-        tr("Send QGIS layers to DuckDB…"),
+        tr("Add QGIS layers to DuckDB…"),
         tr("Refresh databases"),
         tr("Open in a window"),
         tr("Environment diagnostics"),

@@ -293,7 +293,7 @@ class Sidebar(QFrame):
         self.create_db_action = self.add_menu.addAction(tr("Create database…"))
         self.create_db_action.triggered.connect(self.create_database_requested.emit)
         self.add_menu.addSeparator()
-        self.send_action = self.add_menu.addAction(tr("Send QGIS layers to DuckDB…"))
+        self.send_action = self.add_menu.addAction(tr("Add QGIS layers to DuckDB…"))
         self.send_action.triggered.connect(self.send_layers_requested.emit)
         self.add_button.clicked.connect(lambda: self._popup(self.add_menu, self.add_button))
         row.addWidget(self.add_button)
