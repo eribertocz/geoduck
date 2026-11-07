@@ -168,7 +168,8 @@ def geometry_column_name(layer: QgsVectorLayer) -> str:
     elif provider == "postgres":
         name = QgsProviderRegistry.instance().decodeUri(provider, layer.source()).get("geometryColumn", "")
     elif provider == "ogr":
-        name = _ogr_geometry_column(layer.source())
+        # la ruta que usa el proveedor (absoluta); `source()` puede venir relativa al proyecto
+        name = _ogr_geometry_column(layer.dataProvider().dataSourceUri() or layer.source())
     return name or "geom"
 
 
@@ -177,7 +178,10 @@ def _ogr_geometry_column(source: str) -> str:
     from osgeo import ogr  # noqa: PLC0415 - GDAL viene con QGIS
 
     parts = QgsProviderRegistry.instance().decodeUri("ogr", source)
-    ds = ogr.Open(parts.get("path", ""))
+    try:  # con `UseExceptions` (QGIS 4 en Windows) GDAL lanza en vez de devolver None
+        ds = ogr.Open(parts.get("path", ""))
+    except (RuntimeError, OSError):
+        return ""
     if ds is None:
         return ""
     name = parts.get("layerName")
@@ -217,7 +221,8 @@ def gdal_source(layer: Any) -> tuple[str, str | None] | None:
     FlatGeobuf, GeoJSON, KML, Geodatabase, Excel…): su ruta para `ST_Read` y la capa de adentro (§5.4)."""
     if layer.providerType() != "ogr":
         return None
-    parts = QgsProviderRegistry.instance().decodeUri("ogr", layer.source())
+    uri = layer.dataProvider().dataSourceUri() or layer.source()  # absoluta: la «Copia» es un .gpkg
+    parts = QgsProviderRegistry.instance().decodeUri("ogr", uri)
     path = str(parts.get("path") or "")
     if not path or not (os.path.isfile(path) or path.lower().endswith(".gdb")):
         return None
