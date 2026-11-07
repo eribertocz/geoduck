@@ -141,8 +141,8 @@ def test_search_without_text_columns_finds_nothing(con):
 
 
 def test_page_label():
-    assert page_label(0, 100, 48312) == tr("{} of {}").format("1–100", "48 312")
-    assert page_label(100, 100, None) == "101–200"
+    assert page_label(0, 100, 48312) == tr("Rows {} of {}").format("1–100", "48 312")
+    assert page_label(100, 100, None) == tr("Rows {} of …").format("101–200")
     assert page_label(0, 0, 0) == tr("No rows")
 
 

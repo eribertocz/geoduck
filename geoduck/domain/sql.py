@@ -18,7 +18,7 @@ from geoduck.domain.transaction import TransactionState
 #: «Cargar» y «Exportar» usan la consulta completa). El motor admite también los tamaños de `PREVIEW_LIMITS`,
 #: que acotan la memoria de quien lo llame (sql-editor-spec §4).
 DEFAULT_PREVIEW_LIMIT = 20
-PREVIEW_LIMITS = (20, 50, 200, 1000)
+PREVIEW_LIMITS = (20, 50, 100, 200, 1000)  # 100: la página de la pestaña de consulta (G9)
 
 #: Tipos de sentencia de DuckDB que solo leen. Son las únicas que se pueden repetir para cargar el resultado
 #: completo en QGIS (GD-SQL-006); todas las demás cambian, o pueden cambiar, estructura, datos o estado.

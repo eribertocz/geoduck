@@ -39,10 +39,13 @@ acción explica que hay que iniciar una.
 - «Abrir la tabla al terminar» (recordado). Ctrl+Intro envía; Esc cancela.
 
 ## 4. Garantías (GD-IMP-003)
-- **Todo o nada:** todas las capas del envío en **una transacción** de DuckDB en la base destino; si una
-  falla o se cancela, `ROLLBACK` y no queda ninguna tabla nueva, reemplazada ni ampliada.
+- **Cada capa por separado** (desde G9, propietario 2026-11-06; antes «todo o nada»): cada capa en **su
+  transacción** de DuckDB en la base destino; si una falla o se cancela, `ROLLBACK` de esa capa y no queda su
+  tabla nueva, reemplazada ni ampliada; las que ya terminaron quedan («Deshacer» borra las nuevas).
+  `import_batches` sigue siendo «todo o nada» para lo que recibe; la interfaz le pasa una capa cada vez
+  (workspace-pro-spec §9).
 - **Progreso y cancelación** por capa y en total; la interfaz de QGIS sigue respondiendo.
-- **Conteo:** al terminar, filas en DuckDB = entidades leídas de cada capa; si no, `ROLLBACK` y error.
+- **Conteo:** al terminar cada capa, filas en DuckDB = entidades leídas; si no, `ROLLBACK` de esa capa y error.
 - **Sin pérdidas silenciosas:** un campo que no se puede convertir, una geometría ilegible o un SRC que no se
   puede expresar detienen el envío con su motivo, o se avisan antes de enviar si el diálogo ya lo sabe.
 - La capa de QGIS, su selección y su filtro no cambian.

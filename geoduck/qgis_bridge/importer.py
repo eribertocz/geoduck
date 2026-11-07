@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 from qgis.core import (
     QgsApplication,
     QgsCoordinateReferenceSystem,
@@ -56,6 +55,7 @@ from geoduck.domain.importing import (
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
+from geoduck.qgis_bridge.copies import is_copy
 from geoduck.qgis_bridge.provider import FID, KEY, id_columns, key_alias
 from geoduck.qgis_bridge.reproject import Reprojector
 
@@ -138,6 +138,20 @@ def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
     return str(srs.ExportToPROJJSON()) or None
 
 
+def copy_fid_fields(layer: Any) -> set[int]:
+    """El identificador que el GeoPackage de una «Copia» de GeoDuck añadió (`fid`, `geoduck_fid`…): no es un
+    dato de la tabla y no vuelve a DuckDB (si volviera, cada ida y vuelta sumaría una columna y la tercera
+    carga fallaría; observación del propietario, 2026-11-06). Las columnas de la tabla se envían todas."""
+    if not is_copy(layer) or layer.providerType() != "ogr":
+        return set()
+    fields = layer.fields()
+    return {
+        i
+        for i in layer.primaryKeyAttributes()
+        if fields.at(i).name() == "fid" or fields.at(i).name().startswith("geoduck_fid")
+    }
+
+
 def geometry_column_name(layer: QgsVectorLayer) -> str:
     """El nombre que la capa da a su geometría (`geom`, `geometry`, `shape`…); `geom` si no trae ninguno."""
     provider = layer.providerType()
@@ -165,6 +179,22 @@ def _ogr_geometry_column(source: str) -> str:
     return str(lyr.GetGeometryColumn() or "") if lyr is not None else ""
 
 
+def _parquet_metadata(path: str) -> dict[bytes, bytes] | None:
+    """Metadatos de un Parquet, o None si este PyArrow no trae Parquet (F-130).
+
+    `pyarrow.parquet` se importa aquí y no al cargar GeoDuck: en algunos QGIS de Windows (OSGeo4W) su DLL no
+    carga («not built with support for the Parquet file format») y GeoDuck no debe dejar de abrir por eso.
+    Sin él, una capa GeoParquet se envía por el camino general (QGIS la lee), igual de correcta."""
+    try:
+        import pyarrow.parquet as pq  # noqa: PLC0415 - opcional; ver arriba
+    except ImportError:
+        return None
+    try:
+        return pq.read_schema(path).metadata or {}
+    except (OSError, ValueError):
+        return None
+
+
 def geoparquet_path(layer: QgsVectorLayer) -> str | None:
     """Ruta del archivo si la capa es un GeoParquet que DuckDB lee directo (§5.2)."""
     if layer.providerType() != "ogr":
@@ -172,8 +202,8 @@ def geoparquet_path(layer: QgsVectorLayer) -> str | None:
     path = QgsProviderRegistry.instance().decodeUri("ogr", layer.source()).get("path", "")
     if not path.lower().endswith(".parquet") or not Path(path).is_file():
         return None
-    metadata = pq.read_schema(path).metadata or {}
-    return path if b"geo" in metadata else None
+    metadata = _parquet_metadata(path)
+    return path if metadata is not None and b"geo" in metadata else None
 
 
 def plan_layer(
@@ -209,16 +239,17 @@ def plan_layer(
                 )
             )
         geometry = ImportGeometry(geometry_column_name(layer), crs)
-    fields = list(layer.fields())
+    skipped = copy_fid_fields(layer)
+    fields = [(i, f) for i, f in enumerate(layer.fields()) if i not in skipped]
     taken = [geometry.name] if geometry is not None else []
-    names, renamed = column_names([*taken, *(f.name() for f in fields)])
+    names, renamed = column_names([*taken, *(f.name() for _i, f in fields)])
     warnings += renamed
     columns: list[ImportColumn] = []
-    for i, f in enumerate(fields):
+    for k, (i, f) in enumerate(fields):
         duck, note = duck_type_for(type_name(f.type()), type_name(f.subType()) or None)
         if note:
             warnings.append(f"«{f.name()}»: {note}")
-        columns.append(ImportColumn(names[len(taken) + i], f"c{i}", duck))
+        columns.append(ImportColumn(names[len(taken) + k], f"c{i}", duck))
     common: dict[str, Any] = {"database": database, "schema": schema, "temporary": temporary}
 
     provider = layer.dataProvider()
@@ -307,7 +338,7 @@ def _parquet_sql(path: str, geometry: ImportGeometry | None) -> str:
     source = f"read_parquet({quote_string_literal(path)})"
     if geometry is None:
         return f"SELECT * FROM {source}"
-    geo = json.loads(pq.read_schema(path).metadata[b"geo"])
+    geo = json.loads((_parquet_metadata(path) or {})[b"geo"])
     column = quote_identifier(str(geo.get("primary_column") or "geometry"))
     value = f"ST_SetCRS({column}, {quote_string_literal(geometry.crs)})" if geometry.crs else column
     return f"SELECT * EXCLUDE ({column}), {value} AS {quote_identifier(geometry.name)} FROM {source}"
@@ -361,7 +392,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
     def __init__(
         self, plans: list[tuple[int, LayerPlan]], channel: BatchChannel[Any], on_read: Callable[[int], None]
     ) -> None:
-        super().__init__(tr("GeoDuck: send layers to DuckDB"), QgsTask.Flag.CanCancel)
+        super().__init__(tr("GeoDuck: add QGIS layers to DuckDB"), QgsTask.Flag.CanCancel)
         # Las fuentes se crean aquí, en el hilo principal; se leen en el hilo de la tarea (F-117)
         self._sources = [
             (i, p.job, p.fids, p.reprojector, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans
@@ -391,7 +422,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
             request.setFilterFids(fids)
         if job.geometry is None:
             request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
-        indexes = list(range(len(job.columns)))
+        indexes = [int(c.source[1:]) for c in job.columns]  # `c{i}`: el campo i de la capa
         rows: list[list[Any]] = []
         wkbs: list[bytes | None] = []
         sent = False

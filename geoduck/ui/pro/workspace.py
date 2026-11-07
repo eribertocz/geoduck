@@ -18,13 +18,17 @@ from pathlib import Path
 from typing import Any
 
 from qgis.core import QgsSettings
-from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QKeySequence
+from qgis.PyQt.QtCore import QEvent, Qt, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QBoxLayout,
     QFileDialog,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -55,9 +59,10 @@ from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
-from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
+from geoduck.ui.pro.add_layers import AddLayers
+from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids, menu_title, place_job
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_title
+from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu, popup_under
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,
@@ -74,15 +79,18 @@ from geoduck.ui.pro.places import (
 from geoduck.ui.pro.project_copies import ProjectCopies
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.recovery import QueryRecovery, read_query
-from geoduck.ui.pro.send import QuickSend
 from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
-from geoduck.ui.pro.widgets import Toast, button, icon_button, label
+from geoduck.ui.pro.widgets import LOGO, Toast, button, icon_button, label, lines_html
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
 STATE, TABS, WELCOME = 0, 1, 2
+#: Por debajo de este ancho (o en el panel acoplado), las páginas pasan al modo compacto.
+COMPACT_WIDTH = 640
+#: Ancho del explorador abierto encima del contenido en el panel.
+OVERLAY_WIDTH = 272
 
 
 def session_parts(coordinator: Any) -> tuple[str, str, str]:
@@ -159,6 +167,11 @@ class ProWorkspace(QWidget):
         self._ask_close = ask_close
         self.wide = True
         self.sidebar_open = True
+        #: Modo compacto (panel acoplado o ventana angosta): íconos con tooltip donde no cabe el texto.
+        self.compact = False
+        #: En el panel, el explorador se abre encima del contenido y se cierra al elegir algo.
+        self.overlay_open = False
+        self._action_rows: list[QBoxLayout] = []
         self.colors = style.apply(self)
         self.places = Places(self._settings)
 
@@ -171,7 +184,7 @@ class ProWorkspace(QWidget):
         self.on_view_map: Callable[[list[str]], str | None] | None = None
         self.loader.on_loaded = self._loaded
         #: Capas de QGIS soltadas sobre GeoDuck (E5): sin diálogo si no hay nada que decidir.
-        self.quick_send = QuickSend(coordinator, self)
+        self.to_duckdb = AddLayers(coordinator, self)
         self.last_toast: Toast | None = None
         self.aborted_toast: Toast | None = None
         self.setAcceptDrops(True)
@@ -182,7 +195,8 @@ class ProWorkspace(QWidget):
             if copies_bridge is not None
             else None
         )
-        self.tabs = TabArea(self.colors, page_factory or self._make_page, self)
+        factory = page_factory or self._make_page
+        self.tabs = TabArea(self.colors, lambda place: self._with_mode(factory(place)), self)
         self.tabs.can_close = self._ask_save
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -240,6 +254,12 @@ class ProWorkspace(QWidget):
         self.new_query_button = icon_button("plus", tr("New query"), self.colors)
         self.new_query_button.clicked.connect(self.new_query)
         row.addWidget(self.new_query_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        # el archivo de la consulta, a la altura de las pestañas (propietario, 2026-11-06)
+        self.file_button = icon_button("more", tr("Open, save, save as…"), self.colors)
+        self.file_menu = QMenu(self)
+        self.file_menu.aboutToShow.connect(self._fill_file_menu)
+        self.file_button.clicked.connect(lambda: popup_under(self.file_menu, self.file_button))
+        row.addWidget(self.file_button, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addStretch(1)
         self.search_button = button(tr("Search"), "ghost", icon="search", colors=self.colors)
         self.search_button.setToolTip(tr("Go to a table or run an action (Ctrl+K)"))
@@ -258,8 +278,40 @@ class ProWorkspace(QWidget):
         row.addWidget(self.dock_button, 0, Qt.AlignmentFlag.AlignVCenter)
         return head
 
+    def _load_menu_for(self, parent: QWidget, places: list[Any]) -> QMenu:
+        """Clic derecho en una o varias tablas › «Cargar en QGIS ▸»: el mismo menú que al soltarlas en el
+        mapa; con una sola, también «Más opciones…»."""
+        jobs = [place_job(place) for place in places]
+        return load_menu(
+            parent,
+            self.colors,
+            lambda kind: self.loader.start_many(jobs, kind),
+            title=menu_title(len(places)),
+            more=len(places) == 1,
+        )
+
+    def _fill_file_menu(self) -> None:
+        """«Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; guardar, solo con una consulta elegida."""
+        menu = self.file_menu
+        menu.clear()
+        menu.addAction(tr("Open query…") + "\tCtrl+O", self.open_query_file)
+        menu.addSeparator()
+        page = self.tabs.page(self.tabs.bar.currentIndex()) if len(self.tabs) else None
+        query = page if isinstance(page, QueryPage) else None
+        name = query.place.name if query is not None else ""
+        save = menu.addAction(
+            (tr("Save «{}»").format(name) if query is not None else tr("Save")) + "\tCtrl+S",
+            lambda: query.save() if query is not None else None,
+        )
+        save_as = menu.addAction(tr("Save as…"), lambda: query.save_as() if query is not None else None)
+        save.setEnabled(query is not None)
+        save_as.setEnabled(query is not None)
+
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         super().resizeEvent(event)
+        self.set_compact(not self.wide or self.width() < COMPACT_WIDTH)
+        if not self.wide:
+            self._place_overlay()
         if self.command_palette.isVisible():
             self.command_palette.refresh(self.command_palette.edit.text())
 
@@ -277,10 +329,16 @@ class ProWorkspace(QWidget):
         box.setContentsMargins(16, 0, 16, 0)
         box.setSpacing(8)
         glyph = label("")
-        glyph.setPixmap(icons.pixmap(icon, self.colors.faint, 36))
+        if icon == "logo":  # sin sesión: el logo grande en gris (marca, 2026-11-07)
+            glyph.setPixmap(QIcon(LOGO).pixmap(64, 64, QIcon.Mode.Disabled))
+        else:
+            glyph.setPixmap(icons.pixmap(icon, self.colors.faint, 36))
         title = label("", "title")
         text = label("", "muted")
         text.setWordWrap(True)
+        title.setWordWrap(True)
+        for wrapped in (title, text):
+            wrapped.setMinimumWidth(160)  # bajan de línea: en el panel angosto no fijan el ancho
         for widget in (glyph, title, text):
             widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
             box.addWidget(widget)
@@ -291,6 +349,7 @@ class ProWorkspace(QWidget):
         for widget in buttons:
             actions.addWidget(widget)
         actions.addStretch(1)
+        self._action_rows.append(actions)  # en el modo compacto, los botones uno debajo de otro
         box.addLayout(actions)
         row.addWidget(column, 1)
         row.addStretch(1)
@@ -311,7 +370,7 @@ class ProWorkspace(QWidget):
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
         self.diagnostics_button.setVisible(False)
         page, _, self.state_title, self.state_text = self._empty_page(
-            "database", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
+            "logo", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
         )
         return page
 
@@ -341,29 +400,30 @@ class ProWorkspace(QWidget):
         self.progress.setFixedWidth(140)
         self.progress.setVisible(False)
         row.addWidget(self.progress)
-        self.progress_cancel = QPushButton(tr("Cancel"))
-        self.progress_cancel.setProperty("pro", "ghost")
-        self.progress_cancel.setVisible(False)
-        self.progress_cancel.clicked.connect(self.quick_send.cancel)
-        row.addWidget(self.progress_cancel)
+        # la línea de progreso: un clic vuelve al paso 3 de «Capas de QGIS → DuckDB» (F-131)
+        self.progress_button = QPushButton()
+        self.progress_button.setProperty("pro", "ghost")
+        self.progress_button.setToolTip(tr("Show the progress"))
+        self.progress_button.setAccessibleName(tr("Show the progress"))
+        self.progress_button.setVisible(False)
+        self.progress_button.clicked.connect(self.to_duckdb.show_window)
+        row.addWidget(self.progress_button)
         return foot
 
     # -- envío desde QGIS (E5) ---------------------------------------------------------------------------
 
-    def show_progress(self, text: str, total: int) -> None:
-        self.notify(text)
-        self.progress.setRange(0, max(0, total))  # 0 = indeterminado: DuckDB copia sin informar entidades
-        self.progress.setValue(0)
+    def show_progress(self, text: str, _total: int = 0) -> None:
+        self.progress.setRange(0, 0)  # en marcha; el detalle de cada capa, en el paso 3
         self.progress.setVisible(True)
-        self.progress_cancel.setVisible(True)
+        self.set_progress(text)
+        self.progress_button.setVisible(True)
 
-    def set_progress(self, rows: int) -> None:
-        if self.progress.maximum() > 0:
-            self.progress.setValue(min(self.progress.maximum(), rows))
+    def set_progress(self, text: str) -> None:
+        self.progress_button.setText(text)
 
     def hide_progress(self) -> None:
         self.progress.setVisible(False)
-        self.progress_cancel.setVisible(False)
+        self.progress_button.setVisible(False)
 
     def toast(self, text: str, actions: list[tuple[str, Callable[[], None]]], seconds: int) -> None:
         if self.last_toast is not None:
@@ -375,12 +435,14 @@ class ProWorkspace(QWidget):
         toast.show_at_corner(bottom=40)
         self.last_toast = toast
 
-    def _loaded(self, report: Any) -> None:
-        """Capa cargada: el aviso con «Ver en el mapa» (si el complemento sabe mostrarla)."""
+    def _loaded(self, report: Any) -> bool:
+        """Capa cargada: un solo aviso, con «Ver en el mapa» (si el complemento sabe mostrarla), el origen, el
+        acceso y las advertencias. Devuelve si lo mostró."""
         if self.on_view_map is None:
-            return
+            return False
         ids = [layer_id for layer_id, _ in report.layers] or [report.layer_id]
-        self.toast(finished_title(report), [(tr("View on map"), lambda: self.view_map(ids))], 10)
+        self.toast(lines_html(finished_lines(report)), [(tr("View on map"), lambda: self.view_map(ids))], 12)
+        return True
 
     def view_map(self, layer_ids: list[str]) -> None:
         if self.on_view_map is not None:
@@ -394,19 +456,32 @@ class ProWorkspace(QWidget):
         self.open_place(place_of(table.database, table.schema, table.name, kind))
 
     def send_layers(self, layer_ids_: list[str], destination: tuple[str, str] | None = None) -> None:
-        """Capas de QGIS soltadas sobre una base (o, sin `destination`, sobre la base actual)."""
-        self.quick_send.send(
+        """Capas de QGIS arrastradas (o del clic derecho): «Capas de QGIS → DuckDB», paso 1 con esas capas;
+        en el paso 2, la base donde se soltaron o, sin `destination`, la base actual (F-131)."""
+        self.to_duckdb.open(
             layer_ids_, destination if destination is not None else self.sidebar.current_target()
         )
+
+    def add_layers(self, checked: list[str] | None = None) -> None:
+        """«+» o Ctrl+K › «Añadir capas de QGIS a DuckDB…»: paso 1 con todas las capas del proyecto."""
+        self.to_duckdb.open(None, self.sidebar.current_target(), checked=checked)
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         """Capas soltadas en cualquier parte de GeoDuck (también en el panel): a la base actual."""
         if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
-            event.acceptProposedAction()
+            event.setDropAction(Qt.DropAction.CopyAction)  # nunca «mover»: QGIS borraría la capa
+            event.accept()
             target = self.sidebar.current_target()
             where = target[0] if target else tr("the current database")
             count = len(layer_ids(event.mimeData()))
             self.notify(tr("Drop to send {0} layer(s) to «{1}»").format(count, where))
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
         else:
             event.ignore()
 
@@ -415,12 +490,17 @@ class ProWorkspace(QWidget):
         if not ids:
             event.ignore()
             return
-        event.acceptProposedAction()
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
         self.send_layers(ids)
 
     def _connect_sidebar(self) -> None:
         side = self.sidebar
         side.open_requested.connect(self.open_place)
+        side.open_requested.connect(
+            lambda _p: self.set_overlay_open(False)
+        )  # en el panel: elegido, se cierra
+        side.make_load_menu = self._load_menu_for
         side.favorite_requested.connect(self.toggle_favorite)
         side.detach_requested.connect(self.detach)
         side.refresh_requested.connect(self.refresh)
@@ -430,6 +510,7 @@ class ProWorkspace(QWidget):
         side.send_layers_requested.connect(self.send_layers_requested.emit)
         side.diagnostics_requested.connect(self.show_diagnostics)
         side.about_requested.connect(self.show_about)
+        side.start_requested.connect(self.start)
         side.tree.layers_dropped.connect(self.send_layers)
         side.tree.drop_hint.connect(lambda text: self.notify(text) if text else None)
 
@@ -441,26 +522,100 @@ class ProWorkspace(QWidget):
     # -- presentación ---------------------------------------------------------------------------------
 
     def set_presentation(self, *, wide: bool) -> None:
-        """Ventana (`wide`) o panel: en el panel no hay barra lateral ni «Acoplar»; la cabecera del panel
-        lleva la sesión y la búsqueda."""
+        """Ventana (`wide`) o panel. En el panel (propietario, 2026-11-07): la sesión y la búsqueda van en su
+        cabecera; el explorador se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B) y
+        se cierra al elegir algo, con Esc o con un clic fuera; las páginas pasan al modo compacto."""
         self.wide = wide
-        self.sidebar.setVisible(wide and self.sidebar_open)
-        self.divider.setVisible(self.sidebar.isVisibleTo(self))
-        for widget in (self.sidebar_button, self.dock_button, self.search_button, self.search_kbd):
+        layout = self.layout()
+        if wide and layout.indexOf(self.sidebar) < 0:
+            layout.insertWidget(0, self.sidebar)
+            self.sidebar.setGraphicsEffect(None)
+        elif not wide and layout.indexOf(self.sidebar) >= 0:
+            layout.removeWidget(self.sidebar)
+            shadow = QGraphicsDropShadowEffect(self.sidebar)
+            shadow.setBlurRadius(24)
+            shadow.setOffset(4, 0)
+            shadow.setColor(QColor(0, 0, 0, 70))
+            self.sidebar.setGraphicsEffect(shadow)
+        self.sidebar.session_head.setVisible(wide)
+        for widget in (self.dock_button, self.search_button, self.search_kbd):
             widget.setVisible(wide)  # en el panel, la búsqueda está en su cabecera
+        self.overlay_open = False
+        self._apply_sidebar()
+        self.set_compact(not wide or self.width() < COMPACT_WIDTH)
         self._render()
+
+    def set_compact(self, compact: bool) -> None:
+        if compact == self.compact:
+            return
+        self.compact = compact
+        direction = QBoxLayout.Direction.TopToBottom if compact else QBoxLayout.Direction.LeftToRight
+        for actions in self._action_rows:
+            actions.setDirection(direction)
+            actions.invalidate()
+        self.body.updateGeometry()
+        for index in range(len(self.tabs)):
+            self._with_mode(self.tabs.page(index))
+
+    def _with_mode(self, page: QWidget) -> QWidget:
+        """Cada página nueva entra en el modo de ahora (compacto o no)."""
+        if hasattr(page, "set_compact"):
+            page.set_compact(self.compact)
+        return page
+
+    def _apply_sidebar(self) -> None:
+        if self.wide:
+            self.sidebar.setVisible(self.sidebar_open)
+            self.divider.setVisible(self.sidebar_open)
+            QApplication.instance().removeEventFilter(self)
+            return
+        self.divider.setVisible(False)
+        self.sidebar.setVisible(self.overlay_open)
+        if self.overlay_open:
+            self._place_overlay()
+            self.sidebar.raise_()
+            self.sidebar.search.edit.setFocus()
+            QApplication.instance().installEventFilter(self)
+        else:
+            QApplication.instance().removeEventFilter(self)
+
+    def _place_overlay(self) -> None:
+        if self.overlay_open:
+            self.sidebar.setGeometry(0, 0, min(OVERLAY_WIDTH, max(self.width() - 48, 200)), self.height())
 
     def set_sidebar_open(self, open_: bool) -> None:
         self.sidebar_open = open_
-        self.sidebar.setVisible(self.wide and open_)
-        self.divider.setVisible(self.wide and open_)
+        self._apply_sidebar()
+
+    def set_overlay_open(self, open_: bool) -> None:
+        if open_ != self.overlay_open:
+            self.overlay_open = open_
+            self._apply_sidebar()
 
     def toggle_sidebar(self) -> None:
-        """Ctrl+B: pliega o abre la barra lateral (solo en la ventana)."""
+        """Ctrl+B o el botón: en la ventana pliega o abre la barra lateral; en el panel, abre o cierra el
+        explorador encima del contenido."""
         if not self.wide:
+            self.set_overlay_open(not self.overlay_open)
             return
         self.set_sidebar_open(not self.sidebar_open)
         self.sidebar_changed.emit(self.sidebar_open)
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        """Con el explorador abierto en el panel: un clic fuera o Esc lo cierran (sin tragarse el clic)."""
+        if not self.overlay_open or self.wide:
+            return False
+        kind = event.type()
+        if kind == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            self.set_overlay_open(False)
+            return True
+        if kind == QEvent.Type.MouseButtonPress and isinstance(watched, QWidget):
+            inside = self.sidebar.isAncestorOf(watched) or watched is self.sidebar
+            toggle = watched is self.sidebar_button or self.sidebar_button.isAncestorOf(watched)
+            popup = watched.window() is not self.window()  # menús del propio explorador
+            if not inside and not toggle and not popup:
+                self.set_overlay_open(False)
+        return False
 
     def status(self) -> tuple[str, str]:
         """Punto y texto de la sesión, para la cabecera del panel."""
@@ -479,7 +634,7 @@ class ProWorkspace(QWidget):
         self.sidebar.set_session(dot, engine, status, ready=ready)
         self.status_changed.emit(dot, text)
         has_session = self._coordinator.engine_info is not None and state is not SessionState.DISCONNECTED
-        for widget in (self.new_query_button, self.search_button):
+        for widget in (self.new_query_button, self.file_button, self.search_button):
             widget.setEnabled(has_session)
         self.tabs.bar.setVisible(len(self.tabs) > 0)
         if not has_session or state is SessionState.CLOSING:
@@ -810,17 +965,21 @@ class ProWorkspace(QWidget):
         ]
         if self.transaction_aborted():
             found.append(Entry(tr("Roll back transaction"), action, "warning", self.rollback))
+        if self.to_duckdb.running:
+            found.append(
+                Entry(tr("Show progress: QGIS layers → DuckDB"), action, "layers", self.to_duckdb.show_window)
+            )
         if ready:
             found += [
                 Entry(
                     tr("Open database…"), action, "database", lambda: self.attach(OpenAction.OPEN_EXISTING)
                 ),
                 Entry(tr("Create database…"), action, "database", lambda: self.attach(OpenAction.CREATE_NEW)),
-                Entry(tr("Send QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
+                Entry(tr("Add QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),
             ]
+        found.append(Entry(tr("Show or hide the sidebar"), action, "sidebar", self.toggle_sidebar))
         if self.wide:
-            found.append(Entry(tr("Show or hide the sidebar"), action, "sidebar", self.toggle_sidebar))
             found.append(
                 Entry(tr("Dock to QGIS"), action, "dock", lambda: self.presentation_requested.emit(False))
             )
@@ -880,6 +1039,6 @@ class ProWorkspace(QWidget):
         self.recovery.stop()
         self.loader.detach()
         self.history.detach()
-        self.quick_send.detach()
+        self.to_duckdb.detach()
         if self.project_copies is not None:
             self.project_copies.detach()

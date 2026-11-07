@@ -23,10 +23,12 @@ El editor acepta el SQL disponible en DuckDB >=1.5 (DDL, DML, vistas, macros, tr
 Una sentencia no se clasifica solo por su primera palabra: `WITH` puede anteceder DML; el parser y el comportamiento del motor son la fuente de verdad.
 
 ## 4. Previsualización y paginación
-- Vista previa: **20 filas fijas, sin selector** (decisión del propietario, 2026-11-03; antes 200 por defecto con 50/200/500/1000); siempre visualmente etiquetada «Vista previa». «Cargar» y «Exportar» usan la consulta completa.
+- Vista previa: **20 filas fijas, sin selector** (en Workspace Pro, páginas de 100: workspace-pro-spec §5) (decisión del propietario, 2026-11-03; antes 200 por defecto con 50/200/500/1000); siempre visualmente etiquetada «Vista previa». «Cargar» y «Exportar» usan la consulta completa.
 - Nunca materializar `fetchall()` en resultados sin límite conocido.
 - Para lecturas reejecutables, usar una consulta acotada, respetando semántica SQL y su ordenación; si no hay `ORDER BY` no garantizar que la paginación sea estable.
-- No calcular `COUNT(*)` completo automáticamente para todo SELECT.
+- No calcular `COUNT(*)` completo automáticamente para todo SELECT. **Excepción (Workspace Pro, propietario,
+  2026-11-06):** la pestaña de consulta muestra páginas de 100 filas y cuenta el total aparte, solo para una
+  lectura reejecutable con más filas que la página (workspace-pro-spec §5).
 - Cambiar de pestaña de resultados no debe mantener un reader DuckDB abierto.
 - El registro conserva solo el fragmento mostrado y metadatos necesarios; no caché universal del resultado completo.
 - No efectuar reejecuciones ocultas en consultas potencialmente volátiles/sensibles; indicar cuándo cambia el estado de datos.

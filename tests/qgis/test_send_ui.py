@@ -2,7 +2,7 @@
 """«Enviar a DuckDB»: diálogo, puntos de entrada y avisos (G8 · E3; AT-IMP-001, AT-IMP-002, AT-IMP-006).
 
 QGIS, coordinador y worker DuckDB reales; sin `spatial`. Desde G9 · E6 los avisos van en el pie de GeoDuck
-(`ui/pro/send`); el diálogo es el mismo.
+(`ui/pro/add_layers`, F-131); el diálogo es el mismo.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ from geoduck.engine.worker import SessionWorker
 from geoduck.qgis_bridge.importer import LayerSender
 from geoduck.qgis_bridge.loader import BridgeLoader
 from geoduck.ui.dispatcher import QtDispatcher
-from geoduck.ui.pro.workspace import ProWorkspace
 from geoduck.ui.send_dialog import OPEN_AFTER_SETTING, SendDialog
 from tests.qgis.conftest import wait_for
 
@@ -278,17 +277,9 @@ def test_failure_says_nothing_changed(env):
     layer = points("t")
     dialog = env.dialog([layer.id()])
     env.rows("CREATE TABLE t AS SELECT 1 AS x")  # aparece después de abrir el diálogo
-    ws = ProWorkspace(env.coordinator, lambda: None, Store())
-    try:
-        before = len(env.events)
-        ws.quick_send._send(dialog)  # el envío de GeoDuck, con su aviso en el pie
-        assert wait_for(lambda: any(isinstance(e, SendFailed) for e in env.events[before:]), TIMEOUT)
-        event = next(e for e in env.events[before:] if isinstance(e, SendFailed))
-        assert not event.cancelled
-        assert "DuckDB no cambió" in ws.notice.text()
-    finally:
-        ws.detach_coordinator()
-        ws.deleteLater()
+    event = env.send(dialog)
+    assert isinstance(event, SendFailed) and not event.cancelled
+    assert list(env.rows("SELECT x FROM t")) == [(1,)]  # la tabla de antes, intacta
 
 
 # -- «Reproyectar a…» y SRC personalizados (E4; AT-IMP-003, AT-IMP-007) ------------------------------------

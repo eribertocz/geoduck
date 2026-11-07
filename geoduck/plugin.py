@@ -16,7 +16,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.app.events import LoadFinished, PreviewsInvalidated
+from geoduck.app.events import LoadFinished, PreviewsInvalidated, SessionStateChanged
 from geoduck.app.ports import SessionEngine
 from geoduck.domain.diagnostics import DiagnosticReport, SpatialProbe
 from geoduck.infra.diagnostics import collect
@@ -25,7 +25,8 @@ from geoduck.ui.i18n import tr
 from geoduck.ui.map_view import MapView
 from geoduck.ui.pro.drag import PlacesDropHandler
 from geoduck.ui.pro.shell import ProController, migrate_settings
-from geoduck.ui.pro.workspace import ProWorkspace
+from geoduck.ui.pro.widgets import logo_icon
+from geoduck.ui.pro.workspace import ProWorkspace, session_parts
 
 _log = logging.getLogger("geoduck")
 
@@ -76,7 +77,7 @@ class GeometryValidity:
         self._on_message = on_message
         self.dialog_factory: Any = ValidityDialog
         self.tasks: list[Any] = []  # referencias vivas mientras corren
-        self.action = QAction(tr("Diagnose geometries…"), iface.mainWindow())
+        self.action = QAction(QIcon(ICON), tr("Diagnose geometries…"), iface.mainWindow())
         self.action.setObjectName("geoduckDiagnoseGeometries")
         self.action.triggered.connect(self.diagnose_active_layer)
         self._project = QgsProject.instance()
@@ -168,14 +169,14 @@ def selected_layer_ids(iface: Any) -> list[str]:
 
 
 class SendToDuckDB:
-    """«Enviar a DuckDB…» en el menú de las capas vectoriales del panel de capas (qgis-import-spec §2). Con la
-    interfaz nueva (G9 · E6) hace lo mismo que soltar las capas: sin diálogo si no hay nada que decidir."""
+    """«Añadir a DuckDB…» en el menú de las capas vectoriales del panel de capas (qgis-import-spec §2): abre
+    «Capas de QGIS → DuckDB» con las capas seleccionadas, como al arrastrarlas (F-131)."""
 
     def __init__(self, iface: Any, send: Any) -> None:
         self.iface = iface
-        self.action = QAction(tr("Send to DuckDB…"), iface.mainWindow())
+        self.action = QAction(QIcon(ICON), tr("Add to DuckDB…"), iface.mainWindow())
         self.action.setObjectName("geoduckSendToDuckDB")
-        self.action.setToolTip(tr("Copies the selected layers into DuckDB tables"))
+        self.action.setToolTip(tr("Adds the selected layers to DuckDB as tables (GeoDuck)"))
         self.action.triggered.connect(lambda: send(selected_layer_ids(self.iface)))
         self._layer_api = hasattr(iface, "addCustomActionForLayerType")
         if self._layer_api:  # en todas las capas vectoriales (allLayers=True)
@@ -241,7 +242,7 @@ class GeoDuckPlugin:
         # «Enviar a DuckDB»: el menú de capa hace lo mismo que soltar; «+» y Ctrl+K abren el diálogo
         self.send_action = SendToDuckDB(self.iface, self._send_layers)
         self.content.send_layers_requested.connect(
-            lambda: self.content.quick_send.choose(selected_layer_ids(self.iface)) if self.content else None
+            lambda: self.content.add_layers(selected_layer_ids(self.iface)) if self.content else None
         )
         # Tablas de GeoDuck soltadas en el mapa o en el panel de capas: el mini menú Copia / Conectada
         self.drop_handler = PlacesDropHandler(lambda: self.content)
@@ -253,7 +254,7 @@ class GeoDuckPlugin:
             self.action.setChecked(self.workspace.is_visible())
 
     def _send_layers(self, layer_ids: list[str]) -> None:
-        """Menú de capa «Enviar a DuckDB…»: GeoDuck visible (ahí están el progreso y el aviso) y el envío."""
+        """Menú de capa «Añadir a DuckDB…»: GeoDuck visible y la ventana «Capas de QGIS → DuckDB»."""
         if self.workspace is not None and self.content is not None:
             self.workspace.set_visible(True)
             self.content.send_layers(layer_ids)
@@ -272,6 +273,12 @@ class GeoDuckPlugin:
         if isinstance(event, LoadFinished) and self.validity is not None:
             report = event.report
             self.validity.register([i for i, _ in report.layers] or [report.layer_id])
+        if (
+            isinstance(event, SessionStateChanged)
+            and self.action is not None
+            and self.coordinator is not None
+        ):
+            self.action.setIcon(logo_icon(session_parts(self.coordinator)[0]))  # el puntito de la sesión
         if isinstance(event, PreviewsInvalidated) and self.loader is not None:
             self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 

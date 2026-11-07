@@ -17,13 +17,14 @@ from collections.abc import Callable
 from typing import Any
 
 from qgis.gui import QgsCustomDropHandler
-from qgis.PyQt.QtCore import QByteArray, QMimeData, QPoint
-from qgis.PyQt.QtGui import QCursor
+from qgis.PyQt.QtCore import QByteArray, QMimeData, QPoint, Qt
+from qgis.PyQt.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
 
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.load import load_menu
 from geoduck.ui.pro.places import QUERY, VIEW, Place
+from geoduck.ui.pro.widgets import LOGO
 
 #: Formato del panel de capas de QGIS al arrastrar capas (`QgsLayerTreeModel::mimeData`).
 LAYERS_MIME = "application/qgis.layertreemodeldata"
@@ -113,3 +114,26 @@ class PlacesDropHandler(QgsCustomDropHandler):
             title=menu_title(len(places)),
         )
         self.menu.popup(at)  # Esc o un clic fuera cierran el menú sin cargar nada
+
+
+def drag_pixmap(count: int) -> QPixmap:
+    """Lo que se ve al arrastrar tablas hacia el mapa: el pato de GeoDuck, y cuántas lleva si son varias
+    (propietario, 2026-11-07: «como arrastrar un pato al lago»)."""
+    size = 40
+    image = QPixmap(size + 22, size)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.drawPixmap(0, 0, QIcon(LOGO).pixmap(size, size))
+    if count > 1:
+        painter.setBrush(QColor("#F2A33A"))
+        painter.setPen(QColor("#FFFFFF"))
+        painter.drawEllipse(size - 10, 0, 22, 18)
+        font = painter.font()
+        font.setBold(True)
+        font.setPixelSize(11)
+        painter.setFont(font)
+        painter.setPen(QColor("#1F2430"))
+        painter.drawText(size - 10, 0, 22, 18, int(Qt.AlignmentFlag.AlignCenter), str(count))
+    painter.end()
+    return image
