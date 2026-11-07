@@ -6,10 +6,11 @@ el comportamiento y la accesibilidad (nombre accesible y ayuda en cada acción).
 
 from __future__ import annotations
 
+import html
 from collections.abc import Callable
 
 from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QPainter, QPalette, QTextDocument
+from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextDocument
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -229,6 +230,14 @@ class StatusDot(QWidget):
         painter.end()
 
 
+def lines_html(lines: list[str]) -> str:
+    """Un aviso en líneas: la primera en negrita (qué pasó), las demás debajo (detalles)."""
+    if not lines:
+        return ""
+    head, *rest = (html.escape(line) for line in lines)
+    return "<br>".join([f"<b>{head}</b>", *rest])
+
+
 class Toast(QFrame):
     """Aviso flotante abajo a la derecha: punto de color, texto y acciones («Abrir», «Deshacer»). Aparece y se
     va con un fundido breve; se cierra solo tras `seconds` (0 = no) y nunca roba el foco."""
@@ -250,7 +259,12 @@ class Toast(QFrame):
         self.text.setWordWrap(True)
         plain = QTextDocument()
         plain.setHtml(text)
-        width = self.text.fontMetrics().horizontalAdvance(plain.toPlainText()) + 4
+        bold = QFont(self.text.font())
+        bold.setBold(True)
+        width = max(
+            QFontMetrics(bold).horizontalAdvance(line) for line in plain.toPlainText().splitlines() or [""]
+        )
+        width += 4
         self.text.setMinimumWidth(min(width, 520))
         self.text.setMaximumWidth(520)
         row.addWidget(self.text)

@@ -60,6 +60,7 @@ def main() -> None:  # noqa: PLR0915 - todas las capturas, en orden
     from geoduck.ui.pro.drag import PlacesDropHandler
     from geoduck.ui.pro.places import TABLE, Place
     from geoduck.ui.pro.sidebar import DATABASE, ROLE
+    from geoduck.ui.pro.widgets import lines_html
     from geoduck.ui.pro.workspace import ProWorkspace
 
     qt = "qt" + QT_VERSION_STR[0]
@@ -120,7 +121,7 @@ def main() -> None:  # noqa: PLR0915 - todas las capturas, en orden
     settle(0.3)
     shoot(window, out / f"anadir-paso3-listo-{qt}.png")
     window.hide()
-    ws.toast(flow.done_text(), [(tr("Open"), lambda: None), (tr("Undo"), lambda: None)], 0)
+    ws.toast(lines_html(flow.done_lines()), [(tr("Open"), lambda: None), (tr("Undo"), lambda: None)], 0)
     settle(0.4)
     shoot(ws, out / f"anadir-aviso-{qt}.png")
     # Tablas de DuckDB soltadas en el mapa: el mini menú (el otro sentido)

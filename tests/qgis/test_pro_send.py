@@ -214,9 +214,8 @@ def test_dropping_on_a_database_opens_the_three_steps_with_that_database(coordin
     assert [s["state"] for s in ws.to_duckdb.states] == ["done", "done"]
     assert has_tables(coordinator, {"medidores", "zonas"})
     assert window.isVisible() and window.stack.currentIndex() == 2  # el resumen, en el paso 3
-    assert window.subtitle.text() == tr("Done:") + " " + tr("{0} QGIS layers added to DuckDB · {1}").format(
-        2, DB
-    )
+    summary = tr("{0} QGIS layers added to DuckDB").format(2) + " · " + tr("Database: {0}").format(DB)
+    assert window.subtitle.text() == tr("Done:") + " " + summary
     assert not ws.progress.isVisible()
 
 

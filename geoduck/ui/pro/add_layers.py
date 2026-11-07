@@ -45,7 +45,7 @@ from geoduck.domain.importing import PATH_QGIS, ImportedTable, SendCandidate, Se
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import style
-from geoduck.ui.pro.widgets import button, label
+from geoduck.ui.pro.widgets import button, label, lines_html
 from geoduck.ui.send_dialog import SendDialog
 
 CHOOSE, WHERE, PROGRESS = 0, 1, 2
@@ -484,7 +484,7 @@ class AddLayers:
         self._current = None
         self._host.hide_progress()
         self._refresh()
-        text = self.done_text()
+        text = lines_html(self.done_lines())
         # un solo aviso: el resumen del paso 3 o, con la ventana cerrada, el aviso con «×»; nada en el pie,
         # que quedaría desactualizado (observación del propietario, 2026-11-06)
         self._host.notify("")
@@ -496,20 +496,25 @@ class AddLayers:
                 actions.append((tr("Undo"), self.undo))
             self._host.toast(text, actions, DONE_SECONDS)
 
-    def done_text(self) -> str:
+    def done_lines(self) -> list[str]:
+        """El resumen, una idea por línea: cuántas y en qué sentido; en qué base; canceladas; con error."""
         added = sum(1 for s in self.states if s["state"] == DONE)
         where = self.request.database if self.request is not None else ""
         if added == 1:
-            text = tr("1 QGIS layer added to DuckDB · {0}").format(where)
+            lines = [tr("1 QGIS layer added to DuckDB")]
         else:
-            text = tr("{0} QGIS layers added to DuckDB · {1}").format(added, where)
+            lines = [tr("{0} QGIS layers added to DuckDB").format(added)]
+        lines.append(tr("Database: {0}").format(where))
         cancelled = [s["name"] for s in self.states if s["state"] == CANCELLED]
         failed = [s["name"] for s in self.states if s["state"] == FAILED]
         if cancelled:
-            text += " · " + tr("{0} cancelled ({1})").format(len(cancelled), ", ".join(cancelled))
+            lines.append(tr("{0} cancelled ({1})").format(len(cancelled), ", ".join(cancelled)))
         if failed:
-            text += " · " + tr("{0} with error ({1})").format(len(failed), ", ".join(failed))
-        return text
+            lines.append(tr("{0} with error ({1})").format(len(failed), ", ".join(failed)))
+        return lines
+
+    def done_text(self) -> str:
+        return " · ".join(self.done_lines())
 
     def progress_text(self) -> str:
         """La línea del pie: «⟳ Añadiendo 2 de 4 · redes_bt 62 %» (clic: vuelve al paso 3)."""

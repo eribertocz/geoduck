@@ -58,7 +58,7 @@ from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_text
+from geoduck.ui.pro.load import QuickLoad, finished_lines
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,
@@ -79,7 +79,7 @@ from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
-from geoduck.ui.pro.widgets import Toast, button, icon_button, label
+from geoduck.ui.pro.widgets import Toast, button, icon_button, label, lines_html
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
 STATE, TABS, WELCOME = 0, 1, 2
@@ -382,7 +382,7 @@ class ProWorkspace(QWidget):
         if self.on_view_map is None:
             return False
         ids = [layer_id for layer_id, _ in report.layers] or [report.layer_id]
-        self.toast(finished_text(report), [(tr("View on map"), lambda: self.view_map(ids))], 12)
+        self.toast(lines_html(finished_lines(report)), [(tr("View on map"), lambda: self.view_map(ids))], 12)
         return True
 
     def view_map(self, layer_ids: list[str]) -> None:
