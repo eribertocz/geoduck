@@ -59,13 +59,13 @@ from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.files import OTHER, file_filters, format_for, unsupported_lines
 from geoduck.domain.session import ErrorCause, SessionState
-from geoduck.qgis_bridge.open_files import open_in_qgis
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import accepts, drop_hint, file_paths, layer_ids, menu_title, place_job
 from geoduck.ui.pro.history import History, HistoryPage
 from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu, popup_under
+from geoduck.ui.pro.open_files import open_in_qgis
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,

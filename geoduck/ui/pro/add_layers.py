@@ -216,6 +216,8 @@ class AddLayersWindow(QDialog):
                 item.setData(0, Qt.ItemDataRole.UserRole, c.layer_id)
                 self.tree.addTopLevelItem(item)
                 self.rows[c.layer_id] = item
+        for item in self.rows.values():  # con las señales bloqueadas: cambiar la ayuda emite itemChanged
+            item.setToolTip(1, item.text(1))
         self.tree.blockSignals(False)
         header = self.tree.header()
         files = any(c.file is not None for c in candidates)
@@ -226,8 +228,6 @@ class AddLayersWindow(QDialog):
         header.setSectionResizeMode(
             1, QHeaderView.ResizeMode.Stretch if files else QHeaderView.ResizeMode.ResizeToContents
         )
-        for item in self.rows.values():
-            item.setToolTip(1, item.text(1))
         self.tree.setVisible(bool(candidates))
         self.empty.setVisible(not any(c.problem is None for c in candidates))
 
