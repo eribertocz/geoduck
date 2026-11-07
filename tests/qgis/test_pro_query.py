@@ -108,7 +108,7 @@ def test_run_runs_the_statement_under_the_cursor_and_shows_its_rows(coordinator)
     assert [c.name for c in page.model.columns] == ["n"]
     assert page.model.rowCount() == 5
     assert page.view.current == RESULT and not page.result_tabs.isVisible()
-    assert page.summary.text().startswith(tr("{} rows").format(5) + " · ")
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format("1–5", "5") + " · ")
 
 
 def test_all_shows_one_result_tab_per_statement_with_rows(coordinator):
@@ -280,3 +280,54 @@ def test_run_sql_typed_by_the_user_through_execute_too(coordinator):
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.model.rows == ((5,),)
     assert os.environ["GEODUCK_RECOVERY_DIR"]
+
+
+def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coordinator):
+    """Propietario (2026-11-06): el resultado de una consulta se maneja como la pestaña de tabla: «Filas 1–100
+    de N · tiempo» abajo, ‹ › de 100 filas, el total contado aparte y el detalle de la fila, plegable."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n, 'v' || range AS v FROM range(250);")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.model.rowCount() == 100 and page.model.rows[0] == (0, "v0")
+    assert wait_for(lambda: page.range_label.text().startswith(tr("Rows {} of {}").format("1–100", "250")))
+    assert page.summary.text() == ""  # el resumen está en el pie
+    assert not page.prev_button.isEnabled() and page.next_button.isEnabled()
+    # el detalle: la fila elegida, con su número real
+    assert page.detail.isVisible() and page.detail.title.text() == tr("Row {}").format("1")
+    page.next_button.click()
+    assert wait_for(lambda: page.model.offset == 100)
+    assert page.model.rows[0] == (100, "v100")
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format("101–200", "250"))
+    assert page.detail.title.text() == tr("Row {}").format("101")
+    page.next_button.click()
+    assert wait_for(lambda: page.model.offset == 200)
+    assert page.model.rowCount() == 50 and not page.next_button.isEnabled()
+    page.prev_button.click()
+    assert wait_for(lambda: page.model.offset == 100)
+    # plegar y volver a abrir el detalle
+    page.detail_button.setChecked(False)
+    assert not page.detail.isVisible()
+    page.detail_button.setChecked(True)
+    assert page.detail.isVisible()
+    page.detail.closed.emit()
+    assert not page.detail_button.isChecked() and not page.detail.isVisible()
+    # «Mensajes» no tiene páginas ni detalle
+    page.view.set_current(MESSAGES)
+    page._show_view(MESSAGES)
+    assert page.range_label.text() == "" and not page.next_button.isEnabled()
+
+
+def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinator):
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n FROM range(5);")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format("1–5", "5"))
+    assert not page.prev_button.isEnabled() and not page.next_button.isEnabled()
+    page.editor.setText("CREATE TABLE w AS SELECT range AS n FROM range(300); DELETE FROM w RETURNING n;")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.model.rowCount() == 100  # el DELETE … RETURNING muestra su primera página
+    assert not page.next_button.isEnabled()  # y nunca se repite para pasar de página
+    assert page.range_label.text().startswith(tr("Rows {} of more than {}").format("1–100", "100"))

@@ -51,16 +51,18 @@ from geoduck.app.events import (
     StatementFinished,
     VocabularyChanged,
 )
+from geoduck.domain.browse import PAGE, page_label
 from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.session import SessionState
-from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, StatementResult, StatementStatus, result_title
+from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, result_title
+from geoduck.domain.sql_text import load_sql
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
 from geoduck.ui.pro.load import export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
-from geoduck.ui.pro.table_page import PageModel, TypeHeader, fit_columns
+from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns
 from geoduck.ui.pro.tokens import DARK, METRICS, Colors
 from geoduck.ui.pro.widgets import Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
@@ -120,6 +122,9 @@ class QueryPage(QWidget):
         self.run: Run | None = None
         self.results: list[StatementResult] = []
         self._epochs: dict[int, int] = {}
+        #: Página de cada resultado con tabla (por `id`): desplazamiento, filas y total (None: sin contar).
+        self._pages: dict[int, dict[str, Any]] = {}
+        self.detail_open = True
         self.saved_text = sql if place.path else None  # lo que hay en el archivo
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
@@ -226,22 +231,11 @@ class QueryPage(QWidget):
         self.summary = label("", "muted")
         row.addWidget(self.summary)
         row.addWidget(spacer(), 1)
-        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
-        self.export_button.setToolTip(tr("Exports the full query of this result"))
-        self.export_menu = QMenu(self)
-        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
-        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
-        self.export_button.clicked.connect(
-            lambda: self.export_menu.popup(
-                self.export_button.mapToGlobal(QPoint(0, self.export_button.height()))
-            )
-        )
-        row.addWidget(self.export_button)
-        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
-        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
-        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
-        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
-        row.addWidget(self.load_button)
+        self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
+        self.detail_button.setCheckable(True)
+        self.detail_button.setChecked(True)
+        self.detail_button.toggled.connect(self.set_detail_open)
+        row.addWidget(self.detail_button)
         box.addWidget(head)
         self.result_tabs = QTabBar()
         self.result_tabs.setProperty("pro", "tabs")
@@ -278,8 +272,54 @@ class QueryPage(QWidget):
         self.messages.setProperty("pro", "plain")
         self.messages.setWidgetResizable(True)
         self.stack.addWidget(self.messages)
-        box.addWidget(self.stack, 1)
+        middle = QWidget()
+        side = QHBoxLayout(middle)
+        side.setContentsMargins(0, 0, 0, 0)
+        side.setSpacing(0)
+        side.addWidget(self.stack, 1)
+        # el detalle de la fila a la derecha, plegable, como en la pestaña de tabla (propietario, 2026-11-06)
+        self.detail = DetailPanel(self.colors)
+        self.detail.closed.connect(lambda: self.detail_button.setChecked(False))
+        self.detail.hide()
+        side.addWidget(self.detail)
+        box.addWidget(middle, 1)
+        self.grid.selectionModel().currentRowChanged.connect(
+            lambda current, _p: self._row_changed(current.row())
+        )
+        box.addWidget(self._build_footer())
         return panel
+
+    def _build_footer(self) -> QWidget:
+        """El pie del resultado, igual que el de la pestaña de tabla: «Filas 1–100 de N · tiempo», ‹ ›,
+        «Exportar» y «Cargar en QGIS» (propietario, 2026-11-06)."""
+        foot = QFrame()
+        foot.setProperty("pro", "rule-top")
+        foot.setFixedHeight(METRICS.bar - 4)
+        row = QHBoxLayout(foot)
+        row.setContentsMargins(16, 0, 16, 0)
+        row.setSpacing(10)
+        self.range_label = label("", "muted")
+        row.addWidget(self.range_label)
+        self.prev_button = icon_button("chevron-left", tr("Previous page"), self.colors)
+        self.prev_button.clicked.connect(lambda: self.go(self._offset() - PAGE))
+        self.next_button = icon_button("chevron-right", tr("Next page"), self.colors)
+        self.next_button.clicked.connect(lambda: self.go(self._offset() + PAGE))
+        row.addWidget(self.prev_button)
+        row.addWidget(self.next_button)
+        row.addStretch(1)
+        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
+        self.export_button.setToolTip(tr("Exports the full query of this result"))
+        self.export_menu = QMenu(self)
+        self.export_menu.addAction(tr("CSV…"), lambda: self.export(ExportFormat.CSV))
+        self.export_menu.addAction(tr("Parquet…"), lambda: self.export(ExportFormat.PARQUET))
+        self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
+        row.addWidget(self.export_button)
+        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
+        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
+        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
+        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
+        row.addWidget(self.load_button)
+        return foot
 
     # -- base de la consulta --------------------------------------------------------------------------
 
@@ -327,7 +367,7 @@ class QueryPage(QWidget):
                 scope,
                 cursor=cursor,
                 base=base,
-                preview_limit=DEFAULT_PREVIEW_LIMIT,
+                preview_limit=PAGE,  # la primera página llega con la ejecución
                 database=self.database,
             )
         except GeoDuckError as exc:
@@ -368,6 +408,7 @@ class QueryPage(QWidget):
         """Una pestaña por sentencia con tabla (sin pestañas si es una); si ninguna tiene tabla, los
         mensajes."""
         tabular = [r for r in self.results if r.preview is not None]
+        self._pages = {}
         self.result_tabs.blockSignals(True)
         while self.result_tabs.count():
             self.result_tabs.removeTab(0)
@@ -390,7 +431,9 @@ class QueryPage(QWidget):
             self.result_tabs.hide()
             self.export_button.setEnabled(False)
             self.load_button.setEnabled(False)
+            self.detail.hide()
             self._summarize_messages()
+            self._update_range(None)
         else:
             self.result_tabs.setVisible(len(getattr(self, "_tabular", [])) > 1)
             self._show_grid()
@@ -405,24 +448,128 @@ class QueryPage(QWidget):
             self.summary.setText("")
             self.export_button.setEnabled(False)
             self.load_button.setEnabled(False)
+            self.detail.hide()
+            self._update_range(None)
             return
         result = tabular[index]
         preview = result.preview
         assert preview is not None
+        page = self._page_of(result)
         columns = tuple(ColumnInfo(n, t, None) for n, t in zip(preview.columns, preview.types, strict=False))
-        self.model.set_page(columns, preview.rows, 0)
+        self.model.set_page(columns, page["rows"], page["offset"])
         fit_columns(self.grid, self.model)
-        rows = _count(len(preview.rows))
-        text = (tr("first {} rows") if preview.truncated else tr("{} rows")).format(rows)
-        if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
-            text += " · " + tr("may be out of date")
-        self.summary.setText(f"{text} · {_seconds(result.duration_ms)}")
-        self.stack.setCurrentWidget(self.grid if preview.rows else self.empty)
-        if not preview.rows:
+        self.summary.setText("")  # el resumen va en el pie, como en la pestaña de tabla
+        self.stack.setCurrentWidget(self.grid if page["rows"] else self.empty)
+        if not page["rows"]:
             self.empty.setText(tr("The query returned no rows."))
+        else:
+            self.grid.selectRow(0)
+        self._row_changed(0 if page["rows"] else -1)
         usable = result.statement.replayable and self._coordinator.state is SessionState.READY
         self.export_button.setEnabled(usable)
         self.load_button.setEnabled(usable and self._loader is not None)
+        self._update_range(result)
+
+    # -- páginas y total (propietario, 2026-11-06: igual que la pestaña de tabla) ---------------------------
+
+    def _page_of(self, result: StatementResult) -> dict[str, Any]:
+        """La página que se muestra de `result`: la primera llega con la ejecución; el total se cuenta aparte
+        (solo si había más filas que la página y la consulta se puede repetir)."""
+        key = id(result)
+        page = self._pages.get(key)
+        if page is None:
+            preview = result.preview
+            assert preview is not None
+            total = None if preview.truncated else len(preview.rows)
+            page = {"offset": 0, "rows": preview.rows, "total": total}
+            self._pages[key] = page
+            if total is None and result.statement.replayable:
+                self._count(result, page)
+        return page
+
+    def _count(self, result: StatementResult, page: dict[str, Any]) -> None:
+        def counted(outcome: Any) -> None:
+            if self._closed or isinstance(outcome, BaseException):
+                return  # sin total: el pie sigue con «de …»
+            page["total"] = int(outcome.rows[0][0]) if outcome.rows else 0
+            if self.current_result is result:
+                self._update_range(result)
+
+        sql = f"SELECT count(*) FROM ({load_sql(result.statement.text)}) AS geoduck_q"
+        with contextlib.suppress(GeoDuckError):  # DuckDB ocupado: el pie sigue con «de …»
+            self._coordinator.read_rows(sql, 1, counted, database=result.database)
+
+    def _offset(self) -> int:
+        result = self.current_result
+        page = self._pages.get(id(result)) if result is not None else None
+        return page["offset"] if page else 0
+
+    def go(self, offset: int) -> None:
+        """‹ ›: otra página del resultado elegido. Repite la consulta con `LIMIT`/`OFFSET`."""
+        result = self.current_result
+        if result is None or not result.statement.replayable:
+            return
+        page = self._page_of(result)
+        offset = max(0, offset)
+        if page["total"] is not None and offset >= page["total"]:
+            return
+
+        def read(outcome: Any) -> None:
+            if self._closed:
+                return
+            if isinstance(outcome, BaseException):
+                self.notice.emit(getattr(outcome, "message", str(outcome)))
+                return
+            page["offset"], page["rows"] = offset, outcome.rows
+            if self.current_result is result:
+                self._show_grid()
+
+        sql = f"SELECT * FROM ({load_sql(result.statement.text)}) AS geoduck_q LIMIT {PAGE} OFFSET {offset}"
+        try:
+            self._coordinator.read_rows(sql, PAGE, read, database=result.database)
+        except GeoDuckError as exc:
+            self.notice.emit(exc.message)
+
+    def _update_range(self, result: StatementResult | None) -> None:
+        """«Filas 1–100 de 1 000 000 · 0,4 s»; ‹ › solo si hay otra página y la consulta se puede repetir."""
+        page = self._pages.get(id(result)) if result is not None else None
+        if result is None or page is None:
+            self.range_label.setText("")
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            return
+        shown = len(page["rows"])
+        if page["total"] is None and not result.statement.replayable:
+            # una escritura (`DELETE … RETURNING`) no se repite: ni se cuenta ni se pasa de página
+            text = tr("Rows {} of more than {}").format(f"1–{shown}", _count(shown))
+        else:
+            text = page_label(page["offset"], shown, page["total"])
+        if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
+            text += " · " + tr("may be out of date")
+        self.range_label.setText(f"{text} · {_seconds(result.duration_ms)}")
+        ready = result.statement.replayable and self._coordinator.state is SessionState.READY
+        self.prev_button.setEnabled(ready and page["offset"] > 0)
+        more = shown == PAGE and (page["total"] is None or page["offset"] + shown < page["total"])
+        self.next_button.setEnabled(ready and more)
+
+    # -- detalle de la fila -----------------------------------------------------------------------------
+
+    def set_detail_open(self, open_: bool) -> None:
+        self.detail_open = open_
+        self._row_changed(self.grid.currentIndex().row())
+
+    def _row_changed(self, row: int) -> None:
+        visible = (
+            self.detail_open
+            and 0 <= row < self.model.rowCount()
+            and self.stack.currentWidget() is self.grid
+            and self.view.current == RESULT
+        )
+        if not visible:
+            self.detail.hide()
+            return
+        self.detail.show()
+        self.detail.show_row(self.model.offset + row + 1, self.model.columns, self.model.rows[row])
 
     @property
     def current_result(self) -> StatementResult | None:
@@ -605,6 +752,8 @@ class QueryPage(QWidget):
         )
         self.export_button.setEnabled(usable)
         self.load_button.setEnabled(usable and self._loader is not None)
+        if hasattr(self, "range_label"):
+            self._update_range(self.current_result if self.view.current == RESULT else None)
 
     def _on_event(self, event: AppEvent) -> None:
         if self._closed:

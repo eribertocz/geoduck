@@ -579,10 +579,12 @@ El editor acepta el SQL disponible en DuckDB >=1.5 (DDL, DML, vistas, macros, tr
 Una sentencia no se clasifica solo por su primera palabra: `WITH` puede anteceder DML; el parser y el comportamiento del motor son la fuente de verdad.
 
 ## 4. Previsualización y paginación
-- Vista previa: **20 filas fijas, sin selector** (decisión del propietario, 2026-11-03; antes 200 por defecto con 50/200/500/1000); siempre visualmente etiquetada «Vista previa». «Cargar» y «Exportar» usan la consulta completa.
+- Vista previa: **20 filas fijas, sin selector** (en Workspace Pro, páginas de 100: workspace-pro-spec §5) (decisión del propietario, 2026-11-03; antes 200 por defecto con 50/200/500/1000); siempre visualmente etiquetada «Vista previa». «Cargar» y «Exportar» usan la consulta completa.
 - Nunca materializar `fetchall()` en resultados sin límite conocido.
 - Para lecturas reejecutables, usar una consulta acotada, respetando semántica SQL y su ordenación; si no hay `ORDER BY` no garantizar que la paginación sea estable.
-- No calcular `COUNT(*)` completo automáticamente para todo SELECT.
+- No calcular `COUNT(*)` completo automáticamente para todo SELECT. **Excepción (Workspace Pro, propietario,
+  2026-11-06):** la pestaña de consulta muestra páginas de 100 filas y cuenta el total aparte, solo para una
+  lectura reejecutable con más filas que la página (workspace-pro-spec §5).
 - Cambiar de pestaña de resultados no debe mantener un reader DuckDB abierto.
 - El registro conserva solo el fragmento mostrado y metadatos necesarios; no caché universal del resultado completo.
 - No efectuar reejecuciones ocultas en consultas potencialmente volátiles/sensibles; indicar cuándo cambia el estado de datos.
@@ -1409,7 +1411,7 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
     cada chip se quita con ×. Se combinan con Y. **«Ver SQL»** muestra la consulta equivalente y la abre en una
     pestaña de consulta.
   - **Buscar** en la tabla (texto en las columnas de texto).
-  - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «1–100 de 48 312», ‹ ›; el
+  - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «Filas 1–100 de 48 312», ‹ ›; el
     total se cuenta aparte, sin bloquear.
   - **Detalle de fila** (panel derecho, plegable): cada campo con su tipo y su valor completo; la geometría
     resumida (tipo, SRC, número de vértices); copiar valor.
@@ -1422,9 +1424,14 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   funciones). Base de la consulta en un desplegable.
 - **Ejecutar** la sentencia bajo el cursor o la selección (Ctrl+Intro) y **Todo** (Ctrl+Mayús+Intro);
   **Cancelar**.
-- **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una), con «N filas · X ms»;
-  **Mensajes** con el registro (OK, errores con línea y columna).
-- «Exportar ▾» y «Cargar en QGIS ▾» del resultado.
+- **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una); **Mensajes** con el
+  registro (OK, errores con línea y columna).
+- **El resultado se maneja como la pestaña de tabla** (propietario, 2026-11-06, tras la prueba en Windows): el
+  mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s», ‹ › de 100 filas, «Exportar ▾» y «Cargar en QGIS ▾»;
+  y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y
+  el total repiten la lectura (`LIMIT`/`OFFSET`, `count(*)`) en el worker, sin bloquear. Sin `ORDER BY`, el
+  orden entre páginas no está garantizado. Una escritura con filas (`… RETURNING`) nunca se repite: muestra su
+  primera página, «Filas 1–100 de más de 100», sin ‹ ›.
 - **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación activada por defecto
   (ADR-0014, ahora por consulta; propietario, 2026-11-05). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
   como comentario).

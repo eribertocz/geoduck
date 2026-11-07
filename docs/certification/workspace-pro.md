@@ -46,11 +46,12 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 |---|---|---|
 | 3a | «+» → «Crear base…» → `C:\geoduck-g9\pruebas ñá\prueba.duckdb` | Aparece «prueba» en «Bases» |
 | 3b | En una consulta: `CREATE TABLE prueba.medidores AS SELECT range AS id, range * 1.5 AS kwh FROM range(1000000);` | Termina; la tabla aparece bajo «prueba» |
-| 3c | Doble clic en `medidores` | La pestaña de tabla muestra la primera página **al instante**; «1–100 de 1 000 000» |
+| 3c | Doble clic en `medidores` | La pestaña de tabla muestra la primera página **al instante**; «Filas 1–100 de 1 000 000» |
 | 3d | Clic en la cabecera `kwh`; añada dos filtros (chips); busque; pase de página | Cada cosa responde sin congelar QGIS; «Ver SQL» abre la consulta equivalente |
 | 3e | Elija una fila y abra el detalle; pase a «Estructura» | Valores completos; columnas, tipos, nulos y `CREATE` |
 | 3f | Ctrl+K, escriba `medi` (sin acentos ni mayúsculas) e Intro | Abre la tabla; Esc cierra Ctrl+K |
 | 3g | Marque la tabla con ★; reinicie QGIS | Vuelve en «★»; la barra lateral no tiene «Recientes» |
+| 3g2 | En una consulta: `SELECT * FROM prueba.medidores;` y «Ejecutar» | Abajo, el mismo pie que la tabla: «Filas 1–100 de 1 000 000 · …» (el total llega enseguida), ‹ › pasa a «101–200»; a la derecha, el detalle de la fila elegida, que se pliega con su botón |
 | 3h | Guarde la consulta con Ctrl+S en la carpeta con acentos; ciérrela; Ctrl+O y ábrala | Vuelve con su texto |
 | 3i | Escriba `BEGIN; CREATE TABLE u (x INTEGER PRIMARY KEY); INSERT INTO u VALUES (1), (1);` y ejecute | Aviso abajo a la derecha que **no se va solo**: «La transacción falló. «Revertir» descarta sus cambios…»; pulse «Revertir» y DuckDB vuelve a estar «Lista» |
 | 3j | Ctrl+K › «Historial de ejecución» | Pestaña con cada sentencia (hora, ✓/✕, duración); «Error» filtra; doble clic abre una consulta nueva **sin ejecutarla** |
