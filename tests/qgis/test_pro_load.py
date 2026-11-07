@@ -344,3 +344,39 @@ def test_choosing_one_of_two_geometries_loads_one_layer(coordinator):
     open_table(ws, "dos").load_in_qgis(OPTIONS)
     assert wait_for(lambda: layers_named("dos") and coordinator.state is SessionState.READY, 30)
     assert len(layers_named("dos")) == 1 and layers_named("dos")[0].geometryType() == 0  # puntos
+
+
+def test_a_copy_sent_back_to_duckdb_keeps_its_columns_and_loads_again(coordinator):
+    """Observación del propietario (2026-11-06): la «Copia» de una tabla con `fid` llevaba `geoduck_fid`
+    (el identificador del GeoPackage); al volver a DuckDB se quedaba como columna y la tercera carga fallaba.
+    Ahora ese identificador no vuelve: la tabla de ida y vuelta tiene las mismas columnas y carga otra vez."""
+    from tests.qgis.test_pro_send import add_all, to_step_two
+
+    coordinator.execute_sql(
+        "CREATE TABLE t0 AS SELECT range::INTEGER AS fid, 'n' || range AS nombre,"
+        " ('POINT (' || range || ' 1)')::GEOMETRY('OGC:CRS84') AS geom FROM range(5);",
+        RunScope.ALL,
+    )
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "t0" for o in coordinator.catalog.objects))
+    ws = workspace(coordinator)
+    for trip in range(3):
+        name = f"t{trip}"
+        page = open_table(ws, name)
+        assert [c.name for c in page.model.columns] == ["fid", "nombre", "geom"]
+        ws.loader.last_report = None
+        page.load_in_qgis(COPY)
+        assert wait_for(
+            lambda: ws.loader.last_report is not None and coordinator.state is SessionState.READY, 30
+        )
+        layer = QgsProject.instance().mapLayer(ws.loader.last_report.layer_id)
+        assert layer is not None and layer.featureCount() == 5
+        assert "fid" in [f.name() for f in layer.fields()]  # la columna de la tabla sigue en QGIS
+        layer.setName(f"t{trip + 1}")
+        ws.add_layers([layer.id()])
+        to_step_two(ws)
+        add_all(ws, coordinator)
+        ws.to_duckdb.window.close()
+        coordinator.refresh_catalog()
+        assert wait_for(lambda n=f"t{trip + 1}": any(o.name == n for o in coordinator.catalog.objects))

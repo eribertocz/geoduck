@@ -6,10 +6,11 @@ el comportamiento y la accesibilidad (nombre accesible y ayuda en cada acción).
 
 from __future__ import annotations
 
+import html
 from collections.abc import Callable
 
 from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QPainter, QPalette
+from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextDocument
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -22,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
 from geoduck.ui.pro.style import colors_for
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -228,6 +230,14 @@ class StatusDot(QWidget):
         painter.end()
 
 
+def lines_html(lines: list[str]) -> str:
+    """Un aviso en líneas: la primera en negrita (qué pasó), las demás debajo (detalles)."""
+    if not lines:
+        return ""
+    head, *rest = (html.escape(line) for line in lines)
+    return "<br>".join([f"<b>{head}</b>", *rest])
+
+
 class Toast(QFrame):
     """Aviso flotante abajo a la derecha: punto de color, texto y acciones («Abrir», «Deshacer»). Aparece y se
     va con un fundido breve; se cierra solo tras `seconds` (0 = no) y nunca roba el foco."""
@@ -245,9 +255,28 @@ class Toast(QFrame):
         row.addWidget(dot)
         self.text = QLabel(text)
         self.text.setTextFormat(Qt.TextFormat.RichText)
+        # un aviso corto, en una línea; uno largo (origen, acceso, advertencias) baja de línea a los 520 px
+        self.text.setWordWrap(True)
+        plain = QTextDocument()
+        plain.setHtml(text)
+        bold = QFont(self.text.font())
+        bold.setBold(True)
+        width = max(
+            QFontMetrics(bold).horizontalAdvance(line) for line in plain.toPlainText().splitlines() or [""]
+        )
+        width += 4
+        self.text.setMinimumWidth(min(width, 520))
+        self.text.setMaximumWidth(520)
         row.addWidget(self.text)
         self.actions: list[QPushButton] = []
         self.seconds = seconds
+        #: F-132: «×» para cerrar el aviso sin hacer nada más; va siempre al final, después de las acciones.
+        self.close_button = icon_button("close", tr("Close"), colors, size=14)
+        self.close_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.close_button.clicked.connect(self.dismiss)
+        #: Se llama al cerrarlo con «×» (p. ej., recordar que no se decidió).
+        self.on_closed: Callable[[], None] | None = None
+        self.close_button.clicked.connect(lambda: self.on_closed() if self.on_closed else None)
         self._effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._effect)
         self._fade = QPropertyAnimation(self._effect, b"opacity", self)
@@ -265,6 +294,7 @@ class Toast(QFrame):
 
     def show_at_corner(self, margin: int = METRICS.space_lg, bottom: int = 64) -> None:
         parent = self.parentWidget()
+        self.layout().addWidget(self.close_button)  # type: ignore[union-attr]
         self.adjustSize()
         if parent is not None:
             self.move(

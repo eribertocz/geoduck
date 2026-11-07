@@ -6,13 +6,22 @@ supportsQt6=True
 description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
 about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica; y las capas de QGIS se envían a DuckDB como tablas.
 
-    ESTADO: Alpha (0.9.0a1, QGIS → DuckDB). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
+    ESTADO: Alpha (0.10.0a1, Workspace Pro). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
     DEPENDENCIAS EXTERNAS (no incluidas en el complemento): los paquetes de Python «duckdb» (>= 1.5.0) y «pyarrow», instalados en el Python de QGIS. Use «Diagnóstico del entorno» en GeoDuck para comprobarlos. La extensión DuckDB «spatial» es opcional.
-version=0.9.0a1
+version=0.10.0a1
 author=eribertocz
 email=PENDIENTE_DE_DEFINIR_POR_EL_PROPIETARIO
-changelog=0.9.0a1 (G8 · QGIS → DuckDB)
+changelog=0.10.0a1 (G9 · Workspace Pro)
+    - Interfaz nueva, en ventana propia o como panel: barra lateral con Recientes, ★ y Bases; pestañas de tabla y de consulta; Ctrl+K para encontrar cualquier tabla o acción; tema claro y oscuro según QGIS (también el editor SQL).
+    - Pestaña de tabla: tablas de millones de filas por páginas, orden, filtros como chips, búsqueda, detalle de fila, «Estructura» y «Ver SQL».
+    - Pestaña de consulta: ejecutar sentencia, selección o todo; mensajes con la línea del error; abrir y guardar .sql; un cuaderno de 0.8/0.9 se abre como una consulta; copia de recuperación.
+    - «Cargar en QGIS ▾»: Copia o Conectada en un clic; «Más opciones…» para elegir geometrías, usar una columna WKB/WKT, reproyectar o separar por tipo; «Ver en el mapa» en el aviso; al guardar el proyecto, «Guardar las copias junto al proyecto».
+    - Arrastrar en los dos sentidos: capas de QGIS sobre una base (sin ventana si todo es nuevo; progreso y «Deshacer» en GeoDuck) y tablas de GeoDuck al mapa o al panel de capas.
+    - «Historial» de ejecución (Ctrl+K), aviso para revertir una transacción que falló, «Iniciar DuckDB» / «Cerrar DuckDB» y todo en gris sin DuckDB, con una explicación si falta DuckDB o PyArrow.
+    - Al actualizar se conservan ventana o panel, su lado y la barra lateral; los cuadernos abiertos vuelven como consultas.
+    - Se retira la interfaz anterior (explorador, editor de pestañas y cuadernos de celdas).
+    0.9.0a1 (G8 · QGIS → DuckDB)
     - «Enviar a DuckDB…» en el menú de las capas vectoriales y «Importar capas de QGIS…» en el «+»: copia una o varias capas (o su selección, respetando su filtro) a tablas de DuckDB con su geometría y su SRC, en una sola transacción.
     - Diálogo con «qué pasará» por capa: si la tabla ya existe, por defecto no se envía; reemplazar, añadir filas u otro nombre se eligen.
     - Capas Conectadas y GeoParquet se copian dentro de DuckDB; GeoParquet también como vista. «Reproyectar a…» con QGIS/PROJ. Tabla temporal de la sesión.

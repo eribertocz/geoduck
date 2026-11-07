@@ -168,14 +168,14 @@ def selected_layer_ids(iface: Any) -> list[str]:
 
 
 class SendToDuckDB:
-    """«Enviar a DuckDB…» en el menú de las capas vectoriales del panel de capas (qgis-import-spec §2). Con la
-    interfaz nueva (G9 · E6) hace lo mismo que soltar las capas: sin diálogo si no hay nada que decidir."""
+    """«Añadir a DuckDB…» en el menú de las capas vectoriales del panel de capas (qgis-import-spec §2): abre
+    «Capas de QGIS → DuckDB» con las capas seleccionadas, como al arrastrarlas (F-131)."""
 
     def __init__(self, iface: Any, send: Any) -> None:
         self.iface = iface
-        self.action = QAction(tr("Send to DuckDB…"), iface.mainWindow())
+        self.action = QAction(tr("Add to DuckDB…"), iface.mainWindow())
         self.action.setObjectName("geoduckSendToDuckDB")
-        self.action.setToolTip(tr("Copies the selected layers into DuckDB tables"))
+        self.action.setToolTip(tr("Adds the selected layers to DuckDB as tables (GeoDuck)"))
         self.action.triggered.connect(lambda: send(selected_layer_ids(self.iface)))
         self._layer_api = hasattr(iface, "addCustomActionForLayerType")
         if self._layer_api:  # en todas las capas vectoriales (allLayers=True)
@@ -241,7 +241,7 @@ class GeoDuckPlugin:
         # «Enviar a DuckDB»: el menú de capa hace lo mismo que soltar; «+» y Ctrl+K abren el diálogo
         self.send_action = SendToDuckDB(self.iface, self._send_layers)
         self.content.send_layers_requested.connect(
-            lambda: self.content.quick_send.choose(selected_layer_ids(self.iface)) if self.content else None
+            lambda: self.content.add_layers(selected_layer_ids(self.iface)) if self.content else None
         )
         # Tablas de GeoDuck soltadas en el mapa o en el panel de capas: el mini menú Copia / Conectada
         self.drop_handler = PlacesDropHandler(lambda: self.content)
@@ -253,7 +253,7 @@ class GeoDuckPlugin:
             self.action.setChecked(self.workspace.is_visible())
 
     def _send_layers(self, layer_ids: list[str]) -> None:
-        """Menú de capa «Enviar a DuckDB…»: GeoDuck visible (ahí están el progreso y el aviso) y el envío."""
+        """Menú de capa «Añadir a DuckDB…»: GeoDuck visible y la ventana «Capas de QGIS → DuckDB»."""
         if self.workspace is not None and self.content is not None:
             self.workspace.set_visible(True)
             self.content.send_layers(layer_ids)
