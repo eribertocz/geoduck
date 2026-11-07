@@ -1309,6 +1309,15 @@ acción explica que hay que iniciar una.
    demás usan `INSERT … SELECT` (sin `spatial` no se puede declarar `GEOMETRY('EPSG:…')`: F-115).
    Medido: 1 millón de puntos en 5–7 s (F-114). Contrapresión con el mismo canal acotado que
    las cargas (qgis-bridge-spec §2).
+4. **Capa que viene de un archivo que el GDAL de DuckDB lee** (G9, decisión del propietario, 2026-11-07):
+   GeoPackage, Shapefile, FlatGeobuf, GeoJSON, KML, Geodatabase, Excel… (la lista de §10), sin filtro ni
+   selección, sin «Reproyectar a…» y sin «Añadir filas»: `CREATE TABLE … AS SELECT * FROM ST_Read('ruta',
+   layer = '…')` dentro de DuckDB, con el SRC de la capa (`ST_SetCRS`). Medido (2 núcleos, GeoPackage con
+   EPSG:32719): 1 millón de puntos en 0,3 s contra 6,9 s por el camino 3 (**23×**); 200 000 polígonos en 0,3 s
+   contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
+   «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
+   ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
+   ese clic, el camino 3. El resumen dice «leído directo por DuckDB».
 
 ## 6. Columnas y tipos (GD-IMP-005)
 | QGIS (`QMetaType`) | DuckDB |

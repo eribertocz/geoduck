@@ -288,3 +288,63 @@ def test_write_query_reads_a_file_outside_the_list_with_sql(coordinator, data):
     assert "spatial;" in text.splitlines()[0]  # visible: lo decide el usuario al ejecutar
     assert f"SELECT * FROM ST_Read('{path}');" in text and "CREATE TABLE" in text
     assert not page.results
+
+
+# -- «Capas de QGIS → DuckDB» inteligente (qgis-import-spec §5.4; medido 2026-11-07: 8–23× más rápido) ----
+
+
+def gpkg_layer(tmp_path, name="pozos", n=50):
+    from qgis.core import QgsProject, QgsVectorLayer
+
+    con = duckdb.connect()
+    con.execute("LOAD spatial")
+    con.execute("SET geometry_always_xy = true")
+    path = tmp_path / f"{name}.gpkg"
+    con.execute(
+        f"COPY (SELECT i AS id, ST_SetCRS(ST_Point(i, i), 'EPSG:32719') AS geom FROM range({n}) r(i)) "
+        f"TO '{path}' (FORMAT gdal, DRIVER 'GPKG')"
+    )
+    con.close()
+    layer = QgsVectorLayer(str(path), name, "ogr")
+    assert layer.isValid()
+    QgsProject.instance().addMapLayer(layer)
+    return layer
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_a_layer_from_a_file_offers_to_speed_up_and_never_blocks(coordinator, tmp_path):
+    from geoduck.domain.importing import PATH_GDAL, PATH_QGIS, path_label
+
+    layer = gpkg_layer(tmp_path)
+    ws = workspace(coordinator)
+    ws.send_layers([layer.id()], (DB, "main"))
+    flow = ws.to_duckdb
+    assert flow._candidates[0].path == PATH_GDAL
+    window = flow.window
+    assert wait_for(window.note.isVisible, TIMEOUT)  # «Instalar/Cargar y acelerar»
+    assert window.spatial_button.text() == tr("Load and speed up")
+    dialog = to_step_two(ws)  # sin el clic: QGIS la copia, como siempre
+    assert flow._candidates[0].path_for(False, False, dialog.duckdb_reads) == PATH_QGIS
+    ws.to_duckdb._show_choose_again()
+    window.spatial_button.click()
+    assert wait_for(lambda: flow._spatial_loaded and not window.note.isVisible(), TIMEOUT)
+    dialog = to_step_two(ws)
+    assert dialog.duckdb_reads and path_label(PATH_GDAL) in dialog.summary.text()
+    add_all(ws, coordinator)
+    assert [s["state"] for s in flow.states] == ["done"]
+    assert has_tables(coordinator, {"pozos"})
+    rows = []
+    coordinator.read_rows("SELECT count(*), any_value(typeof(geom)) FROM memory.main.pozos", 1, rows.append)
+    assert wait_for(lambda: rows, TIMEOUT)
+    assert rows[0].rows[0][0] == 50 and "32719" in rows[0].rows[0][1]
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_a_filtered_layer_from_a_file_is_still_copied_by_qgis(coordinator, tmp_path):
+    from geoduck.domain.importing import PATH_QGIS
+
+    layer = gpkg_layer(tmp_path, "filtrada")
+    layer.setSubsetString('"id" < 10')
+    ws = workspace(coordinator)
+    ws.send_layers([layer.id()], (DB, "main"))
+    assert ws.to_duckdb._candidates[0].path == PATH_QGIS  # se copia lo que se ve

@@ -468,22 +468,22 @@
             <translation>Los otros {0} archivos siguen a «Archivos → DuckDB»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="285" />
+            <location filename="../../geoduck/domain/importing.py" line="287" />
             <source>read by QGIS in the background</source>
             <translation>leído por QGIS en segundo plano</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="280" />
+            <location filename="../../geoduck/domain/importing.py" line="282" />
             <source>inside DuckDB (Connected layer)</source>
             <translation>dentro de DuckDB (capa Conectada)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="282" />
+            <location filename="../../geoduck/domain/importing.py" line="284" />
             <source>read directly by DuckDB (GeoParquet)</source>
             <translation>leído directo por DuckDB (GeoParquet)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="284" />
+            <location filename="../../geoduck/domain/importing.py" line="286" />
             <source>read directly by DuckDB</source>
             <translation>leído directo por DuckDB</translation>
         </message>
@@ -503,22 +503,22 @@
             <translation>lista de «{0}» enviada como texto</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="417" />
+            <location filename="../../geoduck/domain/importing.py" line="423" />
             <source>the table has no column «{0}»</source>
             <translation>la tabla no tiene la columna «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="419" />
+            <location filename="../../geoduck/domain/importing.py" line="425" />
             <source>column «{0}» is {1} in the table and {2} in the layer</source>
             <translation>la columna «{0}» es {1} en la tabla y {2} en la capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="425" />
+            <location filename="../../geoduck/domain/importing.py" line="431" />
             <source>the table has no geometry column «{0}»</source>
             <translation>la tabla no tiene la columna de geometría «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/importing.py" line="428" />
+            <location filename="../../geoduck/domain/importing.py" line="434" />
             <source>the geometry «{0}» has another CRS in the table ({1})</source>
             <translation>la geometría «{0}» tiene otro SRC en la tabla ({1})</translation>
         </message>
@@ -947,7 +947,7 @@
         </message>
         <message>
             <location filename="../../geoduck/engine/importing.py" line="175" />
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="437" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="488" />
             <source>Sending cancelled</source>
             <translation>Envío cancelado</translation>
         </message>
@@ -1347,7 +1347,7 @@
             <location filename="../../geoduck/plugin.py" line="222" />
             <location filename="../../geoduck/plugin.py" line="86" />
             <location filename="../../geoduck/plugin.py" line="183" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="120" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="121" />
             <location filename="../../geoduck/ui/pro/load.py" line="514" />
             <location filename="../../geoduck/ui/pro/load.py" line="240" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="53" />
@@ -1547,7 +1547,7 @@
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/families.py" line="42" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="345" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="349" />
             <source>no geometry</source>
             <translation>sin geometría</translation>
         </message>
@@ -1594,64 +1594,64 @@
             <translation>M añadida con valor NaN a {0} geometrías sin M</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="539" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="590" />
             <source>Connected (GeoDuck)</source>
             <translation>Conectada (GeoDuck)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="541" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="592" />
             <source>Memory</source>
             <translation>Memoria</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="556" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="607" />
             <location filename="../../geoduck/ui/send_dialog.py" line="91" />
             <source>custom</source>
             <translation>personalizado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="265" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="283" />
             <source>A Connected layer of this session is sent with its CRS: it cannot be reprojected</source>
             <translation>Una capa Conectada de esta sesión se envía con su SRC: no se puede reproyectar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="303" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="321" />
             <source>A view is only possible for a GeoParquet layer without selection or filter</source>
             <translation>Una vista solo es posible para una capa GeoParquet sin selección ni filtro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="399" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="450" />
             <source>GeoDuck: add QGIS layers to DuckDB</source>
             <translation>GeoDuck: añadir capas de QGIS a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="615" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="669" />
             <source>Custom CRS: it is stored with its full definition (PROJJSON)</source>
             <translation>SRC personalizado: se guarda con su definición completa (PROJJSON)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="269" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="287" />
             <source>A view cannot be reprojected: it is sent as a copy</source>
             <translation>Una vista no se puede reproyectar: se envía como copia</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="581" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="632" />
             <source>only vector layers can be sent</source>
             <translation>solo se pueden enviar capas vectoriales</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="598" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="649" />
             <source>the layer is not valid</source>
             <translation>la capa no es válida</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="670" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="724" />
             <location filename="../../geoduck/ui/map_view.py" line="64" />
             <source>The layer is no longer in the project</source>
             <translation>La capa ya no está en el proyecto</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="241" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="259" />
             <source>The CRS of «{0}» cannot be expressed: reproject the layer or send it without CRS</source>
             <translation>El SRC de «{0}» no se puede expresar: reproyecta la capa o envíala sin SRC</translation>
         </message>
@@ -1872,7 +1872,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/about_dialog.py" line="115" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="875" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="943" />
             <location filename="../../geoduck/ui/pro/widgets.py" line="370" />
             <source>Close</source>
             <translation>Cerrar</translation>
@@ -1944,15 +1944,15 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/attach_dialog.py" line="125" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="478" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="525" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="513" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="562" />
             <location filename="../../geoduck/ui/pro/load.py" line="523" />
             <location filename="../../geoduck/ui/pro/load.py" line="284" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="71" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="196" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="451" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="907" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="290" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="294" />
             <source>Cancel</source>
             <translation>Cancelar</translation>
         </message>
@@ -1990,8 +1990,8 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/attach_dialog.py" line="122" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="872" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="707" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="940" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="775" />
             <location filename="../../geoduck/ui/pro/sidebar.py" line="666" />
             <source>Open</source>
             <translation>Abrir</translation>
@@ -2073,297 +2073,325 @@
             <translation>La capa no tiene extensión válida: se seleccionó sin hacer zoom</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="103" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="104" />
             <source>Points</source>
             <translation>Puntos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="104" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="105" />
             <source>Lines</source>
             <translation>Líneas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="105" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="106" />
             <source>Polygons</source>
             <translation>Polígonos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="106" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="107" />
             <source>Tables without geometry</source>
             <translation>Tablas sin geometría</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="107" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="108" />
             <source>Need «spatial»</source>
             <translation>Necesitan «spatial»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="108" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="109" />
             <source>Cannot be added</source>
             <translation>No se pueden añadir</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="155" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="425" />
+            <source>With DuckDB's «spatial» extension, layers that come from a file are copied by DuckDB: up to 20 times faster.</source>
+            <translation>Con la extensión «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="156" />
             <source>QGIS layers</source>
             <translation>Capas de QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="163" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="164" />
             <source>Your QGIS project has no vector layers. Add one in QGIS and come back here.</source>
             <translation>Tu proyecto de QGIS no tiene capas vectoriales. Añade una en QGIS y vuelve aquí.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="264" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="265" />
             <source>Files → DuckDB</source>
             <translation>Archivos → DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="264" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="265" />
             <source>QGIS layers → DuckDB</source>
             <translation>Capas de QGIS → DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="368" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="375" />
             <source>Reading the files…</source>
             <translation>Leyendo los archivos…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="402" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="409" />
             <source>None of these files can be read.</source>
             <translation>No se puede leer ninguno de estos archivos.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="419" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="424" />
+            <source>Load and speed up</source>
+            <translation>Cargar y acelerar</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="424" />
+            <source>Install and speed up</source>
+            <translation>Instalar y acelerar</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="436" />
+            <source>Without it, QGIS copies them as usual.</source>
+            <translation>Sin ella, las copia QGIS como siempre.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="454" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="430" />
             <source>It is installed but not loaded: GeoDuck will load it when you press «{0}».</source>
             <translation>Está instalada pero no cargada: GeoDuck la cargará al pulsar «{0}».</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="420" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="455" />
             <source>Load and continue</source>
             <translation>Cargar y continuar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="422" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="457" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="432" />
             <source>It is not installed: GeoDuck will install it when you press «{0}» (only once, about 40 MB).</source>
             <translation>No está instalada: GeoDuck la instalará al pulsar «{0}» (una sola vez, ~40 MB).</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="425" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="460" />
             <source>Install and continue</source>
             <translation>Instalar y continuar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="522" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="559" />
             <source>Choose the DuckDB database and schema where to save them.</source>
             <translation>Elige en qué base y esquema de DuckDB guardarlas.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="542" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="579" />
             <source>Add 1 layer to DuckDB</source>
             <translation>Añadir 1 capa a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="809" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="877" />
             <source>Continue in the background</source>
             <translation>Seguir en segundo plano</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="811" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="879" />
             <source>Cancel all</source>
             <translation>Cancelar todo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="868" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="709" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="936" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="777" />
             <source>Undo</source>
             <translation>Deshacer</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="332" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="354" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="335" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="361" />
             <source>Finish or cancel these layers to add more.</source>
             <translation>Termina o cancela estas capas para añadir más.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="336" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="339" />
             <source>Start DuckDB to add layers.</source>
             <translation>Inicia DuckDB para añadir capas.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="358" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="365" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="480" />
             <source>Start DuckDB to import files.</source>
             <translation>Inicia DuckDB para importar archivos.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="426" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="461" />
             <source>{0} are read with DuckDB's «spatial» extension (the fastest).</source>
             <translation>{0} se leen con la extensión «spatial» de DuckDB (la más rápida).</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="449" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="484" />
             <source>Installing…</source>
             <translation>Instalando…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="449" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="484" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="513" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="714" />
             <source>Loading…</source>
             <translation>Cargando…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="473" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="508" />
             <source>Choose what to add to DuckDB. Each layer or sheet becomes a table.</source>
             <translation>Elige qué añadir a DuckDB. Cada capa u hoja será una tabla.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="475" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="510" />
             <source>Choose the layers to add to DuckDB. The ones selected in QGIS are already checked.</source>
             <translation>Elige las capas que quieres añadir a DuckDB. Las que tenías seleccionadas en QGIS ya vienen marcadas.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="480" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="515" />
             <source>Next</source>
             <translation>Siguiente</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="491" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="526" />
             <source>1 layer chosen</source>
             <translation>1 capa elegida</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="523" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="560" />
             <source>Back</source>
             <translation>Atrás</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="800" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="854" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="704" />
+            <source>«spatial» is loaded: DuckDB copies the layers that come from a file.</source>
+            <translation>«spatial» está cargada: DuckDB copia las capas que vienen de un archivo.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="868" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="922" />
             <source>Remove this layer</source>
             <translation>Quitar esta capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="265" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="266" />
             <source>of</source>
             <translation>de</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="391" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="398" />
             <source>The files could not be read: </source>
             <translation>No se pudieron leer los archivos: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="429" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="438" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="464" />
             <source>It could not be activated: </source>
             <translation>No se pudo activar: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="542" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="579" />
             <source>Add {0} layers to DuckDB</source>
             <translation>Añadir {0} capas a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="612" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="651" />
             <source>DuckDB is busy</source>
             <translation>DuckDB está ocupado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="719" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="787" />
             <source>1 table added to DuckDB from files</source>
             <translation>1 tabla añadida a DuckDB desde archivos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="724" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="792" />
             <source>1 QGIS layer added to DuckDB</source>
             <translation>1 capa de QGIS añadida a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="727" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="795" />
             <source>Catalog: {0} · Schema: {1}</source>
             <translation>Catálogo: {0} · Esquema: {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="744" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="812" />
             <source>Adding {0} of {1} to DuckDB</source>
             <translation>Añadiendo {0} de {1} a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="854" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="922" />
             <source>Stop this layer</source>
             <translation>Detener esta capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="238" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="844" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="344" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="239" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="912" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="348" />
             <source>{0} features</source>
             <translation>{0} entidades</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="491" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="526" />
             <source>{0} layers chosen</source>
             <translation>{0} capas elegidas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="731" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="799" />
             <source>{0} cancelled ({1})</source>
             <translation>{0} canceladas ({1})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="733" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="801" />
             <source>{0} with error ({1})</source>
             <translation>{0} con error ({1})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="761" />
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="691" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="829" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="759" />
             <source>It could not be undone:</source>
             <translation>No se pudo deshacer:</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="857" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="925" />
             <source>Adding {0} layers to DuckDB · {1}…</source>
             <translation>Añadiendo {0} capas a DuckDB · {1}…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="860" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="928" />
             <source>Done:</source>
             <translation>Listo:</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="247" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="625" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="248" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="629" />
             <source>{0} rows</source>
             <translation>{0} filas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="721" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="789" />
             <source>{0} tables added to DuckDB from files</source>
             <translation>{0} tablas añadidas a DuckDB desde archivos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="726" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="794" />
             <source>{0} QGIS layers added to DuckDB</source>
             <translation>{0} capas de QGIS añadidas a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="847" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="915" />
             <source>cancelled</source>
             <translation>cancelada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="852" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="920" />
             <source>waiting</source>
             <translation>en espera</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="686" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="754" />
             <source>Undone: {0}</source>
             <translation>Deshecho: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/add_layers.py" line="849" />
+            <location filename="../../geoduck/ui/pro/add_layers.py" line="917" />
             <source>error: {0}</source>
             <translation>error: {0}</translation>
         </message>
@@ -2646,13 +2674,13 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/load_options.py" line="112" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="234" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="238" />
             <source>Reproject to…</source>
             <translation>Reproyectar a…</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/load_options.py" line="113" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="235" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="239" />
             <source>Transforms the coordinates while copying, with QGIS/PROJ.</source>
             <translation>Transforma las coordenadas al copiar, con QGIS/PROJ.</translation>
         </message>
@@ -2679,7 +2707,7 @@
         <message>
             <location filename="../../geoduck/ui/pro/load_options.py" line="89" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="375" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="347" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="351" />
             <source>no CRS</source>
             <translation>sin SRC</translation>
         </message>
@@ -3814,244 +3842,244 @@
             <translation>Otro nombre</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="163" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="167" />
             <source>Send to DuckDB</source>
             <translation>Enviar a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="194" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="198" />
             <source>Destination database</source>
             <translation>Base de datos destino</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="198" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="202" />
             <source>Temporary table (this session only)</source>
             <translation>Tabla temporal (solo esta sesión)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="230" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="234" />
             <source>Send only the selected features</source>
             <translation>Enviar solo las entidades seleccionadas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="231" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="235" />
             <source>View instead of copy (GeoParquet: no data is copied)</source>
             <translation>Vista en vez de copia (GeoParquet: no se copian datos)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="237" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="241" />
             <source>Target CRS</source>
             <translation>SRC de destino</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="251" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="255" />
             <source>Send without CRS</source>
             <translation>Enviar sin SRC</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="286" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="290" />
             <source>Open the table when done</source>
             <translation>Abrir la tabla al terminar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="293" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="297" />
             <source>Send</source>
             <translation>Enviar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="296" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="300" />
             <source>Ctrl+Enter</source>
             <translation>Ctrl+Intro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="379" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="383" />
             <source>If the table already exists</source>
             <translation>Si la tabla ya existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="532" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="536" />
             <source>Already exists: it will not be sent</source>
             <translation>Ya existe: no se enviará</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="607" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="611" />
             <source>Checking the destination…</source>
             <translation>Comprobando el destino…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="609" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="613" />
             <source>Choose the target CRS of «Reproject to…».</source>
             <translation>Elige el SRC de destino de «Reproyectar a…».</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="612" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="616" />
             <source>Nothing to send: check at least one layer.</source>
             <translation>Nada que enviar: marca al menos una capa.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="207" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="211" />
             <source>Layer</source>
             <translation>Capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="207" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="211" />
             <source>Table in DuckDB</source>
             <translation>Tabla en DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="207" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="211" />
             <source>What will happen</source>
             <translation>Qué pasará</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="260" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="264" />
             <source>More options</source>
             <translation>Más opciones</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="349" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="353" />
             <source>with filter: only what the layer shows</source>
             <translation>con filtro: solo lo que muestra la capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="488" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="492" />
             <source>Not selected</source>
             <translation>No marcada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="491" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="495" />
             <source>Cannot: write a valid table name</source>
             <translation>No se puede: escribe un nombre de tabla válido</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="498" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="502" />
             <source>Cannot: another layer uses this name</source>
             <translation>No se puede: otra capa usa este nombre</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="501" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="505" />
             <source>Cannot: a Connected layer is sent with its CRS, without reprojecting</source>
             <translation>No se puede: una capa Conectada se envía con su SRC, sin reproyectar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="504" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="508" />
             <source>Cannot: the layer has no CRS to reproject from</source>
             <translation>No se puede: la capa no tiene SRC desde el que reproyectar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="506" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="510" />
             <source>Cannot: the CRS cannot be stored (see below)</source>
             <translation>No se puede: el SRC no se puede guardar (ver abajo)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="510" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="514" />
             <source>Checking…</source>
             <translation>Comprobando…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="513" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="517" />
             <source>Cannot: a view has this name; choose another name</source>
             <translation>No se puede: hay una vista con este nombre; elige otro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="524" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="528" />
             <source>Already exists: it will be replaced</source>
             <translation>Ya existe: se reemplazará</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="531" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="535" />
             <source>Already exists: rows will be added</source>
             <translation>Ya existe: se añadirán filas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="558" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="562" />
             <source>A layer has a CRS that cannot be expressed: reproject it («Reproject to…») or send it without CRS.</source>
             <translation>Una capa tiene un SRC que no se puede expresar: reproyéctala («Reproyectar a…») o envíala sin SRC.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="644" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="648" />
             <source>Replacing or adding rows cannot be undone from GeoDuck.</source>
             <translation>Reemplazar o añadir filas no se puede deshacer desde GeoDuck.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="646" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="650" />
             <source>The view reads the file each time: it must stay where it is.</source>
             <translation>La vista lee el archivo cada vez: debe seguir en su sitio.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="190" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="194" />
             <source>Destination</source>
             <translation>Destino</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="228" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="232" />
             <source>Only selected features ({0})</source>
             <translation>Solo las entidades seleccionadas ({0})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="374" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="378" />
             <source>Table name for {0}</source>
             <translation>Nombre de tabla para {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="521" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="645" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="525" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="649" />
             <source>New view</source>
             <translation>Vista nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="521" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="525" />
             <source>New table</source>
             <translation>Tabla nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="527" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="531" />
             <source>Cannot: rows cannot be added as a view</source>
             <translation>No se puede: no se pueden añadir filas a una vista</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="565" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="569" />
             <source>This database uses an older file format that cannot store the CRS of a geometry. Send without CRS, or choose another database.</source>
             <translation>Esta base usa un formato de archivo antiguo que no guarda el SRC de una geometría. Envía sin SRC o elige otra base.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="628" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="632" />
             <source>How: {0}</source>
             <translation>Cómo: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="486" />
-            <location filename="../../geoduck/ui/send_dialog.py" line="508" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="490" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="512" />
             <source>Cannot: {0}</source>
             <translation>No se puede: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="620" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="624" />
             <source>{0} new</source>
             <translation>{0} nuevas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="622" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="626" />
             <source>{0} replaced</source>
             <translation>{0} reemplazadas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="624" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="628" />
             <source>{0} with more rows</source>
             <translation>{0} con más filas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="632" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="636" />
             <source>Reprojected to {0} with QGIS/PROJ.</source>
             <translation>Reproyectado a {0} con QGIS/PROJ.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="530" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="534" />
             <source>Cannot add rows: {0}</source>
             <translation>No se pueden añadir filas: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/send_dialog.py" line="641" />
+            <location filename="../../geoduck/ui/send_dialog.py" line="645" />
             <source>Large layers: it may take about {0} minutes. You can cancel.</source>
             <translation>Capas grandes: puede tardar unos {0} minutos. Puedes cancelar.</translation>
         </message>

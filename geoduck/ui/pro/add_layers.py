@@ -54,6 +54,7 @@ from geoduck.app.events import (
 from geoduck.domain.errors import GeoDuckError, SessionStateError
 from geoduck.domain.files import candidate_for, file_formats_needing_spatial, size_label
 from geoduck.domain.importing import (
+    PATH_GDAL,
     PATH_QGIS,
     ImportedTable,
     SendCandidate,
@@ -313,6 +314,8 @@ class AddLayers:
         self._paths: list[str] = []
         self._scanning = False
         self._spatial_installed: bool | None = None
+        #: `spatial` cargada en la sesión (capas que vienen de un archivo: las copia DuckDB, §5.4).
+        self._spatial_loaded = False
         self._activating = False
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
@@ -338,9 +341,13 @@ class AddLayers:
         self.files = False
         self._candidates = coordinator.send_candidates(layer_ids)
         self._destination = destination
+        self._spatial_loaded = False
+        if any(c.path == PATH_GDAL for c in self._candidates):
+            coordinator.check_spatial()  # responde con SpatialChecked: nota «Instalar y acelerar»
         marked = set(layer_ids) if layer_ids is not None else set(checked or [])
         window = self._window()
         window.fill(self._candidates, marked)
+        window.note.setVisible(False)
         self._show_choose()
         window.show()
         window.raise_()
@@ -409,7 +416,35 @@ class AddLayers:
             window.note.setVisible(False)
         self.choice_changed()
 
+    def _show_speed_note(self, error: str = "") -> None:
+        """Capas de QGIS que vienen de un archivo: con `spatial`, DuckDB las copia mucho más rápido (§5.4).
+        Sin el clic, las copia QGIS como siempre: nunca bloquea."""
+        window = self._window()
+        installed = self._spatial_installed
+        label_text = tr("Load and speed up") if installed else tr("Install and speed up")
+        text = tr(
+            "With DuckDB's «spatial» extension, layers that come from a file are copied by DuckDB: up "
+            "to 20 times faster."
+        )
+        text += " " + (
+            tr("It is installed but not loaded: GeoDuck will load it when you press «{0}».")
+            if installed
+            else tr(
+                "It is not installed: GeoDuck will install it when you press «{0}» (only once, about 40 MB)."
+            )
+        ).format(label_text)
+        text += " " + tr("Without it, QGIS copies them as usual.")
+        if error:
+            text += "\n" + tr("It could not be activated: ") + error
+        window.note_text.setText(text)
+        window.spatial_button.setText(label_text)
+        window.spatial_button.setEnabled(not self._activating)
+        window.note.setVisible(True)
+
     def _show_spatial_note(self, error: str = "") -> None:
+        if not self.files:
+            self._show_speed_note(error)
+            return
         window = self._window()
         formats = file_formats_needing_spatial(
             [c.file for c in self._candidates if c.problem == NEEDS_SPATIAL]
@@ -512,6 +547,8 @@ class AddLayers:
             pro=True,
         )
         dialog.tidy_columns = False
+        dialog.duckdb_reads = self._spatial_loaded  # §5.4: las capas de archivo, por DuckDB
+        dialog.refresh()
         dialog.tree.setColumnHidden(2, False)
         dialog.setWindowFlags(Qt.WindowType.Widget)
         dialog.layout().setContentsMargins(0, 0, 0, 0)
@@ -577,7 +614,9 @@ class AddLayers:
         for item in request.items:
             c = by_id[item.layer_id]
             total = (
-                c.rows_for(only) if c.path_for(only, request.reproject_to is not None) == PATH_QGIS else -1
+                c.rows_for(only)
+                if c.path_for(only, request.reproject_to is not None, request.duckdb_reads) == PATH_QGIS
+                else -1
             )
             self.states.append({"state": WAITING, "rows": 0, "total": total, "name": c.name, "message": ""})
         self.tables = []
@@ -643,24 +682,53 @@ class AddLayers:
             self._finish()
         self._refresh()
 
-    def _on_event(self, event: AppEvent) -> None:
+    def _on_spatial(self, event: AppEvent) -> bool:  # noqa: PLR0911 - un evento por rama
+        """`spatial` consultada, activada o fallida: la nota del paso 1. True si el evento era ese."""
+        if not self.files and not self.running and isinstance(event, SpatialChecked):
+            self._spatial_installed = event.installed
+            self._spatial_loaded = event.loaded
+            needs = any(c.path == PATH_GDAL for c in self._candidates)
+            if (
+                needs
+                and not event.loaded
+                and self.window is not None
+                and self.window.stack.currentIndex() == 0
+            ):
+                self._show_speed_note()
+            return True
+        if not self.files and isinstance(event, SpatialActivated) and self._activating:
+            self._activating = False
+            self._spatial_installed = self._spatial_loaded = True
+            if self.window is not None:
+                self.window.note.setVisible(False)
+            self._host.notify(tr("«spatial» is loaded: DuckDB copies the layers that come from a file."))
+            return True
+        if not self.files and isinstance(event, SpatialActivationFailed) and self._activating:
+            self._activating = False
+            self._show_speed_note(event.message)
+            return True
         if self.files and isinstance(event, SpatialChecked):
             self._spatial_installed = event.installed
             if event.loaded:  # alguien la cargó (p. ej. con SQL): basta con volver a leer
                 self._scan()
             elif self.window is not None and self.window.note.isVisible():
                 self._show_spatial_note()
-            return
+            return True
         if self.files and isinstance(event, SpatialActivated) and self._activating:
             self._activating = False
             self._spatial_installed = True
             if self.window is not None:
                 self.window.note.setVisible(False)
             self._scan()
-            return
+            return True
         if self.files and isinstance(event, SpatialActivationFailed) and self._activating:
             self._activating = False
             self._show_spatial_note(event.message)
+            return True
+        return False
+
+    def _on_event(self, event: AppEvent) -> None:
+        if self._on_spatial(event):
             return
         index = self._current
         if isinstance(event, SendProgressed) and self._mine and index is not None:

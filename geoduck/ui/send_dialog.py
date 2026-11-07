@@ -141,6 +141,10 @@ _PRO_ROLES = {"muted": "muted", "primary": "primary", "error-text": "error", "se
 
 
 class SendDialog(QDialog):
+    #: `spatial` cargada: las capas que vienen de un archivo las copia DuckDB (§5.4). Lo pone «Capas de QGIS →
+    #: DuckDB»; el diálogo clásico sigue con QGIS.
+    duckdb_reads = False
+
     def _role(self, widget: QWidget, role: str) -> None:
         widget.setProperty("geoduck", role)
         if getattr(self, "pro", False):
@@ -624,7 +628,7 @@ class SendDialog(QDialog):
             parts.append(tr("{0} with more rows").format(added))
         lines = [f"<b>{' · '.join(parts)}</b> · " + tr("{0} rows").format(_count(rows))]
         reproject = self.reproject_to is not None
-        paths = sorted({self._candidates[i].path_for(only, reproject) for i, _ in sending})
+        paths = sorted({self._candidates[i].path_for(only, reproject, self.duckdb_reads) for i, _ in sending})
         lines.append(tr("How: {0}").format(", ".join(path_label(p) for p in paths)))
         if reproject:
             crs = self.reproject_crs.crs()
@@ -633,7 +637,7 @@ class SendDialog(QDialog):
         slow = sum(
             self._candidates[i].rows_for(only)
             for i, _ in sending
-            if self._candidates[i].path_for(only, reproject) == PATH_QGIS
+            if self._candidates[i].path_for(only, reproject, self.duckdb_reads) == PATH_QGIS
         )
         if is_large(slow):
             minutes = max(2, round(estimated_seconds(slow) / 60))
@@ -664,7 +668,7 @@ class SendDialog(QDialog):
             c = self._candidates[i]
             if (
                 self.row_state(i).kind == "send"
-                and c.path_for(only, self.reproject_to is not None) == PATH_QGIS
+                and c.path_for(only, self.reproject_to is not None, self.duckdb_reads) == PATH_QGIS
             ):
                 total += c.rows_for(only)
         return total
@@ -686,4 +690,5 @@ class SendDialog(QDialog):
             as_view=self.as_view.isChecked() and self.reproject_to is None,
             without_crs=self.without_crs.isChecked(),
             reproject_to=self.reproject_to,
+            duckdb_reads=self.duckdb_reads,
         )
