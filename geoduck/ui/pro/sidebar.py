@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from qgis.PyQt.QtCore import QMimeData, QModelIndex, QObject, QPoint, QRect, QRectF, QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen
+from qgis.PyQt.QtGui import QColor, QDrag, QFont, QFontMetrics, QIcon, QPainter, QPen
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -34,11 +34,11 @@ from geoduck import __version__
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ObjectKind, catalog_key
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import fuzzy, icons
-from geoduck.ui.pro.drag import LAYERS_MIME, PLACES_MIME, layer_ids, places_mime
+from geoduck.ui.pro.drag import LAYERS_MIME, PLACES_MIME, drag_pixmap, layer_ids, places_mime
 from geoduck.ui.pro.places import Place, Places, icon_name, missing_reason, place_of
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
-from geoduck.ui.pro.widgets import ElidedLabel, SearchField, StatusDot, icon_button, label
+from geoduck.ui.pro.widgets import LOGO, ElidedLabel, SearchField, StatusDot, icon_button, label
 
 #: Qué es cada fila del árbol (rol `ROLE`): una sección, una base, un esquema, un grupo o un lugar.
 ROLE = Qt.ItemDataRole.UserRole
@@ -64,16 +64,31 @@ class _NavDelegate(QStyledItemDelegate):
         self.small = ui_font(METRICS.font_small)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
-        self._paint(painter, option, index)
         tree = option.widget  # type: ignore[attr-defined]
         target = getattr(tree, "drop_item", None)
-        if target is not None and tree.itemFromIndex(index) is target:  # E5: la base donde se soltarán
+        lake = target is not None and tree.itemFromIndex(index) is target  # la base donde se soltarán
+        box = QRectF(option.rect).adjusted(1, 1, -1, -1)  # type: ignore[attr-defined]
+        if lake:  # «el lago» (marca, 2026-11-07): la base se pinta de azul claro, con el pato a la derecha
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(self.colors.accent_soft))
+            painter.drawRoundedRect(box, 5, 5)
+            painter.restore()
+        self._lake = lake  # en el lago, el pato ocupa el sitio del texto de la derecha
+        self._paint(painter, option, index)
+        self._lake = False
+        if lake:
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             pen = QPen(QColor(self.colors.accent))
             pen.setWidthF(1.5)
             painter.setPen(pen)
-            painter.drawRoundedRect(QRectF(option.rect).adjusted(1, 1, -1, -1), 5, 5)  # type: ignore[attr-defined]
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(box, 5, 5)
+            side = 16
+            logo = QIcon(LOGO).pixmap(side, side)
+            painter.drawPixmap(int(box.right()) - side - 6, int(box.center().y()) - side // 2, logo)
             painter.restore()
 
     def _paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
@@ -93,6 +108,8 @@ class _NavDelegate(QStyledItemDelegate):
         narrow = QStyleOptionViewItem(option)
         narrow.rect = QRect(rect.x(), rect.y(), max(0, rect.width() - width), rect.height())
         super().paint(painter, narrow, index)
+        if getattr(self, "_lake", False):
+            return
         painter.save()
         painter.setFont(self.small)
         painter.setPen(QColor(self.colors.faint))
@@ -140,8 +157,16 @@ class NavTree(QTreeWidget):
         return places_mime(places)
 
     def startDrag(self, actions: Any) -> None:  # noqa: N802 - API de Qt
-        if any((d := i.data(0, ROLE)) and d[0] == PLACE and not d[1].is_query for i in self.selectedItems()):
-            super().startDrag(Qt.DropAction.CopyAction)
+        """Arrastrar tablas al mapa: se arrastra el pato de GeoDuck (con cuántas lleva) hacia QGIS."""
+        items = self.selectedItems()
+        count = sum(1 for i in items if (d := i.data(0, ROLE)) and d[0] == PLACE and not d[1].is_query)
+        if not count:
+            return
+        drag = QDrag(self)
+        drag.setMimeData(self.mimeData(items))
+        drag.setPixmap(drag_pixmap(count))
+        drag.setHotSpot(QPoint(14, 34))
+        drag.exec(Qt.DropAction.CopyAction)
 
     # -- desde QGIS -----------------------------------------------------------------------------------
 
@@ -222,6 +247,7 @@ class Sidebar(QFrame):
     send_layers_requested = pyqtSignal()
     diagnostics_requested = pyqtSignal()
     about_requested = pyqtSignal()
+    start_requested = pyqtSignal()
 
     def __init__(self, colors: Colors, places: Places) -> None:
         super().__init__()
@@ -258,7 +284,9 @@ class Sidebar(QFrame):
         row = QHBoxLayout(head)
         row.setContentsMargins(14, 0, 8, 0)
         row.setSpacing(9)
-        self.dot = StatusDot(self.colors)
+        # el logo dice el estado de la sesión, y un clic abre su menú (marca, 2026-11-07)
+        self.dot = StatusDot(self.colors, logo=True)
+        self.dot.clicked.connect(lambda: self._popup(self.session_menu, self.dot))
         row.addWidget(self.dot)
         titles = QVBoxLayout()
         titles.setSpacing(0)
@@ -270,12 +298,23 @@ class Sidebar(QFrame):
         titles.addWidget(self.status)
         row.addLayout(titles, 1)
         self.session_button = icon_button("more", tr("Session"), self.colors)
+        # El menú de la sesión: solo lo que aplica (propietario, 2026-11-07): sin sesión, «Iniciar DuckDB»;
+        # con sesión, «Cerrar sesión»; nunca un «Iniciar» en gris.
         self.session_menu = QMenu(self)
+        self.start_action = self.session_menu.addAction(tr("Start DuckDB"))
+        self.start_action.triggered.connect(self.start_requested.emit)
+        self.session_open_db = self.session_menu.addAction(tr("Open database…"))
+        self.session_open_db.triggered.connect(self.open_database_requested.emit)
+        self.session_create_db = self.session_menu.addAction(tr("Create database…"))
+        self.session_create_db.triggered.connect(self.create_database_requested.emit)
         self.refresh_action = self.session_menu.addAction(tr("Refresh"))
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
         self.session_menu.addSeparator()
-        self.close_action = self.session_menu.addAction(tr("Close DuckDB"))
+        self.close_action = self.session_menu.addAction(tr("Close session"))
         self.close_action.triggered.connect(self.close_session_requested.emit)
+        self.session_menu.addSeparator()
+        self.session_menu.addAction(tr("Environment diagnostics"), self.diagnostics_requested.emit)
+        self.session_menu.addAction(tr("About GeoDuck"), self.about_requested.emit)
         self.session_button.clicked.connect(lambda: self._popup(self.session_menu, self.session_button))
         row.addWidget(self.session_button)
         return head
@@ -361,14 +400,18 @@ class Sidebar(QFrame):
         self.title.setText(engine)
         self.status.setText(text)
         self.refresh_action.setEnabled(ready)
-        self.close_action.setEnabled(dot != "off")
+        self.refresh_action.setVisible(dot != "off")
+        self.close_action.setVisible(dot != "off")
+        self.start_action.setVisible(dot == "off")
+        for action in (self.session_open_db, self.session_create_db):
+            action.setEnabled(ready or dot == "off")
         for action in (self.open_db_action, self.create_db_action):
             action.setEnabled(ready or dot == "off")
         self.send_action.setEnabled(ready)
         # Sin DuckDB, todo en gris salvo iniciar, abrir o crear una base, Diagnóstico y Acerca de
         # (propietario, 2026-11-06)
         started = dot != "off"
-        for widget in (self.search, self.tree, self.session_button):
+        for widget in (self.search, self.tree):
             widget.setEnabled(started)
 
     def current_target(self) -> tuple[str, str] | None:

@@ -19,7 +19,7 @@ from typing import Any
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import QEvent, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QKeySequence
+from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -83,7 +83,7 @@ from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
-from geoduck.ui.pro.widgets import Toast, button, icon_button, label, lines_html
+from geoduck.ui.pro.widgets import LOGO, Toast, button, icon_button, label, lines_html
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
 STATE, TABS, WELCOME = 0, 1, 2
@@ -329,7 +329,10 @@ class ProWorkspace(QWidget):
         box.setContentsMargins(16, 0, 16, 0)
         box.setSpacing(8)
         glyph = label("")
-        glyph.setPixmap(icons.pixmap(icon, self.colors.faint, 36))
+        if icon == "logo":  # sin sesión: el logo grande en gris (marca, 2026-11-07)
+            glyph.setPixmap(QIcon(LOGO).pixmap(64, 64, QIcon.Mode.Disabled))
+        else:
+            glyph.setPixmap(icons.pixmap(icon, self.colors.faint, 36))
         title = label("", "title")
         text = label("", "muted")
         text.setWordWrap(True)
@@ -367,7 +370,7 @@ class ProWorkspace(QWidget):
         self.diagnostics_button.clicked.connect(self.show_diagnostics)
         self.diagnostics_button.setVisible(False)
         page, _, self.state_title, self.state_text = self._empty_page(
-            "database", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
+            "logo", [self.start_button, self.open_button, self.create_button, self.diagnostics_button]
         )
         return page
 
@@ -507,6 +510,7 @@ class ProWorkspace(QWidget):
         side.send_layers_requested.connect(self.send_layers_requested.emit)
         side.diagnostics_requested.connect(self.show_diagnostics)
         side.about_requested.connect(self.show_about)
+        side.start_requested.connect(self.start)
         side.tree.layers_dropped.connect(self.send_layers)
         side.tree.drop_hint.connect(lambda text: self.notify(text) if text else None)
 

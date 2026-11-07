@@ -45,7 +45,7 @@ from geoduck.domain.importing import PATH_QGIS, ImportedTable, SendCandidate, Se
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import style
-from geoduck.ui.pro.widgets import button, label, lines_html
+from geoduck.ui.pro.widgets import LogoBar, button, label, lines_html
 from geoduck.ui.send_dialog import SendDialog
 
 CHOOSE, WHERE, PROGRESS = 0, 1, 2
@@ -543,7 +543,7 @@ class AddLayers:
 
     # -- paso 3: la vista ---------------------------------------------------------------------------------
 
-    def _build_progress(self) -> None:  # noqa: PLR0915 - la grilla, fila a fila
+    def _build_progress(self) -> None:
         window = self._window()
         self._drop_send_dialog()
         old = window.progress_page.layout()
@@ -571,9 +571,7 @@ class AddLayers:
             cell = QWidget()
             row = QHBoxLayout(cell)
             row.setContentsMargins(0, 0, 0, 0)
-            bar = QProgressBar()
-            bar.setProperty("pro", "thin")
-            bar.setTextVisible(False)
+            bar = LogoBar(window.colors)  # el logo avanza en la punta (marca, 2026-11-07)
             bar.setFixedWidth(160)
             row.addWidget(bar)
             detail = label("", "muted")
