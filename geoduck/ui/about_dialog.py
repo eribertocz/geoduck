@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont, QIcon
+from qgis.PyQt.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -49,6 +49,20 @@ def components(report: DiagnosticReport | None, engine: EngineInfo | None) -> li
     if report is not None:
         rows.append(("PyArrow", report.by_id("pyarrow").detail.removeprefix("PyArrow ")))
     return rows
+
+
+class _Band(QWidget):
+    """La franja de la marca arriba de «Acerca de» (azul lago → azul profundo)."""
+
+    def __init__(self, start: QColor, end: QColor) -> None:
+        super().__init__()
+        self._colors = (start, end)
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802 - API de Qt
+        gradient = QLinearGradient(0, 0, self.width(), 0)
+        gradient.setColorAt(0, self._colors[0])
+        gradient.setColorAt(1, self._colors[1])
+        QPainter(self).fillRect(self.rect(), gradient)
 
 
 class AboutDialog(QDialog):
@@ -95,18 +109,26 @@ class AboutDialog(QDialog):
                 "pending; see «Environment diagnostics» for your installation."
             )
         )
-        note.setProperty("geoduck", "muted")
+        note.setProperty("geoduck", "note")  # la raya ámbar de la marca
         note.setWordWrap(True)
 
         close = QPushButton(tr("Close"))
-        close.setProperty("geoduck", "secondary")
+        close.setProperty("geoduck", "primary")
         close.setDefault(True)
         close.clicked.connect(self.reject)
         buttons = QHBoxLayout()
         buttons.addWidget(self.links, 1)
         buttons.addWidget(close)
 
-        layout = QVBoxLayout(self)
+        # una franja azul arriba: solo aquí, el diálogo de presentación (marca, 2026-11-07)
+        band = _Band(QColor(palette.primary), QColor("#1D3F99"))
+        band.setFixedHeight(5)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(band)
+        layout = QVBoxLayout()
+        outer.addLayout(layout)
         layout.setContentsMargins(20, 18, 20, 16)
         layout.setSpacing(14)
         layout.addLayout(top)
@@ -118,15 +140,16 @@ class AboutDialog(QDialog):
         """Icono, nombre, versión en una etiqueta y resumen."""
         icon = QLabel()
         icon.setPixmap(QIcon(str(_ICON)).pixmap(56, 56))
-        name = QLabel("GeoDuck")
+        name = QLabel(f'Geo<span style="color: {palette.action};">Duck</span>')  # «Geo» + «Duck» en azul
+        name.setTextFormat(Qt.TextFormat.RichText)
         font = QFont(name.font())
         font.setPointSizeF(font.pointSizeF() * 1.6)
         font.setBold(True)
         name.setFont(font)
         self.version = QLabel(version_text())
         self.version.setStyleSheet(
-            f"background: {palette.chip}; color: {palette.text}; border: 1px solid {palette.border};"
-            "border-radius: 10px; padding: 2px 10px;"
+            f"background: {palette.chip}; color: {palette.brand_text}; border: none;"
+            "border-radius: 10px; padding: 2px 10px; font-weight: 600;"
         )
         name_row = QHBoxLayout()
         name_row.setSpacing(10)

@@ -17,9 +17,9 @@ from qgis.PyQt.QtWidgets import QWidget
 
 @dataclass(frozen=True)
 class Palette:
-    primary: str  # Verde GeoDuck: «Ejecutar», «Iniciar sesión», «Lista», «OK»
+    primary: str  # Azul de la marca (claude/marca.md, 2026-11-07): botón principal de cada diálogo
     primary_hover: str
-    action: str  # Azul QGIS: «Cargar en QGIS ▾», enlaces
+    action: str  # El mismo azul: «Cargar en QGIS ▾», enlaces, «Duck» en el nombre
     action_hover: str
     error: str
     busy: str
@@ -37,14 +37,17 @@ class Palette:
     error_bg: str
     error_border: str
     keyword: str
-    on_color: str  # texto sobre verde o azul
+    on_color: str  # texto sobre el azul
+    brand_text: str  # texto de las etiquetas de la marca (la versión en «Acerca de»)
+    amber: str  # ámbar del pico: la raya de las advertencias
+    note_bg: str
 
 
 LIGHT = Palette(
-    primary="#2D7A3E",
-    primary_hover="#256634",
-    action="#1F5FA8",
-    action_hover="#1A508E",
+    primary="#2F5FD0",
+    primary_hover="#1D3F99",
+    action="#2F5FD0",
+    action_hover="#1D3F99",
     error="#B42318",
     busy="#9A6700",
     text="#1F2328",
@@ -54,21 +57,24 @@ LIGHT = Palette(
     header="#F6F7F8",
     border="#D0D4D9",
     border_soft="#E3E6E9",
-    selection="#E3EDF8",
-    chip="#EEF4FB",
+    selection="#E3EAFB",
+    chip="#E7ECFA",
     success_bg="#EEF6F0",
     success_border="#B7DCC0",
     error_bg="#FBF4F3",
     error_border="#E7B8B5",
     keyword="#8250DF",
     on_color="#FFFFFF",
+    brand_text="#1D3F99",
+    amber="#F2A33A",
+    note_bg="#FFF8EE",
 )
 
 DARK = Palette(
-    primary="#3FA45B",
-    primary_hover="#4BB868",
-    action="#4C8DDB",
-    action_hover="#5E9BE3",
+    primary="#7DA0F0",
+    primary_hover="#94B2F4",
+    action="#7DA0F0",
+    action_hover="#94B2F4",
     error="#F06A5F",
     busy="#D4A72C",
     text="#E6EDF3",
@@ -78,14 +84,17 @@ DARK = Palette(
     header="#1C2128",
     border="#30363D",
     border_soft="#262C34",
-    selection="#1F3550",
-    chip="#18283B",
+    selection="#22304F",
+    chip="#22304F",
     success_bg="#14261A",
     success_border="#2E5A3A",
     error_bg="#2A1715",
     error_border="#6B2C27",
     keyword="#B392F0",
     on_color="#0D1117",
+    brand_text="#B9CCF7",
+    amber="#F2A33A",
+    note_bg="#2A2214",
 )
 
 
@@ -108,6 +117,9 @@ def stylesheet(p: Palette) -> str:
 #geoduckWorkspace, #geoduckWindowCentral, #geoduckDockBody {{ background: {p.window}; }}
 QLabel {{ color: {p.text}; }}
 *[geoduck="muted"] {{ color: {p.muted}; }}
+*[geoduck="note"] {{
+    color: {p.muted}; background: {p.note_bg}; border-left: 3px solid {p.amber}; padding: 6px 10px;
+}}
 *[geoduck="error-text"] {{ color: {p.error}; }}
 
 #geoduckSessionBar {{ background: {p.card}; border: none; border-bottom: 1px solid {p.border}; }}

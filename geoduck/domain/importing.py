@@ -76,6 +76,8 @@ class ImportJob:
     as_view: bool = False
     #: Camino SQL con selección: tabla Arrow de identificadores que `source_sql` une como `SELECTION_VIEW`.
     selection: Any = None
+    #: Archivo Arrow/Feather (qgis-import-spec §10): el motor lo registra como `ARROW_VIEW` con PyArrow.
+    source_arrow: str | None = None
 
     @property
     def by_sql(self) -> bool:
@@ -269,6 +271,8 @@ def is_large(features: int) -> bool:
 PATH_CONNECTED = "connected"
 PATH_PARQUET = "parquet"
 PATH_QGIS = "qgis"
+#: Archivo leído por DuckDB (qgis-import-spec §10).
+PATH_FILE = "file"
 
 
 def path_label(path: str) -> str:
@@ -276,6 +280,8 @@ def path_label(path: str) -> str:
         return tr("inside DuckDB (Connected layer)")
     if path == PATH_PARQUET:
         return tr("read directly by DuckDB (GeoParquet)")
+    if path == PATH_FILE:
+        return tr("read directly by DuckDB")
     return tr("read by QGIS in the background")
 
 
@@ -308,6 +314,8 @@ class SendCandidate:
     problem: str | None = None
     #: El SRC de la capa no se puede expresar (§7): solo se envía «sin SRC».
     crs_problem: bool = False
+    #: Archivos → DuckDB (§10): la capa del archivo (`domain.files.FileLayer`); None = capa de QGIS.
+    file: Any = None
 
     @property
     def can_view(self) -> bool:
@@ -332,6 +340,8 @@ class SendItem:
     layer_id: str
     table: str
     mode: ImportMode
+    #: Archivos → DuckDB (§10): la capa del archivo; None = capa de QGIS (`layer_id`).
+    file: Any = None
 
 
 @dataclass(frozen=True)

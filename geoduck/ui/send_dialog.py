@@ -165,6 +165,8 @@ class SendDialog(QDialog):
         self.resize(780, 540)
         #: G9 · E5: con `pro`, el sistema de diseño de Workspace Pro; el comportamiento no cambia.
         self.pro = pro
+        #: Ocultar «Qué pasará» si todo es nuevo (E5). En «Capas de QGIS → DuckDB» (F-131) siempre se ve.
+        self.tidy_columns = True
         if pro:
             from geoduck.ui.pro import style as pro_style  # noqa: PLC0415
 
@@ -242,7 +244,8 @@ class SendDialog(QDialog):
         reproject_layout.setContentsMargins(0, 0, 0, 0)
         reproject_layout.addWidget(self.reproject)
         reproject_layout.addWidget(self.reproject_crs, 1)
-        self.reproject_row.setVisible(any(c.geometry is not None for c in candidates))
+        # Un archivo lo copia DuckDB tal cual (qgis-import-spec §10): no se reproyecta con QGIS
+        self.reproject_row.setVisible(any(c.geometry is not None and c.file is None for c in candidates))
         self.reproject.toggled.connect(self.reproject_crs.setEnabled)
         self.reproject_crs.crsChanged.connect(lambda _crs: self.refresh())
         self.without_crs = QCheckBox(tr("Send without CRS"))
@@ -258,7 +261,7 @@ class SendDialog(QDialog):
             self.more_button.setProperty("pro", "ghost")
             self.more_button.setCheckable(True)
             self._optional = (
-                any(c.geometry is not None for c in candidates),
+                any(c.geometry is not None and c.file is None for c in candidates),
                 any(c.can_view for c in candidates),
             )
             self.more_button.setVisible(any(self._optional))
@@ -565,7 +568,7 @@ class SendDialog(QDialog):
                 )
             )
         self.summary.setText(self._summary(states))
-        if self.pro:
+        if self.pro and self.tidy_columns:
             self._tidy(states)
         sending = [s for s in states if s.kind == "send"]
         blocked = [s for i, s in enumerate(states) if s.kind == "blocked" and self._checked(i)]

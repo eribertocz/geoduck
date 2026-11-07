@@ -10,10 +10,14 @@ las opciones de QGIS (ADR-0011). `QgsCodeEditor.setCustomAppearance` no está en
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Callable
 from typing import Any
 
+from qgis.PyQt.QtCore import QEvent, QObject, Qt
 from qgis.PyQt.QtGui import QColor, QFont
 
+from geoduck.domain.files import editor_readable
+from geoduck.ui.pro.drag import LAYERS_MIME, file_paths
 from geoduck.ui.pro.tokens import Colors
 
 #: Estilos del lexer SQL que se colorean (los demás quedan con el color del texto).
@@ -58,7 +62,7 @@ def paint(editor: Any, colors: Colors, *, dark: bool) -> None:
     editor.setMarginsForegroundColor(QColor(colors.faint))
     editor.setCaretForegroundColor(text)
     editor.setCaretLineBackgroundColor(QColor(colors.segment))
-    editor.setSelectionBackgroundColor(QColor(colors.accent_soft))
+    editor.setSelectionBackgroundColor(QColor(colors.selection))
     editor.setSelectionForegroundColor(text)
     editor.setFoldMarginColors(QColor(colors.side), QColor(colors.side))
 
@@ -92,6 +96,80 @@ def free_keys(editor: Any, keys: tuple[str, ...]) -> None:
                 command.setAlternateKey(0)
 
 
+class _LayerDrops(QObject):
+    """Capas de QGIS arrastradas al editor: el editor no las toma como texto (las «movía» y QGIS las borraba,
+    observación del propietario, 2026-11-06); siguen a GeoDuck, que las añade a DuckDB como en cualquier otra
+    parte (workspace-pro-spec §9), siempre como copia."""
+
+    _KINDS = (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop)
+
+    def __init__(self, editor: Any) -> None:
+        super().__init__(editor)
+        self._editor = editor
+        #: Archivos soltados en el editor (los pone la página de consulta): devuelve si los tomó.
+        self.on_files: Callable[[list[str]], bool] | None = None
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        if event.type() not in self._KINDS:
+            return False
+        data = event.mimeData()
+        if data.hasFormat(LAYERS_MIME):
+            event.ignore()  # sin aceptar: Qt la pasa al contenedor (el área de trabajo, que abre el diálogo)
+            return True
+        paths = file_paths(data)
+        if not paths:
+            return False
+        # Archivos en el editor (decisión del propietario, 2026-11-07): llevarlos a DuckDB con SQL sin
+        # ejecutarlo. Si ninguno se lee con SQL (Arrow, no compatibles), siguen al área de trabajo.
+        if self.on_files is None or not any(editor_readable(p) for p in paths):
+            event.ignore()
+            return True
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        if event.type() == QEvent.Type.Drop:
+            self.on_files(paths)
+        return True
+
+
+def insert_sql(editor: Any, text: str) -> None:
+    """Escribe `text` donde está el cursor: si la línea ya tiene texto, después de ella y con una línea en
+    blanco, para que cada sentencia quede aparte. El cursor queda en la primera sentencia escrita."""
+    line, _index = editor.getCursorPosition()
+    current = editor.text(line).rstrip("\r\n") if line < editor.lines() else ""
+    if current.strip():
+        editor.setCursorPosition(line, len(current))
+        text = "\n\n" + text
+        line += 2
+    editor.insert(text + "\n")
+    editor.setCursorPosition(line, 0)
+    editor.setFocus()
+
+
+#: Marcador (QScintilla) de la sentencia que correrá «Ejecutar», en un margen fino a la izquierda del texto.
+MARK = 20
+_MARK_MARGIN = 1
+
+
+def prepare_mark(editor: Any, colors: Colors) -> None:
+    """Un margen de 4 px con una barra del color de acento (workspace-pro-spec §5)."""
+    from qgis.PyQt.Qsci import QsciScintilla  # noqa: PLC0415
+
+    editor.setMarginType(_MARK_MARGIN, QsciScintilla.MarginType.SymbolMargin)
+    editor.setMarginWidth(_MARK_MARGIN, 4)
+    editor.setMarginMarkerMask(_MARK_MARGIN, editor.marginMarkerMask(_MARK_MARGIN) | (1 << MARK))
+    editor.markerDefine(QsciScintilla.MarkerSymbol.FullRectangle, MARK)
+    editor.setMarkerBackgroundColor(QColor(colors.accent), MARK)
+    editor.setMarkerForegroundColor(QColor(colors.accent), MARK)
+
+
+def mark_lines(editor: Any, lines: tuple[int, int] | None) -> None:
+    """Marca las líneas `lines` (primera y última, incluidas); `None` quita la marca."""
+    editor.markerDeleteAll(MARK)
+    if lines is not None:
+        for line in range(lines[0], lines[1] + 1):
+            editor.markerAdd(line, MARK)
+
+
 def make(colors: Colors, *, dark: bool) -> Any:
     """Un `QgsCodeEditorSQL` de GeoDuck: números de línea, sin marco, colores del tema y los atajos de la
     consulta libres (Ctrl+Intro, Ctrl+Mayús+Intro, Ctrl+S, Ctrl+O, Ctrl+W)."""
@@ -103,4 +181,6 @@ def make(colors: Colors, *, dark: bool) -> Any:
     editor.setFrameShape(QFrame.Shape.NoFrame)
     free_keys(editor, ("Ctrl+Return", "Ctrl+Shift+Return", "Ctrl+S", "Ctrl+O", "Ctrl+W", "Ctrl+T"))
     paint(editor, colors, dark=dark)
+    editor.layer_drops = _LayerDrops(editor)
+    editor.viewport().installEventFilter(editor.layer_drops)
     return editor

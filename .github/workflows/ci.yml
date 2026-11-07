@@ -62,6 +62,9 @@ jobs:
         run: |
           python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==${{ matrix.pyarrow }}"
           if [ -n "$NUMPY_PIN" ]; then python -m pip install "numpy==$NUMPY_PIN"; fi
+      # Entorno de pruebas, no GeoDuck: «Archivos → DuckDB» con GDAL (qgis-import-spec §10) la necesita.
+      - name: extensión spatial para las pruebas de archivos
+        run: python -c "import duckdb; duckdb.connect().execute('INSTALL spatial')" || echo "spatial no disponible"
       - run: >-
           python -m pytest tests/unit tests/engine -q
           --junitxml=engine-${{ matrix.duckdb }}-py${{ matrix.python }}-pa${{ matrix.pyarrow }}.xml

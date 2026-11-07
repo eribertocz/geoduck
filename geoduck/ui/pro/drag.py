@@ -3,6 +3,8 @@
 
 - **QGIS → DuckDB:** capas del panel de capas soltadas sobre una base de la barra lateral (o en cualquier
   parte de GeoDuck: a la base actual). Las lee `layer_ids` del formato del panel de capas de QGIS.
+- **Archivos → DuckDB:** archivos soltados desde el escritorio, el Explorador o el Navegador de QGIS
+  (`file_paths`), con el mismo «pato al lago» (qgis-import-spec §10).
 - **DuckDB → QGIS:** tablas o vistas arrastradas desde la barra lateral (`places_mime`) y soltadas en el
   mapa o en el panel de capas. `PlacesDropHandler` (un `QgsCustomDropHandler` que registra el complemento)
   muestra el mini menú «N tablas · ¿cómo cargarlas?» (Copia / Conectada) donde se soltaron; Esc cancela.
@@ -12,18 +14,20 @@
 from __future__ import annotations
 
 import json
+import os
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from typing import Any
 
 from qgis.gui import QgsCustomDropHandler
-from qgis.PyQt.QtCore import QByteArray, QMimeData, QPoint
-from qgis.PyQt.QtGui import QCursor
+from qgis.PyQt.QtCore import QByteArray, QMimeData, QPoint, Qt
+from qgis.PyQt.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
 
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.load import load_menu
 from geoduck.ui.pro.places import QUERY, VIEW, Place
+from geoduck.ui.pro.widgets import LOGO
 
 #: Formato del panel de capas de QGIS al arrastrar capas (`QgsLayerTreeModel::mimeData`).
 LAYERS_MIME = "application/qgis.layertreemodeldata"
@@ -46,6 +50,42 @@ def layer_ids(data: QMimeData) -> list[str]:
         if layer_id and layer_id not in found:
             found.append(layer_id)
     return found
+
+
+def file_paths(data: QMimeData) -> list[str]:
+    """Archivos arrastrados: rutas locales (escritorio, Explorador) o del Navegador de QGIS. Las capas del
+    panel de capas no cuentan (son capas, no archivos)."""
+    if data.hasFormat(LAYERS_MIME):
+        return []
+    found: list[str] = []
+    if data.hasUrls():
+        for url in data.urls():
+            if url.isLocalFile():
+                found.append(url.toLocalFile())
+    if not found:
+        try:
+            from qgis.core import QgsMimeDataUtils  # noqa: PLC0415
+
+            if QgsMimeDataUtils.isUriList(data):
+                for uri in QgsMimeDataUtils.decodeUriList(data):
+                    path = uri.uri.split("|")[0]
+                    if path and os.path.exists(path):
+                        found.append(path)
+        except (ImportError, AttributeError):
+            pass
+    return list(dict.fromkeys(p.rstrip("/\\") or p for p in found))
+
+
+def accepts(data: QMimeData) -> bool:
+    """Capas de QGIS o archivos: lo que GeoDuck añade a DuckDB al soltarlo."""
+    return data.hasFormat(LAYERS_MIME) or bool(file_paths(data))
+
+
+def drop_hint(data: QMimeData, where: str) -> str:
+    files = file_paths(data)
+    if files:
+        return tr("Drop to import {0} file(s) into «{1}»").format(len(files), where)
+    return tr("Drop to send {0} layer(s) to «{1}»").format(len(layer_ids(data)), where)
 
 
 def places_mime(places: list[Place]) -> QMimeData:
@@ -113,3 +153,26 @@ class PlacesDropHandler(QgsCustomDropHandler):
             title=menu_title(len(places)),
         )
         self.menu.popup(at)  # Esc o un clic fuera cierran el menú sin cargar nada
+
+
+def drag_pixmap(count: int) -> QPixmap:
+    """Lo que se ve al arrastrar tablas hacia el mapa: el pato de GeoDuck, y cuántas lleva si son varias
+    (propietario, 2026-11-07: «como arrastrar un pato al lago»)."""
+    size = 40
+    image = QPixmap(size + 22, size)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.drawPixmap(0, 0, QIcon(LOGO).pixmap(size, size))
+    if count > 1:
+        painter.setBrush(QColor("#F2A33A"))
+        painter.setPen(QColor("#FFFFFF"))
+        painter.drawEllipse(size - 10, 0, 22, 18)
+        font = painter.font()
+        font.setBold(True)
+        font.setPixelSize(11)
+        painter.setFont(font)
+        painter.setPen(QColor("#1F2430"))
+        painter.drawText(size - 10, 0, 22, 18, int(Qt.AlignmentFlag.AlignCenter), str(count))
+    painter.end()
+    return image

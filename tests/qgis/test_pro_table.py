@@ -119,7 +119,7 @@ def test_a_million_rows_first_page_quickly_then_the_total(consumidores):
     assert page.model.rowCount() == PAGE
     assert wait_for(lambda: counted(page))
     assert page.total == 1_000_000
-    assert page.range_label.text() == tr("{} of {}").format("1–100", "1 000 000")
+    assert page.range_label.text() == tr("Rows {} of {}").format("1–100", "1 000 000")
     assert [c.name for c in page.model.columns] == ["id", "nombre", "kwh"]
     assert page.model.headerData(0, 2) == "1"  # número de fila (vertical)
 
@@ -146,7 +146,7 @@ def test_sort_filters_search_and_pages_match_sql(consumidores):
     first = page.model.rows[0][0]
     page.next_button.click()
     assert wait_for(lambda: page.offset == PAGE and loaded(page) and page.model.rows[0][0] != first)
-    assert page.range_label.text().startswith("101–200")
+    assert page.range_label.text().startswith(tr("Rows {} of {}").split("{}")[0] + "101–200")
     page.prev_button.click()
     assert wait_for(lambda: page.offset == 0 and page.model.rows[0][0] == first)
     page.remove_filter(0)

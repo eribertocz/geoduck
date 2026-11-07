@@ -777,16 +777,28 @@ class SessionCoordinator:
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result())))
 
     def read_rows(
-        self, sql: str, max_rows: int, on_done: Callable[[StatementOutcome | BaseException], None]
+        self,
+        sql: str,
+        max_rows: int,
+        on_done: Callable[[StatementOutcome | BaseException], None],
+        *,
+        database: str | None = None,
     ) -> None:
         """Lectura de la pestaña de tabla (G9; workspace-pro-spec §4): una página, el total, una fila o la
         estructura. Solo SQL de solo lectura que construye GeoDuck (`domain.browse`); no pasa por `BUSY` ni
         invalida nada. Se encola en el worker serial; `on_done` llega en el hilo principal."""
         engine = self._require_ready(tr("read the table"))
-        handle = engine.query(sql, max_rows=max_rows, priority=False)
+        handle = engine.query(sql, max_rows=max_rows, priority=False, database=database)
         handle.future.add_done_callback(
             lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result()))
         )
+
+    def scan_files(self, paths: list[str], on_done: Callable[[Any], None]) -> None:
+        """Archivos → DuckDB, paso 1 (qgis-import-spec §10): las capas de cada archivo, leídas por DuckDB
+        solo de sus metadatos. No pasa por `BUSY`; `on_done` recibe la lista o el error (hilo principal)."""
+        engine = self._require_ready(tr("read the files"))
+        fut = engine.scan_files(paths)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result())))
 
     def send_layers(self, request: SendRequest) -> int:
         """Envía capas de QGIS a DuckDB en una transacción (qgis-import-spec §4). La sesión pasa por `BUSY`
