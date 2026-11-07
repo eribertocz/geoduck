@@ -293,6 +293,106 @@ def test_a_narrow_panel_keeps_every_action_within_reach(plugin):
         assert action in titles
 
 
+def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugin):
+    """Propietario (2026-11-07): el panel baja a 340 px sin que nada se monte; las mismas opciones, con
+    ícono y tooltip donde no cabe el texto (▶ sin «Ejecutar»); el explorador se abre encima y se cierra al
+    elegir una tabla o con Esc."""
+    from geoduck.ui.pro.places import TABLE, Place
+    from geoduck.ui.pro.table_page import TablePage
+
+    item = plugin()
+    start(item)
+    coordinator = item.coordinator
+    coordinator.execute_sql("CREATE TABLE puntos AS SELECT range AS id FROM range(150);", RunScope.ALL)
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "puntos" for o in coordinator.catalog.objects))
+    item.workspace.set_visible(True)
+    item.workspace.set_mode(Mode.DOCK)
+    ws = item.content
+    ws.open_place(Place(TABLE, "puntos", "memory", "main"))
+    table = ws.tabs.page(ws.tabs.bar.currentIndex())
+    assert isinstance(table, TablePage)
+    ws.new_query()
+    query = ws.tabs.page(ws.tabs.bar.currentIndex())
+    query.editor.setText("SELECT 1;")
+    query.mark_statement()
+    assert ws.compact and table.compact and query.compact
+    assert query.run_button.text() == "" and query.run_button.accessibleName() == tr("Run · line {}").format(
+        1
+    )
+    assert tr("Run · line {}").format(1) in query.run_button.toolTip()
+    assert query.load_button.text() == "" and query.load_button.accessibleName() == tr("Load in QGIS")
+    assert not query.detail_button.isChecked() and not table.detail_button.isChecked()
+    assert table.structure_button.isVisibleTo(table) and not table.mode.isVisibleTo(table)
+    table.structure_button.setChecked(True)
+    assert table.views.currentIndex() == 1
+    table.structure_button.setChecked(False)
+    assert table.views.currentIndex() == 0
+    for page in (query, table):  # medido con el panel visible: 338 px (capturas en docs/evidence/g9/panel)
+        assert page.minimumSizeHint().width() <= 340, page.minimumSizeHint().width()
+    # el explorador: encima, sin la fila de la sesión (la lleva la cabecera del panel)
+    assert ws.sidebar_button.isVisibleTo(ws) and ws.sidebar.isHidden()
+    ws.toggle_sidebar()
+    assert not ws.sidebar.isHidden() and ws.sidebar.geometry().x() == 0
+    assert not ws.sidebar.session_head.isVisibleTo(ws.sidebar)
+    ws.sidebar.open_requested.emit(Place(TABLE, "puntos", "memory", "main"))
+    assert ws.sidebar.isHidden()  # elegida la tabla, se cierra
+    ws.toggle_sidebar()
+    assert not ws.sidebar.isHidden()
+    ws.set_overlay_open(False)
+    # de vuelta a la ventana: todo con texto y la barra lateral en su sitio
+    item.workspace.set_mode(Mode.WINDOW)
+    ws.resize(1300, 800)
+    query.mark_statement()
+    assert not ws.compact and query.run_button.text() == tr("Run · line {}").format(1)
+    assert table.mode.isVisibleTo(table) and not table.structure_button.isVisibleTo(table)
+
+
+def test_right_click_on_one_or_more_tables_loads_them_with_the_same_menu(plugin):
+    """Propietario (2026-11-06): clic derecho en una o varias tablas (Ctrl/Mayús) › «Cargar en QGIS ▸», el
+    mismo menú que al soltarlas en el mapa; con una sola, también «Más opciones…»."""
+    from geoduck.ui.pro.sidebar import PLACE, ROLE
+
+    item = plugin()
+    start(item)
+    coordinator = item.coordinator
+    coordinator.execute_sql(
+        "CREATE TABLE a AS SELECT 1 AS x; CREATE TABLE b AS SELECT 2 AS x; CREATE TABLE c AS SELECT 3 AS x;",
+        RunScope.ALL,
+    )
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "c" for o in coordinator.catalog.objects))
+    item.workspace.set_visible(True)
+    ws = item.content
+    tree = ws.sidebar.tree
+    items = {}
+
+    def walk(parent):
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            data = child.data(0, ROLE)
+            if data and data[0] == PLACE:
+                items[data[1].name] = child
+            walk(child)
+
+    for i in range(tree.topLevelItemCount()):
+        walk(tree.topLevelItem(i))
+    assert tree.selectionMode() == tree.SelectionMode.ExtendedSelection
+    items["a"].setSelected(True)
+    items["c"].setSelected(True)
+    assert [p.name for p in ws.sidebar.selected_places()] == ["a", "c"]
+    picked = []
+    ws.loader.start_many = lambda jobs, kind: picked.append(([j["name"] for j in jobs], kind))
+    menu = ws._load_menu_for(ws, ws.sidebar.selected_places())
+    copy = next(a for a in menu.actions() if a.text() == tr("Copy (mode)"))
+    copy.trigger()
+    assert picked == [(["a", "c"], COPY)]
+    single = ws._load_menu_for(ws, [ws.sidebar.selected_places()[0]])
+    assert tr("More options…") in [a.text() for a in single.actions()]
+
+
 # -- diálogos que siguen en uso ----------------------------------------------------------------------------
 
 

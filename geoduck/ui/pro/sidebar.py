@@ -211,6 +211,8 @@ class Sidebar(QFrame):
     """La barra lateral. `render(catalog)` la rehace desde el catálogo; `places` da recientes y favoritos."""
 
     open_requested = pyqtSignal(object)  # Place
+    #: El menú «Cargar en QGIS ▸» para unas tablas (lo pone el workspace: Copia / Conectada / Más opciones…).
+    make_load_menu: Callable[[QWidget, list[Place]], QMenu] | None = None
     favorite_requested = pyqtSignal(object)  # Place
     detach_requested = pyqtSignal(str)
     refresh_requested = pyqtSignal()
@@ -235,7 +237,9 @@ class Sidebar(QFrame):
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(0)
-        box.addWidget(self._build_header())
+        #: La sesión arriba («DuckDB 2.0.0», «Lista · en memoria», «⋯»); en el panel la lleva su cabecera.
+        self.session_head = self._build_header()
+        box.addWidget(self.session_head)
         box.addLayout(self._build_filter())
         self.tree = self._build_tree()
         trees = QVBoxLayout()
@@ -311,6 +315,8 @@ class Sidebar(QFrame):
         tree.setIndentation(14)
         tree.setUniformRowHeights(True)
         tree.setExpandsOnDoubleClick(False)
+        # varias tablas a la vez (Ctrl o Mayús) para cargarlas juntas en QGIS (propietario, 2026-11-06)
+        tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         tree.setAccessibleName(tr("Databases and favorites"))
         tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         tree.customContextMenuRequested.connect(self._context_menu)
@@ -570,6 +576,15 @@ class Sidebar(QFrame):
         elif data[0] in (DATABASE, SCHEMA, GROUP):
             item.setExpanded(not item.isExpanded())
 
+    def selected_places(self) -> list[Place]:
+        """Las tablas y vistas elegidas en el árbol (las consultas no se cargan desde aquí)."""
+        places: list[Place] = []
+        for item in self.tree.selectedItems():
+            data = item.data(0, ROLE)
+            if data and data[0] == PLACE and not data[1].is_query:
+                places.append(data[1])
+        return places
+
     def _context_menu(self, pos: QPoint) -> None:
         item = self.tree.itemAt(pos)
         data = item.data(0, ROLE) if item is not None else None
@@ -579,6 +594,17 @@ class Sidebar(QFrame):
         if data[0] == PLACE:
             place: Place = data[1]
             menu.addAction(tr("Open"), lambda: self.open_requested.emit(place))
+            chosen = self.selected_places() if item.isSelected() else []
+            tables = chosen or ([place] if not place.is_query else [])
+            if tables and self.make_load_menu is not None:
+                load = self.make_load_menu(menu, tables)
+                load.setTitle(
+                    tr("Load in QGIS")
+                    if len(tables) == 1
+                    else tr("Load {} tables in QGIS").format(len(tables))
+                )
+                load.setIcon(icons.icon("layers", self.colors.muted, 14))
+                menu.addMenu(load)
             if place.remembered:
                 text = (
                     tr("Remove from favorites") if self.places.is_favorite(place) else tr("Add to favorites")

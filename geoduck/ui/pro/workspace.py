@@ -18,11 +18,14 @@ from pathlib import Path
 from typing import Any
 
 from qgis.core import QgsSettings
-from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QKeySequence
+from qgis.PyQt.QtCore import QEvent, Qt, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QKeySequence
 from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QBoxLayout,
     QFileDialog,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -57,9 +60,9 @@ from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
-from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
+from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids, menu_title, place_job
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_lines, popup_under
+from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu, popup_under
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,
@@ -84,6 +87,10 @@ from geoduck.ui.pro.widgets import Toast, button, icon_button, label, lines_html
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
 STATE, TABS, WELCOME = 0, 1, 2
+#: Por debajo de este ancho (o en el panel acoplado), las páginas pasan al modo compacto.
+COMPACT_WIDTH = 640
+#: Ancho del explorador abierto encima del contenido en el panel.
+OVERLAY_WIDTH = 272
 
 
 def session_parts(coordinator: Any) -> tuple[str, str, str]:
@@ -160,6 +167,11 @@ class ProWorkspace(QWidget):
         self._ask_close = ask_close
         self.wide = True
         self.sidebar_open = True
+        #: Modo compacto (panel acoplado o ventana angosta): íconos con tooltip donde no cabe el texto.
+        self.compact = False
+        #: En el panel, el explorador se abre encima del contenido y se cierra al elegir algo.
+        self.overlay_open = False
+        self._action_rows: list[QBoxLayout] = []
         self.colors = style.apply(self)
         self.places = Places(self._settings)
 
@@ -183,7 +195,8 @@ class ProWorkspace(QWidget):
             if copies_bridge is not None
             else None
         )
-        self.tabs = TabArea(self.colors, page_factory or self._make_page, self)
+        factory = page_factory or self._make_page
+        self.tabs = TabArea(self.colors, lambda place: self._with_mode(factory(place)), self)
         self.tabs.can_close = self._ask_save
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -265,6 +278,18 @@ class ProWorkspace(QWidget):
         row.addWidget(self.dock_button, 0, Qt.AlignmentFlag.AlignVCenter)
         return head
 
+    def _load_menu_for(self, parent: QWidget, places: list[Any]) -> QMenu:
+        """Clic derecho en una o varias tablas › «Cargar en QGIS ▸»: el mismo menú que al soltarlas en el
+        mapa; con una sola, también «Más opciones…»."""
+        jobs = [place_job(place) for place in places]
+        return load_menu(
+            parent,
+            self.colors,
+            lambda kind: self.loader.start_many(jobs, kind),
+            title=menu_title(len(places)),
+            more=len(places) == 1,
+        )
+
     def _fill_file_menu(self) -> None:
         """«Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; guardar, solo con una consulta elegida."""
         menu = self.file_menu
@@ -284,6 +309,9 @@ class ProWorkspace(QWidget):
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         super().resizeEvent(event)
+        self.set_compact(not self.wide or self.width() < COMPACT_WIDTH)
+        if not self.wide:
+            self._place_overlay()
         if self.command_palette.isVisible():
             self.command_palette.refresh(self.command_palette.edit.text())
 
@@ -297,6 +325,7 @@ class ProWorkspace(QWidget):
         row.addStretch(1)
         column = QWidget()
         column.setMaximumWidth(560)  # cabe la fila de botones más larga (con «Diagnóstico»)
+        column.setMinimumWidth(200)  # el texto baja de línea: en el panel angosto no fija el ancho
         box = QVBoxLayout(column)
         box.setContentsMargins(16, 0, 16, 0)
         box.setSpacing(8)
@@ -311,10 +340,10 @@ class ProWorkspace(QWidget):
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.setContentsMargins(0, 10, 0, 0)
-        actions.addStretch(1)
         for widget in buttons:
             actions.addWidget(widget)
-        actions.addStretch(1)
+        actions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._action_rows.append(actions)  # en el modo compacto, los botones uno debajo de otro
         box.addLayout(actions)
         row.addWidget(column, 1)
         row.addStretch(1)
@@ -462,6 +491,10 @@ class ProWorkspace(QWidget):
     def _connect_sidebar(self) -> None:
         side = self.sidebar
         side.open_requested.connect(self.open_place)
+        side.open_requested.connect(
+            lambda _p: self.set_overlay_open(False)
+        )  # en el panel: elegido, se cierra
+        side.make_load_menu = self._load_menu_for
         side.favorite_requested.connect(self.toggle_favorite)
         side.detach_requested.connect(self.detach)
         side.refresh_requested.connect(self.refresh)
@@ -482,26 +515,100 @@ class ProWorkspace(QWidget):
     # -- presentación ---------------------------------------------------------------------------------
 
     def set_presentation(self, *, wide: bool) -> None:
-        """Ventana (`wide`) o panel: en el panel no hay barra lateral ni «Acoplar»; la cabecera del panel
-        lleva la sesión y la búsqueda."""
+        """Ventana (`wide`) o panel. En el panel (propietario, 2026-11-07): la sesión y la búsqueda van en su
+        cabecera; el explorador se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B) y
+        se cierra al elegir algo, con Esc o con un clic fuera; las páginas pasan al modo compacto."""
         self.wide = wide
-        self.sidebar.setVisible(wide and self.sidebar_open)
-        self.divider.setVisible(self.sidebar.isVisibleTo(self))
-        for widget in (self.sidebar_button, self.dock_button, self.search_button, self.search_kbd):
+        layout = self.layout()
+        if wide and layout.indexOf(self.sidebar) < 0:
+            layout.insertWidget(0, self.sidebar)
+            self.sidebar.setGraphicsEffect(None)
+        elif not wide and layout.indexOf(self.sidebar) >= 0:
+            layout.removeWidget(self.sidebar)
+            shadow = QGraphicsDropShadowEffect(self.sidebar)
+            shadow.setBlurRadius(24)
+            shadow.setOffset(4, 0)
+            shadow.setColor(QColor(0, 0, 0, 70))
+            self.sidebar.setGraphicsEffect(shadow)
+        self.sidebar.session_head.setVisible(wide)
+        for widget in (self.dock_button, self.search_button, self.search_kbd):
             widget.setVisible(wide)  # en el panel, la búsqueda está en su cabecera
+        self.overlay_open = False
+        self._apply_sidebar()
+        self.set_compact(not wide or self.width() < COMPACT_WIDTH)
         self._render()
+
+    def set_compact(self, compact: bool) -> None:
+        if compact == self.compact:
+            return
+        self.compact = compact
+        direction = QBoxLayout.Direction.TopToBottom if compact else QBoxLayout.Direction.LeftToRight
+        for actions in self._action_rows:
+            actions.setDirection(direction)
+            actions.invalidate()
+        self.body.updateGeometry()
+        for index in range(len(self.tabs)):
+            self._with_mode(self.tabs.page(index))
+
+    def _with_mode(self, page: QWidget) -> QWidget:
+        """Cada página nueva entra en el modo de ahora (compacto o no)."""
+        if hasattr(page, "set_compact"):
+            page.set_compact(self.compact)
+        return page
+
+    def _apply_sidebar(self) -> None:
+        if self.wide:
+            self.sidebar.setVisible(self.sidebar_open)
+            self.divider.setVisible(self.sidebar_open)
+            QApplication.instance().removeEventFilter(self)
+            return
+        self.divider.setVisible(False)
+        self.sidebar.setVisible(self.overlay_open)
+        if self.overlay_open:
+            self._place_overlay()
+            self.sidebar.raise_()
+            self.sidebar.search.edit.setFocus()
+            QApplication.instance().installEventFilter(self)
+        else:
+            QApplication.instance().removeEventFilter(self)
+
+    def _place_overlay(self) -> None:
+        if self.overlay_open:
+            self.sidebar.setGeometry(0, 0, min(OVERLAY_WIDTH, max(self.width() - 48, 200)), self.height())
 
     def set_sidebar_open(self, open_: bool) -> None:
         self.sidebar_open = open_
-        self.sidebar.setVisible(self.wide and open_)
-        self.divider.setVisible(self.wide and open_)
+        self._apply_sidebar()
+
+    def set_overlay_open(self, open_: bool) -> None:
+        if open_ != self.overlay_open:
+            self.overlay_open = open_
+            self._apply_sidebar()
 
     def toggle_sidebar(self) -> None:
-        """Ctrl+B: pliega o abre la barra lateral (solo en la ventana)."""
+        """Ctrl+B o el botón: en la ventana pliega o abre la barra lateral; en el panel, abre o cierra el
+        explorador encima del contenido."""
         if not self.wide:
+            self.set_overlay_open(not self.overlay_open)
             return
         self.set_sidebar_open(not self.sidebar_open)
         self.sidebar_changed.emit(self.sidebar_open)
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        """Con el explorador abierto en el panel: un clic fuera o Esc lo cierran (sin tragarse el clic)."""
+        if not self.overlay_open or self.wide:
+            return False
+        kind = event.type()
+        if kind == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            self.set_overlay_open(False)
+            return True
+        if kind == QEvent.Type.MouseButtonPress and isinstance(watched, QWidget):
+            inside = self.sidebar.isAncestorOf(watched) or watched is self.sidebar
+            toggle = watched is self.sidebar_button or self.sidebar_button.isAncestorOf(watched)
+            popup = watched.window() is not self.window()  # menús del propio explorador
+            if not inside and not toggle and not popup:
+                self.set_overlay_open(False)
+        return False
 
     def status(self) -> tuple[str, str]:
         """Punto y texto de la sesión, para la cabecera del panel."""
@@ -864,8 +971,8 @@ class ProWorkspace(QWidget):
                 Entry(tr("Add QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),
             ]
+        found.append(Entry(tr("Show or hide the sidebar"), action, "sidebar", self.toggle_sidebar))
         if self.wide:
-            found.append(Entry(tr("Show or hide the sidebar"), action, "sidebar", self.toggle_sidebar))
             found.append(
                 Entry(tr("Dock to QGIS"), action, "dock", lambda: self.presentation_requested.emit(False))
             )

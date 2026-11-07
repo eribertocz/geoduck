@@ -45,8 +45,16 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
   Ctrl+W), reordenar y recordar las abiertas.
 - **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde DuckDB · Conectada · Ver en el mapa»).
-- **Panel acoplado:** pestañas en una fila compacta, sin barra lateral (Ctrl+K y el menú de la pestaña la
-  sustituyen); ninguna acción desaparece, se compacta.
+- **Panel acoplado** (propietario, 2026-11-07, tras la prueba en Windows; antes no bajaba de 690 px): **modo
+  compacto, mínimo 340 px** sin que nada se monte. Las mismas opciones que la ventana, con ícono y tooltip
+  donde no cabe el texto: ▶ sin «Ejecutar», ■, la base sin «Se ejecuta en», «Exportar» y «Cargar en QGIS»
+  como íconos, «Ver SQL» y el filtro como íconos, «Estructura» como ícono ⓘ arriba; el detalle de fila,
+  cerrado. El **explorador** se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B), sin
+  repetir la sesión (está en la cabecera del panel), y se cierra al elegir algo, con Esc o con un clic fuera.
+  Una ventana de menos de 640 px usa el mismo modo compacto.
+- **Clic derecho en una o varias tablas** (Ctrl/Mayús + clic, como en el Explorador de Windows o QGIS) ›
+  «Cargar en QGIS ▸» / «Cargar N tablas en QGIS ▸»: el mismo menú que al soltarlas en el mapa (§9); con una
+  sola, también «Más opciones…».
 
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
@@ -98,14 +106,15 @@ con la base y el tipo de cada resultado. Intro abre; Esc cierra.
 
 ## 7. Cargar en QGIS (GD-WSP-006; decisión del propietario, 2026-11-05)
 Dos opciones, en lenguaje simple:
-- **«Copia»:** independiente de DuckDB. Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
+- **«Copia»:** «Copia los datos a la memoria de QGIS; ya no depende de DuckDB» (propietario, 2026-11-07: sin
+  «rápida», que hacía pensar en velocidad; lo que la define es que es una copia en memoria). Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
   Copia en memoria solo como **respaldo automático** si GDAL no permite la rápida. El usuario nunca elige entre
   las dos.
 - **Al guardar el proyecto** con alguna «Copia» (decisión del propietario, 2026-11-05, tras el spike E0b: ninguna
   copia sobrevive a reabrir el proyecto), GeoDuck lo avisa y ofrece en un clic **«Guardar las copias junto al
   proyecto»**: un GeoPackage al lado del `.qgz`, y cada capa pasa a leer ese archivo y sobrevive. Con «No, gracias»,
   al reabrir la capa se muestra «no disponible» con su motivo, nunca rota sin explicación.
-- **«Conectada»:** en vivo, editable en DuckDB (ADR-0012).
+- **«Conectada»:** «Lee directamente de DuckDB, sin copiar; lo que edites se guarda en DuckDB» (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
 
 ## 8. Favoritos (GD-WSP-007)

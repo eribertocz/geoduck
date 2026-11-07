@@ -202,9 +202,11 @@ def load_menu(
         head.setDefaultWidget(caption)
         head.setEnabled(False)
         menu.addAction(head)
+    copy_text = tr("Copies the data into QGIS memory; it no longer depends on DuckDB")
+    connected_text = tr("Reads straight from DuckDB without copying; edits are saved in DuckDB")
     for kind, icon, name, text in (
-        (COPY, "layers", tr("Copy (mode)"), tr("Fast and independent of DuckDB")),
-        (CONNECTED, "database", tr("Connected"), tr("Live and editable in DuckDB")),
+        (COPY, "layers", tr("Copy (mode)"), copy_text),
+        (CONNECTED, "database", tr("Connected"), connected_text),
     ):
         row = _Row(icon, name, text, colors)
         action = QWidgetAction(menu)

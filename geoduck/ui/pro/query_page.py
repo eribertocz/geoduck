@@ -64,7 +64,7 @@ from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
 from geoduck.ui.pro.load import export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
-from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns
+from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns, tighten
 from geoduck.ui.pro.tokens import DARK, METRICS, Colors
 from geoduck.ui.pro.widgets import Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
@@ -129,6 +129,7 @@ class QueryPage(QWidget):
         #: Página de cada resultado con tabla (por `id`): desplazamiento, filas y total (None: sin contar).
         self._pages: dict[int, dict[str, Any]] = {}
         self.detail_open = True
+        self.compact = False
         self.saved_text = sql if place.path else None  # lo que hay en el archivo
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
@@ -185,14 +186,16 @@ class QueryPage(QWidget):
         self.run_button.setIcon(self._icon("play", self.colors.on_accent))
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
-        row.addWidget(label("Ctrl+Intro", "kbd"), 0, Qt.AlignmentFlag.AlignVCenter)
+        self.kbd_label = label("Ctrl+Intro", "kbd")
+        row.addWidget(self.kbd_label, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addSpacing(6)
         self.cancel_button = button(tr("Cancel"), "ghost", icon="stop", colors=self.colors)
         self.cancel_button.setToolTip(tr("Stops the running SQL"))
         self.cancel_button.clicked.connect(self.cancel)
         row.addWidget(self.cancel_button)
         row.addWidget(spacer(), 1)
-        row.addWidget(label(tr("Runs in"), "muted"))
+        self.runs_in_label = label(tr("Runs in"), "muted")
+        row.addWidget(self.runs_in_label)
         self.base = QComboBox()
         self.base.setAccessibleName(tr("Database of the query"))
         self.base.setToolTip(tr("«Run» runs the SQL in this database"))
@@ -376,6 +379,27 @@ class QueryPage(QWidget):
         self.summary.setText(tr("Running…"))
         self._render_state()
 
+    def set_compact(self, compact: bool) -> None:
+        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): ▶ sin texto, ■, la base
+        sin «Se ejecuta en»; «Exportar» y «Cargar en QGIS» como íconos; el detalle de la fila, cerrado. Todo
+        sigue ahí, con su tooltip."""
+        self.compact = compact
+        self.kbd_label.setVisible(not compact)
+        self.runs_in_label.setVisible(not compact)
+        self.base.setMinimumWidth(80 if compact else 110)
+        for widget, text in (
+            (self.cancel_button, tr("Cancel")),
+            (self.export_button, tr("Export")),
+            (self.load_button, tr("Load in QGIS")),
+        ):
+            widget.setText("" if compact else text)
+            widget.setAccessibleName(text)
+        self.detail_button.setChecked(not compact)
+        tighten(self.range_label.parentWidget().layout(), compact, (16, 0, 16, 0), 10)
+        tighten(self.run_button.parentWidget().layout(), compact, (12, 8, 12, 8), 6)
+        self.mark_statement()
+        self._update_range(self.current_result if self.view.current == RESULT else None)
+
     def _wire_mark(self) -> None:
         """Cada movimiento del cursor, selección o cambio de texto vuelve a marcar (tras `MARK_MS`)."""
         self._mark_timer = QTimer(self)
@@ -408,16 +432,19 @@ class QueryPage(QWidget):
             lines = (line_index_from(text, span[0])[0], line_index_from(text, span[1])[0])
         pro_editor.mark_lines(self.editor, lines)
         if self.editor.hasSelectedText():
-            self.run_button.setText(tr("Run selection"))
+            what = tr("Run selection")
         elif lines is not None:
-            self.run_button.setText(tr("Run · line {}").format(lines[0] + 1))
+            what = tr("Run · line {}").format(lines[0] + 1)
         else:
-            self.run_button.setText(tr("Run"))
-        self.run_button.setToolTip(
-            tr("Ctrl+Enter: runs the selection or, without one, the marked statement")
-            + "\n"
-            + tr("Ctrl+Shift+Enter: runs all ({} statements)").format(count)
-        )
+            what = tr("Run")
+        # en el modo compacto, solo el ícono ▶ (propietario, 2026-11-07); el texto va al tooltip
+        self.run_button.setText("" if self.compact else what)
+        self.run_button.setAccessibleName(what)
+        tips = [
+            tr("Ctrl+Enter: runs the selection or, without one, the marked statement"),
+            tr("Ctrl+Shift+Enter: runs all ({} statements)").format(count),
+        ]
+        self.run_button.setToolTip("\n".join([what, *tips] if self.compact else tips))
         self.run_all_action.setText(tr("Run all ({} statements)").format(count) + "\tCtrl+Shift+Enter")
 
     def cancel(self) -> None:
@@ -589,7 +616,9 @@ class QueryPage(QWidget):
             text = page_label(page["offset"], shown, page["total"])
         if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
             text += " · " + tr("may be out of date")
-        self.range_label.setText(f"{text} · {_seconds(result.duration_ms)}")
+        full = f"{text} · {_seconds(result.duration_ms)}"
+        self.range_label.setText(text if self.compact else full)
+        self.range_label.setToolTip(full)
         ready = result.statement.replayable and self._coordinator.state is SessionState.READY
         self.prev_button.setEnabled(ready and page["offset"] > 0)
         more = shown == PAGE and (page["total"] is None or page["offset"] + shown < page["total"])
