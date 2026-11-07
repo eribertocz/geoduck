@@ -410,11 +410,19 @@ class ProWorkspace(QWidget):
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         """Capas soltadas en cualquier parte de GeoDuck (también en el panel): a la base actual."""
         if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
-            event.acceptProposedAction()
+            event.setDropAction(Qt.DropAction.CopyAction)  # nunca «mover»: QGIS borraría la capa
+            event.accept()
             target = self.sidebar.current_target()
             where = target[0] if target else tr("the current database")
             count = len(layer_ids(event.mimeData()))
             self.notify(tr("Drop to send {0} layer(s) to «{1}»").format(count, where))
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
         else:
             event.ignore()
 
@@ -423,7 +431,8 @@ class ProWorkspace(QWidget):
         if not ids:
             event.ignore()
             return
-        event.acceptProposedAction()
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
         self.send_layers(ids)
 
     def _connect_sidebar(self) -> None:

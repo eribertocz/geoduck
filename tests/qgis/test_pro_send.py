@@ -357,6 +357,36 @@ def test_dropping_on_empty_space_goes_to_the_current_database(coordinator):
     assert to_step_two(ws).destination_value == (DB, "main")
 
 
+def test_a_layer_dropped_on_the_editor_is_copied_never_moved(coordinator):
+    """Observación del propietario (2026-11-06): soltar una capa en el editor la borraba de QGIS (el editor
+    aceptaba «mover»). Ahora el editor no la toma; GeoDuck abre «Añadir» y la acción es siempre «copiar»."""
+    from qgis.PyQt.QtGui import QDragEnterEvent
+
+    ws = workspace(coordinator)
+    ws.new_query()
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    page.editor.setText("SELECT 1;")
+    layer = points("puntos", 4)
+    _model, data = layers_mime([layer])
+    viewport = page.editor.viewport()
+    pos = QPoint(20, 10)
+    # el panel de capas de QGIS propone «mover» (Mayús fuerza esa propuesta aquí, como en Windows)
+    buttons, keys = Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier
+    actions = Qt.DropAction.CopyAction | Qt.DropAction.MoveAction
+    enter = QDragEnterEvent(pos, actions, data, buttons, keys)
+    assert enter.proposedAction() == Qt.DropAction.MoveAction
+    QCoreApplication.sendEvent(viewport, enter)
+    assert (
+        enter.isAccepted() and enter.dropAction() == Qt.DropAction.CopyAction
+    )  # lo aceptó GeoDuck, copiando
+    event = QDropEvent(QPointF(pos), actions, data, buttons, keys)
+    QCoreApplication.sendEvent(viewport, event)
+    assert event.isAccepted() and event.dropAction() == Qt.DropAction.CopyAction
+    assert page.editor.text() == "SELECT 1;"  # el editor no pegó nada
+    assert ws.to_duckdb.window is not None and ws.to_duckdb.window.isVisible()  # «Añadir», paso 2
+    assert QgsProject.instance().mapLayer(layer.id()) is not None
+
+
 def test_tables_dragged_to_the_map_ask_how_and_ask_the_crs_once(coordinator):
     coordinator.execute_sql(
         "CREATE TABLE con_src AS SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY('OGC:CRS84') AS geom;"
