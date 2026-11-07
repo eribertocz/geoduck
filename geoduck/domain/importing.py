@@ -78,6 +78,9 @@ class ImportJob:
     selection: Any = None
     #: Archivo Arrow/Feather (qgis-import-spec §10): el motor lo registra como `ARROW_VIEW` con PyArrow.
     source_arrow: str | None = None
+    #: Filas que muestra QGIS con el filtro de la capa (§5.4): si DuckDB da otra cantidad, no se escribe
+    #: nada y el envío falla con `FILTER_MISMATCH` (la capa se copia entonces por QGIS).
+    expected_rows: int | None = None
 
     @property
     def by_sql(self) -> bool:
@@ -318,6 +321,10 @@ class SendCandidate:
     crs_problem: bool = False
     #: Archivos → DuckDB (§10): la capa del archivo (`domain.files.FileLayer`); None = capa de QGIS.
     file: Any = None
+    #: De dónde viene, para la trazabilidad del paso 3: «file», «database», «web», «memory», «duckdb» u
+    #: «other»; y su formato corto («GPKG», «SHP», «POSTGIS», «WFS»…).
+    source_kind: str = "other"
+    source_format: str = ""
 
     @property
     def can_view(self) -> bool:

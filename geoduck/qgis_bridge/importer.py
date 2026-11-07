@@ -322,9 +322,9 @@ def plan_layer(  # noqa: PLR0912 - un camino por rama (§5)
         )
 
     # Camino 4: archivo que el GDAL de DuckDB lee → `ST_Read`, sin pasar por QGIS (§5.4; hasta 23× más
-    # rápido, medido 2026-11-07). Sin filtro ni selección (lo que se ve es el archivo entero) y sin «Añadir
-    # filas» (las columnas de GDAL pueden no ser las de QGIS).
-    if duckdb_reads and mode is not ImportMode.APPEND and fids is None and not layer.subsetString():
+    # rápido, medido 2026-11-07). El filtro de la capa va como `WHERE` y se comprueba con las filas que
+    # muestra QGIS. Sin selección ni «Añadir filas» (las columnas de GDAL pueden no ser las de QGIS).
+    if duckdb_reads and mode is not ImportMode.APPEND and fids is None:
         job_gdal = _gdal_job(layer, table, mode, geometry, without_crs, common)
         if job_gdal is not None:
             return LayerPlan(layer, job_gdal, PATH_GDAL, None, features, warnings, tuple(columns))
@@ -356,7 +356,14 @@ def _gdal_job(  # noqa: PLR0917 - lo que ya decidió `plan_layer`
         crs=geometry.crs if geometry is not None else None,
     )
     sql = select_sql(item, without_crs=without_crs)
-    return ImportJob(layer.name(), table, mode, (), geometry, source_sql=sql, **common)
+    subset = layer.subsetString().strip()
+    expected = None
+    if subset:  # el filtro de QGIS, como lo escribió el usuario; si DuckDB da otras filas, falla (§5.4)
+        sql = f"SELECT * FROM ({sql}) AS __geoduck_layer WHERE {subset}"
+        expected = int(layer.featureCount())
+    return ImportJob(
+        layer.name(), table, mode, (), geometry, source_sql=sql, expected_rows=expected, **common
+    )
 
 
 def _connected_sql(
@@ -600,6 +607,37 @@ def _source_label(layer: Any) -> str:
     return provider
 
 
+#: Proveedores de QGIS que leen de una base de datos o de un servicio web (trazabilidad del paso 3).
+_DATABASES = {
+    "postgres": "POSTGIS",
+    "mssql": "SQL SERVER",
+    "oracle": "ORACLE",
+    "hana": "HANA",
+    "spatialite": "SPATIALITE",
+}
+_WEB = {"wfs": "WFS", "oapif": "OGC API", "arcgisfeatureserver": "ARCGIS"}
+
+
+def source_trace(layer: Any) -> tuple[str, str]:
+    """De dónde viene la capa (tipo y formato corto) para la trazabilidad (workspace-pro-spec §9)."""
+    provider = str(layer.providerType())
+    if provider == KEY:
+        return "duckdb", "DUCKDB"
+    if provider == "memory":
+        return "memory", tr("MEMORY")
+    if provider in _DATABASES:
+        return "database", _DATABASES[provider]
+    if provider in _WEB:
+        return "web", _WEB[provider]
+    if provider in ("ogr", "delimitedtext"):
+        path = str(QgsProviderRegistry.instance().decodeUri(provider, layer.source()).get("path") or "")
+        if path:
+            name = os.path.basename(path.rstrip("/\\")).lower()
+            short = "OSM" if name.endswith(".osm.pbf") else (os.path.splitext(name)[1].lstrip(".") or "OGR")
+            return "file", short.upper()
+    return "other", provider.upper()
+
+
 def _crs_label(layer: QgsVectorLayer) -> str | None:
     crs = layer.crs()
     if not layer.isSpatial() or not crs.isValid():
@@ -655,9 +693,10 @@ def describe_layer(layer: Any, table: str) -> SendCandidate:
         plan = plan_layer(layer, table=table, without_crs=True)
         crs_problem = True
     path = plan.path
-    if path == PATH_QGIS and gdal_source(layer) is not None and not layer.subsetString():
+    if path == PATH_QGIS and gdal_source(layer) is not None:
         path = PATH_GDAL  # la copia DuckDB si `spatial` está cargada (o el usuario la activa)
     geometry_type = QgsWkbTypes.displayString(layer.wkbType()) if layer.isSpatial() else None
+    kind, short = source_trace(layer)
     warnings = list(plan.warnings)
     crs = layer.crs()
     if (
@@ -682,6 +721,8 @@ def describe_layer(layer: Any, table: str) -> SendCandidate:
         tuple(warnings),
         table,
         crs_problem=crs_problem,
+        source_kind=kind,
+        source_format=short,
     )
 
 

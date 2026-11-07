@@ -20,6 +20,7 @@ las demás; «Deshacer» borra las tablas nuevas. DuckDB escribe de a una cosa: 
 from __future__ import annotations
 
 import dataclasses
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -32,7 +33,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QProgressBar,
+    QScrollArea,
     QStackedWidget,
     QTreeWidget,
     QTreeWidgetItem,
@@ -54,6 +55,7 @@ from geoduck.app.events import (
 from geoduck.domain.errors import GeoDuckError, SessionStateError
 from geoduck.domain.files import candidate_for, file_formats_needing_spatial, size_label
 from geoduck.domain.importing import (
+    PATH_CONNECTED,
     PATH_GDAL,
     PATH_QGIS,
     ImportedTable,
@@ -65,7 +67,8 @@ from geoduck.domain.importing import (
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import style
-from geoduck.ui.pro.widgets import LogoBar, button, label, lines_html
+from geoduck.ui.pro.trace import TraceView
+from geoduck.ui.pro.widgets import button, label, lines_html
 from geoduck.ui.send_dialog import SendDialog
 from geoduck.ui.theme import palette_for
 
@@ -636,9 +639,15 @@ class AddLayers:
             return
         index = waiting[0]
         assert self.request is not None
-        single = dataclasses.replace(self.request, items=(self.request.items[index],))
+        fallback = bool(self.states[index].get("fallback"))
+        single = dataclasses.replace(
+            self.request,
+            items=(self.request.items[index],),
+            duckdb_reads=self.request.duckdb_reads and not fallback,  # §5.4: tras un filtro distinto, QGIS
+        )
         self._current = index
         self.states[index]["state"] = RUNNING
+        self.states[index]["started"] = time.monotonic()
         self._mine = True  # `SendStarted` llega antes de que `send_layers` devuelva
         try:
             self._coordinator.send_layers(single)
@@ -738,8 +747,21 @@ class AddLayers:
             self._mine = False
             rows = sum(t.rows for t in event.report.tables)
             self.states[index]["rows"] = rows
+            started = self.states[index].get("started")
+            self.states[index]["seconds"] = time.monotonic() - started if started else None
+            request = self.request
+            self.states[index]["checked"] = bool(
+                request is not None
+                and request.duckdb_reads
+                and not self.states[index].get("fallback")
+                and any(c.filtered for c in self._candidates if c.layer_id == request.items[index].layer_id)
+            )
             self._mark(index, DONE, " · ".join(event.report.warnings))
             self.tables.extend(event.report.tables)
+            QTimer.singleShot(0, self._next)
+            self._refresh()
+        elif isinstance(event, SendFailed) and self._mine and index is not None and self._retry(index, event):
+            self._mine = False
             QTimer.singleShot(0, self._next)
             self._refresh()
         elif isinstance(event, SendFailed) and self._mine and index is not None:
@@ -757,6 +779,24 @@ class AddLayers:
         elif isinstance(event, SendUndoFailed) and self._undoing:
             self._undoing = False
             self._host.notify(tr("It could not be undone:") + f" {event.message}")
+
+    def _retry(self, index: int, event: SendFailed) -> bool:
+        """Una capa de archivo leída por DuckDB con el filtro de QGIS que falló (filtro que DuckDB no entiende
+        o que da otras filas): se copia por QGIS, sin error para el usuario (§5.4). True si se reintenta."""
+        state = self.states[index]
+        if event.cancelled or state.get("fallback") or self.request is None or not self.request.duckdb_reads:
+            return False
+        candidate = next(
+            (c for c in self._candidates if c.layer_id == self.request.items[index].layer_id), None
+        )
+        if candidate is None or candidate.path != PATH_GDAL or not candidate.filtered:
+            return False
+        state["fallback"] = True
+        state["state"] = WAITING
+        state["rows"] = 0
+        state["total"] = candidate.rows_for(self.request.only_selected)
+        self._current = None
+        return True
 
     def _finish(self) -> None:
         if not self.running:
@@ -831,49 +871,43 @@ class AddLayers:
     # -- paso 3: la vista ---------------------------------------------------------------------------------
 
     def _build_progress(self) -> None:
+        """Paso 3: cada capa con su trazabilidad (workspace-pro-spec §9): a la izquierda el nombre, por qué va
+        por ese camino y su estado; a la derecha el diagrama, que es también el avance; «×» al final."""
         window = self._window()
         self._drop_send_dialog()
         old = window.progress_page.layout()
         if old is not None:
             QWidget().setLayout(old)  # suelta la grilla anterior
-        grid = QGridLayout(window.progress_page)
+        column = QVBoxLayout(window.progress_page)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        self.summary = label("", "muted")
+        column.addWidget(self.summary)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        inner = QWidget()
+        grid = QGridLayout(inner)
         grid.setContentsMargins(0, 4, 0, 0)
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(10)
-        by_id = {c.layer_id: c for c in self._candidates}
+        grid.setVerticalSpacing(2)
         assert self.request is not None
-        self.marks: list[QLabel] = []
+        by_id = {c.layer_id: c for c in self._candidates}
+        self.names: list[QLabel] = []
+        self.whys: list[QLabel] = []
         self.details: list[QLabel] = []
-        self.bars: list[QProgressBar] = []
+        self.traces: list[TraceView] = []
         self.removes: list[QWidget] = []
+        dest = self.request.database if not self.request.temporary else "temp"
         for i, item in enumerate(self.request.items):
-            mark = QLabel()
-            grid.addWidget(mark, i, 0)
-            icon = QLabel()
-            layer = None if item.file is not None else QgsProject.instance().mapLayer(item.layer_id)
-            if layer is not None:
-                icon.setPixmap(QgsIconUtils.iconForLayer(layer).pixmap(18, 18))
-            grid.addWidget(icon, i, 1)
-            grid.addWidget(QLabel(by_id[item.layer_id].name), i, 2)
-            cell = QWidget()
-            row = QHBoxLayout(cell)
-            row.setContentsMargins(0, 0, 0, 0)
-            bar = LogoBar(window.colors)  # el logo avanza en la punta (marca, 2026-11-07)
-            bar.setFixedWidth(160)
-            row.addWidget(bar)
-            detail = label("", "muted")
-            row.addWidget(detail, 1)
-            grid.addWidget(cell, i, 3)
-            remove = button("×", "ghost")
-            remove.setAccessibleName(tr("Remove this layer"))
-            remove.clicked.connect(lambda _c=False, index=i: self.remove(index))
-            grid.addWidget(remove, i, 4)
-            self.marks.append(mark)
-            self.details.append(detail)
-            self.bars.append(bar)
-            self.removes.append(remove)
-        grid.setColumnStretch(3, 1)
+            self._progress_row(grid, i, item, by_id[item.layer_id], dest)
+        grid.setColumnStretch(0, 2)
+        grid.setColumnStretch(1, 3)
         grid.setRowStretch(len(self.request.items), 1)
+        scroll.setWidget(inner)
+        scroll.viewport().setAutoFillBackground(False)  # el fondo de la ventana, no el gris del área
+        inner.setAutoFillBackground(False)
+        column.addWidget(scroll, 1)
         self.background = button(tr("Continue in the background"))
         self.background.clicked.connect(window.hide)
         self.cancel_all_button = button(tr("Cancel all"))
@@ -882,47 +916,139 @@ class AddLayers:
         window.set_step(PROGRESS, "")
         self._refresh()
 
+    def _progress_row(self, grid: QGridLayout, i: int, item: Any, c: SendCandidate, dest: str) -> None:
+        window = self._window()
+        assert self.request is not None
+        texts = QWidget()
+        box = QVBoxLayout(texts)
+        box.setContentsMargins(0, 6, 0, 6)
+        box.setSpacing(2)
+        name = label(c.name)
+        font = name.font()
+        font.setBold(True)
+        name.setFont(font)
+        why = label("", "muted")
+        why.setWordWrap(True)
+        detail = label("", "muted")
+        for widget in (name, why, detail):
+            box.addWidget(widget)
+        grid.addWidget(texts, i, 0)
+        trace = TraceView(
+            window.colors,
+            source_kind=c.source_kind,
+            source_label=c.source_format or c.source,
+            dest_label=item.table,
+            bridge=False,
+            qgis=c.file is None,
+        )
+        trace.setToolTip(f"{dest}.{self.request.schema}.{item.table}")
+        grid.addWidget(trace, i, 1)
+        remove = button("×", "ghost")
+        remove.setAccessibleName(tr("Remove this layer"))
+        remove.clicked.connect(lambda _c=False, index=i: self.remove(index))
+        grid.addWidget(remove, i, 2, Qt.AlignmentFlag.AlignVCenter)
+        self.names.append(name)
+        self.whys.append(why)
+        self.details.append(detail)
+        self.traces.append(trace)
+        self.removes.append(remove)
+
+    def _route(self, index: int) -> tuple[bool, str]:
+        """El camino de una capa y por qué, en una frase (workspace-pro-spec §9): (puente, motivo)."""
+        assert self.request is not None
+        request = self.request
+        item = request.items[index]
+        c = next(x for x in self._candidates if x.layer_id == item.layer_id)
+        fallback = bool(self.states[index].get("fallback"))
+        reproject = request.reproject_to is not None
+        path = c.path_for(request.only_selected, reproject, request.duckdb_reads and not fallback)
+        if path == PATH_CONNECTED:
+            return True, tr("Copied inside DuckDB (Connected layer)")
+        if path != PATH_QGIS:
+            why = tr("Read directly by DuckDB")
+            if c.filtered:
+                why += " · " + tr("with the layer filter")
+            return True, why
+        if fallback:
+            reason = tr("DuckDB does not understand its filter")
+        elif reproject and c.geometry is not None:
+            reason = tr("it is reprojected")
+        elif request.only_selected and c.selected:
+            reason = tr("only the selection")
+        elif c.path == PATH_GDAL:
+            reason = tr("«spatial» is not loaded")
+        elif c.source_kind == "memory":
+            reason = tr("temporary layer, without a file")
+        elif c.source_kind == "database":
+            reason = tr("it comes from a database ({0})").format(c.source_format)
+        elif c.source_kind == "web":
+            reason = tr("it comes from a web service ({0})").format(c.source_format)
+        else:
+            reason = tr("QGIS reads this kind of layer")
+        return False, tr("Goes through QGIS: {0}").format(reason)
+
+    def _status(self, i: int, bridge: bool, progress: float | None) -> tuple[str, str]:
+        """El estado de una capa en una línea («✓ 31 400 filas · 0,2 s · mismas filas que en QGIS»)."""
+        colors = self._window().colors
+        s = self.states[i]
+        state = s["state"]
+        detail = self.details[i]
+        color = colors.muted
+        if state == RUNNING:
+            text = f"{round(progress * 100)} %" if progress is not None else tr("copying…")
+            color = colors.accent
+        elif state == DONE:
+            text = "✓ " + tr("{0} rows").format(_count(s["rows"]))
+            if s.get("seconds") is not None:
+                text += f" · {s['seconds']:.1f} s".replace(".", ",")
+            if bridge and s.get("checked"):
+                text += " · " + tr("same rows as in QGIS")
+            if s["message"]:
+                text += f" · ⚠ {s['message']}"
+            color = colors.ok
+        elif state == CANCELLED:
+            text = tr("cancelled")
+        elif state == FAILED:
+            text = tr("error: {0}").format(s["message"])
+            detail.setToolTip(s["message"])
+            color = colors.error
+        else:
+            text = tr("waiting")
+        return text, color
+
     def _refresh(self) -> None:
         window = self.window
-        if window is None or self.request is None or not hasattr(self, "marks"):
+        if window is None or self.request is None or not hasattr(self, "traces"):
             return
-        colors = window.colors
+        fast = 0
         for i, s in enumerate(self.states):
             state = s["state"]
-            mark, detail, bar, remove = self.marks[i], self.details[i], self.bars[i], self.removes[i]
-            symbol, color = {
-                DONE: ("✓", colors.ok),
-                CANCELLED: ("✕", colors.error),
-                FAILED: ("✕", colors.error),
-                RUNNING: ("⟳", colors.accent),
-                WAITING: ("○", colors.muted),
-            }[state]
-            mark.setText(symbol)
-            mark.setStyleSheet(f"color: {color}; font-weight: 600;")
-            bar.setVisible(state == RUNNING)
-            if state == RUNNING:
-                if s["total"] > 0:
-                    bar.setRange(0, s["total"])
-                    bar.setValue(min(s["rows"], s["total"]))
-                    detail.setText(f"{min(100, s['rows'] * 100 // s['total'])} %")
-                else:
-                    bar.setRange(0, 0)  # DuckDB copia sin informar entidades
-                    detail.setText("")
-            elif state == DONE:
-                text = tr("{0} features").format(_count(s["rows"]))
-                detail.setText(text + (f" · ⚠ {s['message']}" if s["message"] else ""))
-            elif state == CANCELLED:
-                detail.setText(tr("cancelled"))
-            elif state == FAILED:
-                detail.setText(tr("error: {0}").format(s["message"]))
-                detail.setToolTip(s["message"])
-            else:
-                detail.setText(tr("waiting"))
+            detail, trace, remove = self.details[i], self.traces[i], self.removes[i]
+            bridge, why = self._route(i)
+            fast += bridge
+            trace.set_bridge(bridge)
+            self.whys[i].setText(why)
+            progress = None
+            if state == RUNNING and s["total"] > 0:
+                progress = min(s["rows"], s["total"]) / s["total"]
+            trace.set_state(state, progress)
+            text, color = self._status(i, bridge, progress)
+            detail.setText(text)
+            detail.setStyleSheet(f"color: {color}; font-weight: 600;" if state in (DONE, RUNNING) else "")
             remove.setVisible(self.running and state in (WAITING, RUNNING))
             remove.setToolTip(tr("Remove this layer") if state == WAITING else tr("Stop this layer"))
+        total = len(self.states)
+        self.summary.setText(
+            "⚡ "
+            + tr("{0} directly by DuckDB").format(fast)
+            + " · "
+            + tr("{0} through QGIS").format(total - fast)
+            if not self.files
+            else "⚡ " + tr("{0} directly by DuckDB").format(fast)
+        )
         where = self.request.database
         if self.running:
-            window.subtitle.setText(tr("Adding {0} layers to DuckDB · {1}…").format(len(self.states), where))
+            window.subtitle.setText(tr("Adding {0} layers to DuckDB · {1}…").format(total, where))
             self._host.set_progress(self.progress_text())
         else:
             window.subtitle.setText(tr("Done:") + " " + self.done_text())

@@ -339,12 +339,47 @@ def test_a_layer_from_a_file_offers_to_speed_up_and_never_blocks(coordinator, tm
     assert rows[0].rows[0][0] == 50 and "32719" in rows[0].rows[0][1]
 
 
-@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
-def test_a_filtered_layer_from_a_file_is_still_copied_by_qgis(coordinator, tmp_path):
-    from geoduck.domain.importing import PATH_QGIS
+def read_one(coordinator, sql):
+    rows = []
+    coordinator.read_rows(sql, 1, rows.append)
+    assert wait_for(lambda: rows, TIMEOUT)
+    return rows[0].rows[0]
 
+
+def add_with_spatial(ws, coordinator, layer):
+    ws.send_layers([layer.id()], (DB, "main"))
+    window = ws.to_duckdb.window
+    assert wait_for(window.note.isVisible, TIMEOUT)
+    window.spatial_button.click()
+    assert wait_for(lambda: ws.to_duckdb._spatial_loaded, TIMEOUT)
+    to_step_two(ws)
+    add_all(ws, coordinator)
+    return ws.to_duckdb
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_a_filter_that_duckdb_understands_is_read_directly_with_the_same_rows(coordinator, tmp_path):
+    """§5.4: el filtro de la capa va como WHERE; DuckDB da las mismas filas que QGIS: puente y ✓."""
     layer = gpkg_layer(tmp_path, "filtrada")
     layer.setSubsetString('"id" < 10')
     ws = workspace(coordinator)
-    ws.send_layers([layer.id()], (DB, "main"))
-    assert ws.to_duckdb._candidates[0].path == PATH_QGIS  # se copia lo que se ve
+    flow = add_with_spatial(ws, coordinator, layer)
+    assert flow.states[0]["state"] == "done" and not flow.states[0].get("fallback")
+    assert flow.traces[0].bridge and flow.states[0]["checked"]
+    assert tr("same rows as in QGIS") in flow.details[0].text()
+    assert read_one(coordinator, "SELECT count(*) FROM memory.main.filtrada")[0] == 10
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_a_filter_that_gives_other_rows_in_duckdb_falls_back_to_qgis(coordinator, tmp_path):
+    """`typeof` de SQLite dice «integer»; el de DuckDB, «BIGINT»: otras filas → DuckDB no escribe nada y la
+    capa se copia por QGIS, sin error para el usuario, con el motivo en su trazabilidad."""
+    layer = gpkg_layer(tmp_path, "rara")
+    layer.setSubsetString("typeof(\"id\") = 'integer'")
+    assert layer.featureCount() == 50
+    ws = workspace(coordinator)
+    flow = add_with_spatial(ws, coordinator, layer)
+    assert flow.states[0]["state"] == "done" and flow.states[0]["fallback"]
+    assert not flow.traces[0].bridge
+    assert tr("DuckDB does not understand its filter") in flow.whys[0].text()
+    assert read_one(coordinator, "SELECT count(*) FROM memory.main.rara")[0] == 50

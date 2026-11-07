@@ -75,7 +75,10 @@ acción explica que hay que iniciar una.
    contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
    «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
    ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
-   ese clic, el camino 3. El resumen dice «leído directo por DuckDB».
+   ese clic, el camino 3. El resumen dice «leído directo por DuckDB». **El filtro de la capa** va como `WHERE`
+   y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
+   esa capa se copia por el camino 3, sin error. **Trazabilidad** (paso 3 y «Exportar ▾»): origen (ícono por
+   tipo) → QGIS (capas) → DuckDB; el puente azul «⚡ DuckDB» salta QGIS; el diagrama es también el avance.
 
 ## 6. Columnas y tipos (GD-IMP-005)
 | QGIS (`QMetaType`) | DuckDB |

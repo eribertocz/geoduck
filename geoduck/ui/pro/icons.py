@@ -55,6 +55,14 @@ PATHS: dict[str, str] = {
     "arrow-up": '<path d="M12 19V5M6 11l6-6 6 6"/>',
     "arrow-down": '<path d="M12 5v14M6 13l6 6 6-6"/>',
     "history": '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/><path d="M12 8v4l3 2"/>',
+    # Trazabilidad (workspace-pro-spec §9): de dónde viene cada capa
+    "file": '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+    "memory": '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"'
+    ' fill="currentColor"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/>',
+    "globe": '<circle cx="12" cy="12" r="8.5"/>'
+    '<path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/>',
+    "qgis-layers": '<path d="M12 3l9 5-9 5-9-5z" fill="currentColor"/>'
+    '<path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5"/>',
 }
 
 

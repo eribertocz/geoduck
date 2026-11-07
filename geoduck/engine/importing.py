@@ -26,7 +26,14 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 
 from geoduck.domain.bridge_types import is_geometry_type
-from geoduck.domain.errors import EngineError, InvalidArgumentError, OperationCancelledError, TransactionError
+from geoduck.domain.errors import (
+    EngineError,
+    ErrorCode,
+    GeoDuckError,
+    InvalidArgumentError,
+    OperationCancelledError,
+    TransactionError,
+)
 from geoduck.domain.files import ARROW_VIEW
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import (
@@ -71,8 +78,17 @@ def _write_from_sql(handle: ConnectionHandle, job: ImportJob) -> int:
 
     def write() -> int:
         rows = handle.execute(f"SELECT count(*) FROM ({source}) AS __geoduck_src", max_rows=1).rows
+        count = int(str(rows[0][0]))
+        if job.expected_rows is not None and count != job.expected_rows:
+            # El filtro de QGIS leído por DuckDB da otras filas: nada se escribe (§5.4)
+            raise GeoDuckError(
+                tr("The layer filter gives {0} rows in DuckDB and {1} in QGIS").format(
+                    count, job.expected_rows
+                ),
+                code=ErrorCode.FILTER_MISMATCH,
+            )
         handle.execute(job.source_write_sql(), max_rows=1)
-        return int(str(rows[0][0]))
+        return count
 
     if job.source_arrow is not None:  # Arrow/Feather: PyArrow lo da a DuckDB por flujo (§10)
         with handle.registered(ARROW_VIEW, arrow_dataset(job.source_arrow)):
