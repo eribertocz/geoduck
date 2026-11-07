@@ -123,9 +123,16 @@ def _scan_arrow(handle: ConnectionHandle, item: FileLayer) -> FileLayer:
 def _scan_gdal(handle: ConnectionHandle, item: FileLayer) -> list[FileLayer]:
     source = vsi_path(item.path)
     rows = handle.execute(f"SELECT layers FROM ST_Read_Meta({quote_string_literal(source)})", max_rows=1).rows
-    layers = list(rows[0][0] or []) if rows else []
+    meta: Any = rows[0][0] if rows else None
+    layers: list[Any] = list(meta or [])
     if not layers and item.format == "gdb":
         layers = _gdb_layers(handle, source)
+    if not layers:  # `ST_Read_Meta` de DuckDB 1.5 no ve dentro de `/vsizip/`: se lee como una sola capa
+        try:
+            _geometry_columns(handle, gdal_read(source, None))
+            layers = [{"name": ""}]
+        except Exception:
+            layers = []
     if not layers:
         return [_replace(item, gdal_source=source, problem=tr("No layers could be read in this file"))]
     many = len(layers) > 1
