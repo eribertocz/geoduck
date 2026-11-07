@@ -1421,13 +1421,16 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
 
 ## 5. Pestaña de consulta (GD-WSP-004)
 - Editor SQL de QGIS con resaltado, números de línea y el autocompletado de G6 (bases, tablas, columnas,
-  funciones). Base de la consulta en un desplegable.
+  funciones).
+- **El archivo arriba, la ejecución abajo** (propietario, 2026-11-06): «⋯» junto a «+» en la fila de pestañas
+  con «Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; la barra de la consulta solo tiene lo de
+  ejecutar: ▶ Ejecutar, Cancelar y **«Se ejecuta en [base ▾]»**.
 - **Un solo «▶ Ejecutar»** (Ctrl+Intro; propietario, 2026-11-06, tras la prueba en Windows): corre la
   selección o, sin ella, **la sentencia marcada**. Una barra de acento a la izquierda del texto marca la
   sentencia que correrá y el botón lo dice («Ejecutar · línea 5», «Ejecutar selección»); se ejecuta
   exactamente lo marcado (se calcula en GeoDuck, igual con DuckDB 1.5 y 2.0; en una línea en blanco entre
-  dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Mayús+Intro y el menú «⋯»; el
-  tooltip del botón explica los dos atajos. Sin botón «Todo». **Cancelar**. La selección se ve con un azul
+  dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Mayús+Intro y el **clic derecho
+  del editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón «Todo». **Cancelar**. La selección se ve con un azul
   claramente distinto del fondo, en claro y en oscuro.
 - **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una); **Mensajes** con el
   registro (OK, errores con línea y columna).

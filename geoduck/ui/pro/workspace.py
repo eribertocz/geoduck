@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -58,7 +59,7 @@ from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_lines
+from geoduck.ui.pro.load import QuickLoad, finished_lines, popup_under
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,
@@ -240,6 +241,12 @@ class ProWorkspace(QWidget):
         self.new_query_button = icon_button("plus", tr("New query"), self.colors)
         self.new_query_button.clicked.connect(self.new_query)
         row.addWidget(self.new_query_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        # el archivo de la consulta, a la altura de las pestañas (propietario, 2026-11-06)
+        self.file_button = icon_button("more", tr("Open, save, save as…"), self.colors)
+        self.file_menu = QMenu(self)
+        self.file_menu.aboutToShow.connect(self._fill_file_menu)
+        self.file_button.clicked.connect(lambda: popup_under(self.file_menu, self.file_button))
+        row.addWidget(self.file_button, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addStretch(1)
         self.search_button = button(tr("Search"), "ghost", icon="search", colors=self.colors)
         self.search_button.setToolTip(tr("Go to a table or run an action (Ctrl+K)"))
@@ -257,6 +264,23 @@ class ProWorkspace(QWidget):
         self.dock_button.clicked.connect(lambda: self.presentation_requested.emit(False))
         row.addWidget(self.dock_button, 0, Qt.AlignmentFlag.AlignVCenter)
         return head
+
+    def _fill_file_menu(self) -> None:
+        """«Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; guardar, solo con una consulta elegida."""
+        menu = self.file_menu
+        menu.clear()
+        menu.addAction(tr("Open query…") + "\tCtrl+O", self.open_query_file)
+        menu.addSeparator()
+        page = self.tabs.page(self.tabs.bar.currentIndex()) if len(self.tabs) else None
+        query = page if isinstance(page, QueryPage) else None
+        name = query.place.name if query is not None else ""
+        save = menu.addAction(
+            (tr("Save «{}»").format(name) if query is not None else tr("Save")) + "\tCtrl+S",
+            lambda: query.save() if query is not None else None,
+        )
+        save_as = menu.addAction(tr("Save as…"), lambda: query.save_as() if query is not None else None)
+        save.setEnabled(query is not None)
+        save_as.setEnabled(query is not None)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         super().resizeEvent(event)
@@ -496,7 +520,7 @@ class ProWorkspace(QWidget):
         self.sidebar.set_session(dot, engine, status, ready=ready)
         self.status_changed.emit(dot, text)
         has_session = self._coordinator.engine_info is not None and state is not SessionState.DISCONNECTED
-        for widget in (self.new_query_button, self.search_button):
+        for widget in (self.new_query_button, self.file_button, self.search_button):
             widget.setEnabled(has_session)
         self.tabs.bar.setVisible(len(self.tabs) > 0)
         if not has_session or state is SessionState.CLOSING:

@@ -363,3 +363,26 @@ def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
     page.editor.setSelection(0, 0, 0, 0)
     page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)
+
+
+def test_open_and_save_are_by_the_tabs_and_run_all_is_in_the_editor_menu(coordinator, tmp_path):
+    """Propietario (2026-11-06): el archivo arriba (el «⋯» junto a las pestañas), la ejecución en la barra de
+    la consulta («Se ejecuta en»), y «Ejecutar todo» en el clic derecho del editor."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;\nSELECT 2 AS dos;")
+    ws._fill_file_menu()
+    texts = [a.text() for a in ws.file_menu.actions() if not a.isSeparator()]
+    assert texts[0].startswith(tr("Open query…"))
+    assert texts[1].startswith(tr("Save «{}»").format(page.place.name))
+    assert all(a.isEnabled() for a in ws.file_menu.actions())
+    assert not hasattr(page, "file_button")  # la barra de la consulta ya no tiene «⋯»
+    assert any(lab.text() == tr("Runs in") for lab in page.findChildren(type(page.summary)))
+    page.editor.setCursorPosition(0, 2)
+    page.mark_statement()
+    menu = page._context.build()
+    actions = [a for a in menu.actions() if not a.isSeparator()]
+    assert actions[0].text().startswith(tr("Run · line {}").format(1))
+    assert actions[1] is page.run_all_action
+    assert len(actions) > 2  # y debajo, el menú de siempre del editor
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)

@@ -20,10 +20,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from qgis.PyQt.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QAction,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -191,26 +192,17 @@ class QueryPage(QWidget):
         self.cancel_button.clicked.connect(self.cancel)
         row.addWidget(self.cancel_button)
         row.addWidget(spacer(), 1)
-        row.addWidget(label(tr("Database"), "muted"))
+        row.addWidget(label(tr("Runs in"), "muted"))
         self.base = QComboBox()
         self.base.setAccessibleName(tr("Database of the query"))
-        self.base.setToolTip(tr("The query runs in this database"))
+        self.base.setToolTip(tr("«Run» runs the SQL in this database"))
         self.base.setMinimumWidth(110)
         self.base.currentIndexChanged.connect(lambda _i: self.changed.emit())
         row.addWidget(self.base)
-        self.file_button = icon_button("more", tr("Run all, open, save, save as…"), self.colors)
-        self.file_menu = QMenu(self)
-        self.run_all_action = self.file_menu.addAction(
-            tr("Run all") + "\tCtrl+Shift+Enter", lambda: self.execute(RunScope.ALL)
-        )
-        self.file_menu.addSeparator()
-        self.file_menu.addAction(tr("Open…") + "\tCtrl+O", self.open_requested.emit)
-        self.file_menu.addAction(tr("Save") + "\tCtrl+S", self.save)
-        self.file_menu.addAction(tr("Save as…"), self.save_as)
-        self.file_button.clicked.connect(
-            lambda: self.file_menu.popup(self.file_button.mapToGlobal(QPoint(0, self.file_button.height())))
-        )
-        row.addWidget(self.file_button)
+        # «Ejecutar todo»: Ctrl+Mayús+Intro y el clic derecho del editor (abrir y guardar están junto a las
+        # pestañas: el archivo arriba, la ejecución aquí; propietario, 2026-11-06)
+        self.run_all_action = QAction(tr("Run all") + "\tCtrl+Shift+Enter", self)
+        self.run_all_action.triggered.connect(lambda: self.execute(RunScope.ALL))
         return bar
 
     def _icon(self, name: str, color: str) -> Any:
@@ -394,6 +386,8 @@ class QueryPage(QWidget):
         for signal in (editor.cursorPositionChanged, editor.selectionChanged, editor.textChanged):
             signal.connect(lambda *_a: self._mark_timer.start())
         pro_editor.prepare_mark(editor, self.colors)
+        self._context = _EditorMenu(self)
+        editor.viewport().installEventFilter(self._context)
 
     def current_span(self) -> tuple[int, int] | None:
         """(inicio, fin) de la sentencia marcada en el texto del editor."""
@@ -832,6 +826,41 @@ class QueryPage(QWidget):
         self._autosave.stop()
         self.save_if_saved()
         self._unsubscribe()
+
+
+class _EditorMenu(QObject):
+    """Clic derecho en el editor: arriba «▶ Ejecutar · línea N» y «Ejecutar todo (N sentencias)»; debajo, el
+    menú de siempre del editor (deshacer, cortar, copiar, pegar…)."""
+
+    def __init__(self, page: QueryPage) -> None:
+        super().__init__(page)
+        self._page = page
+        #: El último menú mostrado (para las pruebas).
+        self.menu: QMenu | None = None
+
+    def build(self) -> QMenu:
+        page = self._page
+        editor = page.editor
+        standard = getattr(editor, "createStandardContextMenu", None)
+        menu = standard() if standard is not None else None
+        if menu is None:
+            menu = QMenu(editor)
+        first = menu.actions()[0] if menu.actions() else None
+        run = QAction(page.run_button.text() + "\tCtrl+Enter", menu)
+        run.setEnabled(page.run_button.isEnabled())
+        run.triggered.connect(lambda: page.execute(RunScope.CURRENT))
+        menu.insertAction(first, run)
+        menu.insertAction(first, page.run_all_action)
+        if first is not None:
+            menu.insertSeparator(first)
+        self.menu = menu
+        return menu
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        if event.type() == QEvent.Type.ContextMenu:
+            self.build().popup(event.globalPos())
+            return True
+        return False
 
 
 def _file_name(title: str) -> str:

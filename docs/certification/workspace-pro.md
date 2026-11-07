@@ -34,7 +34,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | 2b | Pulse el botón de GeoDuck (instalación limpia) | Se abre la **ventana propia**, encima de QGIS; todo en gris salvo «Iniciar DuckDB», «Abrir base…», «Crear base…», «Diagnóstico» y «Acerca de» |
 | 2c | «Iniciar DuckDB» | Arriba de la barra lateral: «DuckDB · Lista» con su versión; la barra lateral y Ctrl+K se activan |
 | 2d | «Nueva consulta»; escriba `SELECT 42 AS n;` y Ctrl+Intro | Resultado `42`; abajo «Filas 1–1 de 1 · X ms» |
-| 2d2 | Escriba debajo `SELECT 7 AS m;`; mueva el cursor entre las dos y seleccione un trozo con el ratón | Una barra azul a la izquierda marca la sentencia del cursor y el botón dice «Ejecutar · línea N»; la selección se ve en azul y el botón dice «Ejecutar selección»; «⋯» › «Ejecutar todo (2 sentencias)» corre las dos |
+| 2d2 | Escriba debajo `SELECT 7 AS m;`; mueva el cursor entre las dos y seleccione un trozo con el ratón | Una barra azul a la izquierda marca la sentencia del cursor y el botón dice «Ejecutar · línea N»; la selección se ve en azul y el botón dice «Ejecutar selección»; clic derecho en el editor › «Ejecutar todo (2 sentencias)» corre las dos |
 | 2e | «Acoplar a QGIS» (arriba a la derecha) | Panel con la **misma** consulta y su resultado; la sesión sigue «Lista» |
 | 2f | En el panel, «Abrir en ventana» | Vuelve la ventana, con todo igual |
 | 2g | Cierre la ventana con la X y vuelva a abrirla con el botón | La sesión sigue «Lista» y las pestañas siguen ahí |
@@ -53,7 +53,7 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | 3f | Ctrl+K, escriba `medi` (sin acentos ni mayúsculas) e Intro | Abre la tabla; Esc cierra Ctrl+K |
 | 3g | Marque la tabla con ★; reinicie QGIS | Vuelve en «★»; la barra lateral no tiene «Recientes» |
 | 3g2 | En una consulta: `SELECT * FROM prueba.medidores;` y «Ejecutar» | Abajo, el mismo pie que la tabla: «Filas 1–100 de 1 000 000 · …» (el total llega enseguida), ‹ › pasa a «101–200»; a la derecha, el detalle de la fila elegida, que se pliega con su botón |
-| 3h | Guarde la consulta con Ctrl+S en la carpeta con acentos; ciérrela; Ctrl+O y ábrala | Vuelve con su texto |
+| 3h | Guarde la consulta con Ctrl+S (o «⋯» junto a las pestañas › «Guardar «…»») en la carpeta con acentos; ciérrela; Ctrl+O y ábrala | Vuelve con su texto |
 | 3i | Escriba `BEGIN; CREATE TABLE u (x INTEGER PRIMARY KEY); INSERT INTO u VALUES (1), (1);` y ejecute | Aviso abajo a la derecha que **no se va solo**: «La transacción falló. «Revertir» descarta sus cambios…»; pulse «Revertir» y DuckDB vuelve a estar «Lista» |
 | 3j | Ctrl+K › «Historial de ejecución» | Pestaña con cada sentencia (hora, ✓/✕, duración); «Error» filtra; doble clic abre una consulta nueva **sin ejecutarla** |
 
