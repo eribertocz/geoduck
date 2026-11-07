@@ -13,7 +13,7 @@ import json
 
 import pytest
 from qgis.core import QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsSettings, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QDialog, QLabel
+from qgis.PyQt.QtWidgets import QLabel
 
 import geoduck
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
@@ -27,7 +27,6 @@ from geoduck.ui.pro.load import COPY
 from geoduck.ui.pro.query_page import QueryPage
 from geoduck.ui.pro.shell import Mode
 from geoduck.ui.pro.workspace import ProWorkspace
-from geoduck.ui.send_dialog import SendDialog
 from tests.qgis.conftest import wait_for
 
 pytestmark = pytest.mark.qgis
@@ -235,38 +234,34 @@ def test_view_on_map_after_loading_selects_zooms_and_minimizes_the_window(plugin
 # -- «Enviar a DuckDB» desde QGIS -----------------------------------------------------------------------
 
 
-def test_the_layer_menu_sends_like_dropping_and_shows_geoduck(plugin, iface):
+def test_the_layer_menu_opens_step_one_with_the_selected_layers(plugin, iface):
     item = plugin()
     start(item)
     layer = points("medidores")
+    points("otra")
     iface.selected_layers = (layer,)
     try:
+        assert item.send_action.action.text() == tr("Add to DuckDB…")
         item.send_action.action.trigger()
         ws = item.content
         assert item.workspace.is_visible()
-        assert wait_for(lambda: ws.quick_send.last_report is not None, TIMEOUT)
-        assert ws.quick_send.asked is False  # tabla nueva en la base en memoria: sin diálogo
-        assert ws.last_toast is not None
+        window = ws.to_duckdb.window
+        assert window.stack.currentIndex() == 0 and list(window.rows) == [layer.id()]
     finally:
         iface.selected_layers = ()
 
 
-def test_the_plus_entry_always_opens_the_dialog_to_choose(plugin, iface, monkeypatch):
+def test_the_plus_entry_opens_step_one_with_every_layer(plugin, iface):
     item = plugin()
     start(item)
-    layer = points("zonas")
+    layer, other = points("zonas"), points("otra")
     iface.selected_layers = (layer,)
-    shown = []
-
-    def fake_exec(dialog):
-        shown.append(len(dialog.items))
-        return QDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(SendDialog, "exec", fake_exec)
     try:
+        assert item.content.sidebar.send_action.text() == tr("Add QGIS layers to DuckDB…")
         item.content.sidebar.send_action.trigger()
-        assert wait_for(lambda: shown, TIMEOUT)
-        assert item.content.quick_send.asked and item.content.quick_send.last_report is None
+        window = item.content.to_duckdb.window
+        assert set(window.rows) == {layer.id(), other.id()}
+        assert window.chosen() == [layer.id()]  # las seleccionadas en QGIS, ya marcadas
     finally:
         iface.selected_layers = ()
 
@@ -290,12 +285,112 @@ def test_a_narrow_panel_keeps_every_action_within_reach(plugin):
         tr("Execution history"),
         tr("Open database…"),
         tr("Create database…"),
-        tr("Send QGIS layers to DuckDB…"),
+        tr("Add QGIS layers to DuckDB…"),
         tr("Refresh databases"),
         tr("Open in a window"),
         tr("Environment diagnostics"),
     ):
         assert action in titles
+
+
+def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugin):
+    """Propietario (2026-11-07): el panel baja a 340 px sin que nada se monte; las mismas opciones, con
+    ícono y tooltip donde no cabe el texto (▶ sin «Ejecutar»); el explorador se abre encima y se cierra al
+    elegir una tabla o con Esc."""
+    from geoduck.ui.pro.places import TABLE, Place
+    from geoduck.ui.pro.table_page import TablePage
+
+    item = plugin()
+    start(item)
+    coordinator = item.coordinator
+    coordinator.execute_sql("CREATE TABLE puntos AS SELECT range AS id FROM range(150);", RunScope.ALL)
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "puntos" for o in coordinator.catalog.objects))
+    item.workspace.set_visible(True)
+    item.workspace.set_mode(Mode.DOCK)
+    ws = item.content
+    ws.open_place(Place(TABLE, "puntos", "memory", "main"))
+    table = ws.tabs.page(ws.tabs.bar.currentIndex())
+    assert isinstance(table, TablePage)
+    ws.new_query()
+    query = ws.tabs.page(ws.tabs.bar.currentIndex())
+    query.editor.setText("SELECT 1;")
+    query.mark_statement()
+    assert ws.compact and table.compact and query.compact
+    assert query.run_button.text() == "" and query.run_button.accessibleName() == tr("Run · line {}").format(
+        1
+    )
+    assert tr("Run · line {}").format(1) in query.run_button.toolTip()
+    assert query.load_button.text() == "" and query.load_button.accessibleName() == tr("Load in QGIS")
+    assert not query.detail_button.isChecked() and not table.detail_button.isChecked()
+    assert table.structure_button.isVisibleTo(table) and not table.mode.isVisibleTo(table)
+    table.structure_button.setChecked(True)
+    assert table.views.currentIndex() == 1
+    table.structure_button.setChecked(False)
+    assert table.views.currentIndex() == 0
+    for page in (query, table):  # medido con el panel visible: 338 px (capturas en docs/evidence/g9/panel)
+        assert page.minimumSizeHint().width() <= 340, page.minimumSizeHint().width()
+    # el explorador: encima, sin la fila de la sesión (la lleva la cabecera del panel)
+    assert ws.sidebar_button.isVisibleTo(ws) and ws.sidebar.isHidden()
+    ws.toggle_sidebar()
+    assert not ws.sidebar.isHidden() and ws.sidebar.geometry().x() == 0
+    assert not ws.sidebar.session_head.isVisibleTo(ws.sidebar)
+    ws.sidebar.open_requested.emit(Place(TABLE, "puntos", "memory", "main"))
+    assert ws.sidebar.isHidden()  # elegida la tabla, se cierra
+    ws.toggle_sidebar()
+    assert not ws.sidebar.isHidden()
+    ws.set_overlay_open(False)
+    # de vuelta a la ventana: todo con texto y la barra lateral en su sitio
+    item.workspace.set_mode(Mode.WINDOW)
+    ws.resize(1300, 800)
+    query.mark_statement()
+    assert not ws.compact and query.run_button.text() == tr("Run · line {}").format(1)
+    assert table.mode.isVisibleTo(table) and not table.structure_button.isVisibleTo(table)
+
+
+def test_right_click_on_one_or_more_tables_loads_them_with_the_same_menu(plugin):
+    """Propietario (2026-11-06): clic derecho en una o varias tablas (Ctrl/Mayús) › «Cargar en QGIS ▸», el
+    mismo menú que al soltarlas en el mapa; con una sola, también «Más opciones…»."""
+    from geoduck.ui.pro.sidebar import PLACE, ROLE
+
+    item = plugin()
+    start(item)
+    coordinator = item.coordinator
+    coordinator.execute_sql(
+        "CREATE TABLE a AS SELECT 1 AS x; CREATE TABLE b AS SELECT 2 AS x; CREATE TABLE c AS SELECT 3 AS x;",
+        RunScope.ALL,
+    )
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.refresh_catalog()
+    assert wait_for(lambda: any(o.name == "c" for o in coordinator.catalog.objects))
+    item.workspace.set_visible(True)
+    ws = item.content
+    tree = ws.sidebar.tree
+    items = {}
+
+    def walk(parent):
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            data = child.data(0, ROLE)
+            if data and data[0] == PLACE:
+                items[data[1].name] = child
+            walk(child)
+
+    for i in range(tree.topLevelItemCount()):
+        walk(tree.topLevelItem(i))
+    assert tree.selectionMode() == tree.SelectionMode.ExtendedSelection
+    items["a"].setSelected(True)
+    items["c"].setSelected(True)
+    assert [p.name for p in ws.sidebar.selected_places()] == ["a", "c"]
+    picked = []
+    ws.loader.start_many = lambda jobs, kind: picked.append(([j["name"] for j in jobs], kind))
+    menu = ws._load_menu_for(ws, ws.sidebar.selected_places())
+    copy = next(a for a in menu.actions() if a.text() == tr("Copy (mode)"))
+    copy.trigger()
+    assert picked == [(["a", "c"], COPY)]
+    single = ws._load_menu_for(ws, [ws.sidebar.selected_places()[0]])
+    assert tr("More options…") in [a.text() for a in single.actions()]
 
 
 # -- diálogos que siguen en uso ----------------------------------------------------------------------------

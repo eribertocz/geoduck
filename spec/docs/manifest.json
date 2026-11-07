@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 177454,
-      "sha256": "1afcd0a5fe10ef702b4f534dbc51c03ea2acc7d1150f7f5dd47b2d3d6accd015"
+      "bytes": 182120,
+      "sha256": "6c7bce55285f2e0c533f47a1a4136522932d357a62d77a5de13500af6623d1b5"
     },
     {
       "path": "README.md",
@@ -161,8 +161,8 @@
     },
     {
       "path": "specs/qgis-import-spec.md",
-      "bytes": 8397,
-      "sha256": "bc0d2a553e74721c8d8fbed15502dcbcd12131d7051fe67e4ba8d5ee1d84d840"
+      "bytes": 8662,
+      "sha256": "9a656bf981044416dd1baf9f7c1663f8aa8faad9d298da14feeaf9a35abe3b36"
     },
     {
       "path": "specs/session-spec.md",
@@ -176,8 +176,8 @@
     },
     {
       "path": "specs/sql-editor-spec.md",
-      "bytes": 13181,
-      "sha256": "fda53c4ef3906b611a693df8fc98f88c29db53a3c283a3966ca5deaf081c9c81"
+      "bytes": 13473,
+      "sha256": "c3edf415b9395c2351e83a6e13e1d62df334d2210fdeda719caede9eaed35953"
     },
     {
       "path": "specs/ui-ux-spec.md",
@@ -186,8 +186,8 @@
     },
     {
       "path": "specs/workspace-pro-spec.md",
-      "bytes": 14195,
-      "sha256": "b14634cd9f6e0b5893b4d595fe95223d66fab3404fd097ebafe81d3c4f06ab7d"
+      "bytes": 18304,
+      "sha256": "0848a528ec7f91b715acff376eaae1c18eaacfff7659a89675f8d081e2f32044"
     }
   ]
 }

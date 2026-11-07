@@ -25,7 +25,7 @@ from geoduck.plugin import make_memory_engine
 from geoduck.ui.dispatcher import QtDispatcher
 from geoduck.ui.pro.places import PREFIX, QUERY, TABLE, Place
 from geoduck.ui.pro.shell import Mode, ProController
-from geoduck.ui.pro.sidebar import PLACE, ROLE
+from geoduck.ui.pro.sidebar import PLACE, ROLE, SECTION
 from geoduck.ui.pro.workspace import STATE, TABS, WELCOME, ProWorkspace
 from tests.qgis.conftest import wait_for
 
@@ -160,7 +160,10 @@ def test_double_click_opens_a_tab_once_and_ctrl_w_closes_it(coordinator):
         tree.itemActivated.emit(item_of(ws, "consumidores"), 0)
     assert [p.name for p in ws.tabs.places()] == ["consumidores"]
     assert ws.body.currentIndex() == TABS
-    assert [p.name for p in ws.places.recents] == ["consumidores"]
+    assert [p.name for p in ws.places.recents] == ["consumidores"]  # solo ordena Ctrl+K
+    ws.sidebar.render(coordinator.catalog)
+    sections = [tree.topLevelItem(i).data(0, ROLE) for i in range(tree.topLevelItemCount())]
+    assert (SECTION, "recent") not in [tuple(s) for s in sections if s]  # sin «Recientes» (2026-11-06)
     tree.itemActivated.emit(item_of(ws, "lecturas"), 0)
     assert ws.tabs.current.name == "lecturas"
     shortcut(ws, "Ctrl+W").activated.emit()

@@ -39,17 +39,25 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   está iniciado) y **«Cerrar DuckDB»** (menú «⋯»); la palabra «sesión» no aparece en la interfaz. Sin DuckDB
   iniciado, **todo está en gris** salvo «Iniciar DuckDB», «Abrir base…», «Crear base…», «Diagnóstico» y
   «Acerca de».
-- **Barra lateral** (plegable, Ctrl+B): búsqueda; **Recientes**; **★ Favoritos**; **Bases** (árbol: bases,
+- **Barra lateral** (plegable, Ctrl+B): búsqueda; **★ Favoritos**; **Bases** (árbol: bases,
   esquemas, tablas, vistas, temporales, con su acceso); «+» (abrir o crear base, importar capas de QGIS); al pie,
   «Diagnóstico», «Acerca de» y la versión.
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
   Ctrl+W), reordenar y recordar las abiertas.
-- **Pie:** el último aviso (p. ej. «Capa «consumidores» cargada · Conectada · Ver en el mapa»).
-- **Panel acoplado:** pestañas en una fila compacta, sin barra lateral (Ctrl+K y el menú de la pestaña la
-  sustituyen); ninguna acción desaparece, se compacta.
+- **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde DuckDB · Conectada · Ver en el mapa»).
+- **Panel acoplado** (propietario, 2026-11-07, tras la prueba en Windows; antes no bajaba de 690 px): **modo
+  compacto, mínimo 340 px** sin que nada se monte. Las mismas opciones que la ventana, con ícono y tooltip
+  donde no cabe el texto: ▶ sin «Ejecutar», ■, la base sin «Se ejecuta en», «Exportar» y «Cargar en QGIS»
+  como íconos, «Ver SQL» y el filtro como íconos, «Estructura» como ícono ⓘ arriba; el detalle de fila,
+  cerrado. El **explorador** se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B), sin
+  repetir la sesión (está en la cabecera del panel), y se cierra al elegir algo, con Esc o con un clic fuera.
+  Una ventana de menos de 640 px usa el mismo modo compacto.
+- **Clic derecho en una o varias tablas** (Ctrl/Mayús + clic, como en el Explorador de Windows o QGIS) ›
+  «Cargar en QGIS ▸» / «Cargar N tablas en QGIS ▸»: el mismo menú que al soltarlas en el mapa (§9); con una
+  sola, también «Más opciones…».
 
 ## 4. Pestaña de tabla (GD-WSP-003)
-Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o Ctrl+K). Solo lectura en G9.
+Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
 - **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con
   tipo bajo cada columna y número de fila.
   - **Orden:** clic en el encabezado (ascendente, descendente, sin orden); lo ejecuta DuckDB.
@@ -57,7 +65,7 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o
     cada chip se quita con ×. Se combinan con Y. **«Ver SQL»** muestra la consulta equivalente y la abre en una
     pestaña de consulta.
   - **Buscar** en la tabla (texto en las columnas de texto).
-  - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «1–100 de 48 312», ‹ ›; el
+  - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «Filas 1–100 de 48 312», ‹ ›; el
     total se cuenta aparte, sin bloquear.
   - **Detalle de fila** (panel derecho, plegable): cada campo con su tipo y su valor completo; la geometría
     resumida (tipo, SRC, número de vértices); copiar valor.
@@ -67,12 +75,25 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, Recientes, ★ o
 
 ## 5. Pestaña de consulta (GD-WSP-004)
 - Editor SQL de QGIS con resaltado, números de línea y el autocompletado de G6 (bases, tablas, columnas,
-  funciones). Base de la consulta en un desplegable.
-- **Ejecutar** la sentencia bajo el cursor o la selección (Ctrl+Intro) y **Todo** (Ctrl+Mayús+Intro);
-  **Cancelar**.
-- **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una), con «N filas · X ms»;
-  **Mensajes** con el registro (OK, errores con línea y columna).
-- «Exportar ▾» y «Cargar en QGIS ▾» del resultado.
+  funciones).
+- **El archivo arriba, la ejecución abajo** (propietario, 2026-11-06): «⋯» junto a «+» en la fila de pestañas
+  con «Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; la barra de la consulta solo tiene lo de
+  ejecutar: ▶ Ejecutar, Cancelar y **«Se ejecuta en [base ▾]»**.
+- **Un solo «▶ Ejecutar»** (Ctrl+Intro; propietario, 2026-11-06, tras la prueba en Windows): corre la
+  selección o, sin ella, **la sentencia marcada**. Una barra de acento a la izquierda del texto marca la
+  sentencia que correrá y el botón lo dice («Ejecutar · línea 5», «Ejecutar selección»); se ejecuta
+  exactamente lo marcado (se calcula en GeoDuck, igual con DuckDB 1.5 y 2.0; en una línea en blanco entre
+  dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Mayús+Intro y el **clic derecho
+  del editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón «Todo». **Cancelar**. La selección se ve con un azul
+  claramente distinto del fondo, en claro y en oscuro.
+- **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una); **Mensajes** con el
+  registro (OK, errores con línea y columna).
+- **El resultado se maneja como la pestaña de tabla** (propietario, 2026-11-06, tras la prueba en Windows): el
+  mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s», ‹ › de 100 filas, «Exportar ▾» y «Cargar en QGIS ▾»;
+  y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y
+  el total repiten la lectura (`LIMIT`/`OFFSET`, `count(*)`) en el worker, sin bloquear. Sin `ORDER BY`, el
+  orden entre páginas no está garantizado. Una escritura con filas (`… RETURNING`) nunca se repite: muestra su
+  primera página, «Filas 1–100 de más de 100», sin ‹ ›.
 - **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación activada por defecto
   (ADR-0014, ahora por consulta; propietario, 2026-11-05). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
   como comentario).
@@ -85,39 +106,60 @@ con la base y el tipo de cada resultado. Intro abre; Esc cierra.
 
 ## 7. Cargar en QGIS (GD-WSP-006; decisión del propietario, 2026-11-05)
 Dos opciones, en lenguaje simple:
-- **«Copia»:** independiente de DuckDB. Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
+- **«Copia»:** «Copia los datos a la memoria de QGIS; ya no depende de DuckDB» (propietario, 2026-11-07: sin
+  «rápida», que hacía pensar en velocidad; lo que la define es que es una copia en memoria). Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
   Copia en memoria solo como **respaldo automático** si GDAL no permite la rápida. El usuario nunca elige entre
   las dos.
 - **Al guardar el proyecto** con alguna «Copia» (decisión del propietario, 2026-11-05, tras el spike E0b: ninguna
   copia sobrevive a reabrir el proyecto), GeoDuck lo avisa y ofrece en un clic **«Guardar las copias junto al
   proyecto»**: un GeoPackage al lado del `.qgz`, y cada capa pasa a leer ese archivo y sobrevive. Con «No, gracias»,
   al reabrir la capa se muestra «no disponible» con su motivo, nunca rota sin explicación.
-- **«Conectada»:** en vivo, editable en DuckDB (ADR-0012).
+- **«Conectada»:** «Lee directamente de DuckDB, sin copiar; lo que edites se guarda en DuckDB» (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
 
-## 8. Recientes y favoritos (GD-WSP-007)
-- **Recientes:** las tablas y consultas abiertas hace poco (máximo 10), en esta y en sesiones anteriores.
+## 8. Favoritos (GD-WSP-007)
+- **Sin «Recientes» en la barra lateral** (propietario, 2026-11-06, tras la prueba en Windows): estorbaba y
+  mostraba tablas que ya no se podían abrir. Lo abierto hace poco solo ordena Ctrl+K, que nunca muestra lo que
+  ya no existe.
 - **★ Favoritos:** el usuario marca tablas y consultas; aparecen arriba.
 - Se recuerdan entre reinicios de QGIS (propietario, 2026-11-05). Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
   objeto ya no existe, se muestra atenuado con su motivo.
 
-## 9. Enviar a DuckDB (GD-WSP-008; qgis-import-spec)
-El diálogo de G8 rehecho con el sistema de diseño, mismo comportamiento. Ctrl+K → «Enviar capa de QGIS a
-DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decisión, 2026-11-05).
+## 9. Capas de QGIS → DuckDB (GD-WSP-008; qgis-import-spec)
+**Una sola ventana de tres pasos para las tres formas** (propietario, 2026-11-06, tras la prueba en Windows:
+F-131; reemplaza el envío directo de E5). Ctrl+K y «+» → «Añadir capas de QGIS a DuckDB…»; en QGIS, clic
+derecho sobre capas → «Añadir a DuckDB…». «Reproyectar a…» sigue siendo global para todas las capas.
 
-**Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5). Lo mínimo: se pregunta solo lo que falta.
-- **QGIS → DuckDB:** soltar una o varias capas del panel de capas en una base de la barra lateral (en el panel
-  acoplado, en cualquier parte: la base actual). Cada tabla guarda el SRC de su capa. Simplificaciones
-  (propietario, 2026-11-06: «Tú decide»):
-  1. **Sin diálogo si no hay nada que decidir:** si todas serán tablas nuevas, sin selección y con SRC, se
-     envían directamente y el pie avisa «N capas enviadas a db · Abrir · Deshacer». El diálogo (con la base y
-     las capas elegidas) solo se abre si hay algo que decidir: una tabla que ya existe, una capa que no se
-     puede, una selección o el SRC.
-  2. **Diálogo más limpio:** sin la columna «Qué pasará» si todo es una tabla nueva; «Reproyectar a…» y «Vista
-     en vez de copia», plegados bajo «Más opciones».
-  3. **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
-     «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
-  4. **Progreso en el pie:** una barra fina y «Cancelar»; sin otra ventana.
+| Cómo empieza | Paso 1 · Capas | Paso 2 · Dónde |
+|---|---|---|
+| Arrastrar capas a GeoDuck | Las arrastradas, marcadas | La base donde se soltaron (o la actual) |
+| Clic derecho › «Añadir a DuckDB…» | Las seleccionadas en QGIS, marcadas | La base actual |
+| «Añadir capas de QGIS a DuckDB…» | Todas las del proyecto; marcadas las seleccionadas en QGIS | La base actual |
+
+1. **Capas:** agrupadas en Puntos, Líneas, Polígonos y Tablas sin geometría, con el icono de QGIS, entidades y
+   SRC; las que no se pueden (ráster…), en gris con su motivo. Sin capas vectoriales, la ventana lo dice.
+   «N capas elegidas» y «Siguiente ›».
+2. **Dónde:** base y esquema, **siempre cambiables** (solo bases escribibles); «Qué pasará» con cada capa
+   (siempre a la vista); «Más opciones» («Reproyectar a…», «Vista en vez de copia»); una frase de lo que
+   ocurrirá. «‹ Atrás» y «Añadir N capas a DuckDB».
+3. **Progreso:** una fila por capa (✓ añadida, ⟳ copiándose con su %, ○ en espera, ✕ cancelada o con error).
+   «×» quita una capa en espera o detiene la que se copia; «Cancelar todo»; «Seguir en segundo plano». Al
+   terminar: qué pasó con cada una, «Deshacer», «Abrir» y «Cerrar».
+
+- **Cada capa se guarda por separado** (una transacción por capa; reemplaza «todo o nada» de G8, propietario
+  2026-11-06): las que terminaron quedan aunque se cancelen o fallen otras; «Deshacer» borra las tablas
+  nuevas. Las capas van una tras otra (DuckDB escribe de a una cosa).
+- **En segundo plano:** el pie muestra «⟳ Añadiendo 2 de 4 a DuckDB · redes_bt 62 %»; un clic (o Ctrl+K ›
+  «Ver progreso: capas de QGIS → DuckDB») vuelve al paso 3. Si se intenta añadir más mientras tanto, se
+  muestra el paso 3 en curso: «Termina o cancela estas capas para añadir más». Al terminar con la ventana
+  cerrada, un aviso «N capas de QGIS añadidas a DuckDB · prueba · Abrir · Deshacer · ×».
+- **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
+  «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
+- **Nombres:** «Añadir … a DuckDB» siempre termina en DuckDB (QGIS → DuckDB); «Cargar en QGIS» siempre termina
+  en QGIS (DuckDB → QGIS). **GeoDuck** es el complemento; **DuckDB**, la base donde quedan los datos.
+- **Avisos:** todos llevan «×» para cerrarlos sin hacer nada más (F-132).
+
+**Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5).
 - **DuckDB → QGIS:** soltar una o varias tablas o vistas en el mapa o en el panel de capas abre un **mini
   menú** «Copia» / «Conectada»: un clic carga todo lo soltado; Esc cancela. El SRC sale de la columna de
   geometría (`GEOMETRY('EPSG:4326')`); **solo si a alguna le falta**, una sola ventana pequeña pide uno para

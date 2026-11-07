@@ -112,30 +112,44 @@ def mode_text(mode: LoadMode) -> str:
     return tr("Connected") if mode is LoadMode.CONNECTED else tr("Copy (mode)")
 
 
-def finished_title(report: LoadReport) -> str:
-    """La capa (o capas), cómo se cargó y cuántas entidades."""
-    rows = f"{report.rows:,}".replace(",", " ")
+def finished_headline(report: LoadReport) -> str:
+    """La primera línea del aviso: qué se añadió y en qué sentido (DuckDB → QGIS)."""
     if len(report.layers) > 1:  # una capa por geometría (spatial-spec §7)
         names = ", ".join(f"«{name}»" for _, name in report.layers)
-        text = (
-            tr("Layers {} loaded · {} · {} features each")
-            if report.rows_each
-            else tr("Layers {} loaded · {} · {} features in total")
-        )
-        return text.format(names, mode_text(report.mode), rows)
-    return tr("Layer «{}» loaded · {} · {} features").format(report.layer_name, mode_text(report.mode), rows)
+        return tr("Layers {} added to QGIS from DuckDB").format(names)
+    return tr("Layer «{}» added to QGIS from DuckDB").format(report.layer_name)
+
+
+def finished_detail(report: LoadReport) -> str:
+    """Cómo se cargó y cuántas entidades."""
+    rows = f"{report.rows:,}".replace(",", " ")
+    if len(report.layers) > 1:
+        count = tr("{} features each") if report.rows_each else tr("{} features in total")
+    else:
+        count = tr("{} features")
+    return f"{mode_text(report.mode)} · {count.format(rows)}"
+
+
+def finished_title(report: LoadReport) -> str:
+    """La capa (o capas), cómo se cargó y cuántas entidades, en una línea."""
+    return f"{finished_headline(report)} · {finished_detail(report)}"
+
+
+def finished_lines(report: LoadReport) -> list[str]:
+    """El aviso, una idea por línea: qué y en qué sentido; cómo y cuántas; origen; acceso; advertencias."""
+    lines = [finished_headline(report), finished_detail(report)]
+    if report.origin:
+        lines.append(tr("Source: {}").format(report.origin))
+        if report.access:
+            lines.append(tr("Access: ") + report.access)
+    if report.warnings:
+        lines.append("⚠ " + "; ".join(report.warnings))
+    return lines
 
 
 def finished_text(report: LoadReport) -> str:
-    """El aviso completo (en el pie): además, el origen y el acceso (decisión del 2026-11-02) y los avisos."""
-    parts = [finished_title(report)]
-    if report.origin:
-        parts.append(tr("Source: {}").format(report.origin))
-        if report.access:
-            parts.append(tr("Access: ") + report.access)
-    if report.warnings:
-        parts.append("⚠ " + "; ".join(report.warnings))
-    return " · ".join(parts)
+    """El aviso completo en una línea (en el pie): además, el origen y el acceso (decisión del 2026-11-02)."""
+    return " · ".join(finished_lines(report))
 
 
 class _Row(QFrame):
@@ -188,9 +202,11 @@ def load_menu(
         head.setDefaultWidget(caption)
         head.setEnabled(False)
         menu.addAction(head)
+    copy_text = tr("Copies the data into QGIS memory; it no longer depends on DuckDB")
+    connected_text = tr("Reads straight from DuckDB without copying; edits are saved in DuckDB")
     for kind, icon, name, text in (
-        (COPY, "layers", tr("Copy (mode)"), tr("Fast and independent of DuckDB")),
-        (CONNECTED, "database", tr("Connected"), tr("Live and editable in DuckDB")),
+        (COPY, "layers", tr("Copy (mode)"), copy_text),
+        (CONNECTED, "database", tr("Connected"), connected_text),
     ):
         row = _Row(icon, name, text, colors)
         action = QWidgetAction(menu)
@@ -328,8 +344,9 @@ class QuickLoad:
         self._loads: set[int] = set()
         self._starting = False
         self.last_report: LoadReport | None = None
-        #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»).
-        self.on_loaded: Callable[[LoadReport], None] | None = None
+        #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»). Si devuelve True, ya avisó
+        #: (y el pie no repite el mensaje, que quedaría desactualizado).
+        self.on_loaded: Callable[[LoadReport], bool] | None = None
         self._unsubscribe = coordinator.subscribe(self._on_event)
 
     def start(
@@ -452,9 +469,8 @@ class QuickLoad:
         elif isinstance(event, LoadFinished) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
             self.last_report = event.report
-            self._notify(finished_text(event.report))
-            if self.on_loaded is not None:
-                self.on_loaded(event.report)
+            shown = self.on_loaded(event.report) if self.on_loaded is not None else False
+            self._notify("" if shown else finished_text(event.report))
             QTimer.singleShot(0, self._next)  # cuando la sesión ya volvió a estar lista
         elif isinstance(event, LoadFailed) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
