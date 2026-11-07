@@ -263,8 +263,10 @@ def test_without_duckdb_everything_is_grey_except_start(qgis_app):
     ws = workspace(idle)
     assert ws.start_button.text() == tr("Start DuckDB") and ws.start_button.isEnabled()
     assert ws.open_button.isEnabled() and ws.create_button.isEnabled()
-    for widget in (ws.sidebar.search, ws.sidebar.tree, ws.sidebar.session_button, ws.new_query_button):
+    for widget in (ws.sidebar.search, ws.sidebar.tree, ws.new_query_button):
         assert not widget.isEnabled()
+    # el menú de la sesión sí: sin sesión ofrece «Iniciar DuckDB» (marca, 2026-11-07)
+    assert ws.sidebar.session_button.isEnabled() and ws.sidebar.start_action.isVisible()
     assert ws.sidebar.diagnostics_button.isEnabled() and ws.sidebar.about_button.isEnabled()
     assert ws.state_title.text() == tr("DuckDB is not started")
     idle.shutdown(5)
