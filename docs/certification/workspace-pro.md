@@ -68,20 +68,25 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | 4g | Cierre y abra el proyecto | Las capas guardadas abren desde el GeoPackage; si eligió «No, gracias», un aviso dice cuáles quedaron vacías y por qué |
 | 4h | Arrastre `pozos` (y otra tabla) desde la barra lateral **al mapa**; repita soltándolas en el **panel de capas** | Mini menú «2 tablas · ¿cómo cargarlas?» con Copia / Conectada donde soltó; Esc cancela sin cargar nada |
 
-## 5. Enviar capas a DuckDB (G8 con la interfaz nueva; AT-WSP-009, AT-IMP-001..007)
+## 5. Capas de QGIS → DuckDB (G8 con la interfaz nueva; AT-WSP-009, AT-IMP-001..007)
 
 | # | Haga | Debe pasar |
 |---|---|---|
-| 5a | Clic derecho sobre el GeoPackage en el panel de capas → «Enviar a DuckDB…» | Sin ventana: GeoDuck se muestra, una barra fina con «Cancelar» en el pie y, al terminar, «Capa «…» enviada a … · Abrir · Deshacer» |
-| 5b | «Abrir» | La tabla, en una pestaña |
-| 5c | Arrastre el Shapefile y el CSV desde el panel de capas **sobre «prueba»** en la barra lateral | La base se resalta con un borde y el pie dice «Suelta para enviar 2 capa(s) a «prueba»»; se envían a «prueba» sin ventana |
-| 5d | Arrastre otra vez el GeoPackage sobre «prueba» | Ahora **sí** se abre la ventana (la tabla ya existe): «Ya existe: no se enviará»; elija «Reemplazar» o «Otro nombre» |
-| 5e | Seleccione unas entidades en el mapa y arrastre la capa | Se abre la ventana con «Solo las entidades seleccionadas (N)» |
-| 5f | «+» → «Enviar capas de QGIS a DuckDB…» | La ventana con todas las capas del proyecto; el ráster, en gris con su motivo; «Más opciones» pliega «Reproyectar a…» |
-| 5g | Envíe una capa de 1 millón de entidades y pulse «Cancelar» en el pie a mitad | «Envío cancelado: no cambió nada en DuckDB.»; la tabla no existe |
-| 5h | Tras un envío de una tabla nueva, «Deshacer» | «Deshecho: …»; la tabla desaparece de la barra lateral |
-| 5i | Cierre DuckDB («Cerrar DuckDB») y repita 5a | El pie dice «Inicia DuckDB para enviar capas.» |
-| 5j | Con DuckDB 1.5.x, envíe a una base **nueva** en archivo | La ventana se abre: esa base no guarda el SRC; «Enviar sin SRC» aparece y nada se envía hasta marcarlo (F-120) |
+| 5a | Clic derecho sobre el GeoPackage en el panel de capas → «Añadir a DuckDB…» | GeoDuck se muestra con «Capas de QGIS → DuckDB · 1 de 3» y esa capa marcada |
+| 5b | «Siguiente ›» | Paso 2: base y esquema (puede cambiarlos), «Qué pasará» («Tabla nueva») y la frase de lo que ocurrirá |
+| 5c | «Añadir 1 capa a DuckDB» | Paso 3: la capa con ⟳ y su % hasta ✓; al terminar «Deshacer», «Abrir» y «Cerrar». «Abrir» abre la tabla en una pestaña |
+| 5d | Arrastre el Shapefile y el CSV desde el panel de capas **sobre «prueba»** en la barra lateral | La base se resalta con un borde y el pie dice «Suelta para enviar 2 capa(s) a «prueba»»; paso 1 con esas dos capas; en el paso 2, «prueba» ya elegida |
+| 5e | Arrastre otra vez el GeoPackage sobre «prueba» y pase al paso 2 | «Ya existe: no se enviará»; elija «Reemplazar» u «Otro nombre» para poder añadirla |
+| 5f | Seleccione unas entidades en el mapa, arrastre la capa y pase al paso 2 | «Solo las entidades seleccionadas (N)» |
+| 5g | «+» → «Añadir capas de QGIS a DuckDB…» | Paso 1 con **todas** las capas, agrupadas (Puntos, Líneas, Polígonos, Tablas sin geometría); el ráster, en gris con su motivo; las seleccionadas en QGIS, ya marcadas |
+| 5h | Añada 4 capas (una grande, de cientos de miles de entidades); en el paso 3 pulse «×» en una que espera | Esa queda «cancelada» y las demás siguen; al terminar, las añadidas quedan en DuckDB |
+| 5i | Repita y pulse «×» en la que se está copiando | Esa se detiene y no queda en DuckDB; la siguiente empieza |
+| 5j | Repita y pulse «Seguir en segundo plano» | La ventana se cierra; el pie dice «⟳ Añadiendo … a DuckDB · …%»; un clic ahí vuelve al paso 3. Al terminar con la ventana cerrada: aviso «N capas de QGIS añadidas a DuckDB · …» con «Abrir», «Deshacer» y **«×»** |
+| 5k | «Cancelar todo» a mitad | Se detiene la actual y se quitan las que faltan; las ya añadidas quedan |
+| 5l | «Deshacer» tras añadir tablas nuevas | «Deshecho: …»; las tablas desaparecen de la barra lateral |
+| 5m | Sin capas en el proyecto, «+» → «Añadir capas de QGIS a DuckDB…» | La ventana dice «Tu proyecto de QGIS no tiene capas vectoriales…»; «Siguiente» en gris |
+| 5n | Cierre DuckDB («Cerrar DuckDB») y arrastre una capa | El pie dice «Inicia DuckDB para añadir capas.» |
+| 5o | Con DuckDB 1.5.x, añada a una base **nueva** en archivo | En el paso 2 aparece «Enviar sin SRC»: esa base no guarda el SRC; no se añade hasta marcarlo (F-120) |
 
 ## 6. Pantalla, tema, monitores y teclado (AT-WSP-001, 010)
 
@@ -100,8 +105,8 @@ Windows: Configuración → Pantalla → Escala. Reinicie QGIS después de cada 
 
 | # | Haga | Debe pasar |
 |---|---|---|
-| 7a | QGIS en inglés, reinicie | «Start DuckDB», «Send to DuckDB…», «Load into QGIS», «More options…» |
-| 7b | QGIS en español, reinicie | «Iniciar DuckDB», «Enviar a DuckDB…», «Cargar en QGIS», «Más opciones…» |
+| 7a | QGIS en inglés, reinicie | «Start DuckDB», «Add to DuckDB…», «Load into QGIS», «More options…» |
+| 7b | QGIS en español, reinicie | «Iniciar DuckDB», «Añadir a DuckDB…», «Cargar en QGIS», «Más opciones…» |
 | 7c | (Opcional, en un QGIS sin DuckDB) Abra GeoDuck | «El entorno no está listo para GeoDuck» · «Falta: DuckDB…» con «Diagnóstico»; «Iniciar DuckDB» en gris |
 | 7d | «Acerca de GeoDuck…» (menú Base de datos › GeoDuck) | Versión 0.10.0a1, licencia, enlaces y componentes; sin correos |
 

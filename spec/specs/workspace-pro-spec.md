@@ -101,23 +101,41 @@ Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hast
 - Se recuerdan entre reinicios de QGIS (propietario, 2026-11-05). Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
   objeto ya no existe, se muestra atenuado con su motivo.
 
-## 9. Enviar a DuckDB (GD-WSP-008; qgis-import-spec)
-El diálogo de G8 rehecho con el sistema de diseño, mismo comportamiento. Ctrl+K → «Enviar capa de QGIS a
-DuckDB…». «Reproyectar a…» sigue siendo global para todo el envío (decisión, 2026-11-05).
+## 9. Capas de QGIS → DuckDB (GD-WSP-008; qgis-import-spec)
+**Una sola ventana de tres pasos para las tres formas** (propietario, 2026-11-06, tras la prueba en Windows:
+F-131; reemplaza el envío directo de E5). Ctrl+K y «+» → «Añadir capas de QGIS a DuckDB…»; en QGIS, clic
+derecho sobre capas → «Añadir a DuckDB…». «Reproyectar a…» sigue siendo global para todas las capas.
 
-**Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5). Lo mínimo: se pregunta solo lo que falta.
-- **QGIS → DuckDB:** soltar una o varias capas del panel de capas en una base de la barra lateral (en el panel
-  acoplado, en cualquier parte: la base actual). Cada tabla guarda el SRC de su capa. Simplificaciones
-  (propietario, 2026-11-06: «Tú decide»):
-  1. **Sin diálogo si no hay nada que decidir:** si todas serán tablas nuevas, sin selección y con SRC, se
-     envían directamente y el pie avisa «N capas enviadas a db · Abrir · Deshacer». El diálogo (con la base y
-     las capas elegidas) solo se abre si hay algo que decidir: una tabla que ya existe, una capa que no se
-     puede, una selección o el SRC.
-  2. **Diálogo más limpio:** sin la columna «Qué pasará» si todo es una tabla nueva; «Reproyectar a…» y «Vista
-     en vez de copia», plegados bajo «Más opciones».
-  3. **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
-     «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
-  4. **Progreso en el pie:** una barra fina y «Cancelar»; sin otra ventana.
+| Cómo empieza | Paso 1 · Capas | Paso 2 · Dónde |
+|---|---|---|
+| Arrastrar capas a GeoDuck | Las arrastradas, marcadas | La base donde se soltaron (o la actual) |
+| Clic derecho › «Añadir a DuckDB…» | Las seleccionadas en QGIS, marcadas | La base actual |
+| «Añadir capas de QGIS a DuckDB…» | Todas las del proyecto; marcadas las seleccionadas en QGIS | La base actual |
+
+1. **Capas:** agrupadas en Puntos, Líneas, Polígonos y Tablas sin geometría, con el icono de QGIS, entidades y
+   SRC; las que no se pueden (ráster…), en gris con su motivo. Sin capas vectoriales, la ventana lo dice.
+   «N capas elegidas» y «Siguiente ›».
+2. **Dónde:** base y esquema, **siempre cambiables** (solo bases escribibles); «Qué pasará» con cada capa
+   (siempre a la vista); «Más opciones» («Reproyectar a…», «Vista en vez de copia»); una frase de lo que
+   ocurrirá. «‹ Atrás» y «Añadir N capas a DuckDB».
+3. **Progreso:** una fila por capa (✓ añadida, ⟳ copiándose con su %, ○ en espera, ✕ cancelada o con error).
+   «×» quita una capa en espera o detiene la que se copia; «Cancelar todo»; «Seguir en segundo plano». Al
+   terminar: qué pasó con cada una, «Deshacer», «Abrir» y «Cerrar».
+
+- **Cada capa se guarda por separado** (una transacción por capa; reemplaza «todo o nada» de G8, propietario
+  2026-11-06): las que terminaron quedan aunque se cancelen o fallen otras; «Deshacer» borra las tablas
+  nuevas. Las capas van una tras otra (DuckDB escribe de a una cosa).
+- **En segundo plano:** el pie muestra «⟳ Añadiendo 2 de 4 a DuckDB · redes_bt 62 %»; un clic (o Ctrl+K ›
+  «Ver progreso: capas de QGIS → DuckDB») vuelve al paso 3. Si se intenta añadir más mientras tanto, se
+  muestra el paso 3 en curso: «Termina o cancela estas capas para añadir más». Al terminar con la ventana
+  cerrada, un aviso «N capas de QGIS añadidas a DuckDB · prueba · Abrir · Deshacer · ×».
+- **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
+  «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
+- **Nombres:** «Añadir … a DuckDB» siempre termina en DuckDB (QGIS → DuckDB); «Cargar en QGIS» siempre termina
+  en QGIS (DuckDB → QGIS). **GeoDuck** es el complemento; **DuckDB**, la base donde quedan los datos.
+- **Avisos:** todos llevan «×» para cerrarlos sin hacer nada más (F-132).
+
+**Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5).
 - **DuckDB → QGIS:** soltar una o varias tablas o vistas en el mapa o en el panel de capas abre un **mini
   menú** «Copia» / «Conectada»: un clic carga todo lo soltado; Esc cancela. El SRC sale de la columna de
   geometría (`GEOMETRY('EPSG:4326')`); **solo si a alguna le falta**, una sola ventana pequeña pide uno para
