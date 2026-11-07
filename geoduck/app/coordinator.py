@@ -793,6 +793,13 @@ class SessionCoordinator:
             lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result()))
         )
 
+    def scan_files(self, paths: list[str], on_done: Callable[[Any], None]) -> None:
+        """Archivos → DuckDB, paso 1 (qgis-import-spec §10): las capas de cada archivo, leídas por DuckDB
+        solo de sus metadatos. No pasa por `BUSY`; `on_done` recibe la lista o el error (hilo principal)."""
+        engine = self._require_ready(tr("read the files"))
+        fut = engine.scan_files(paths)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result())))
+
     def send_layers(self, request: SendRequest) -> int:
         """Envía capas de QGIS a DuckDB en una transacción (qgis-import-spec §4). La sesión pasa por `BUSY`
         (bloquea `DETACH` y el cierre, §9); se cancela con `cancel_current_operation`. Devuelve el id."""

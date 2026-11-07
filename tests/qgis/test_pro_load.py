@@ -200,7 +200,7 @@ def test_export_from_the_table_uses_its_filters(coordinator, tmp_path):
     page = open_table(ws, "puntos")
     page.add_filter(Filter("kwh", GT, "100"))
     assert wait_for(lambda: page.total == 9)
-    page.export_menu.actions()[0].trigger()
+    next(a for a in page.export_menu.actions() if a.data() == "csv").trigger()
     assert wait_for(lambda: target.exists() and coordinator.state is SessionState.READY, 20)
     assert len(target.read_text().splitlines()) == 10
 

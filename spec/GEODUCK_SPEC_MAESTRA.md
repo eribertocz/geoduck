@@ -649,6 +649,17 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   (`GEOMETRY('EPSG:32719')`), la opción por defecto falla, así que exporta con `GEOPARQUET_VERSION 'V2'` y el SRC
   queda en el archivo (GDAL 3.13 lo lee como EPSG:32719). Nunca se inventa un SRC. El archivo se escribe primero
   como temporal oculto en la misma carpeta y se renombra al terminar.
+  **G9 (decisión del propietario, 2026-11-07; maqueta `docs/g9/maqueta/importar-exportar.png`):** «Exportar ▾»
+  (resultado, tabla y clic derecho) muestra ⚡ Parquet/GeoParquet, GeoPackage, CSV y ⚡ FlatGeobuf; «Más
+  formatos ▸» trae ⚡ Arrow/Feather (PyArrow), JSON por líneas, Shapefile, GeoJSON, KML, Geodatabase de ArcGIS
+  y Excel (la geometría como WKT). Cada opción dice en su ayuda qué pasará. **Siempre con el motor de DuckDB,
+  nunca con QGIS**; sin SpatiaLite ni SQLite (GeoPackage los reemplaza; el GDAL de DuckDB no escribe
+  SpatiaLite). Los formatos de GDAL usan `COPY … (FORMAT gdal, DRIVER …)` de `spatial`: si no está cargada,
+  GeoDuck pide permiso («Instalar y exportar» / «Cargar y exportar», spatial-spec §10). Con un SRC en la
+  geometría, DuckDB 2.0 exige fijar `geometry_always_xy`: si el usuario no lo fijó, GeoDuck lo pone en `true`
+  (orden este-norte) **solo durante la exportación** y después lo deja sin fijar; si el usuario lo fijó, no se
+  toca. Todo se escribe en una carpeta temporal junto al destino y se mueve al terminar (un Shapefile son
+  varios archivos; una Geodatabase, una carpeta).
 - **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
   «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
   (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda
@@ -1062,6 +1073,8 @@ Ninguna función de G4 requiere `spatial`: CRS (GeoArrow/PROJJSON), filtro espac
 
 GeoDuck nunca ejecuta `INSTALL` ni `LOAD` por su cuenta. `LOAD`/`INSTALL` escritos por el usuario en el editor son su SQL y se ejecutan como tal; valen solo para esa sesión. «Diagnóstico del entorno…» muestra si `spatial` está instalada y cargada. (Decisión del propietario, 2026-11-02, en G5: se retira la acción «Activar spatial…» de G4/E2; quien necesita `spatial` escribe SQL con `ST_*` y la carga con su propio SQL.)
 
+**Excepción con consentimiento (G9, decisión del propietario, 2026-11-07):** «Archivos → DuckDB» (qgis-import-spec §10) y «Exportar ▾» a un formato de GDAL necesitan `spatial`. Si no está cargada, el diálogo lo explica y ofrece «Instalar y continuar» (o «Cargar y continuar» si ya está instalada); solo ese clic ejecuta `INSTALL spatial` (repositorio oficial firmado) y `LOAD spatial`, para esa sesión. Nunca en silencio.
+
 
 
 ---
@@ -1339,10 +1352,57 @@ acción explica que hay que iniciar una.
 ## 8. Fuera de alcance de G8
 Sincronización o capas vinculadas; enviar estilos, uniones o campos virtuales calculados como expresión
 (se envía su valor); capas ráster; GeoPackage/Shapefile leídos directo por DuckDB (necesitan extensiones:
-ADR-0011); editar la tabla desde el diálogo.
+ADR-0011; en G9 sí, con consentimiento: §10); editar la tabla desde el diálogo.
 
 ## 9. Sin regresión (GD-IMP-007)
 Las cargas DuckDB → QGIS (G3–G4), el workspace, el SQL, los cuadernos y las protecciones de sesión siguen igual; un envío en curso bloquea `DETACH` y el cierre de la base destino igual que una operación propia.
+
+
+## 10. Archivos → DuckDB (GD-IMP-008; G9, decisión del propietario, 2026-11-07)
+Importar archivos de datos a tablas de DuckDB **siempre con el motor de DuckDB** (nunca con QGIS; el
+rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-exportar.png`.
+
+- **Puntos de entrada:** «+» de la barra lateral › «Importar archivos…»; clic derecho en una base o un esquema
+  › «Importar archivos aquí…»; Ctrl+K › «Importar archivos…»; **arrastrar** uno o varios archivos desde el
+  escritorio, el Explorador de archivos o el Navegador de QGIS a GeoDuck (con el «pato al lago», §3 de
+  workspace-pro-spec). Soltar uno o varios archivos **en el editor SQL** es llevarlos a DuckDB
+  escribiendo el SQL, sin ejecutarlo: un `CREATE TABLE base.esquema.nombre AS SELECT * FROM read_parquet('…')`
+  (o `read_csv`, `read_json`, `ST_Read`) por archivo, en la misma pestaña y separados por una línea en blanco.
+  La base es la de «Se ejecuta en» (o la primera en escritura) y el esquema `main`; los nombres no chocan con
+  las tablas que ya existen (nunca `OR REPLACE`). Si hace falta `spatial` y no está cargada, la primera línea
+  es `LOAD spatial;` (o `INSTALL spatial; LOAD spatial;`), visible: lo decide el usuario al ejecutar. Arrow y
+  los no compatibles siguen a «Importar archivos». **Las capas de QGIS soltadas en el editor abren siempre
+  el diálogo** (decisión del propietario, 2026-11-07).
+- **Selector de archivos:** filtro «Todos los compatibles» y uno por formato, con ⚡ en los más rápidos.
+- **Formatos y lector** (verificado con DuckDB 2.0.0):
+
+  | Formato | Extensiones | Lector |
+  |---|---|---|
+  | ⚡ Parquet / GeoParquet | `.parquet` | `read_parquet` (incluido) |
+  | ⚡ Arrow / Feather | `.arrow` `.feather` `.ipc` | PyArrow (`pyarrow.dataset`, por flujo) |
+  | ⚡ CSV / TSV | `.csv` `.tsv` | `read_csv` (incluido) |
+  | JSON / NDJSON | `.json` `.ndjson` `.jsonl` | `read_json` (incluido) |
+  | ⚡ FlatGeobuf, GeoPackage, Shapefile (`.shp` o `.zip`), GeoJSON (`.geojson` `.geojsonl`), KML/KMZ, Geodatabase de ArcGIS (`.gdb`), OpenStreetMap (`.osm.pbf`, solo importar), Excel (`.xlsx`) | | `ST_Read` de `spatial` (GDAL de DuckDB) |
+
+- **`spatial` con consentimiento (ADR-0011):** si hace falta y no está cargada, el paso 1 lo dice en una nota
+  («… se leen con la extensión «spatial» de DuckDB. No está instalada: GeoDuck la instalará al pulsar
+  «Instalar y continuar» (una sola vez, ~40 MB)»). Sin ese clic, GeoDuck no instala ni carga nada; los archivos
+  que no la necesitan se pueden importar igual. No hay lector alternativo.
+- **Paso 1 (Archivos):** una fila por capa u hoja (un GeoPackage o una Geodatabase muestran sus capas; un Excel,
+  sus hojas), agrupadas en puntos, líneas, polígonos y tablas sin geometría, con el formato, el SRC y las
+  filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).
+  Las que no se pueden leer, en gris con el motivo.
+- **Pasos 2 y 3:** los de §3 y §4 (destino, «si ya existe», progreso, «Deshacer»), con el título
+  «Archivos → DuckDB». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
+  transacción, con el conteo de §4.
+- **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
+  archivo (p. ej. SpatiaLite) no entra al diálogo: un aviso claro dice cuáles, qué hacer y si los demás siguen. Si el GDAL de
+  DuckDB lo lee (SpatiaLite, DXF, GML, GPX, MapInfo, ODS…): «Escribir consulta» (una pestaña con su `CREATE
+  TABLE … AS SELECT * FROM ST_Read(…)`, sin ejecutar) y «Abrir en QGIS» (luego se añade la capa); si no son
+  datos: «GeoDuck no puede leer: …», sin acciones. **Sin SpatiaLite ni SQLite** en la lista (decisión del propietario, 2026-11-07): GeoPackage es el formato
+  moderno sobre SQLite; el GDAL de DuckDB no escribe SpatiaLite.
+- **Geometría y SRC:** la que da el lector (`GEOMETRY('EPSG:…')`); un GeoParquet sin `spatial` toma el SRC
+  de sus metadatos `geo` (F-118). Una base que no guarda el SRC (F-120) sigue la regla de §7.
 
 
 

@@ -93,6 +93,17 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   (`GEOMETRY('EPSG:32719')`), la opción por defecto falla, así que exporta con `GEOPARQUET_VERSION 'V2'` y el SRC
   queda en el archivo (GDAL 3.13 lo lee como EPSG:32719). Nunca se inventa un SRC. El archivo se escribe primero
   como temporal oculto en la misma carpeta y se renombra al terminar.
+  **G9 (decisión del propietario, 2026-11-07; maqueta `docs/g9/maqueta/importar-exportar.png`):** «Exportar ▾»
+  (resultado, tabla y clic derecho) muestra ⚡ Parquet/GeoParquet, GeoPackage, CSV y ⚡ FlatGeobuf; «Más
+  formatos ▸» trae ⚡ Arrow/Feather (PyArrow), JSON por líneas, Shapefile, GeoJSON, KML, Geodatabase de ArcGIS
+  y Excel (la geometría como WKT). Cada opción dice en su ayuda qué pasará. **Siempre con el motor de DuckDB,
+  nunca con QGIS**; sin SpatiaLite ni SQLite (GeoPackage los reemplaza; el GDAL de DuckDB no escribe
+  SpatiaLite). Los formatos de GDAL usan `COPY … (FORMAT gdal, DRIVER …)` de `spatial`: si no está cargada,
+  GeoDuck pide permiso («Instalar y exportar» / «Cargar y exportar», spatial-spec §10). Con un SRC en la
+  geometría, DuckDB 2.0 exige fijar `geometry_always_xy`: si el usuario no lo fijó, GeoDuck lo pone en `true`
+  (orden este-norte) **solo durante la exportación** y después lo deja sin fijar; si el usuario lo fijó, no se
+  toca. Todo se escribe en una carpeta temporal junto al destino y se mueve al terminar (un Shapefile son
+  varios archivos; una Geodatabase, una carpeta).
 - **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
   «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
   (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda

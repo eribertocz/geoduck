@@ -252,9 +252,39 @@ def test_export_writes_the_full_query(coordinator, tmp_path):
     page.run_button.click()
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.export_button.isEnabled()
-    page.export_menu.actions()[0].trigger()  # CSV
+    next(a for a in page.export_menu.actions() if a.data() == "csv").trigger()
     assert wait_for(lambda: target.exists() and coordinator.state is SessionState.READY, 20)
     assert len(target.read_text().splitlines()) == 5001  # entera, no la vista previa
+
+
+def test_export_menu_shows_four_formats_and_the_rest_one_step_back(coordinator):
+    """Maqueta aprobada (2026-11-07): Parquet, GeoPackage, CSV y FlatGeobuf a la vista; el resto en «Más
+    formatos ▸»; nunca SpatiaLite ni SQLite; cada opción dice qué pasará."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS n;")
+    shown = [a.data() for a in page.export_menu.actions() if a.data()]
+    assert shown == ["parquet", "gpkg", "csv", "fgb"]
+    more = next(a.menu() for a in page.export_menu.actions() if a.menu() is not None)
+    rest = [a.data() for a in more.actions() if a.data()]
+    assert rest == ["arrow", "json", "shp", "geojson", "kml", "gdb", "xlsx"]
+    assert all(a.toolTip() for a in more.actions() if a.data())
+
+
+def test_a_gdal_format_asks_before_loading_spatial_and_cancel_exports_nothing(
+    coordinator, tmp_path, monkeypatch
+):
+    from geoduck.ui.pro import load as load_module
+
+    asked = []
+    monkeypatch.setattr(load_module, "ASK_SPATIAL", lambda label, installed: asked.append(label) or False)
+    target = tmp_path / "salida.gpkg"
+    ws = workspace(coordinator, paths=[str(target)])
+    page = new_query(ws, "SELECT 1 AS n;")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    next(a for a in page.export_menu.actions() if a.data() == "gpkg").trigger()
+    assert wait_for(lambda: asked, 20)
+    assert asked == ["GeoPackage"] and not target.exists()
 
 
 def test_without_duckdb_everything_is_grey_except_start(qgis_app):

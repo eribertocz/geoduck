@@ -27,6 +27,7 @@ import pyarrow as pa
 
 from geoduck.domain.bridge_types import is_geometry_type
 from geoduck.domain.errors import EngineError, InvalidArgumentError, OperationCancelledError, TransactionError
+from geoduck.domain.files import ARROW_VIEW
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import (
     BATCH_VIEW,
@@ -38,6 +39,7 @@ from geoduck.domain.importing import (
     ImportTarget,
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
+from geoduck.engine.files import arrow_dataset
 from geoduck.engine.sql import run_in_database
 from geoduck.engine.transactions import probe_transaction
 
@@ -71,6 +73,10 @@ def _write_from_sql(handle: ConnectionHandle, job: ImportJob) -> int:
         rows = handle.execute(f"SELECT count(*) FROM ({source}) AS __geoduck_src", max_rows=1).rows
         handle.execute(job.source_write_sql(), max_rows=1)
         return int(str(rows[0][0]))
+
+    if job.source_arrow is not None:  # Arrow/Feather: PyArrow lo da a DuckDB por flujo (§10)
+        with handle.registered(ARROW_VIEW, arrow_dataset(job.source_arrow)):
+            return run_in_database(handle, job.source_database, write)
 
     if job.selection is not None:  # la selección, como tabla Arrow unida con `JOIN` (F-119)
         with handle.registered(SELECTION_VIEW, job.selection):

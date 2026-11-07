@@ -65,6 +65,7 @@ from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
 from geoduck.engine.detach import detach_database
 from geoduck.engine.export import export_query
+from geoduck.engine.files import scan_files
 from geoduck.engine.importing import drop_imported, import_batches, import_target
 from geoduck.engine.spatial import activate_spatial, spatial_state
 from geoduck.engine.sql import StatementListener, run_in_database, run_script
@@ -355,6 +356,10 @@ class SessionWorker:
     def spatial_state(self) -> Future[Any]:
         """Estado de `spatial` en la sesión (sin instalar ni cargar nada)."""
         return self._submit_future(lambda h, _t: spatial_state(h))
+
+    def scan_files(self, paths: list[str]) -> Future[Any]:
+        """Archivos → DuckDB, paso 1: qué hay en cada archivo, solo con metadatos (`geoduck.engine.files`)."""
+        return self._submit_future(lambda h, _t: scan_files(h, paths))
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:
         """`INSTALL` (si `install`) y `LOAD spatial`, con consentimiento del usuario (spatial-spec §10)."""

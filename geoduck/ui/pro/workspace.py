@@ -13,6 +13,7 @@ Ancho («ventana») y compacto («panel»): en el panel no hay barra lateral; la
 from __future__ import annotations
 
 import contextlib
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -56,13 +57,15 @@ from geoduck.app.events import (
 from geoduck.domain.catalog import AttachRequest, ObjectKind, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.files import OTHER, file_filters, format_for, gdal_readable, unsupported_lines
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
-from geoduck.ui.pro.drag import LAYERS_MIME, layer_ids, menu_title, place_job
+from geoduck.ui.pro.drag import accepts, drop_hint, file_paths, layer_ids, menu_title, place_job
 from geoduck.ui.pro.history import History, HistoryPage
 from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu, popup_under
+from geoduck.ui.pro.open_files import open_in_qgis
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
     HISTORY,
@@ -89,6 +92,8 @@ from geoduck.ui.pro.widgets import LOGO, Toast, button, icon_button, label, line
 STATE, TABS, WELCOME = 0, 1, 2
 #: Por debajo de este ancho (o en el panel acoplado), las páginas pasan al modo compacto.
 COMPACT_WIDTH = 640
+#: Segundos del aviso de archivos no compatibles (tiene una acción: «Abrir en QGIS»).
+UNSUPPORTED_SECONDS = 20
 #: Ancho del explorador abierto encima del contenido en el panel.
 OVERLAY_WIDTH = 272
 
@@ -154,8 +159,10 @@ class ProWorkspace(QWidget):
         ask_load_options: Any = None,
         ask_save_copies: Any = None,
         copies_bridge: Any = None,
+        ask_files: Callable[[str, list[str]], list[str]] | None = None,
     ) -> None:
         super().__init__()
+        self._ask_files = ask_files or self._files_dialog
         self._pending_query: tuple[str, str | None] | None = None
         self._ask_path = ask_path or self._file_dialog
         self._confirm_close = confirm_close or self._confirm
@@ -425,11 +432,13 @@ class ProWorkspace(QWidget):
         self.progress.setVisible(False)
         self.progress_button.setVisible(False)
 
-    def toast(self, text: str, actions: list[tuple[str, Callable[[], None]]], seconds: int) -> None:
+    def toast(
+        self, text: str, actions: list[tuple[str, Callable[[], None]]], seconds: int, *, kind: str = "ok"
+    ) -> None:
         if self.last_toast is not None:
             with contextlib.suppress(RuntimeError):
                 self.last_toast.dismiss()
-        toast = Toast(self, text, kind="ok", seconds=seconds)
+        toast = Toast(self, text, kind=kind, seconds=seconds)
         for name, callback in actions:
             toast.add_action(name, callback)
         toast.show_at_corner(bottom=40)
@@ -462,24 +471,78 @@ class ProWorkspace(QWidget):
             layer_ids_, destination if destination is not None else self.sidebar.current_target()
         )
 
+    def import_files(
+        self, destination: tuple[str, str] | None = None, paths: list[str] | None = None
+    ) -> None:
+        """«Importar archivos…» (qgis-import-spec §10): el selector con los formatos compatibles y, con los
+        archivos elegidos (o soltados: `paths`), «Archivos → DuckDB» en la base donde, o en la actual."""
+        if self._coordinator.state is not SessionState.READY:
+            self.notify(tr("Start DuckDB to import files."))
+            return
+        if paths is None:
+            paths = self._ask_files(tr("Import files"), file_filters())
+        if not paths:
+            return
+        # Un formato que no está en la lista no entra al diálogo: un aviso claro y «Abrir en QGIS»
+        # (decisión del propietario, 2026-11-07); los compatibles siguen a los tres pasos.
+        unsupported = [p for p in paths if format_for(p) is OTHER]
+        supported = [p for p in paths if p not in unsupported]
+        if unsupported:
+            readable = [p for p in unsupported if gdal_readable(p)]
+            actions: list[tuple[str, Callable[[], None]]] = []
+            if readable:  # el GDAL de DuckDB lo lee: SQL para quien lo sabe, QGIS para el resto
+                actions = [
+                    (tr("Write query"), lambda: self.write_query(readable)),
+                    (tr("Open in QGIS"), lambda: self.open_in_qgis(readable)),
+                ]
+            self.toast(
+                lines_html(unsupported_lines(unsupported, len(supported))),
+                actions,
+                UNSUPPORTED_SECONDS,
+                kind="busy",  # ámbar: un aviso, no un error
+            )
+        if supported:
+            self.to_duckdb.open_files(
+                supported, destination if destination is not None else self.sidebar.current_target()
+            )
+
+    def write_query(self, paths: list[str]) -> None:
+        """«Escribir consulta»: una pestaña nueva con un `CREATE TABLE … AS SELECT * FROM ST_Read(…)` por
+        archivo, sin ejecutar (lo mismo que soltarlos en el editor)."""
+        self.new_query()
+        page = self.tabs.page(self.tabs.bar.currentIndex())
+        if isinstance(page, QueryPage):
+            page.drop_files(paths, any_format=True)
+
+    def open_in_qgis(self, paths: list[str]) -> None:
+        """«Abrir en QGIS» para archivos que GeoDuck no importa: QGIS los abre (todas sus capas); después se
+        añaden a DuckDB como capas de QGIS (clic derecho › «Añadir a DuckDB…» o arrastrándolas)."""
+        opened, failed = open_in_qgis(paths)
+        if failed:
+            names = ", ".join(os.path.basename(p) for p in failed)
+            self.notify(tr("QGIS could not open: {0}").format(names))
+        elif opened:
+            self.notify(
+                tr("{0} layer(s) opened in QGIS: now add them to DuckDB from the layers panel").format(opened)
+            )
+
     def add_layers(self, checked: list[str] | None = None) -> None:
         """«+» o Ctrl+K › «Añadir capas de QGIS a DuckDB…»: paso 1 con todas las capas del proyecto."""
         self.to_duckdb.open(None, self.sidebar.current_target(), checked=checked)
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
-        """Capas soltadas en cualquier parte de GeoDuck (también en el panel): a la base actual."""
-        if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
+        """Capas o archivos soltados en cualquier parte de GeoDuck (también en el panel): a la base actual."""
+        if accepts(event.mimeData()) and self._coordinator.state is SessionState.READY:
             event.setDropAction(Qt.DropAction.CopyAction)  # nunca «mover»: QGIS borraría la capa
             event.accept()
             target = self.sidebar.current_target()
             where = target[0] if target else tr("the current database")
-            count = len(layer_ids(event.mimeData()))
-            self.notify(tr("Drop to send {0} layer(s) to «{1}»").format(count, where))
+            self.notify(drop_hint(event.mimeData(), where))
         else:
             event.ignore()
 
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
-        if event.mimeData().hasFormat(LAYERS_MIME) and self._coordinator.state is SessionState.READY:
+        if accepts(event.mimeData()) and self._coordinator.state is SessionState.READY:
             event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
         else:
@@ -487,12 +550,16 @@ class ProWorkspace(QWidget):
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         ids = layer_ids(event.mimeData())
-        if not ids:
+        files = file_paths(event.mimeData())
+        if not ids and not files:
             event.ignore()
             return
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
-        self.send_layers(ids)
+        if files:
+            self.import_files(paths=files)
+        else:
+            self.send_layers(ids)
 
     def _connect_sidebar(self) -> None:
         side = self.sidebar
@@ -512,6 +579,8 @@ class ProWorkspace(QWidget):
         side.about_requested.connect(self.show_about)
         side.start_requested.connect(self.start)
         side.tree.layers_dropped.connect(self.send_layers)
+        side.tree.files_dropped.connect(lambda paths, target: self.import_files(target, paths))
+        side.import_files_requested.connect(self.import_files)
         side.tree.drop_hint.connect(lambda text: self.notify(text) if text else None)
 
     def _shortcut(self, keys: str, slot: Callable[[], object]) -> None:
@@ -782,6 +851,7 @@ class ProWorkspace(QWidget):
         page.renamed.connect(lambda old, p=page: self._query_renamed(p, old))
         page.open_requested.connect(self.open_query_file)
         page.notice.connect(self.notify)
+        page.import_files_requested.connect(lambda paths: self.import_files(paths=paths))
         return page
 
     def _query_changed(self, page: QueryPage) -> None:
@@ -839,6 +909,10 @@ class ProWorkspace(QWidget):
         box.exec()
         clicked = box.clickedButton()
         return "save" if clicked is save else "discard" if clicked is discard else "cancel"
+
+    def _files_dialog(self, title: str, filters: list[str]) -> list[str]:
+        paths, _ = QFileDialog.getOpenFileNames(self, title, str(Path.home()), ";;".join(filters))
+        return list(paths)
 
     def _file_dialog(self, title: str, name: str, pattern: str) -> str:
         if title == tr("Open query"):
@@ -975,6 +1049,7 @@ class ProWorkspace(QWidget):
                     tr("Open database…"), action, "database", lambda: self.attach(OpenAction.OPEN_EXISTING)
                 ),
                 Entry(tr("Create database…"), action, "database", lambda: self.attach(OpenAction.CREATE_NEW)),
+                Entry(tr("Import files…"), action, "layers", self.import_files),
                 Entry(tr("Add QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),
             ]

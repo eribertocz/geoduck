@@ -34,9 +34,11 @@ from qgis.PyQt.QtCore import QMetaType, QTimer, QVariant
 
 from geoduck.domain.channel import BatchChannel, ConsumerGoneError
 from geoduck.domain.errors import InvalidArgumentError, OperationCancelledError
+from geoduck.domain.files import file_job
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import (
     PATH_CONNECTED,
+    PATH_FILE,
     PATH_PARQUET,
     PATH_QGIS,
     SELECTION_VIEW,
@@ -47,6 +49,7 @@ from geoduck.domain.importing import (
     ImportMode,
     ImportReport,
     SendCandidate,
+    SendItem,
     SendRequest,
     column_names,
     duck_type_for,
@@ -91,7 +94,8 @@ _ARROW: dict[str, pa.DataType] = {
 class LayerPlan:
     """Lo que se enviará de una capa. `job` va al motor; el resto lo usan el lector y el diálogo."""
 
-    layer: QgsVectorLayer
+    #: None para un archivo (Archivos → DuckDB, §10).
+    layer: QgsVectorLayer | None
     job: ImportJob
     path: str
     #: Solo estas entidades (la selección); None = todas las que muestra la capa (con su filtro).
@@ -658,6 +662,9 @@ class LayerSender:
     ) -> LayerImport:
         plans = []
         for item in request.items:
+            if item.file is not None:  # Archivos → DuckDB (§10): lo lee y lo copia DuckDB
+                plans.append(self._file_plan(item, request))
+                continue
             layer = self._project.mapLayer(item.layer_id)
             if not _vector_layer(layer):
                 raise InvalidArgumentError(tr("The layer is no longer in the project"))
@@ -683,3 +690,17 @@ class LayerSender:
         job = LayerImport(engine, plans, on_progress=on_progress, on_done=on_done)
         job.start()
         return job
+
+    @staticmethod
+    def _file_plan(item: SendItem, request: SendRequest) -> LayerPlan:
+        source = item.file
+        job = file_job(
+            source,
+            table=item.table,
+            mode=item.mode,
+            database=request.database,
+            schema=request.schema,
+            temporary=request.temporary,
+            without_crs=request.without_crs,
+        )
+        return LayerPlan(None, job, PATH_FILE, None, max(source.rows, 0), [], ())

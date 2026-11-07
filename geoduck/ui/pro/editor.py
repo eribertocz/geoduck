@@ -10,12 +10,14 @@ las opciones de QGIS (ADR-0011). `QgsCodeEditor.setCustomAppearance` no está en
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Callable
 from typing import Any
 
-from qgis.PyQt.QtCore import QEvent, QObject
+from qgis.PyQt.QtCore import QEvent, QObject, Qt
 from qgis.PyQt.QtGui import QColor, QFont
 
-from geoduck.ui.pro.drag import LAYERS_MIME
+from geoduck.domain.files import editor_readable
+from geoduck.ui.pro.drag import LAYERS_MIME, file_paths
 from geoduck.ui.pro.tokens import Colors
 
 #: Estilos del lexer SQL que se colorean (los demás quedan con el color del texto).
@@ -101,11 +103,46 @@ class _LayerDrops(QObject):
 
     _KINDS = (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop)
 
+    def __init__(self, editor: Any) -> None:
+        super().__init__(editor)
+        self._editor = editor
+        #: Archivos soltados en el editor (los pone la página de consulta): devuelve si los tomó.
+        self.on_files: Callable[[list[str]], bool] | None = None
+
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
-        if event.type() in self._KINDS and event.mimeData().hasFormat(LAYERS_MIME):
-            event.ignore()  # sin aceptar: Qt la pasa al contenedor (el área de trabajo)
+        if event.type() not in self._KINDS:
+            return False
+        data = event.mimeData()
+        if data.hasFormat(LAYERS_MIME):
+            event.ignore()  # sin aceptar: Qt la pasa al contenedor (el área de trabajo, que abre el diálogo)
             return True
-        return False
+        paths = file_paths(data)
+        if not paths:
+            return False
+        # Archivos en el editor (decisión del propietario, 2026-11-07): llevarlos a DuckDB con SQL sin
+        # ejecutarlo. Si ninguno se lee con SQL (Arrow, no compatibles), siguen al área de trabajo.
+        if self.on_files is None or not any(editor_readable(p) for p in paths):
+            event.ignore()
+            return True
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        if event.type() == QEvent.Type.Drop:
+            self.on_files(paths)
+        return True
+
+
+def insert_sql(editor: Any, text: str) -> None:
+    """Escribe `text` donde está el cursor: si la línea ya tiene texto, después de ella y con una línea en
+    blanco, para que cada sentencia quede aparte. El cursor queda en la primera sentencia escrita."""
+    line, _index = editor.getCursorPosition()
+    current = editor.text(line).rstrip("\r\n") if line < editor.lines() else ""
+    if current.strip():
+        editor.setCursorPosition(line, len(current))
+        text = "\n\n" + text
+        line += 2
+    editor.insert(text + "\n")
+    editor.setCursorPosition(line, 0)
+    editor.setFocus()
 
 
 #: Marcador (QScintilla) de la sentencia que correrá «Ejecutar», en un margen fino a la izquierda del texto.
