@@ -65,7 +65,9 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   la pantalla de inicio muestra el logo grande en gris. Los diálogos usan los colores de la marca (botón
   principal y enlaces en azul `#2F5FD0`, advertencias con raya ámbar `#F2A33A`); «Acerca de» lleva además una
   franja azul arriba y «Geo**Duck**». En el paso 3 de «Capas de QGIS → DuckDB», la barra de cada capa lleva el
-  logo en su punta.
+  logo en su punta. **«Un pato al lago»:** al arrastrar tablas de la barra lateral se ve el pato con cuántas
+  lleva (globito ámbar); la base donde se soltarán capas de QGIS se pinta de azul claro con el pato (la imagen
+  de las capas que se arrastran desde QGIS la dibuja QGIS).
 
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.

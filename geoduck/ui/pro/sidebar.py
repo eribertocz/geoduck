@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from qgis.PyQt.QtCore import QMimeData, QModelIndex, QObject, QPoint, QRect, QRectF, QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen
+from qgis.PyQt.QtGui import QColor, QDrag, QFont, QFontMetrics, QIcon, QPainter, QPen
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -34,11 +34,11 @@ from geoduck import __version__
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ObjectKind, catalog_key
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import fuzzy, icons
-from geoduck.ui.pro.drag import LAYERS_MIME, PLACES_MIME, layer_ids, places_mime
+from geoduck.ui.pro.drag import LAYERS_MIME, PLACES_MIME, drag_pixmap, layer_ids, places_mime
 from geoduck.ui.pro.places import Place, Places, icon_name, missing_reason, place_of
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
-from geoduck.ui.pro.widgets import ElidedLabel, SearchField, StatusDot, icon_button, label
+from geoduck.ui.pro.widgets import LOGO, ElidedLabel, SearchField, StatusDot, icon_button, label
 
 #: Qué es cada fila del árbol (rol `ROLE`): una sección, una base, un esquema, un grupo o un lugar.
 ROLE = Qt.ItemDataRole.UserRole
@@ -64,16 +64,31 @@ class _NavDelegate(QStyledItemDelegate):
         self.small = ui_font(METRICS.font_small)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
-        self._paint(painter, option, index)
         tree = option.widget  # type: ignore[attr-defined]
         target = getattr(tree, "drop_item", None)
-        if target is not None and tree.itemFromIndex(index) is target:  # E5: la base donde se soltarán
+        lake = target is not None and tree.itemFromIndex(index) is target  # la base donde se soltarán
+        box = QRectF(option.rect).adjusted(1, 1, -1, -1)  # type: ignore[attr-defined]
+        if lake:  # «el lago» (marca, 2026-11-07): la base se pinta de azul claro, con el pato a la derecha
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(self.colors.accent_soft))
+            painter.drawRoundedRect(box, 5, 5)
+            painter.restore()
+        self._lake = lake  # en el lago, el pato ocupa el sitio del texto de la derecha
+        self._paint(painter, option, index)
+        self._lake = False
+        if lake:
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             pen = QPen(QColor(self.colors.accent))
             pen.setWidthF(1.5)
             painter.setPen(pen)
-            painter.drawRoundedRect(QRectF(option.rect).adjusted(1, 1, -1, -1), 5, 5)  # type: ignore[attr-defined]
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(box, 5, 5)
+            side = 16
+            logo = QIcon(LOGO).pixmap(side, side)
+            painter.drawPixmap(int(box.right()) - side - 6, int(box.center().y()) - side // 2, logo)
             painter.restore()
 
     def _paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
@@ -93,6 +108,8 @@ class _NavDelegate(QStyledItemDelegate):
         narrow = QStyleOptionViewItem(option)
         narrow.rect = QRect(rect.x(), rect.y(), max(0, rect.width() - width), rect.height())
         super().paint(painter, narrow, index)
+        if getattr(self, "_lake", False):
+            return
         painter.save()
         painter.setFont(self.small)
         painter.setPen(QColor(self.colors.faint))
@@ -140,8 +157,16 @@ class NavTree(QTreeWidget):
         return places_mime(places)
 
     def startDrag(self, actions: Any) -> None:  # noqa: N802 - API de Qt
-        if any((d := i.data(0, ROLE)) and d[0] == PLACE and not d[1].is_query for i in self.selectedItems()):
-            super().startDrag(Qt.DropAction.CopyAction)
+        """Arrastrar tablas al mapa: se arrastra el pato de GeoDuck (con cuántas lleva) hacia QGIS."""
+        items = self.selectedItems()
+        count = sum(1 for i in items if (d := i.data(0, ROLE)) and d[0] == PLACE and not d[1].is_query)
+        if not count:
+            return
+        drag = QDrag(self)
+        drag.setMimeData(self.mimeData(items))
+        drag.setPixmap(drag_pixmap(count))
+        drag.setHotSpot(QPoint(14, 34))
+        drag.exec(Qt.DropAction.CopyAction)
 
     # -- desde QGIS -----------------------------------------------------------------------------------
 

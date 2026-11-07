@@ -429,3 +429,30 @@ def test_the_sidebar_drags_tables_but_not_queries(coordinator):
     data = tree.mimeData(found)
     assert data.hasFormat(PLACES_MIME)
     assert places_from(data) == [Place(TABLE, "t", "db", "main")]
+
+
+def test_dragging_tables_shows_the_duck_and_the_target_database_is_the_lake(coordinator):
+    """Marca (propietario, 2026-11-07, «como arrastrar un pato al lago»): al arrastrar tablas se ve el pato
+    con cuántas lleva; la base donde se soltarán capas de QGIS se pinta de azul claro, con el pato."""
+    from qgis.PyQt.QtGui import QColor
+
+    from geoduck.ui.pro.drag import drag_pixmap
+
+    one, three = drag_pixmap(1), drag_pixmap(3)
+    assert not one.isNull() and one.width() == three.width()
+    image = three.toImage()
+    assert image.pixelColor(48, 9).alpha() > 0  # el globito con el «3»
+    assert one.toImage().pixelColor(48, 9).alpha() == 0  # una sola: sin globito
+    ws = workspace(coordinator)
+    tree = ws.sidebar.tree
+    base = next(
+        tree.topLevelItem(i)
+        for i in range(tree.topLevelItemCount())
+        if (tree.topLevelItem(i).data(0, ROLE) or ("",))[0] == DATABASE and tree.topLevelItem(i).text(0) == DB
+    )
+    tree.drop_item = base
+    rect = tree.visualItemRect(base)
+    shot = tree.viewport().grab().toImage()
+    lake = QColor(ws.colors.accent_soft)
+    assert shot.pixelColor(rect.left() + 4, rect.center().y()) == lake
+    tree.drop_item = None
