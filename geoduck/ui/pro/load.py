@@ -123,7 +123,9 @@ def finished_title(report: LoadReport) -> str:
             else tr("Layers {} added to QGIS from DuckDB · {} · {} features in total")
         )
         return text.format(names, mode_text(report.mode), rows)
-    return tr("Layer «{}» added to QGIS from DuckDB · {} · {} features").format(report.layer_name, mode_text(report.mode), rows)
+    return tr("Layer «{}» added to QGIS from DuckDB · {} · {} features").format(
+        report.layer_name, mode_text(report.mode), rows
+    )
 
 
 def finished_text(report: LoadReport) -> str:
