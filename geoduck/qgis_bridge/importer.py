@@ -55,6 +55,7 @@ from geoduck.domain.importing import (
 )
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
+from geoduck.qgis_bridge.copies import is_copy
 from geoduck.qgis_bridge.provider import FID, KEY, id_columns, key_alias
 from geoduck.qgis_bridge.reproject import Reprojector
 
@@ -135,6 +136,20 @@ def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
     if srs.ImportFromWkt(crs.toWkt(QgsCoordinateReferenceSystem.WktVariant.WKT2_2019)) != 0:
         return None
     return str(srs.ExportToPROJJSON()) or None
+
+
+def copy_fid_fields(layer: Any) -> set[int]:
+    """El identificador que el GeoPackage de una «Copia» de GeoDuck añadió (`fid`, `geoduck_fid`…): no es un
+    dato de la tabla y no vuelve a DuckDB (si volviera, cada ida y vuelta sumaría una columna y la tercera
+    carga fallaría; observación del propietario, 2026-11-06). Las columnas de la tabla se envían todas."""
+    if not is_copy(layer) or layer.providerType() != "ogr":
+        return set()
+    fields = layer.fields()
+    return {
+        i
+        for i in layer.primaryKeyAttributes()
+        if fields.at(i).name() == "fid" or fields.at(i).name().startswith("geoduck_fid")
+    }
 
 
 def geometry_column_name(layer: QgsVectorLayer) -> str:
@@ -224,16 +239,17 @@ def plan_layer(
                 )
             )
         geometry = ImportGeometry(geometry_column_name(layer), crs)
-    fields = list(layer.fields())
+    skipped = copy_fid_fields(layer)
+    fields = [(i, f) for i, f in enumerate(layer.fields()) if i not in skipped]
     taken = [geometry.name] if geometry is not None else []
-    names, renamed = column_names([*taken, *(f.name() for f in fields)])
+    names, renamed = column_names([*taken, *(f.name() for _i, f in fields)])
     warnings += renamed
     columns: list[ImportColumn] = []
-    for i, f in enumerate(fields):
+    for k, (i, f) in enumerate(fields):
         duck, note = duck_type_for(type_name(f.type()), type_name(f.subType()) or None)
         if note:
             warnings.append(f"«{f.name()}»: {note}")
-        columns.append(ImportColumn(names[len(taken) + i], f"c{i}", duck))
+        columns.append(ImportColumn(names[len(taken) + k], f"c{i}", duck))
     common: dict[str, Any] = {"database": database, "schema": schema, "temporary": temporary}
 
     provider = layer.dataProvider()
@@ -406,7 +422,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
             request.setFilterFids(fids)
         if job.geometry is None:
             request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
-        indexes = list(range(len(job.columns)))
+        indexes = [int(c.source[1:]) for c in job.columns]  # `c{i}`: el campo i de la capa
         rows: list[list[Any]] = []
         wkbs: list[bytes | None] = []
         sent = False
