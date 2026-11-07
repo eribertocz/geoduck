@@ -318,21 +318,57 @@ def file_job(
     )
 
 
+#: Datos vectoriales que el GDAL de DuckDB lee aunque no estén en la lista de GeoDuck: para quien sabe SQL,
+#: «Escribir consulta»; para el resto, «Abrir en QGIS» (decisión del propietario, 2026-11-07).
+GDAL_DATA = (
+    ".sqlite",
+    ".db",
+    ".dxf",
+    ".dgn",
+    ".gml",
+    ".gpx",
+    ".tab",
+    ".mif",
+    ".ods",
+    ".topojson",
+    ".gmt",
+    ".vrt",
+    ".mbtiles",
+    ".pmtiles",
+    ".gdbtable",
+    ".e00",
+    ".svg",
+)
+
+
+def gdal_readable(path: str) -> bool:
+    """Fuera de la lista, pero el GDAL de DuckDB lo lee (SpatiaLite, DXF, GML, GPX, MapInfo, ODS…)."""
+    return format_for(path) is OTHER and path.lower().endswith(GDAL_DATA)
+
+
+def _names(paths: list[str]) -> str:
+    return ", ".join(os.path.basename(p.rstrip("/\\")) for p in paths)
+
+
 def unsupported_lines(paths: list[str], supported: int) -> list[str]:
     """El aviso de archivos que GeoDuck no importa, una idea por línea (decisión del propietario, 2026-11-07):
-    cuáles, qué hacer, y si los demás sí siguen."""
-    names = ", ".join(os.path.basename(p.rstrip("/\\")) for p in paths)
-    count = len(paths)
-    lines = [
-        tr("1 file is not supported by GeoDuck: {0}").format(names)
-        if count == 1
-        else tr("{0} files are not supported by GeoDuck: {1}").format(count, names)
-    ]
-    lines.append(
-        tr("Open it in QGIS and then add the layer to DuckDB")
-        if count == 1
-        else tr("Open them in QGIS and then add the layers to DuckDB")
-    )
+    los que DuckDB lee con SQL (o QGIS abre), los que no son datos, y si los demás sí siguen."""
+    readable = [p for p in paths if gdal_readable(p)]
+    other = [p for p in paths if p not in readable]
+    lines = []
+    if readable:
+        lines.append(
+            tr("«{0}» is not in GeoDuck's list").format(_names(readable))
+            if len(readable) == 1
+            else tr("{0} files are not in GeoDuck's list: {1}").format(len(readable), _names(readable))
+        )
+        lines.append(
+            tr("Read it with SQL in the editor, or open it in QGIS and then add the layer")
+            if len(readable) == 1
+            else tr("Read them with SQL in the editor, or open them in QGIS and then add the layers")
+        )
+    if other:
+        lines.append(tr("GeoDuck cannot read: {0}").format(_names(other)))
     if supported:
         lines.append(
             tr("The other file goes on to «Files → DuckDB»")

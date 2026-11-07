@@ -22,6 +22,7 @@ from geoduck.domain.files import file_filters, unsupported_lines
 from geoduck.domain.i18n import tr
 from geoduck.ui.pro.add_layers import NEEDS_SPATIAL
 from geoduck.ui.pro.drag import accepts, file_paths
+from geoduck.ui.pro.widgets import lines_html
 from geoduck.ui.pro.workspace import ProWorkspace
 from tests.qgis import test_pro_send as send
 from tests.qgis.conftest import wait_for
@@ -143,9 +144,13 @@ def test_unsupported_files_get_a_clear_notice_and_the_others_go_on(coordinator, 
     ws.import_files(paths=[str(data / "vieja.sqlite"), str(other), str(data / "lecturas.parquet")])
     text = ws.last_toast.text.text()
     lines = unsupported_lines([str(data / "vieja.sqlite"), str(other)], 1)
-    assert lines[0] == tr("{0} files are not supported by GeoDuck: {1}").format(2, "vieja.sqlite, plano.dwg")
-    assert lines[2] == tr("The other file goes on to «Files → DuckDB»")
-    assert all(line in text for line in lines)
+    assert lines == [
+        tr("«{0}» is not in GeoDuck's list").format("vieja.sqlite"),
+        tr("Read it with SQL in the editor, or open it in QGIS and then add the layer"),
+        tr("GeoDuck cannot read: {0}").format("plano.dwg"),
+        tr("The other file goes on to «Files → DuckDB»"),
+    ]
+    assert text == lines_html(lines)
     assert wait_scanned(ws)
     assert list(ws.to_duckdb.window.rows) == ["file:0"]  # solo el compatible
     assert ws.to_duckdb._candidates[0].name == "lecturas"
@@ -270,3 +275,16 @@ def test_with_the_click_spatial_loads_and_the_layers_appear(coordinator, tmp_pat
     to_step_two(ws)
     add_all(ws, coordinator)
     assert has_tables(coordinator, {"pozos"})
+
+
+def test_write_query_reads_a_file_outside_the_list_with_sql(coordinator, data):
+    """«Escribir consulta»: el GDAL de DuckDB lo lee; una pestaña con su CREATE TABLE, sin ejecutar."""
+    ws = workspace(coordinator)
+    path = str(data / "vieja.sqlite")
+    ws.write_query([path])
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    assert wait_for(lambda: "ST_Read" in page.editor.text(), TIMEOUT)
+    text = page.editor.text()
+    assert "spatial;" in text.splitlines()[0]  # visible: lo decide el usuario al ejecutar
+    assert f"SELECT * FROM ST_Read('{path}');" in text and "CREATE TABLE" in text
+    assert not page.results

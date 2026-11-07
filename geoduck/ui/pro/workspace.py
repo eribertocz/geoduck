@@ -57,7 +57,7 @@ from geoduck.app.events import (
 from geoduck.domain.catalog import AttachRequest, ObjectKind, OpenAction
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
-from geoduck.domain.files import OTHER, file_filters, format_for, unsupported_lines
+from geoduck.domain.files import OTHER, file_filters, format_for, gdal_readable, unsupported_lines
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
@@ -488,9 +488,16 @@ class ProWorkspace(QWidget):
         unsupported = [p for p in paths if format_for(p) is OTHER]
         supported = [p for p in paths if p not in unsupported]
         if unsupported:
+            readable = [p for p in unsupported if gdal_readable(p)]
+            actions: list[tuple[str, Callable[[], None]]] = []
+            if readable:  # el GDAL de DuckDB lo lee: SQL para quien lo sabe, QGIS para el resto
+                actions = [
+                    (tr("Write query"), lambda: self.write_query(readable)),
+                    (tr("Open in QGIS"), lambda: self.open_in_qgis(readable)),
+                ]
             self.toast(
                 lines_html(unsupported_lines(unsupported, len(supported))),
-                [(tr("Open in QGIS"), lambda: self.open_in_qgis(unsupported))],
+                actions,
                 UNSUPPORTED_SECONDS,
                 kind="busy",  # ámbar: un aviso, no un error
             )
@@ -498,6 +505,14 @@ class ProWorkspace(QWidget):
             self.to_duckdb.open_files(
                 supported, destination if destination is not None else self.sidebar.current_target()
             )
+
+    def write_query(self, paths: list[str]) -> None:
+        """«Escribir consulta»: una pestaña nueva con un `CREATE TABLE … AS SELECT * FROM ST_Read(…)` por
+        archivo, sin ejecutar (lo mismo que soltarlos en el editor)."""
+        self.new_query()
+        page = self.tabs.page(self.tabs.bar.currentIndex())
+        if isinstance(page, QueryPage):
+            page.drop_files(paths, any_format=True)
 
     def open_in_qgis(self, paths: list[str]) -> None:
         """«Abrir en QGIS» para archivos que GeoDuck no importa: QGIS los abre (todas sus capas); después se

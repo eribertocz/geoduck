@@ -1396,8 +1396,10 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
   «Archivos → DuckDB». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
   transacción, con el conteo de §4.
 - **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
-  archivo (p. ej. SpatiaLite) aparece en gris con «Formato no compatible: ábrelo primero en QGIS y luego añade
-  la capa a DuckDB». **Sin SpatiaLite ni SQLite** en la lista (decisión del propietario, 2026-11-07): GeoPackage es el formato
+  archivo (p. ej. SpatiaLite) no entra al diálogo: un aviso claro dice cuáles, qué hacer y si los demás siguen. Si el GDAL de
+  DuckDB lo lee (SpatiaLite, DXF, GML, GPX, MapInfo, ODS…): «Escribir consulta» (una pestaña con su `CREATE
+  TABLE … AS SELECT * FROM ST_Read(…)`, sin ejecutar) y «Abrir en QGIS» (luego se añade la capa); si no son
+  datos: «GeoDuck no puede leer: …», sin acciones. **Sin SpatiaLite ni SQLite** en la lista (decisión del propietario, 2026-11-07): GeoPackage es el formato
   moderno sobre SQLite; el GDAL de DuckDB no escribe SpatiaLite.
 - **Geometría y SRC:** la que da el lector (`GEOMETRY('EPSG:…')`); un GeoParquet sin `spatial` toma el SRC
   de sus metadatos `geo` (F-118). Una base que no guarda el SRC (F-120) sigue la regla de §7.

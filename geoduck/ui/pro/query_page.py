@@ -56,7 +56,7 @@ from geoduck.domain.browse import PAGE, page_label
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
-from geoduck.domain.files import create_sql, editor_readable, format_for
+from geoduck.domain.files import create_sql, editor_readable, format_for, gdal_readable
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, result_title
 from geoduck.domain.sql_text import load_sql
@@ -344,11 +344,11 @@ class QueryPage(QWidget):
         schemas = catalog.schemas_of(db.name)
         return db.name, "main" if "main" in schemas or not schemas else schemas[0]
 
-    def drop_files(self, paths: list[str]) -> bool:
+    def drop_files(self, paths: list[str], *, any_format: bool = False) -> bool:
         """Un `CREATE TABLE … AS SELECT *` por archivo, en el cursor y sin ejecutar; los que no se leen con
         SQL (Arrow, no compatibles) siguen a «Importar archivos». Con `spatial` sin cargar, la primera línea
         la carga (visible: lo decide el usuario al ejecutar, ADR-0011)."""
-        readable = [p for p in paths if editor_readable(p)]
+        readable = [p for p in paths if editor_readable(p) or (any_format and gdal_readable(p))]
         rest = [p for p in paths if p not in readable]
         if rest:
             self.import_files_requested.emit(rest)
@@ -367,7 +367,7 @@ class QueryPage(QWidget):
             text = create_sql(readable, database, schema, taken, spatial=spatial, reserved=reserved)
             pro_editor.insert_sql(self.editor, text)
 
-        if not any(format_for(p).needs_spatial for p in readable):
+        if not any(format_for(p).needs_spatial for p in readable):  # fuera de la lista: también GDAL
             write("")
             return True
 
