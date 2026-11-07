@@ -194,30 +194,59 @@ def test_without_the_click_geoduck_does_not_load_spatial(coordinator, data):
     assert not rows[0].rows or not rows[0].rows[0][0]
 
 
-def test_a_file_dropped_on_the_editor_writes_its_query(coordinator, data):
+def drop_on_editor(page, mime):
+    viewport = page.editor.viewport()
+    pos = QPoint(20, 10)
+    buttons, keys = Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+    enter = QDragEnterEvent(pos, Qt.DropAction.CopyAction, mime, buttons, keys)
+    QCoreApplication.sendEvent(viewport, enter)
+    event = QDropEvent(QPointF(pos), Qt.DropAction.CopyAction, mime, buttons, keys)
+    QCoreApplication.sendEvent(viewport, event)
+    return enter, event
+
+
+def test_files_dropped_on_the_editor_write_create_table_without_running(coordinator, data):
+    """Decisión del propietario (2026-11-07): soltar archivos en el editor es llevarlos a DuckDB: un
+    `CREATE TABLE … AS SELECT *` por archivo, en la misma pestaña, sin ejecutar; los nombres no chocan."""
+    ws = workspace(coordinator)
+    ws.new_query()
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    page.editor.setText("SELECT 1;")
+    page.editor.setCursorPosition(0, 3)
+    assert wait_for(lambda: coordinator.vocabulary() is not None, TIMEOUT)  # para no citar de más
+    paths = [data / "lecturas.parquet", data / "clientes.csv"]
+    enter, event = drop_on_editor(page, urls_mime(paths))
+    assert enter.isAccepted() and event.isAccepted()
+    database, schema = page.drop_target()
+    text = page.editor.text()
+    assert text.startswith("SELECT 1;\n\n")
+    assert f"CREATE TABLE {database}.{schema}.lecturas AS\nSELECT * FROM read_parquet('{paths[0]}');" in text
+    assert f"CREATE TABLE {database}.{schema}.clientes AS\nSELECT * FROM read_csv('{paths[1]}');" in text
+    assert page.editor.getCursorPosition() == (2, 0)  # en la primera sentencia escrita
+    assert ws.to_duckdb.window is None and not page.results  # nada se ejecutó ni se abrió
+
+
+def test_layers_dropped_on_the_editor_open_the_dialog(coordinator):
+    from tests.qgis.test_pro_send import layers_mime, points
+
     ws = workspace(coordinator)
     ws.new_query()
     page = ws.tabs.page(ws.tabs.bar.currentIndex())
     page.editor.setText("")
-    mime = urls_mime([data / "lecturas.parquet"])
-    viewport = page.editor.viewport()
-    pos = QPoint(20, 10)
-    enter = QDragEnterEvent(
-        pos, Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
-    )
-    QCoreApplication.sendEvent(viewport, enter)
-    assert enter.isAccepted()
-    event = QDropEvent(
-        QPointF(pos),
-        Qt.DropAction.CopyAction,
-        mime,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-    )
-    QCoreApplication.sendEvent(viewport, event)
-    path = str(data / "lecturas.parquet")
-    assert page.editor.text() == f"SELECT * FROM read_parquet('{path}')"
-    assert ws.to_duckdb.window is None  # no se abrió la importación
+    _model, mime = layers_mime([points("capa", 3)])
+    drop_on_editor(page, mime)
+    assert page.editor.text() == ""
+    assert ws.to_duckdb.window is not None and ws.to_duckdb.window.isVisible()
+
+
+def test_an_arrow_file_dropped_on_the_editor_goes_to_the_import(coordinator, data):
+    ws = workspace(coordinator)
+    ws.new_query()
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    page.editor.setText("")
+    drop_on_editor(page, urls_mime([data / "medidas.arrow"]))
+    assert page.editor.text() == ""
+    assert wait_scanned(ws) and ws.to_duckdb.window.isVisible()
 
 
 @pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")

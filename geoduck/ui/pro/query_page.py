@@ -53,9 +53,10 @@ from geoduck.app.events import (
     VocabularyChanged,
 )
 from geoduck.domain.browse import PAGE, page_label
-from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
+from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
+from geoduck.domain.files import create_sql, editor_readable, format_for
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, result_title
 from geoduck.domain.sql_text import load_sql
@@ -103,6 +104,8 @@ class QueryPage(QWidget):
     open_requested = pyqtSignal()
     #: Aviso para el pie del workspace.
     notice = pyqtSignal(str)
+    #: Archivos soltados en el editor que no se leen con SQL (Arrow, no compatibles): al área de trabajo.
+    import_files_requested = pyqtSignal(list)
 
     def __init__(
         self,
@@ -142,6 +145,7 @@ class QueryPage(QWidget):
         self.editor.setAccessibleName(tr("SQL editor"))
         self.editor.setText(sql)
         self.editor.textChanged.connect(self._text_changed)
+        self.editor.layer_drops.on_files = self.drop_files
         self._wire_mark()
         self.split.addWidget(self.editor)
         self.split.addWidget(self._build_results())
@@ -322,6 +326,64 @@ class QueryPage(QWidget):
     @property
     def database(self) -> str | None:
         return self.base.currentData()
+
+    # -- archivos soltados en el editor (decisión del propietario, 2026-11-07) -------------------------
+
+    def drop_target(self) -> tuple[str, str] | None:
+        """Dónde crear las tablas: la base «Se ejecuta en» (si se escribe); `main` o su primer esquema."""
+        catalog = self._coordinator.catalog
+        if catalog is None:
+            return None
+        name = self.base.currentData() or catalog.default_database.name
+        db = catalog.get(name)
+        if db is None or db.access is not AccessMode.READ_WRITE:
+            writable = [d for d in catalog.databases if d.access is AccessMode.READ_WRITE]
+            if not writable:
+                return None
+            db = writable[0]
+        schemas = catalog.schemas_of(db.name)
+        return db.name, "main" if "main" in schemas or not schemas else schemas[0]
+
+    def drop_files(self, paths: list[str]) -> bool:
+        """Un `CREATE TABLE … AS SELECT *` por archivo, en el cursor y sin ejecutar; los que no se leen con
+        SQL (Arrow, no compatibles) siguen a «Importar archivos». Con `spatial` sin cargar, la primera línea
+        la carga (visible: lo decide el usuario al ejecutar, ADR-0011)."""
+        readable = [p for p in paths if editor_readable(p)]
+        rest = [p for p in paths if p not in readable]
+        if rest:
+            self.import_files_requested.emit(rest)
+        target = self.drop_target()
+        if not readable or target is None:
+            if readable:
+                self.notice.emit(tr("There is no database in read and write mode to create the tables."))
+            return bool(readable)
+        database, schema = target
+        catalog = self._coordinator.catalog
+        taken = [o.name for o in catalog.objects_in(database, schema)] if catalog is not None else []
+        vocabulary = self._coordinator.vocabulary()
+        reserved = vocabulary.reserved if vocabulary is not None else None
+
+        def write(spatial: str) -> None:
+            text = create_sql(readable, database, schema, taken, spatial=spatial, reserved=reserved)
+            pro_editor.insert_sql(self.editor, text)
+
+        if not any(format_for(p).needs_spatial for p in readable):
+            write("")
+            return True
+
+        def checked(out: Any) -> None:
+            row = out.rows[0] if not isinstance(out, BaseException) and out.rows else (False, False)
+            write("" if row[1] else "load" if row[0] else "install")
+
+        try:
+            self._coordinator.read_rows(
+                "SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'",
+                1,
+                checked,
+            )
+        except GeoDuckError:
+            write("install")
+        return True
 
     def show_databases(self, catalog: CatalogSnapshot | None, chosen: str | None = None) -> None:
         """Las bases de la sesión en el desplegable; conserva la elegida si sigue adjunta."""

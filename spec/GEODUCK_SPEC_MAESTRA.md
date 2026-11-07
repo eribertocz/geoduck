@@ -1365,8 +1365,14 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
 - **Puntos de entrada:** «+» de la barra lateral › «Importar archivos…»; clic derecho en una base o un esquema
   › «Importar archivos aquí…»; Ctrl+K › «Importar archivos…»; **arrastrar** uno o varios archivos desde el
   escritorio, el Explorador de archivos o el Navegador de QGIS a GeoDuck (con el «pato al lago», §3 de
-  workspace-pro-spec). Soltar un archivo **en el editor SQL** escribe su consulta de lectura
-  (`SELECT * FROM read_parquet('…')`, `ST_Read('…')`…) en el cursor, sin ejecutarla.
+  workspace-pro-spec). Soltar uno o varios archivos **en el editor SQL** es llevarlos a DuckDB
+  escribiendo el SQL, sin ejecutarlo: un `CREATE TABLE base.esquema.nombre AS SELECT * FROM read_parquet('…')`
+  (o `read_csv`, `read_json`, `ST_Read`) por archivo, en la misma pestaña y separados por una línea en blanco.
+  La base es la de «Se ejecuta en» (o la primera en escritura) y el esquema `main`; los nombres no chocan con
+  las tablas que ya existen (nunca `OR REPLACE`). Si hace falta `spatial` y no está cargada, la primera línea
+  es `LOAD spatial;` (o `INSTALL spatial; LOAD spatial;`), visible: lo decide el usuario al ejecutar. Arrow y
+  los no compatibles siguen a «Importar archivos». **Las capas de QGIS soltadas en el editor abren siempre
+  el diálogo** (decisión del propietario, 2026-11-07).
 - **Selector de archivos:** filtro «Todos los compatibles» y uno por formato, con ⚡ en los más rápidos.
 - **Formatos y lector** (verificado con DuckDB 2.0.0):
 

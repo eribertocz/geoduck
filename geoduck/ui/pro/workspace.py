@@ -836,6 +836,7 @@ class ProWorkspace(QWidget):
         page.renamed.connect(lambda old, p=page: self._query_renamed(p, old))
         page.open_requested.connect(self.open_query_file)
         page.notice.connect(self.notify)
+        page.import_files_requested.connect(lambda paths: self.import_files(paths=paths))
         return page
 
     def _query_changed(self, page: QueryPage) -> None:

@@ -17,8 +17,16 @@ from dataclasses import dataclass
 from enum import Enum
 
 from geoduck.domain.i18n import tr
-from geoduck.domain.importing import PATH_FILE, ImportGeometry, ImportJob, ImportMode, SendCandidate
-from geoduck.domain.sql_text import quote_identifier, quote_string_literal
+from geoduck.domain.importing import (
+    PATH_FILE,
+    ImportGeometry,
+    ImportJob,
+    ImportMode,
+    SendCandidate,
+    table_name_for,
+    unique_name,
+)
+from geoduck.domain.sql_text import quote_identifier, quote_string_literal, sql_name
 
 #: Vista con la que el motor registra un archivo Arrow (PyArrow) durante la importación.
 ARROW_VIEW = "__geoduck_file"
@@ -332,3 +340,40 @@ def unsupported_lines(paths: list[str], supported: int) -> list[str]:
             else tr("The other {0} files go on to «Files → DuckDB»").format(supported)
         )
     return lines
+
+
+def editor_readable(path: str) -> bool:
+    """El editor puede escribir la lectura de este archivo con SQL (Arrow no: lo lee PyArrow)."""
+    fmt = format_for(path)
+    return fmt is not OTHER and fmt.reader is not Reader.ARROW
+
+
+def create_sql(
+    paths: list[str],
+    database: str,
+    schema: str,
+    taken: list[str],
+    *,
+    spatial: str = "",
+    reserved: frozenset[str] | None = None,
+) -> str:
+    """Archivos soltados en el editor (decisión del propietario, 2026-11-07): llevarlos a DuckDB con un
+    `CREATE TABLE … AS SELECT *` por archivo, sin ejecutarlo. Nombres que no chocan con `taken` (nunca
+    `OR REPLACE`). `spatial`: «load» o «install» antepone `LOAD spatial;` (o también `INSTALL`), visible
+    para que el usuario decida (ADR-0011)."""
+    names = list(taken)
+    parts = []
+    if spatial == "install":
+        parts.append("INSTALL spatial;\nLOAD spatial;")
+    elif spatial == "load":
+        parts.append("LOAD spatial;")
+    for path in paths:
+        real = source_path(path)
+        base = os.path.basename(real.rstrip("/\\"))
+        stem = base[: -len(".osm.pbf")] if base.lower().endswith(".osm.pbf") else os.path.splitext(base)[0]
+        table = unique_name(table_name_for(stem), names)
+        names.append(table)
+        target = ".".join(sql_name(x, reserved) for x in (database, schema, table))
+        reading = editor_sql_for_path(path).removeprefix("SELECT * FROM ")
+        parts.append(f"CREATE TABLE {target} AS\nSELECT * FROM {reading};")
+    return "\n\n".join(parts)
