@@ -90,6 +90,21 @@ Anote cada paso como **OK** o **Falla** (con captura) en `docs/evidence/g9/windo
 | 5n | Cierre DuckDB («Cerrar DuckDB») y arrastre una capa | El pie dice «Inicia DuckDB para añadir capas.» |
 | 5o | Con DuckDB 1.5.x, añada a una base **nueva** en archivo | En el paso 2 aparece «Enviar sin SRC»: esa base no guarda el SRC; no se añade hasta marcarlo (F-120) |
 
+## 5b. Archivos ↔ DuckDB y diálogo inteligente (G9 · #130, #131)
+
+1. Arrastrar desde el Explorador un `.parquet`, un `.csv` y un `.gpkg` a una base: «Archivos → DuckDB» con sus capas;
+   el GeoPackage pide «Instalar y continuar» (`spatial`); las tablas se crean.
+2. Arrastrar a la vez un `.sqlite` y un `.parquet`: aviso ámbar claro («no está en la lista…», «Escribir consulta»,
+   «Abrir en QGIS») y el diálogo solo con el Parquet.
+3. Soltar un `.parquet` en el editor: aparece su `CREATE TABLE … AS SELECT *`, sin ejecutarse.
+4. «Exportar ▾» de una consulta con geometría a GeoPackage: pide permiso para `spatial`, se escribe, el aviso
+   muestra DuckDB ⚡→ archivo y el archivo abre en QGIS con su SRC.
+5. Una capa de GeoPackage con filtro, arrastrada a GeoDuck: «Cargar y acelerar»; en el paso 3, el puente
+   «⚡ DuckDB» y «mismas filas que en QGIS».
+6. Una tabla cargada como «Copia» y traída de vuelta a DuckDB: sin error (#132).
+
+**Resultado 2026-11-12 (propietario, Windows, QGIS 4, `main` e8ba063): funciona.**
+
 ## 6. Pantalla, tema, monitores y teclado (AT-WSP-001, 010)
 
 Windows: Configuración → Pantalla → Escala. Reinicie QGIS después de cada cambio.
