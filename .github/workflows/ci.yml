@@ -112,7 +112,7 @@ jobs:
         run: python tools/pro_shots.py screenshots
       # G10 (performance-spec §2): medidas informativas; no bloquean. La línea base está en docs/evidence/g10/base
       - name: banco de medidas (informativo)
-        if: matrix.qgis == '3.44' || matrix.qgis == '4.2'
+        if: startsWith(matrix.qgis, '3.44') || startsWith(matrix.qgis, '4.2')
         continue-on-error: true
         env:
           QT_QPA_PLATFORM: offscreen
