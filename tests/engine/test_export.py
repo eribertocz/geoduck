@@ -200,3 +200,69 @@ def test_an_axis_setting_chosen_by_the_user_is_not_touched(worker, tmp_path):
     worker.export_query(request).future.result(TIMEOUT)
     rows = run_sql(worker, "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'").rows
     assert rows == (("true",),)
+
+
+# -- G10 E2: cancelar una exportación al instante (performance-spec §3; propietario, 2026-11-12) --
+
+
+def test_order_by_is_detected_outside_comments_and_strings():
+    from geoduck.engine.export import has_order_by
+
+    assert has_order_by("SELECT * FROM t ORDER BY x")
+    assert has_order_by("select * from t\norder\n  by x desc")
+    assert not has_order_by("SELECT 'order by' AS s FROM t -- order by x")
+    assert not has_order_by("SELECT * FROM t /* ORDER BY x */")
+
+
+def order_setting(worker):
+    rows = run_sql(worker, "SELECT value FROM duckdb_settings() WHERE name = 'preserve_insertion_order'").rows
+    return str(rows[0][0]).lower()
+
+
+def test_insertion_order_is_off_only_during_the_export_and_order_by_is_kept(worker, tmp_path):
+    import duckdb
+
+    report = export(
+        worker, "SELECT range AS n FROM range(200000)", tmp_path / "a.parquet", ExportFormat.PARQUET
+    )
+    assert report.rows == 200000 and order_setting(worker) == "true"  # como estaba
+    export(
+        worker,
+        "SELECT range AS n FROM range(200000) ORDER BY n DESC",
+        tmp_path / "b.parquet",
+        ExportFormat.PARQUET,
+    )
+    con = duckdb.connect()
+    first = con.execute(f"SELECT n FROM '{tmp_path / 'b.parquet'}' LIMIT 3").fetchall()
+    assert first == [(199999,), (199998,), (199997,)]  # el ORDER BY del usuario se respeta
+    assert order_setting(worker) == "true"
+
+
+def test_an_order_setting_chosen_by_the_user_is_not_touched(worker, tmp_path):
+    run_sql(worker, "SET preserve_insertion_order = false")
+    export(worker, "SELECT 1 AS n", tmp_path / "a.csv", ExportFormat.CSV)
+    assert order_setting(worker) == "false"
+
+
+def test_cancelling_an_export_stops_quickly_and_leaves_nothing(worker, tmp_path):
+    import time
+
+    from geoduck.domain.errors import OperationCancelledError
+
+    run_sql(worker, "CREATE TABLE big AS SELECT range AS id, 'obs ' || range AS nota FROM range(1000000)")
+    request = ExportRequest(
+        # 200 millones de filas: en ningún equipo termina antes de cancelar (se cancela a los 0,3 s)
+        "SELECT a.* FROM big a, range(200)",
+        str(tmp_path / "x.parquet"),
+        ExportFormat.PARQUET,
+        None,
+    )
+    handle = worker.export_query(request)
+    time.sleep(0.3)
+    begin = time.perf_counter()
+    worker.cancel_current()
+    with pytest.raises((OperationCancelledError, GeoDuckError)):
+        handle.future.result(TIMEOUT)
+    assert time.perf_counter() - begin < 1.0  # meta p95 ≤ 1 s; medido 14–77 ms
+    assert not (tmp_path / "x.parquet").exists() and leftovers(tmp_path) == []
+    assert order_setting(worker) == "true"

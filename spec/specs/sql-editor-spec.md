@@ -102,7 +102,10 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   GeoDuck pide permiso («Instalar y exportar» / «Cargar y exportar», spatial-spec §10). Con un SRC en la
   geometría, DuckDB 2.0 exige fijar `geometry_always_xy`: si el usuario no lo fijó, GeoDuck lo pone en `true`
   (orden este-norte) **solo durante la exportación** y después lo deja sin fijar; si el usuario lo fijó, no se
-  toca. Todo se escribe en una carpeta temporal junto al destino y se mueve al terminar (un Shapefile son
+  toca. **G10 (propietario, 2026-11-12):** si la consulta no tiene `ORDER BY`, `preserve_insertion_order` se
+  apaga solo durante la exportación (cancelar baja de hasta 3,3 s a < 0,1 s; las filas pueden salir en otro
+  orden, que SQL no garantiza sin `ORDER BY`) y se deja como estaba; con `ORDER BY`, el orden se respeta; si el
+  usuario lo apagó, no se toca. Todo se escribe en una carpeta temporal junto al destino y se mueve al terminar (un Shapefile son
   varios archivos; una Geodatabase, una carpeta).
 - **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
   «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
