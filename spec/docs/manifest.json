@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 190560,
-      "sha256": "cc77d0f4d833ed16a635df4b037bc8767566115c281e87b1c6dfdb91de00d0ba"
+      "bytes": 201515,
+      "sha256": "01a4026dd0bb274d4e5366214398a1f9f9fe1d3fc281240853a6cfd12740059d"
     },
     {
       "path": "README.md",
@@ -116,8 +116,8 @@
     },
     {
       "path": "docs/product-spec.md",
-      "bytes": 13679,
-      "sha256": "3b3ff45186f5b39141c154bee52cb8e27ef437e475160c3772e1c69e85560c05"
+      "bytes": 14956,
+      "sha256": "ad11dcbccec66e976e610efbf3680edd505a905b686f7832bae8e681edd35dff"
     },
     {
       "path": "docs/references.md",
@@ -126,8 +126,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 9588,
-      "sha256": "0eb851d1a126d43905f34648bb97605a8de38897a6ba0fe15241fcc0e4324e28"
+      "bytes": 9760,
+      "sha256": "ffc2397e9234e18382ef7b391ec94c328e8affffad2db476d221343b1ee55cd9"
     },
     {
       "path": "docs/security.md",
@@ -153,6 +153,11 @@
       "path": "qa/test-strategy.md",
       "bytes": 17277,
       "sha256": "4dff27f74fd93144b8e132eafdbc1ec986c08c948f68615af0b2f61c277bfbaf"
+    },
+    {
+      "path": "specs/performance-spec.md",
+      "bytes": 9375,
+      "sha256": "3cba2ebd6b014bf54753de1e51de19cc03a26e39863045f0252c1525d8e340ef"
     },
     {
       "path": "specs/qgis-bridge-spec.md",

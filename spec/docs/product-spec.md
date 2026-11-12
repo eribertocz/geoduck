@@ -88,6 +88,16 @@
 | GD-CFG-001 | P1 | Persistir preferencias, SQL guardado y conexiones recientes; no capas/datos | AT-CFG-001 |
 | GD-COMP-001 | P0 | Probar pares QGIS/Python/Qt/DUCKDB/PyArrow | AT-COMP-001 |
 | GD-QA-001 | P0 | CI, integración QGIS y benchmarks sin métricas fabricadas | AT-QA-001 |
+| GD-PERF-001 | P0 | Banco de medidas reproducible con la interfaz real y línea base publicada (performance-spec §2) | AT-PERF-001 |
+| GD-PERF-002 | P0 | Cancelar toda operación larga en p95 ≤ 1 s, sin restos (performance-spec §3) | AT-PERF-002 |
+| GD-PERF-003 | P0 | Memoria acotada: presupuesto por transferencia y `temp_directory` de la sesión (performance-spec §4) | AT-PERF-003 |
+| GD-PERF-004 | P0 | Interfaz sin bloqueos: p95 ≤ 50 ms durante transferencias (performance-spec §5) | AT-PERF-004 |
+| GD-PERF-005 | P0 | Estrés de 1 h sin cierres, pérdidas ni capas a medias (performance-spec §6) | AT-PERF-005 |
+| GD-PERF-006 | P1 | Números de rendimiento publicados y regresiones detectadas (performance-spec §7) | AT-PERF-006 |
+| GD-PERF-007 | P0 | Resultados de consulta bajo demanda: una ejecución, scroll continuo, sin repetir la consulta (performance-spec §8) | AT-PERF-007 |
+| GD-PERF-008 | P0 | Tablas con scroll continuo y páginas por posición (performance-spec §9) | AT-PERF-008 |
+| GD-PERF-009 | P1 | «Copia» por DuckDB directo, «Conectada» con caché y cancelación, progreso real (performance-spec §9) | AT-PERF-009 |
+| GD-PERF-010 | P1 | Catálogo y autocompletado por partes para bases grandes (performance-spec §9) | AT-PERF-010 |
 
 ## 3. Reglas de proceso
 ### 3.1 Inicio
