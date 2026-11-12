@@ -35,5 +35,6 @@ regresiones G0–G9. Tag y release `v0.11.0a1` solo los hace el propietario.
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, requisitos, roadmap y plan | En revisión | #134 |
-| E0b Spike G10-A | En revisión: guardar siempre el resultado no conviene (diseño adaptativo, SPEC §8); `rowid` escala mejor que `OFFSET`; cancelar ≤ 0,7 s en el peor caso medido; F-133 (DuckDB 1.5 deja a medias un `COPY` cancelado). `docs/evidence/g10/spike/` | — |
+| E0 SPEC, requisitos, roadmap y plan | Fusionado | #134 |
+| E0b Spike G10-A | Fusionado (#135): guardar siempre el resultado no conviene (diseño adaptativo, SPEC §8); `rowid` escala mejor que `OFFSET`; cancelar ≤ 0,7 s en el peor caso medido; F-133 (DuckDB 1.5 deja a medias un `COPY` cancelado). `docs/evidence/g10/spike/` | — |
+| E1 Banco de medidas y línea base | En revisión: `tools/perf/bench.py` (complemento real: consulta, cargar Copia/Conectada, capa y archivo → DuckDB, exportar, cancelar; tiempo, pausas de la interfaz y RAM pico → JSON y Markdown), línea base en `docs/evidence/g10/base/` (QGIS 3.44 y 4.2 × DuckDB 2.0), trabajo informativo en la CI. Decisión del propietario (2026-11-12, «tú decide»): resultados adaptativos | — |

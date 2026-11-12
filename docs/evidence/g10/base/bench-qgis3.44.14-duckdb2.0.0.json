@@ -1,0 +1,84 @@
+{
+ "entorno": {
+  "qgis": "3.44.14",
+  "qt": "5.15.15",
+  "duckdb": "2.0.0",
+  "python": "3.12.16",
+  "sistema": "Linux-6.18.44-fc-v378-x86_64-with-glibc2.39",
+  "cpus": 2,
+  "filas": 1000000,
+  "repeticiones": 3,
+  "ram_pico_mb": 1637.8
+ },
+ "medidas": {
+  "Consulta: primera página (10 columnas)": {
+   "mediana_ms": 46.6,
+   "max_ms": 62.6,
+   "pausa_max_ms": 11.0,
+   "pausa_p95_ms": 11.0
+  },
+  "Consulta: agregado por zona": {
+   "mediana_ms": 10.8,
+   "max_ms": 10.9,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0
+  },
+  "Cargar en QGIS · Copia (puntos)": {
+   "mediana_ms": 3042.9,
+   "max_ms": 3071.7,
+   "pausa_max_ms": 55.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Cargar en QGIS · Conectada (puntos)": {
+   "mediana_ms": 124.1,
+   "max_ms": 126.8,
+   "pausa_max_ms": 6.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Capa de QGIS → DuckDB (por QGIS, puntos)": {
+   "mediana_ms": 6496.1,
+   "max_ms": 6736.3,
+   "pausa_max_ms": 48.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Archivo Parquet → DuckDB (por DuckDB)": {
+   "mediana_ms": 51.2,
+   "max_ms": 97.9,
+   "pausa_max_ms": 8.0,
+   "pausa_p95_ms": 8.0
+  },
+  "Exportar ▾ · parquet": {
+   "mediana_ms": 290.1,
+   "max_ms": 314.8,
+   "pausa_max_ms": 11.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Exportar ▾ · csv": {
+   "mediana_ms": 439.8,
+   "max_ms": 442.5,
+   "pausa_max_ms": 15.0,
+   "pausa_p95_ms": 8.0
+  },
+  "Cancelar · consulta pesada": {
+   "mediana_ms": 5.9,
+   "max_ms": 6.2,
+   "pausa_max_ms": 0.0,
+   "pausa_p95_ms": 0.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · exportar": {
+   "mediana_ms": 8.8,
+   "max_ms": 9.8,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · cargar en QGIS (Copia)": {
+   "mediana_ms": 57.3,
+   "max_ms": 109.7,
+   "pausa_max_ms": 6.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  }
+ }
+}
