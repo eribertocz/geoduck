@@ -251,10 +251,14 @@ def test_cancelling_an_export_stops_quickly_and_leaves_nothing(worker, tmp_path)
 
     run_sql(worker, "CREATE TABLE big AS SELECT range AS id, 'obs ' || range AS nota FROM range(1000000)")
     request = ExportRequest(
-        "SELECT a.* FROM big a, range(20)", str(tmp_path / "x.parquet"), ExportFormat.PARQUET, None
+        # 200 millones de filas: en ningún equipo termina antes de cancelar (se cancela a los 0,3 s)
+        "SELECT a.* FROM big a, range(200)",
+        str(tmp_path / "x.parquet"),
+        ExportFormat.PARQUET,
+        None,
     )
     handle = worker.export_query(request)
-    time.sleep(0.6)
+    time.sleep(0.3)
     begin = time.perf_counter()
     worker.cancel_current()
     with pytest.raises((OperationCancelledError, GeoDuckError)):
