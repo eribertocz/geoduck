@@ -110,6 +110,13 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python tools/pro_shots.py screenshots
+      # G10 (performance-spec §2): medidas informativas; no bloquean. La línea base está en docs/evidence/g10/base
+      - name: banco de medidas (informativo)
+        if: matrix.qgis == '3.44' || matrix.qgis == '4.2'
+        continue-on-error: true
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/perf/bench.py --rows 1000000 --repeat 3 --out perf
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -117,6 +124,7 @@ jobs:
           path: |
             qgis-*.xml
             screenshots/
+            perf/
 
   build:
     name: ZIP del complemento
