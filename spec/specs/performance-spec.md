@@ -75,9 +75,15 @@ desde «Acerca de». Solo números medidos con el banco de §2.
 Hoy la interfaz recibe solo 100 filas, pero cada página siguiente **vuelve a ejecutar la consulta** (`LIMIT/OFFSET`)
 y el total es otra ejecución. Nuevo contrato:
 
-- **Una sola ejecución.** Una sentencia que devuelve filas se ejecuta una vez y su resultado queda en una tabla
-  temporal de la sesión de GeoDuck (`temp.geoduck_result_<n>`; DuckDB la pasa a disco si no cabe en memoria, §4).
-  La primera página se muestra en cuanto existe; el total es el de esa tabla, sin otra consulta.
+- **Adaptativo (spike G10-A, `docs/evidence/g10/spike/`):** guardar siempre no es lo mejor: en una consulta barata
+  cuesta 3–4 veces la ejecución, y repetirla ya tarda < 0,2 s con 10 millones de filas. Por eso:
+  1. La **primera página** llega por flujo, en cuanto DuckDB la produce (como hoy).
+  2. Si la consulta fue **barata** (propuesto: el total se cuenta en ≤ 300 ms), las páginas siguientes la repiten
+     con ventana; el usuario no nota diferencia.
+  3. Si fue **cara**, el resultado se guarda **una vez** en una tabla temporal de la sesión de GeoDuck
+     (`temp.geoduck_result_<n>`; DuckDB la pasa a disco si no cabe en memoria, §4), en segundo plano y con
+     «Cancelar»; desde ahí, cualquier página se lee por posición en 1–4 ms y el total es inmediato. Mientras se
+     guarda, el pie lo dice («Preparando el resultado completo… N filas»).
 - **Scroll continuo** en la grilla: pide bloques de filas por número de fila a medida que se baja (y los suelta al
   alejarse: en la interfaz nunca hay más de unos miles de filas). Sin botones de página; el pie dice «Filas 1–100 de
   1 000 000» según lo visible. Maqueta aprobada antes de construir.
@@ -87,8 +93,8 @@ y el total es otra ejecución. Nuevo contrato:
   (propuesto: 20 GB o el 50 % del espacio libre, lo menor): al superarlo se guarda hasta ahí y se dice claramente
   («Resultado parcial: N filas; exporta para tenerlo completo»).
 - **Sentencias que no se pueden guardar** (`RETURNING`, `EXPLAIN`, `PRAGMA`): como hoy, la primera página.
-- **Meta:** página siguiente y salto a cualquier fila ≤ 50 ms con 10 millones de filas; el coste de guardar el
-  resultado ≤ 15 % sobre ejecutar la consulta (se mide en el spike; si no se cumple, se revisa el diseño).
+- **Meta:** página siguiente y salto a cualquier fila ≤ 200 ms en una consulta barata y ≤ 50 ms en una guardada,
+  con 10 millones de filas; una consulta cara nunca se ejecuta más de una vez.
 
 ## 9. Tablas, cargas y catálogo (GD-PERF-008..010)
 
@@ -117,7 +123,7 @@ paralelizar QGIS; cambiar el formato de transporte (ADR-0008).
 | AT-PERF-004 | Interfaz: p95 ≤ 50 ms y máximo ≤ 200 ms durante las transferencias; primera apertura de tabla ≤ 100 ms |
 | AT-PERF-005 | Estrés de 1 h sin cierres, pérdidas ni capas a medias; RAM de QGIS +10 % como máximo |
 | AT-PERF-006 | `docs/performance.md` publicado con números medidos; regresiones > 20 % detectadas por el trabajo de la CI |
-| AT-PERF-007 | Una consulta de 10 millones de filas se ejecuta una vez; desplazarse, ordenar, contar, exportar y cargar no la repiten; página ≤ 50 ms; el resultado se borra al cerrar |
+| AT-PERF-007 | Una consulta cara de 10 millones de filas se ejecuta una vez; desplazarse, ordenar, contar, exportar y cargar no la repiten (página ≤ 50 ms); una barata responde ≤ 200 ms por página; el resultado guardado se borra al cerrar |
 | AT-PERF-008 | Tabla de 100 millones de filas: scroll a cualquier parte ≤ 100 ms sin filtro; total estimado inmediato |
 | AT-PERF-009 | «Copia» por DuckDB directo con las mismas filas y SRC que el camino actual, y su mejora medida; «Conectada» cancela lo que ya no se ve |
 | AT-PERF-010 | Catálogo de 10 000 tablas sin pausas > 100 ms |
