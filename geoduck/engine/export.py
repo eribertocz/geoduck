@@ -18,12 +18,14 @@ nada a medias y lo que ya existía no se toca hasta el final (la confirmación l
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from geoduck.domain.bridge_types import is_geometry_type
+from geoduck.domain.completion import blank_code
 from geoduck.domain.errors import InvalidArgumentError
 from geoduck.domain.export import (
     GEOMETRY_TYPES,
@@ -86,6 +88,21 @@ def _geometry_type(handle: ConnectionHandle, body: str, column: str) -> str:
     return GEOMETRY_TYPES.get(kinds[0], "GEOMETRY") if kinds else "GEOMETRY"
 
 
+_ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
+
+
+def has_order_by(sql: str) -> bool:
+    """La consulta pide un orden: `ORDER BY` fuera de comentarios y cadenas, en cualquier nivel."""
+    return bool(_ORDER_BY.search(blank_code(sql)[0]))
+
+
+def _insertion_order(handle: ConnectionHandle) -> bool:
+    rows = handle.execute(
+        "SELECT value FROM duckdb_settings() WHERE name = 'preserve_insertion_order'", max_rows=1
+    ).rows
+    return not rows or str(rows[0][0]).lower() == "true"
+
+
 def _axis_setting(handle: ConnectionHandle) -> str | None:
     rows = handle.execute(
         "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'", max_rows=1
@@ -130,6 +147,13 @@ def export_query(handle: ConnectionHandle, token: CancelToken, request: ExportRe
     folder.mkdir()
     written = folder / target.name
     restore_axis = False
+    # Cancelar al instante (performance-spec §3; medido: 4 ms–3,3 s con orden, 14–77 ms sin orden): mantener
+    # el orden de inserción hace que los hilos de DuckDB se esperen entre sí al cancelar. Sin `ORDER BY`, SQL
+    # no garantiza un orden, así que se apaga **solo durante la exportación** y se deja como estaba (decisión
+    # del propietario, 2026-11-12); con `ORDER BY`, DuckDB lo respeta igual. Si el usuario lo apagó, queda.
+    restore_order = fmt is not ExportFormat.ARROW and not has_order_by(body) and _insertion_order(handle)
+    if restore_order:
+        handle.execute("SET preserve_insertion_order = false", max_rows=1)
     try:
         token.raise_if_cancelled()
         if fmt is ExportFormat.ARROW:
@@ -154,6 +178,8 @@ def export_query(handle: ConnectionHandle, token: CancelToken, request: ExportRe
         token.raise_if_cancelled()
         _replace_into(written, target)
     finally:
+        if restore_order:
+            handle.execute("SET preserve_insertion_order = true", max_rows=1)
         if restore_axis:
             handle.execute("RESET geometry_always_xy", max_rows=1)  # como estaba: sin fijar
         shutil.rmtree(folder, ignore_errors=True)

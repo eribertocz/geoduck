@@ -18,7 +18,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from qgis.PyQt.QtCore import QAbstractTableModel, QModelIndex, QPoint, QRect, QSize, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QAbstractTableModel, QModelIndex, QPoint, QRect, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QGuiApplication, QIcon, QKeySequence, QPainter
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
@@ -84,6 +84,8 @@ _NUMERIC = re.compile(
 )
 #: Caracteres de una celda en la grilla (el valor completo está en el detalle).
 CELL = 300
+#: Filas que se miden para el ancho de las columnas.
+FIT_ROWS = 25
 
 
 def is_numeric(data_type: str) -> bool:
@@ -100,6 +102,9 @@ def fit_columns(grid: QTableView, model: PageModel) -> None:
     """Ancho de cada columna: el de su contenido o el de su encabezado (nombre y tipo), entre 90 y 360 px."""
     if not model.columns:
         return
+    # Medir solo las primeras filas (performance-spec §5: medir las 100 filas de cada columna era la mayor
+    # parte de la pausa al mostrar una página); el ancho tiene tope de 360 px y la celda se puede ensanchar
+    grid.horizontalHeader().setResizeContentsPrecision(FIT_ROWS)
     grid.resizeColumnsToContents()
     metrics = grid.horizontalHeader().fontMetrics()
     for i, column in enumerate(model.columns):
@@ -133,12 +138,23 @@ class PageModel(QAbstractTableModel):
         self.mono = ui_font(METRICS.font_small, mono=True)
         self.italic = ui_font()
         self.italic.setItalic(True)
+        # Por columna, calculado una vez por página (data() se llama miles de veces al pintar)
+        self._numeric: tuple[bool, ...] = ()
+        self._align: tuple[int, ...] = ()
+        self._texts: dict[tuple[int, int], str] = {}
+        self._null = QColor(colors.null)
+        self._muted = QColor(colors.muted)
 
     def set_page(
         self, columns: tuple[ColumnInfo, ...], rows: tuple[tuple[object, ...], ...], offset: int
     ) -> None:
         self.beginResetModel()
         self.columns, self.rows, self.offset = columns, rows, offset
+        self._numeric = tuple(is_numeric(c.data_type) for c in columns)
+        right = int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        left = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self._align = tuple(right if n else left for n in self._numeric)
+        self._texts = {}
         self.endResetModel()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802, B008 - API de Qt
@@ -152,17 +168,20 @@ class PageModel(QAbstractTableModel):
         cursiva; números y geometrías en monoespaciada)."""
         if not index.isValid():
             return None
-        value = self.rows[index.row()][index.column()]
-        column = self.columns[index.column()]
-        numeric = is_numeric(column.data_type)
+        row, col = index.row(), index.column()
+        value = self.rows[row][col]
+        column = self.columns[col]
+        numeric = self._numeric[col]
         answer: Any = None
         if role == Qt.ItemDataRole.DisplayRole:
-            answer = cell_text(value)
+            key = (row, col)
+            answer = self._texts.get(key)
+            if answer is None:
+                answer = self._texts[key] = cell_text(value)
         elif role == Qt.ItemDataRole.TextAlignmentRole:
-            side = Qt.AlignmentFlag.AlignRight if numeric else Qt.AlignmentFlag.AlignLeft
-            answer = int(side | Qt.AlignmentFlag.AlignVCenter)
+            answer = self._align[col]
         elif role == Qt.ItemDataRole.ForegroundRole and (value is None or column.is_geometry):
-            answer = QColor(self.colors.null if value is None else self.colors.muted)
+            answer = self._null if value is None else self._muted
         elif role == Qt.ItemDataRole.FontRole and (value is None or numeric or column.is_geometry):
             answer = self.italic if value is None else self.mono
         return answer
@@ -328,9 +347,31 @@ class DetailPanel(QFrame):
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         box.addWidget(self.scroll, 1)
         self.fields: list[tuple[str, str]] = []
+        self._shown: tuple[Any, ...] | None = None
+        self._pending: tuple[Any, ...] | None = None
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(0)
+        self._timer.timeout.connect(self._build)
 
     def show_row(self, number: int, columns: tuple[ColumnInfo, ...], values: tuple[object, ...]) -> None:
+        """Muestra la fila en la siguiente vuelta del bucle de eventos (performance-spec §5): la grilla se pinta
+        primero y el detalle después, en dos pausas cortas en vez de una larga; si llegan varias filas
+        seguidas, solo se construye la última, y la misma fila no se reconstruye."""
         self.title.setText(tr("Row {}").format(f"{number:,}".replace(",", " ")))
+        key = (number, columns, values)
+        if key == self._shown:
+            return
+        self._pending = key
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def _build(self) -> None:
+        if self._pending is None:
+            return
+        number, columns, values = self._pending
+        self._pending = None
+        self._shown = (number, columns, values)
         body = QWidget()
         box = QVBoxLayout(body)
         box.setContentsMargins(14, 6, 10, 10)
