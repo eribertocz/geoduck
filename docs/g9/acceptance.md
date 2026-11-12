@@ -1,8 +1,8 @@
 # G9 · `v0.10.0a1` Workspace Pro — evidencia de aceptación (AT-WSP-001..012)
 
-**Estado:** Propuesto para aceptación (E7). La aceptación la da el propietario; el tag y la release `v0.10.0a1`
+**Estado:** Listo para cerrar (E7): prueba de Windows hecha por el propietario el 2026-11-12. La aceptación la da el propietario; el tag y la release `v0.10.0a1`
 también los hace él. Versión en `metadata.txt` y `geoduck/__init__.py`: `0.10.0a1` (en este PR).
-**Base verificada:** E0–E6b (#114–#124), la corrección G8 de cancelar (#119) F-130 (#126) y las observaciones de la prueba en Windows (#127). Las cifras de la CI de este PR se
+**Base verificada:** E0–E6b (#114–#124), la corrección G8 de cancelar (#119) F-130 (#126) las observaciones de la prueba en Windows (#127), la marca (#128, #129), «Archivos → DuckDB» y «Exportar ▾» a más formatos (#130), el diálogo inteligente con trazabilidad (#131) y el arreglo de la «Copia» en QGIS 4 (#132). Las cifras de la CI de este PR se
 anotan en un comentario del PR. **Contrato:** `docs/g9/plan.md`, `spec/specs/workspace-pro-spec.md`
 (GD-WSP-001..012), ADR-0016, `spec/qa/test-strategy.md`.
 
@@ -53,7 +53,7 @@ las que probaban pantallas retiradas se quitaron con ellas, y lo que cubrían es
 | Rendimiento de §13 medido en QGIS 3.44 y 4.2 | Cumplida (§5) |
 | Capturas aprobadas antes de construir cada pantalla | Cumplida: E0b, E1, E2, E3, E4, E5, E6 (historial) y E6b, aprobadas por el propietario |
 | La interfaz anterior retirada sin perder funciones | Cumplida (E6, E6b; SPEC §12) |
-| Guía manual en Windows | Cumplida: [`docs/certification/workspace-pro.md`](../certification/workspace-pro.md) (incluye G8); la ejecución en Windows la hace el propietario |
+| Guía manual en Windows | Cumplida: [`docs/certification/workspace-pro.md`](../certification/workspace-pro.md) (incluye G8). **Ejecutada por el propietario en Windows (QGIS 4) el 2026-11-12 con el zip de `main` e8ba063: funciona** |
 | Regresiones G0–G8 | Cumplida |
 
 ## 4. Revisión de la interfaz con el principio del balance (SPEC §1)
@@ -105,6 +105,11 @@ Ver [`docs/evidence/g9/rendimiento/README.md`](../evidence/g9/rendimiento/README
 | 2026-11-06 | Tras la prueba en Windows: arrastrar, el clic derecho y «Añadir capas de QGIS a DuckDB…» abren la misma ventana de tres pasos (capas, dónde, progreso); cada capa se guarda por separado; «Añadir … a DuckDB» / «Cargar en QGIS»; GeoDuck es el complemento y DuckDB la base (F-131) |
 | 2026-11-06 | Todos los avisos llevan «×» (F-132) |
 | 2026-11-06 | **Principio de toda la interfaz:** el balance entre ofrecer opciones y no complicar (SPEC §1) |
+| 2026-11-07 | Marca: logo (pin azul con pato blanco y pico ámbar), colores `#2F5FD0` / `#F2A33A` / `#1D3F99`; logo en la barra de progreso, el botón de sesión, «Acerca de» y el «pato al lago» al arrastrar (#128, #129) |
+| 2026-11-07 | **Importar y exportar siempre con el motor de DuckDB, nunca con QGIS** (rendimiento). Solo formatos modernos, rápidos o muy usados: Parquet/GeoParquet, Arrow/Feather, FlatGeobuf, CSV, JSON, GeoPackage, Shapefile, GeoJSON, KML/KMZ, Geodatabase, OSM (solo importar), Excel; sin SpatiaLite ni SQLite. Otro archivo: aviso claro con «Escribir consulta» / «Abrir en QGIS». `spatial` solo con un clic de permiso. Archivos soltados en el editor: un `CREATE TABLE … AS SELECT *` sin ejecutar; capas soltadas ahí: el diálogo (#130; qgis-import-spec §10) |
+| 2026-11-07 | `geometry_always_xy = true` solo durante una exportación a GDAL, si el usuario no lo fijó (#130) |
+| 2026-11-07 | Diálogo inteligente: una capa que viene de un archivo la copia DuckDB (`ST_Read`), también con su filtro comprobado por filas; medido 8–23× más rápido; trazabilidad en el paso 3 y al exportar (#131; qgis-import-spec §5.4) |
+| 2026-11-12 | La trazabilidad se rediseña **después de terminar todas las fases**, con una línea de tiempo vertical (puntos e íconos, un paso por línea) como referencia del propietario |
 
 ## 7. Hallazgos
 
