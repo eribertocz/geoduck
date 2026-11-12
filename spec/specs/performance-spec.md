@@ -1,6 +1,6 @@
 # GeoDuck — Rendimiento (G10 · `v0.11.0a1`)
 
-**Estado:** Propuesta (E0), pendiente de aprobación del propietario. **Requisitos:** GD-PERF-001..006, que detallan
+**Estado:** Aprobada por el propietario (2026-11-12: plan, metas propuestas y optimización «de primer nivel»). **Requisitos:** GD-PERF-001..010, que detallan
 GD-BRD-003 (progreso y cancelación sin tocar QGIS desde el worker) y GD-QA-001 (benchmarks sin métricas
 fabricadas). **Protocolo de medida:** `spec/qa/benchmarks.md`. **Plan:** `docs/g10/plan.md`.
 
@@ -70,12 +70,44 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
 `docs/performance.md`: tabla por operación, tamaño, versión de QGIS y DuckDB, y equipo, con mediana y p95, enlazada
 desde «Acerca de». Solo números medidos con el banco de §2.
 
-## 8. Fuera de alcance de G10
+## 8. Resultados de consulta bajo demanda (GD-PERF-007; propietario, 2026-11-12)
+
+Hoy la interfaz recibe solo 100 filas, pero cada página siguiente **vuelve a ejecutar la consulta** (`LIMIT/OFFSET`)
+y el total es otra ejecución. Nuevo contrato:
+
+- **Una sola ejecución.** Una sentencia que devuelve filas se ejecuta una vez y su resultado queda en una tabla
+  temporal de la sesión de GeoDuck (`temp.geoduck_result_<n>`; DuckDB la pasa a disco si no cabe en memoria, §4).
+  La primera página se muestra en cuanto existe; el total es el de esa tabla, sin otra consulta.
+- **Scroll continuo** en la grilla: pide bloques de filas por número de fila a medida que se baja (y los suelta al
+  alejarse: en la interfaz nunca hay más de unos miles de filas). Sin botones de página; el pie dice «Filas 1–100 de
+  1 000 000» según lo visible. Maqueta aprobada antes de construir.
+- **Ordenar por columna** en el resultado, resuelto por DuckDB sobre la tabla temporal.
+- **«Exportar ▾» y «Cargar en QGIS»** leen ese resultado, sin ejecutar la consulta otra vez.
+- **Vida:** el resultado se borra al volver a ejecutar, al cerrar la pestaña o la sesión. Tope de disco configurable
+  (propuesto: 20 GB o el 50 % del espacio libre, lo menor): al superarlo se guarda hasta ahí y se dice claramente
+  («Resultado parcial: N filas; exporta para tenerlo completo»).
+- **Sentencias que no se pueden guardar** (`RETURNING`, `EXPLAIN`, `PRAGMA`): como hoy, la primera página.
+- **Meta:** página siguiente y salto a cualquier fila ≤ 50 ms con 10 millones de filas; el coste de guardar el
+  resultado ≤ 15 % sobre ejecutar la consulta (se mide en el spike; si no se cumple, se revisa el diseño).
+
+## 9. Tablas, cargas y catálogo (GD-PERF-008..010)
+
+- **Tabla (GD-PERF-008):** el mismo scroll continuo; páginas por posición (`rowid`) cuando no hay orden ni filtro,
+  en vez de `OFFSET`; total estimado al instante (metadatos) y exacto después. Meta: ir a cualquier parte de una
+  tabla de 100 millones de filas ≤ 100 ms sin filtro.
+- **Cargar en QGIS (GD-PERF-009):** «Copia» escrita por DuckDB directo a GeoPackage cuando `spatial` está cargada
+  (con el permiso de spatial-spec §10; si no, el camino actual), comprobando filas y SRC. «Conectada»: caché de
+  páginas por extensión y cancelación inmediata de lo que ya no se ve. La selección de QGIS, leída por DuckDB
+  (lista de identificadores) en «→ DuckDB». Progreso real con porcentaje en importar y exportar.
+- **Catálogo (GD-PERF-010):** columnas y autocompletado cargados por partes; bases con 10 000 tablas sin pausas
+  (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla).
+
+## 10. Fuera de alcance de G10
 
 Funciones nuevas de interfaz; la trazabilidad rediseñada (después de todas las fases, decisión del 2026-11-12);
 paralelizar QGIS; cambiar el formato de transporte (ADR-0008).
 
-## 9. Criterios de aceptación
+## 11. Criterios de aceptación
 
 | AT | Escenario |
 |---|---|
@@ -85,3 +117,7 @@ paralelizar QGIS; cambiar el formato de transporte (ADR-0008).
 | AT-PERF-004 | Interfaz: p95 ≤ 50 ms y máximo ≤ 200 ms durante las transferencias; primera apertura de tabla ≤ 100 ms |
 | AT-PERF-005 | Estrés de 1 h sin cierres, pérdidas ni capas a medias; RAM de QGIS +10 % como máximo |
 | AT-PERF-006 | `docs/performance.md` publicado con números medidos; regresiones > 20 % detectadas por el trabajo de la CI |
+| AT-PERF-007 | Una consulta de 10 millones de filas se ejecuta una vez; desplazarse, ordenar, contar, exportar y cargar no la repiten; página ≤ 50 ms; el resultado se borra al cerrar |
+| AT-PERF-008 | Tabla de 100 millones de filas: scroll a cualquier parte ≤ 100 ms sin filtro; total estimado inmediato |
+| AT-PERF-009 | «Copia» por DuckDB directo con las mismas filas y SRC que el camino actual, y su mejora medida; «Conectada» cancela lo que ya no se ve |
+| AT-PERF-010 | Catálogo de 10 000 tablas sin pausas > 100 ms |

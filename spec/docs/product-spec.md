@@ -94,6 +94,10 @@
 | GD-PERF-004 | P0 | Interfaz sin bloqueos: p95 ≤ 50 ms durante transferencias (performance-spec §5) | AT-PERF-004 |
 | GD-PERF-005 | P0 | Estrés de 1 h sin cierres, pérdidas ni capas a medias (performance-spec §6) | AT-PERF-005 |
 | GD-PERF-006 | P1 | Números de rendimiento publicados y regresiones detectadas (performance-spec §7) | AT-PERF-006 |
+| GD-PERF-007 | P0 | Resultados de consulta bajo demanda: una ejecución, scroll continuo, sin repetir la consulta (performance-spec §8) | AT-PERF-007 |
+| GD-PERF-008 | P0 | Tablas con scroll continuo y páginas por posición (performance-spec §9) | AT-PERF-008 |
+| GD-PERF-009 | P1 | «Copia» por DuckDB directo, «Conectada» con caché y cancelación, progreso real (performance-spec §9) | AT-PERF-009 |
+| GD-PERF-010 | P1 | Catálogo y autocompletado por partes para bases grandes (performance-spec §9) | AT-PERF-010 |
 
 ## 3. Reglas de proceso
 ### 3.1 Inicio
