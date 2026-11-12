@@ -1,0 +1,48 @@
+{
+ "duckdb": "1.5.0",
+ "rows": 10000000,
+ "cpus": 2,
+ "hoy_primera_pagina_s": 0.002,
+ "hoy_count_s": 0.064,
+ "hoy_pagina_offset_5M_s": 0.09,
+ "hoy_pagina_offset_final_s": 0.171,
+ "solo_ejecutar_s": 0.153,
+ "guardar_resultado_s": 0.632,
+ "filas_resultado": 9500000,
+ "propuesto_pagina_rowid_ms": 3.74,
+ "propuesto_total_ms": 1.41,
+ "propuesto_ordenar_pagina_s": 0.096,
+ "tabla_offset_9M_ms": 7.34,
+ "tabla_rowid_9M_ms": 3.33,
+ "cancelar": {
+  "consulta_pesada": {
+   "ms_max": 347.1,
+   "ms_mediana": 256.8,
+   "fin": [
+    "InterruptException"
+   ]
+  },
+  "crear_tabla": {
+   "ms_max": 3.7,
+   "ms_mediana": 3.0,
+   "fin": [
+    "InterruptException"
+   ]
+  },
+  "exportar_parquet": {
+   "ms_max": 135.6,
+   "ms_mediana": 52.3,
+   "fin": [
+    "InterruptException"
+   ]
+  },
+  "ordenar": {
+   "ms_max": 27.9,
+   "ms_mediana": 22.8,
+   "fin": [
+    "InterruptException"
+   ]
+  }
+ },
+ "restos_parquet": true
+}

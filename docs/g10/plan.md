@@ -35,4 +35,5 @@ regresiones G0–G9. Tag y release `v0.11.0a1` solo los hace el propietario.
 
 | Entrega | Estado | PR |
 |---|---|---|
-| E0 SPEC, requisitos, roadmap y plan | En revisión | — |
+| E0 SPEC, requisitos, roadmap y plan | En revisión | #134 |
+| E0b Spike G10-A | En revisión: guardar siempre el resultado no conviene (diseño adaptativo, SPEC §8); `rowid` escala mejor que `OFFSET`; cancelar ≤ 0,7 s en el peor caso medido; F-133 (DuckDB 1.5 deja a medias un `COPY` cancelado). `docs/evidence/g10/spike/` | — |
