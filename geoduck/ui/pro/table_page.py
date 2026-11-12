@@ -355,9 +355,9 @@ class DetailPanel(QFrame):
         self._timer.timeout.connect(self._build)
 
     def show_row(self, number: int, columns: tuple[ColumnInfo, ...], values: tuple[object, ...]) -> None:
-        """Muestra la fila en la siguiente vuelta del bucle de eventos (performance-spec §5): la grilla se pinta
-        primero y el detalle después, en dos pausas cortas en vez de una larga; si llegan varias filas
-        seguidas, solo se construye la última, y la misma fila no se reconstruye."""
+        """Muestra la fila en la siguiente vuelta del bucle de eventos (performance-spec §5): primero se pinta
+        la grilla y después el detalle, en dos pausas cortas y no una larga. Si llegan varias filas seguidas,
+        solo se construye la última, y la misma fila no se reconstruye."""
         self.title.setText(tr("Row {}").format(f"{number:,}".replace(",", " ")))
         key = (number, columns, values)
         if key == self._shown:
