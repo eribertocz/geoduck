@@ -24,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QVBoxLayout,
     QWidget,
@@ -36,6 +37,7 @@ from geoduck.app.events import (
     LoadFinished,
     LoadPrepared,
     LoadPrepareFailed,
+    LoadProgressed,
     LoadStarted,
 )
 from geoduck.domain.bridge_types import LoadPlan
@@ -189,12 +191,20 @@ def load_menu(
     *,
     title: str = "",
     more: bool = False,
+    name: Callable[[], str] | None = None,
+    rename: Callable[[], None] | None = None,
 ) -> QMenu:
     """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea. Con `title`
     (tablas soltadas en el mapa, E5), una cabecera arriba («3 tablas · ¿cómo cargarlas?»). Con `more` (E6b),
-    al final una línea discreta «Más opciones…» que llama a `pick(OPTIONS)`."""
+    al final una línea discreta «Más opciones…» que llama a `pick(OPTIONS)`.
+
+    #148, punto 15: con `name` (una tabla o un resultado), arriba el **nombre de la capa en QGIS**, ya
+    relleno con lo que `name()` propone al abrir el menú (Enter = Copia; `menu.name_edit`); con varias
+    geometrías, el nombre es el prefijo («Consumo · geom»). Con `rename` (varias tablas), «Nombres: los de
+    las tablas · Cambiar nombres…», que abre el diálogo único."""
     menu = QMenu(parent)
     menu.setProperty("pro", "load-menu")
+    menu.name_edit = None  # type: ignore[attr-defined]
     if title:
         head = QWidgetAction(menu)
         caption = label(title, "section")
@@ -202,16 +212,20 @@ def load_menu(
         head.setDefaultWidget(caption)
         head.setEnabled(False)
         menu.addAction(head)
+    if name is not None:
+        menu.name_edit = _name_field(menu, name, lambda: (pick(COPY), menu.close()))  # type: ignore[attr-defined]
+    if rename is not None:
+        _rename_row(menu, rename)
     copy_text = tr("Copies the data into QGIS memory; it no longer depends on DuckDB")
     connected_text = tr("Reads straight from DuckDB without copying; edits are saved in DuckDB")
-    for kind, icon, name, text in (
+    for kind, icon, mode, text in (
         (COPY, "layers", tr("Copy (mode)"), copy_text),
         (CONNECTED, "database", tr("Connected"), connected_text),
     ):
-        row = _Row(icon, name, text, colors)
+        row = _Row(icon, mode, text, colors)
         action = QWidgetAction(menu)
         action.setDefaultWidget(row)
-        action.setText(name)
+        action.setText(mode)
         action.triggered.connect(lambda _c=False, k=kind: pick(k))
         row.picked.connect(action.trigger)
         row.picked.connect(menu.close)
@@ -223,6 +237,56 @@ def load_menu(
         extra.setToolTip(tr("Choose geometries, use a WKB/WKT column, reproject or separate by type"))
         extra.triggered.connect(lambda _c=False: pick(OPTIONS))
     return menu
+
+
+def layer_name(menu: QMenu, proposed: str) -> str:
+    """El nombre escrito arriba del menú (#148), o el propuesto si no hay campo o quedó vacío."""
+    edit = getattr(menu, "name_edit", None)
+    text = edit.text().strip() if edit is not None else ""
+    return text or proposed
+
+
+def _name_field(menu: QMenu, name: Callable[[], str], enter: Callable[[], Any]) -> QLineEdit:
+    box = QWidget()
+    column = QVBoxLayout(box)
+    column.setContentsMargins(10, 8, 10, 6)
+    column.setSpacing(4)
+    column.addWidget(label(tr("Layer name in QGIS"), "muted"))
+    edit = QLineEdit()
+    edit.setAccessibleName(tr("Layer name in QGIS"))
+    edit.setToolTip(tr("With several geometries, the name is the prefix: «{0} · geom»").format(tr("name")))
+    column.addWidget(edit)
+    hint = label(tr("Proposed: the name of the tab (or of the table). Edit it or leave it."), "faint")
+    hint.setWordWrap(True)
+    column.addWidget(hint)
+    action = QWidgetAction(menu)
+    action.setDefaultWidget(box)
+    menu.addAction(action)
+    menu.addSeparator()
+    edit.returnPressed.connect(enter)  # Enter = Copia
+
+    def opened() -> None:
+        edit.setText(name())
+        edit.selectAll()
+        QTimer.singleShot(0, edit.setFocus)
+
+    menu.aboutToShow.connect(opened)
+    return edit
+
+
+def _rename_row(menu: QMenu, rename: Callable[[], None]) -> None:
+    box = QWidget()
+    row = QHBoxLayout(box)
+    row.setContentsMargins(10, 6, 10, 6)
+    row.setSpacing(8)
+    row.addWidget(label(tr("Names: those of the tables"), "muted"), 1)
+    change = button(tr("Change names…"), "link")
+    change.clicked.connect(lambda _c=False: (menu.close(), rename()))
+    row.addWidget(change)
+    action = QWidgetAction(menu)
+    action.setDefaultWidget(box)
+    menu.addAction(action)
+    menu.addSeparator()
 
 
 def popup_under(menu: QMenu, anchor: QWidget) -> None:
@@ -340,8 +404,12 @@ class QuickLoad:
         self._ask_crs = ask_crs or CrsDialog.ask
         #: token del plan → (lote, posición en el lote)
         self._pending: dict[int, tuple[dict[str, Any], int]] = {}
-        self._queue: list[LoadRequest] = []
+        #: (carga, lote, posición en el lote), en orden.
+        self._queue: list[tuple[LoadRequest, dict[str, Any], int]] = []
         self._loads: set[int] = set()
+        #: id de carga → (lote, posición): para avisar a quien mira el lote (la línea de tiempo, #148).
+        self._jobs: dict[int, tuple[dict[str, Any], int]] = {}
+        self._next_job: tuple[dict[str, Any], int] | None = None
         self._starting = False
         self.last_report: LoadReport | None = None
         #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»). Si devuelve True, ya avisó
@@ -364,14 +432,20 @@ class QuickLoad:
         job = {"sql": sql, "name": name, "source": source, "source_kind": source_kind, "database": database}
         self.start_many([job], kind)
 
-    def start_many(self, jobs: list[dict[str, Any]], kind: str) -> None:
+    def start_many(self, jobs: list[dict[str, Any]], kind: str, *, watch: Any = None) -> None:
         """Varias cargas con el mismo modo. Cada `job`: `sql`, `name` y, opcionales, `source`, `source_kind`
-        y `database` (como en `start`). Con `OPTIONS` (una sola carga), la ventana «Más opciones…» elige."""
+        y `database` (como en `start`). Con `OPTIONS` (una sola carga), la ventana «Más opciones…» elige.
+        `watch` (la línea de tiempo, #148) recibe `job_started(i, request)`, `job_progressed(i, filas)`,
+        `job_finished(i, report)`, `job_failed(i, mensaje, cancelada)` y `batch_stopped()` (se canceló al
+        preguntar el SRC o las opciones: no se carga nada)."""
         modes = self._coordinator.load_modes()
         mode = LoadMode.CONNECTED if kind == CONNECTED else copy_mode(modes)
         reason = modes.get(mode)
         if reason is not None and kind != OPTIONS:
             self._notify(tr("Cannot load: ") + reason)
+            if watch is not None:
+                for index in range(len(jobs)):
+                    watch.job_failed(index, reason, False)
             return
         batch: dict[str, Any] = {
             "jobs": jobs,
@@ -379,23 +453,28 @@ class QuickLoad:
             "plans": [None] * len(jobs),
             "waiting": 0,
             "options": kind == OPTIONS,
+            "watch": watch,
         }
         for index, job in enumerate(jobs):
             try:
                 token = self._coordinator.prepare_load(job["sql"], database=job.get("database"))
             except GeoDuckError as exc:
                 self._notify(tr("Cannot load: ") + exc.message)
+                if watch is not None:
+                    watch.job_failed(index, exc.message, False)
                 continue
             self._pending[token] = (batch, index)
             batch["waiting"] += 1
 
-    def _prepared(self, token: int, plan: LoadPlan | None) -> None:
+    def _prepared(self, token: int, plan: LoadPlan | None) -> None:  # noqa: PLR0912 - en orden
         batch, index = self._pending.pop(token)
         batch["plans"][index] = plan
         batch["waiting"] -= 1
         if batch["waiting"]:
             return
+        watch = batch.get("watch")
         ready = [(job, found) for job, found in zip(batch["jobs"], batch["plans"], strict=True) if found]
+        places = [i for i, found in enumerate(batch["plans"]) if found]
         if not ready:
             return
         options: dict[str, Any] | None = None
@@ -404,6 +483,8 @@ class QuickLoad:
             ask = self._ask_options or _ask_options
             options = ask(found, job["name"], 1 if batch["mode"] is LoadMode.CONNECTED else 0, self._parent)
             if options is None:
+                if watch is not None:
+                    watch.batch_stopped()
                 return  # canceló
             modes = self._coordinator.load_modes()
             batch["mode"] = LoadMode.CONNECTED if options["kind"] == CONNECTED else copy_mode(modes)
@@ -424,58 +505,88 @@ class QuickLoad:
         if missing:
             chosen = self._ask_crs([text for _, _, text in missing], self._parent)
             if chosen is None:
+                if watch is not None:
+                    watch.batch_stopped()
                 return  # canceló: no se carga nada
             answer = chosen
         for i, (job, found) in enumerate(ready):
             overrides = {column: answer[text] for j, column, text in missing if j == i and text in answer}
-            self._queue.append(
-                build_request(
-                    found,
-                    job["sql"],
-                    job["name"],
-                    batch["mode"],
-                    overrides,
-                    source=job.get("source"),
-                    source_kind=job.get("source_kind"),
-                    database=job.get("database"),
-                    options=options,
-                )
+            request = build_request(
+                found,
+                job["sql"],
+                (options or {}).get("name") or job["name"],
+                batch["mode"],
+                overrides,
+                source=job.get("source"),
+                source_kind=job.get("source_kind"),
+                database=job.get("database"),
+                options=options,
             )
+            self._queue.append((request, batch, places[i]))
         self._next()
 
     def _next(self) -> None:
         """La siguiente carga de la cola, si la sesión está libre (las cargas ocupan la sesión)."""
         if not self._queue or self._loads:
             return
-        request = self._queue.pop(0)
+        request, batch, index = self._queue.pop(0)
         self._starting = True  # `LoadStarted` llega antes de que `load` devuelva su id
+        self._next_job = (batch, index)
         try:
-            self._loads.add(self._coordinator.load(request))
+            load_id = self._coordinator.load(request)
+            self._loads.add(load_id)
+            self._jobs[load_id] = (batch, index)
         except GeoDuckError as exc:
             self._notify(tr("Cannot load: ") + exc.message)
+            self._tell(batch, "job_failed", index, exc.message, False)
             QTimer.singleShot(0, self._next)
         finally:
             self._starting = False
+            self._next_job = None
+
+    @staticmethod
+    def _tell(batch: dict[str, Any] | None, what: str, *args: Any) -> None:
+        watch = batch.get("watch") if batch is not None else None
+        if watch is not None:
+            getattr(watch, what)(*args)
+
+    def _job(self, load_id: int) -> tuple[dict[str, Any] | None, int]:
+        return self._jobs.get(load_id, (None, -1))
 
     def _on_event(self, event: AppEvent) -> None:
         if isinstance(event, LoadPrepared) and event.token in self._pending:
             self._prepared(event.token, event.plan)
         elif isinstance(event, LoadPrepareFailed) and event.token in self._pending:
             self._notify(tr("Cannot load: ") + event.message)
+            batch, index = self._pending[event.token]
+            self._tell(batch, "job_failed", index, event.message, False)
             self._prepared(event.token, None)
         elif isinstance(event, LoadStarted) and (self._starting or event.load_id in self._loads):
             self._loads.add(event.load_id)
+            if self._next_job is not None:
+                self._jobs[event.load_id] = self._next_job
+            batch, index = self._job(event.load_id)
+            self._tell(batch, "job_started", index, event.request)
             self._notify(tr("Loading «{}»…").format(event.request.layer_name))
+        elif isinstance(event, LoadProgressed) and event.load_id in self._loads:
+            batch, index = self._job(event.load_id)
+            self._tell(batch, "job_progressed", index, event.rows)
         elif isinstance(event, LoadFinished) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
+            batch, index = self._jobs.pop(event.load_id, (None, -1))
             self.last_report = event.report
+            self._tell(batch, "job_finished", index, event.report)
             shown = self.on_loaded(event.report) if self.on_loaded is not None else False
             self._notify("" if shown else finished_text(event.report))
             QTimer.singleShot(0, self._next)  # cuando la sesión ya volvió a estar lista
         elif isinstance(event, LoadFailed) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
+            batch, index = self._jobs.pop(event.load_id, (None, -1))
+            self._tell(batch, "job_failed", index, event.message, event.cancelled)
             if event.cancelled:
-                self._queue.clear()  # «Cancelar» detiene todo el lote
+                for _request, other, position in self._queue:  # «Cancelar» detiene todo el lote
+                    self._tell(other, "job_failed", position, "", True)
+                self._queue.clear()
             self._notify(
                 tr("Loading cancelled.") if event.cancelled else tr("Loading error: ") + event.message
             )

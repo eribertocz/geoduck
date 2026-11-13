@@ -83,7 +83,7 @@ from geoduck.ui.pro import icons
 from geoduck.ui.pro.editor_tools import SHORTCUTS, EditorTools, FindBar
 from geoduck.ui.pro.error_card import ErrorCardView
 from geoduck.ui.pro.grid import DataGrid
-from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
+from geoduck.ui.pro.load import export_menu, export_query, layer_name, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.table_page import tighten
@@ -367,7 +367,9 @@ class QueryPage(QWidget):
         self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
         row.addWidget(self.export_button)
         self.load_button = icon_button("layers", tr("Load the full result in QGIS ▾"), self.colors)
-        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
+        self.load_menu = load_menu(
+            self, self.colors, self.load_in_qgis, more=True, name=self._proposed_layer_name
+        )
         self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
         row.addWidget(self.load_button)
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
@@ -1201,12 +1203,19 @@ class QueryPage(QWidget):
             return browse.display_sql()
         return result.statement.text
 
+    def _proposed_layer_name(self) -> str:
+        """El nombre propuesto para la capa (#148): el de la pestaña (o el del resultado elegido)."""
+        result = self.current_result
+        if result is not None and self.run_text:
+            return result_title(self.run_text, result.statement)
+        return self.place.name
+
     def load_in_qgis(self, kind: str) -> None:
         """«Cargar en QGIS ▾»: el resultado elegido como «Copia» o «Conectada» (repite la consulta)."""
         result = self.current_result
         if result is None or not result.statement.replayable or self._loader is None:
             return
-        name = result_title(self.run_text, result.statement) if self.run_text else self.place.name
+        name = layer_name(self.load_menu, self._proposed_layer_name())
         self._loader(self._result_sql(result), name, kind, database=result.database)
         self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 

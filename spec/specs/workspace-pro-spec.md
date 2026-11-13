@@ -81,8 +81,7 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   entorno» y «Acerca de GeoDuck». El botón de GeoDuck en la barra de QGIS lleva el mismo puntito. Sin sesión,
   la pantalla de inicio muestra el logo grande en gris. Los diálogos usan los colores de la marca (botón
   principal y enlaces en turquesa, advertencias con raya ámbar `#F2A33A`; §10); «Acerca de» lleva además una
-  franja turquesa arriba y «Geo**Duck**». En el paso 3 de «Capas de QGIS → GeoDuck», la barra de cada capa lleva el
-  logo en su punta. **«Un pato al lago»:** al arrastrar tablas de la barra lateral se ve el pato con cuántas
+  franja turquesa arriba y «Geo**Duck**». En la línea de tiempo (§9), el total es el lago con el pato en su punta. **«Un pato al lago»:** al arrastrar tablas de la barra lateral se ve el pato con cuántas
   lleva (globito ámbar); la base donde se soltarán capas de QGIS se pinta de turquesa claro con el pato (la imagen
   de las capas que se arrastran desde QGIS la dibuja QGIS). **El lago, más notorio** (#147, punto 21): al pasar
   por encima, la fila de la base en turquesa suave con borde, «Soltar aquí · main» y el pato con ondas que se
@@ -265,6 +264,14 @@ Dos opciones, en lenguaje simple:
   al reabrir la capa se muestra «no disponible» con su motivo, nunca rota sin explicación.
 - **«Conectada»:** «Lee directamente de DuckDB, sin copiar; lo que edites se guarda en DuckDB» (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
+- **El nombre de la capa arriba del menú** (#148, punto 15; maqueta `cargar-qgis`): con una tabla o un
+  resultado, «Nombre de la capa en QGIS», ya relleno con el de la pestaña (o la tabla); se edita y **Enter =
+  Copia**, o se elige el modo. Con varias geometrías, el nombre es el prefijo («Consumo por zona · geom»). Con
+  varias tablas, «Nombres: los de las tablas · **Cambiar nombres…**», que abre el diálogo único (§9).
+- **«Más opciones…»** (#148, punto 25): «Cargar en QGIS con opciones», con el **nombre de la capa**, Copia o
+  Conectada y «Qué geometrías · N columnas» en una **lista de alto fijo (≈ 6 filas) con desplazamiento**; con
+  más de 8 columnas, «Buscar columna…» y «Todas · Ninguna», y «1 de 10 elegida · desplázate para ver todas».
+  El diálogo nunca pasa del alto de la pantalla: nombre, opciones y botones siempre a la vista.
 
 ## 8. Favoritos (GD-WSP-007)
 - **Sin «Recientes» en la barra lateral** (propietario, 2026-11-06, tras la prueba en Windows): estorbaba y
@@ -275,32 +282,51 @@ Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hast
   objeto ya no existe, se muestra atenuado con su motivo.
 
 ## 9. Capas de QGIS → GeoDuck (GD-WSP-008; qgis-import-spec)
-**Una sola ventana de tres pasos para las tres formas** (propietario, 2026-11-06, tras la prueba en Windows:
-F-131; reemplaza el envío directo de E5). Ctrl+K y «+» → «Añadir capas de QGIS a GeoDuck…»; en QGIS, clic
-derecho sobre capas → GeoDuck › «Enviar a GeoDuck…» (#142). «Reproyectar a…» sigue siendo global para todas las capas.
+**Un solo diálogo para los dos sentidos** (#148, puntos 15, 16, 19 y 25; maquetas `dialogo-unico`,
+`progreso-traza`, `cargar-qgis` y `flujo-completo`; reemplaza la ventana de tres pasos de F-131). Los dos
+sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso → listo**. Ctrl+K y «+» →
+«Añadir capas de QGIS a GeoDuck…»; en QGIS, clic derecho sobre capas → GeoDuck › «Enviar a GeoDuck…» (#142);
+«Importar archivos…» usa el mismo diálogo («N archivos → GeoDuck»). «Reproyectar a…» sigue siendo global.
 
-| Cómo empieza | Paso 1 · Capas | Paso 2 · Dónde |
+| Cómo empieza | Filas | Destino |
 |---|---|---|
 | Arrastrar capas a GeoDuck | Las arrastradas, marcadas | La base donde se soltaron (o la actual) |
 | Clic derecho › «Enviar a GeoDuck…» | Las seleccionadas en QGIS, marcadas | La base actual |
 | «Añadir capas de QGIS a GeoDuck…» | Todas las del proyecto; marcadas las seleccionadas en QGIS | La base actual |
 
-1. **Capas:** agrupadas en Puntos, Líneas, Polígonos y Tablas sin geometría, con el icono de QGIS, entidades y
-   SRC; las que no se pueden (ráster…), en gris con su motivo. Sin capas vectoriales, la ventana lo dice.
-   «N capas elegidas» y «Siguiente ›».
-2. **Dónde:** base y esquema, **siempre cambiables** (solo bases escribibles); «Qué pasará» con cada capa
-   (siempre a la vista); «Más opciones» («Reproyectar a…», «Vista en vez de copia»); una frase de lo que
-   ocurrirá. «‹ Atrás» y «Añadir N capas a GeoDuck».
-3. **Progreso:** una fila por capa (✓ añadida, ⟳ copiándose con su %, ○ en espera, ✕ cancelada o con error).
-   «×» quita una capa en espera o detiene la que se copia; «Cancelar todo»; «Seguir en segundo plano». Al
-   terminar: qué pasó con cada una, «Deshacer», «Abrir» y «Cerrar».
+1. **Arriba, de dónde a dónde:** «Enviar a GeoDuck» y «3 capas de QGIS → GeoDuck» (o «3 tablas de GeoDuck →
+   QGIS»). **«Destino»** es lo único que cambia: hacia GeoDuck, **base y esquema** (siempre cambiables; solo
+   bases escribibles, y «Tabla temporal (solo esta sesión)»); hacia QGIS, **Copia o Conectada**.
+2. **Nombres:** cada fila tiene **un solo nombre, el del destino**, ya relleno; debajo, en gris, «de: predios ·
+   GPKG · 10 000». **Doble clic en el nombre (o F2)** lo cambia; Enter pasa al siguiente; Esc lo deja como
+   estaba. **El origen nunca se renombra.** Si el nombre ya existe en DuckDB: «Ya existe en memory.main ·
+   **Usar «lecturas_2»** (por defecto) · Reemplazar · Añadir filas» (y por qué no, si no se puede). Hacia QGIS
+   solo informa: «Ya hay una capa con este nombre en el proyecto (se puede cargar igual)». Las que no se pueden
+   (ráster…), en gris con su motivo; sin capas vectoriales, el diálogo lo dice. «Solo seleccionadas», «Más
+   opciones» y el SRC, debajo, solo cuando aplican. «Enviar N capas» / «Cargar N capas».
+3. **Progreso: la línea de tiempo vertical** (reemplaza la trazabilidad horizontal; el mismo diseño para
+   importar capas, importar archivos, exportar y cargar en QGIS). Arriba el **total** (título, «memory · main ·
+   2 de 3», el tiempo y **el lago**: el pato nada hasta la punta mientras avanza, #143) y **una fila plegable
+   por capa** («✓ 10 000 filas · 0,1 s», «Copiando… 182 000 de 300 000», «En espera»): la que avanza se abre
+   sola y las terminadas se pliegan (salvo que el usuario las abra). Dentro, los **pasos**: **Origen** (formato,
+   ruta, capa y filtro) → **Lectura** (⚡ directa con DuckDB, «QGIS se salta», o «Lectura con QGIS» y por qué)
+   → **Copia a DuckDB** (filas, barra y «≈ 1 s restante») → **Destino** (memory.main.redes · filas · SRC),
+   cada uno con su tiempo. Círculos con icono: ✓ verde = hecho, girando turquesa = ahora, punteado gris = en
+   espera o saltado; **un paso que falla se pone rojo con la tarjeta de error** (#145). «Cancelar · Esc»
+   mientras corre (y «Seguir en segundo plano»); al terminar, «Listo: 3 capas en DuckDB» con la píldora «⚡ 1
+   directo por DuckDB · 2 por QGIS», **«Deshacer», «Abrir» y «Cerrar»**. Exportar: Consulta → DuckDB escribe
+   el archivo → Archivo, con «Abrir carpeta», «Cargar en QGIS» y «Cerrar». Hacia QGIS: Origen → Copia a QGIS
+   (o Capa conectada) → Capa en QGIS, con «Ver en el mapa» y «Cerrar».
+4. **Atajos que se saltan el paso 2** con lo propuesto: **arrastrar y soltar** sobre una base (QGIS →
+   GeoDuck, con el lago) y **Copia o Conectada directo desde el menú** (GeoDuck → QGIS: un clic, con el aviso
+   «Ver en el mapa»).
 
 - **Cada capa se guarda por separado** (una transacción por capa; reemplaza «todo o nada» de G8, propietario
   2026-11-06): las que terminaron quedan aunque se cancelen o fallen otras; «Deshacer» borra las tablas
   nuevas. Las capas van una tras otra (DuckDB escribe de a una cosa).
 - **En segundo plano:** el pie muestra «⟳ Añadiendo 2 de 4 a GeoDuck · redes_bt 62 %»; un clic (o Ctrl+K ›
-  «Ver progreso: capas de QGIS → GeoDuck») vuelve al paso 3. Si se intenta añadir más mientras tanto, se
-  muestra el paso 3 en curso: «Termina o cancela estas capas para añadir más». Al terminar con la ventana
+  «Ver progreso: capas de QGIS → GeoDuck») vuelve a la línea de tiempo. Si se intenta añadir más mientras tanto, se
+  muestra el progreso en curso: «Termina o cancela estas capas para añadir más». Al terminar con la ventana
   cerrada, un aviso «N capas de QGIS añadidas a GeoDuck · prueba · Abrir · Deshacer · ×».
 - **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
   «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.

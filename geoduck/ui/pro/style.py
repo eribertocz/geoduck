@@ -153,6 +153,21 @@ def stylesheet(c: Colors) -> str:
 {r} QLineEdit[pro="filter-box"][invalid="true"], {r} QLineEdit[pro="where"][invalid="true"] {{
     border-color: {c.error}; background: {c.error_soft}; }}
 {r} QLineEdit[pro="where"] {{ font-family: "{mono}"; }}
+{r} QFrame[pro="name-row"] {{ border: 0; border-bottom: 1px solid {c.line}; background: transparent; }}
+{r} QFrame[pro="name-row"]:focus {{ background: {c.side}; }}
+{r} QFrame[pro="name-note"] {{ border-radius: {m.radius}px; background: {c.segment}; }}
+{r} QFrame[pro="name-note"][tone="conflict"] {{ background: {c.chip_bg}; border: 1px solid {c.warn}; }}
+{r} QFrame[pro="name-note"][tone="error"] {{ background: {c.error_soft}; }}
+{r} QPushButton[pro="name-pill"] {{ border: 1px solid {c.border}; border-radius: {m.pill}px;
+    padding: 2px 10px; background: {c.bg}; color: {c.text}; }}
+{r} QPushButton[pro="name-pill"]:checked {{ border: 1.5px solid {c.accent}; color: {c.accent};
+    background: {c.accent_soft}; }}
+{r} QFrame[pro="route-chip"] {{ background: {c.chip_bg}; border: 1px solid {c.chip_border};
+    border-radius: {m.pill}px; }}
+{r} QFrame[pro="timeline-row"] {{ background: {c.bg}; border: 1px solid {c.border};
+    border-radius: {m.radius}px; }}
+{r} QLabel[pro="timeline-pill"] {{ background: {c.accent_soft}; color: {c.accent}; border-radius: {m.pill}px;
+    padding: 4px 12px; font-weight: 600; }}
 {r} QLabel[pro="drop-guide"] {{ color: {c.accent}; background: {c.accent_soft}; border: 1px dashed {c.accent};
     border-radius: {m.radius}px; padding: 6px 10px; }}
 {r} QPushButton[pro="icon"][drop="true"] {{ background: {c.accent_soft}; border: 1.5px solid {c.accent}; }}

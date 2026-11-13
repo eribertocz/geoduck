@@ -77,8 +77,9 @@ acción explica que hay que iniciar una.
    ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
    ese clic, el camino 3. El resumen dice «leído directo por DuckDB». **El filtro de la capa** va como `WHERE`
    y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
-   esa capa se copia por el camino 3, sin error. **Trazabilidad** (paso 3 y «Exportar ▾»): origen (ícono por
-   tipo) → QGIS (capas) → DuckDB; el puente turquesa «⚡ DuckDB» salta QGIS; el diagrama es también el avance.
+   esa capa se copia por el camino 3, sin error. **Trazabilidad** (#148: la línea de tiempo vertical de
+   workspace-pro-spec §9, también en «Exportar ▾»): origen y filtro → lectura («⚡ Lectura directa con
+   DuckDB · QGIS se salta», o «Lectura con QGIS» y por qué) → copia → destino, cada paso con su tiempo.
    **También sin `spatial` (#140):** una capa que viene de un **Parquet/GeoParquet, Arrow, CSV o JSON** la lee
    DuckDB con su lector propio (`read_parquet`, `read_csv`, `read_json`, PyArrow para Arrow), sin `spatial` y
    con el filtro como `WHERE`. La geometría y el SRC salen de la capa de QGIS (sin `pyarrow.parquet`, que en

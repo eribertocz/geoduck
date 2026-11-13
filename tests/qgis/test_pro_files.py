@@ -103,9 +103,10 @@ def test_import_files_lists_them_and_duckdb_copies_them(coordinator, data):
     flow = ws.to_duckdb
     window = flow.window
     assert wait_scanned(ws)
-    assert window.title.text().startswith(tr("Files → GeoDuck"))
+    assert window.title.text() == tr("Import to GeoDuck")
+    assert window.source_chip.text.text() == tr("{0} files").format(3)
     assert len(window.chosen()) == 3 and not window.note.isVisible()
-    detail = window.rows["file:0"].text(1)
+    detail = window.rows["file:0"].origin.text()
     assert "Parquet" in detail and tr("{0} rows").format(9) in detail
     dialog = to_step_two(ws)
     assert not dialog.reproject_row.isVisible()  # DuckDB lo copia tal cual
@@ -266,7 +267,7 @@ def test_with_the_click_spatial_loads_and_the_layers_appear(coordinator, tmp_pat
     window.spatial_button.click()  # el permiso del usuario
     assert wait_for(lambda: not window.note.isVisible() and "file:0" in window.rows, TIMEOUT)
     assert wait_for(lambda: ws.to_duckdb._candidates[0].problem is None, TIMEOUT)
-    assert window.rows["file:0"].text(0) == "pozos"
+    assert window.rows["file:0"].name == "pozos"
     to_step_two(ws)
     add_all(ws, coordinator)
     assert has_tables(coordinator, {"pozos"})
@@ -321,8 +322,7 @@ def test_a_layer_from_a_file_offers_to_speed_up_and_never_blocks(coordinator, tm
     assert window.spatial_button.text() == tr("Load and speed up")
     dialog = to_step_two(ws)  # sin el clic: QGIS la copia, como siempre
     assert flow._candidates[0].path_for(False, False, dialog.duckdb_reads) == PATH_QGIS
-    ws.to_duckdb._show_choose_again()
-    window.spatial_button.click()
+    window.spatial_button.click()  # en el mismo diálogo (#148)
     assert wait_for(lambda: flow._spatial_loaded and not window.note.isVisible(), TIMEOUT)
     dialog = to_step_two(ws)
     assert dialog.duckdb_reads and path_label(PATH_GDAL) in dialog.summary.text()
@@ -361,8 +361,8 @@ def test_a_filter_that_duckdb_understands_is_read_directly_with_the_same_rows(co
     ws = workspace(coordinator)
     flow = add_with_spatial(ws, coordinator, layer)
     assert flow.states[0]["state"] == "done" and not flow.states[0].get("fallback")
-    assert flow.traces[0].bridge and flow.states[0]["checked"]
-    assert tr("same rows as in QGIS") in flow.details[0].text()
+    assert flow._route(0)[0] and flow.states[0]["checked"]
+    assert tr("same rows as in QGIS") in flow._steps(0)[1].detail
     assert read_one(coordinator, "SELECT count(*) FROM memory.main.filtrada")[0] == 10
 
 
@@ -376,8 +376,8 @@ def test_a_filter_that_gives_other_rows_in_duckdb_falls_back_to_qgis(coordinator
     ws = workspace(coordinator)
     flow = add_with_spatial(ws, coordinator, layer)
     assert flow.states[0]["state"] == "done" and flow.states[0]["fallback"]
-    assert not flow.traces[0].bridge
-    assert tr("DuckDB does not understand its filter") in flow.whys[0].text()
+    assert not flow._route(0)[0]
+    assert tr("DuckDB does not understand its filter, so QGIS applies it") in flow._steps(0)[1].detail
     assert read_one(coordinator, "SELECT count(*) FROM memory.main.rara")[0] == 50
 
 
@@ -402,5 +402,5 @@ def test_a_filtered_geoparquet_layer_is_copied_by_duckdb_without_spatial(coordin
     assert candidate.path_for(False, False, dialog.duckdb_reads) == PATH_GDAL  # sin `spatial`
     add_all(ws, coordinator)
     assert flow.states[0]["state"] == "done" and not flow.states[0].get("fallback")
-    assert flow.traces[0].bridge and flow.states[0]["checked"]
+    assert flow._route(0)[0] and flow.states[0]["checked"]
     assert read_one(coordinator, "SELECT count(*) FROM memory.main.rios")[0] == 3

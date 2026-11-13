@@ -24,22 +24,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from qgis.core import QgsIconUtils, QgsProject
-from qgis.PyQt.QtCore import QSize, Qt, QTimer
-from qgis.PyQt.QtWidgets import (
-    QDialog,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QScrollArea,
-    QStackedWidget,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtWidgets import QComboBox, QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from geoduck.app.events import (
     AppEvent,
@@ -58,6 +44,7 @@ from geoduck.domain.importing import (
     PATH_CONNECTED,
     PATH_GDAL,
     PATH_QGIS,
+    Conflict,
     ImportedTable,
     SendCandidate,
     SendRequest,
@@ -65,18 +52,27 @@ from geoduck.domain.importing import (
     unique_name,
 )
 from geoduck.domain.session import SessionState
+from geoduck.domain.sql_errors import explain
 from geoduck.ui.i18n import tr
-from geoduck.ui.pro import style
-from geoduck.ui.pro.trace import TraceView
+from geoduck.ui.pro.error_card import ErrorCardView
+from geoduck.ui.pro.timeline import SKIPPED, Step, seconds_text  # los demás estados se escriben igual
+from geoduck.ui.pro.transfer import APPEND, CONFLICT, ERROR, FORM, RENAME, REPLACE, NameRow, TransferWindow
 from geoduck.ui.pro.widgets import button, label, lines_html
-from geoduck.ui.send_dialog import SendDialog
-from geoduck.ui.theme import palette_for
+from geoduck.ui.send_dialog import TEMPORARY, SendDialog
+
+#: Ícono de cada origen en la línea de tiempo.
+SOURCE_ICONS = {
+    "file": "file",
+    "database": "database",
+    "web": "globe",
+    "memory": "memory",
+    "duckdb": "database",
+}
 
 #: Motivo de un archivo de GDAL sin `spatial` cargada (`geoduck.engine.files.NEEDS_SPATIAL`).
 NEEDS_SPATIAL = "needs-spatial"
 
-CHOOSE, WHERE, PROGRESS = 0, 1, 2
-#: Estado de cada capa en el paso 3.
+#: Estado de cada capa (y de cada paso de su línea de tiempo: se escriben igual).
 WAITING, RUNNING, DONE, CANCELLED, FAILED = "waiting", "running", "done", "cancelled", "failed"
 #: Segundos que se ve el aviso final cuando la ventana está cerrada.
 DONE_SECONDS = 15
@@ -113,69 +109,26 @@ def group_titles() -> list[str]:
     ]
 
 
-class AddLayersWindow(QDialog):
-    """La ventana de tres pasos. La maneja `AddLayers` (que envía y recibe los eventos)."""
+class AddLayersWindow(TransferWindow):
+    """El diálogo único hacia GeoDuck (#148): de dónde → GeoDuck, destino (base y esquema), una fila por capa
+    con su nombre en el destino y, al enviar, la línea de tiempo. Lo maneja `AddLayers`."""
 
     def __init__(self, flow: AddLayers, parent: QWidget | None) -> None:
         super().__init__(parent)
         self.flow = flow
-        self.setModal(False)
-        self.colors = style.apply(self)
-        self.setWindowTitle(tr("GeoDuck"))
-        box = QVBoxLayout(self)
-        box.setContentsMargins(22, 20, 22, 18)
-        box.setSpacing(10)
-        self.title = label("", "title")
-        box.addWidget(self.title)
-        self.subtitle = label("", "muted")
-        self.subtitle.setWordWrap(True)
-        box.addWidget(self.subtitle)
-        self.stack = QStackedWidget()
-        box.addWidget(self.stack, 1)
-        self.stack.addWidget(self._build_choose())
-        self.where_page = QWidget()
-        self.where_box = QVBoxLayout(self.where_page)
-        self.where_box.setContentsMargins(0, 0, 0, 0)
-        self.stack.addWidget(self.where_page)
-        self.progress_page = QWidget()
-        self.stack.addWidget(self.progress_page)
-        self.footer = QHBoxLayout()
-        box.addLayout(self.footer)
-        self.send_dialog: SendDialog | None = None
-        self.resize(640, 520)
-        self.setMinimumWidth(560)
-
-    # -- paso 1 ---------------------------------------------------------------------------------------
-
-    def _build_choose(self) -> QWidget:
-        page = QWidget()
-        column = QVBoxLayout(page)
-        column.setContentsMargins(0, 0, 0, 0)
-        self.tree = QTreeWidget()
-        self.tree.setHeaderHidden(True)
-        self.tree.setColumnCount(2)
-        self.tree.setRootIsDecorated(False)
-        self.tree.setIconSize(QSize(18, 18))
-        self.tree.setAccessibleName(tr("QGIS layers"))
-        header = self.tree.header()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.itemChanged.connect(lambda *_: self.flow.choice_changed())
-        column.addWidget(self.tree, 1)
-        self.empty = label(
-            tr("Your QGIS project has no vector layers. Add one in QGIS and come back here."), "muted"
-        )
-        self.empty.setWordWrap(True)
-        self.empty.setVisible(False)
-        column.addWidget(self.empty)
-        # Archivos → DuckDB (§10): `spatial`, solo con el permiso del usuario (spatial-spec §10, ADR-0011)
+        self.database = QComboBox()
+        self.database.setAccessibleName(tr("Destination database"))
+        self.schema = QComboBox()
+        self.schema.setAccessibleName(tr("Destination schema"))
+        self.destination.addWidget(self.database)
+        self.destination.addWidget(self.schema)
+        self.database.currentIndexChanged.connect(lambda _i: flow.database_changed())
+        self.schema.currentIndexChanged.connect(lambda _i: flow.schema_changed())
+        # `spatial`, solo con el permiso del usuario (spatial-spec §10, ADR-0011)
         self.note = QFrame()
-        self.note.setObjectName("geoduckNote")
-        brand = palette_for(self)
-        self.note.setStyleSheet(
-            f"#geoduckNote {{ background: {brand.note_bg}; border-left: 3px solid {brand.amber}; }}"
-        )
+        self.note.setProperty("pro", "name-note")
+        self.note.setProperty("tone", "conflict")
+        self.note.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         note_row = QHBoxLayout(self.note)
         note_row.setContentsMargins(10, 8, 10, 8)
         self.note_text = label("", "muted")
@@ -185,112 +138,62 @@ class AddLayersWindow(QDialog):
         self.spatial_button.clicked.connect(lambda _c=False: self.flow.activate_spatial())
         note_row.addWidget(self.spatial_button, 0, Qt.AlignmentFlag.AlignVCenter)
         self.note.setVisible(False)
-        column.addWidget(self.note)
-        return page
+        self.extra.addWidget(self.note)
+        self.options = QVBoxLayout()
+        self.options.setSpacing(4)
+        self.extra.addLayout(self.options)
+        self.rows: dict[str, NameRow] = {}
+        self.send_dialog: SendDialog | None = None
+        self.on_close = flow.window_closed
+        self.on_escape = flow.escape
 
     def fill(self, candidates: list[SendCandidate], checked: set[str]) -> None:
-        self.tree.blockSignals(True)
-        self.tree.clear()
-        self.rows: dict[str, QTreeWidgetItem] = {}
-        titles = group_titles()
-        for group in range(6):
-            members = [c for c in candidates if group_of(c) == group]
-            if not members:
-                continue
-            head = QTreeWidgetItem([titles[group], ""])
-            font = head.font(0)
-            font.setBold(True)
-            head.setFont(0, font)
-            head.setFlags(Qt.ItemFlag.ItemIsEnabled)
-            self.tree.addTopLevelItem(head)
-            for c in members:
-                item = QTreeWidgetItem([c.name, self._detail(c)])
-                if c.file is not None:
-                    item.setToolTip(0, c.file.path)
-                layer = QgsProject.instance().mapLayer(c.layer_id)
-                if layer is not None:
-                    item.setIcon(0, QgsIconUtils.iconForLayer(layer))
-                item.setForeground(1, self.palette().placeholderText())
-                if c.problem is None:
-                    item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
-                    state = Qt.CheckState.Checked if c.layer_id in checked else Qt.CheckState.Unchecked
-                    item.setCheckState(0, state)
-                else:
-                    item.setFlags(Qt.ItemFlag.NoItemFlags)
-                item.setData(0, Qt.ItemDataRole.UserRole, c.layer_id)
-                self.tree.addTopLevelItem(item)
-                self.rows[c.layer_id] = item
-        for item in self.rows.values():  # con las señales bloqueadas: cambiar la ayuda emite itemChanged
-            item.setToolTip(1, item.text(1))
-        self.tree.blockSignals(False)
-        header = self.tree.header()
-        files = any(c.file is not None for c in candidates)
-        # Archivos: el nombre entero y el detalle, que es largo, se recorta (su texto completo, en la ayuda)
-        header.setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents if files else QHeaderView.ResizeMode.Stretch
-        )
-        header.setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch if files else QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.tree.setVisible(bool(candidates))
+        """Una fila por capa (las que no se pueden, en gris con su motivo), en el orden de siempre: puntos,
+        líneas, polígonos, tablas sin geometría, las que esperan `spatial` y las que no se pueden."""
+        self.names.clear()
+        self.rows = {}
+        for c in sorted(candidates, key=group_of):
+            row = NameRow(
+                self.colors,
+                c.table,
+                self._origin(c),
+                enabled=c.problem is None,
+                checked=c.layer_id in checked,
+            )
+            if c.file is not None:
+                row.origin.setToolTip(c.file.path)
+            row.layer_id = c.layer_id  # type: ignore[attr-defined]
+            self.names.add(row)
+            self.rows[c.layer_id] = row
+        self.names.setVisible(bool(candidates))
         self.empty.setVisible(not any(c.problem is None for c in candidates))
 
     @staticmethod
-    def _detail(c: SendCandidate) -> str:
-        """«12 000 entidades · EPSG:32719»; para un archivo, «⚡ Parquet · 2 400 000 filas · EPSG:4326»."""
+    def _origin(c: SendCandidate) -> str:
+        """«de: predios · GPKG · 10 000»; para un archivo, «lecturas.parquet · Parquet · 2 400 000 filas»; las
+        que no se pueden, con su motivo."""
         if c.file is None:
-            detail = c.problem if c.problem else tr("{0} features").format(_count(max(c.features, 0)))
-            return detail + (f" · {c.crs_label}" if c.problem is None and c.crs_label else "")
+            parts = [c.name, c.source_format or c.source]
+            if c.problem:
+                parts.append(c.problem)
+            elif c.features >= 0:
+                parts.append(_count(c.features))
+            if c.filtered and not c.problem:
+                parts.append(tr("with filter"))
+            return " · ".join(p for p in parts if p)
         if c.problem and c.file.file_format.key == "other":
-            return c.problem  # «Formato no compatible: ábrelo primero en QGIS…»
-        parts = [c.source]
+            return c.problem
+        parts = [c.name, c.source]
         if c.problem and c.problem != NEEDS_SPATIAL:
             parts.append(c.problem)
         else:
             parts.append(
                 tr("{0} rows").format(_count(c.features)) if c.features >= 0 else size_label(c.file.size)
             )
-            if c.crs_label:
-                parts.append(c.crs_label)
         return " · ".join(p for p in parts if p)
 
     def chosen(self) -> list[str]:
-        return [
-            layer_id
-            for layer_id, item in self.rows.items()
-            if item.flags() & Qt.ItemFlag.ItemIsUserCheckable and item.checkState(0) == Qt.CheckState.Checked
-        ]
-
-    # -- pies y títulos -----------------------------------------------------------------------------------
-
-    def set_step(self, step: int, subtitle: str) -> None:
-        self.stack.setCurrentIndex(step)
-        head = tr("Files → GeoDuck") if self.flow.files else tr("QGIS layers → GeoDuck")
-        self.title.setText(head + f"  ·  {step + 1} " + tr("of") + " 3")
-        self.subtitle.setText(subtitle)
-
-    def set_footer(self, left: list[QWidget], right: list[QWidget]) -> None:
-        while self.footer.count():
-            item = self.footer.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.hide()
-                widget.setParent(None)
-                widget.deleteLater()
-        for widget in left:
-            self.footer.addWidget(widget)
-        self.footer.addStretch(1)
-        for widget in right:
-            self.footer.addWidget(widget)
-
-    def closeEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
-        """Cerrar con la X de la ventana: en el paso 3 en curso es «Seguir en segundo plano»."""
-        self.flow.window_closed()
-        super().closeEvent(event)
-
-    def reject(self) -> None:  # Esc
-        self.flow.window_closed()
-        super().reject()
+        return [layer_id for layer_id, row in self.rows.items() if row.included]
 
 
 class AddLayers:
@@ -351,7 +254,8 @@ class AddLayers:
         window = self._window()
         window.fill(self._candidates, marked)
         window.note.setVisible(False)
-        self._show_choose()
+        self._build_model(marked)
+        self._show_form()
         window.show()
         window.raise_()
         window.activateWindow()
@@ -378,7 +282,8 @@ class AddLayers:
         window.empty.setText(tr("Reading the files…"))
         window.empty.setVisible(True)
         window.note.setVisible(False)
-        self._show_choose()
+        self._build_model(set())
+        self._show_form()
         window.show()
         window.raise_()
         window.activateWindow()
@@ -408,7 +313,9 @@ class AddLayers:
             taken.append(table)
             candidates.append(candidate_for(item, i, table))
         self._candidates = candidates
-        window.fill(candidates, {c.layer_id for c in candidates if c.problem is None})
+        marked = {c.layer_id for c in candidates if c.problem is None}
+        window.fill(candidates, marked)
+        self._build_model(marked)
         window.empty.setText(tr("None of these files can be read."))
         window.empty.setVisible(not any(c.problem is None for c in candidates))
         if any(c.problem == NEEDS_SPATIAL for c in candidates):
@@ -499,99 +406,225 @@ class AddLayers:
             self.window.activateWindow()
 
     def window_closed(self) -> None:
-        if not self.running:
-            self._drop_send_dialog()
+        """Cerrar con la X: en curso, sigue en segundo plano (el pie la trae de vuelta)."""
 
-    # -- paso 1 -----------------------------------------------------------------------------------------
+    # -- destino y nombres (#148, puntos 15 y 16) ----------------------------------------------------------
 
-    def _show_choose(self) -> None:
-        window = self._window()
-        window.set_step(
-            CHOOSE,
-            tr("Choose what to add to GeoDuck. Each layer or sheet becomes a table.")
-            if self.files
-            else tr("Choose the layers to add to GeoDuck. The ones selected in QGIS are already checked."),
-        )
-        self.count_label = label("", "muted")
-        cancel = button(tr("Cancel"))
-        cancel.clicked.connect(window.reject)
-        self.next_button = button(tr("Next") + "  ›", "primary")
-        self.next_button.setDefault(True)
-        self.next_button.clicked.connect(self._show_where)
-        window.set_footer([self.count_label], [cancel, self.next_button])
-        self.choice_changed()
-
-    def choice_changed(self) -> None:
-        if self.window is None or self.window.stack.currentIndex() != CHOOSE:
-            return
-        count = len(self.window.chosen())
-        self.count_label.setText(
-            tr("1 layer chosen") if count == 1 else tr("{0} layers chosen").format(count)
-        )
-        self.next_button.setEnabled(count > 0)
-
-    # -- paso 2 -----------------------------------------------------------------------------------------
-
-    def _show_where(self) -> None:
-        window = self._window()
-        chosen = set(window.chosen())
-        if not chosen:
-            return
+    def _build_model(self, marked: set[str]) -> None:
+        """Las reglas de siempre (qué se envía, nombres válidos, SRC, selección, reproyectar) son las del
+        diálogo de G8, sin mostrarlo: la ventana es su vista. Sus opciones («Solo seleccionadas», «Más
+        opciones») pasan a la ventana."""
         self._drop_send_dialog()
-        candidates = [c for c in self._candidates if c.layer_id in chosen]
+        window = self._window()
         coordinator = self._coordinator
         dialog = SendDialog(
-            candidates,
+            self._candidates,
             coordinator.catalog,
             coordinator.read_import_target,
             window,
-            checked=chosen,
+            checked=marked,
             destination=self._destination,
             pro=True,
         )
-        dialog.tidy_columns = False
+        dialog.hide()
         dialog.duckdb_reads = self._spatial_loaded  # §5.4: las capas de archivo, por DuckDB
-        dialog.refresh()
-        dialog.tree.setColumnHidden(2, False)
-        dialog.setWindowFlags(Qt.WindowType.Widget)
-        dialog.layout().setContentsMargins(0, 0, 0, 0)
-        for widget in (dialog.send_button, dialog.cancel_button, dialog.open_after):
-            widget.hide()
+        dialog.on_target = self.sync
         window.send_dialog = dialog
-        window.where_box.addWidget(dialog)
-        window.set_step(WHERE, tr("Choose the database and schema where to save them."))
-        back = button("‹  " + tr("Back"))
-        back.clicked.connect(self._show_choose_again)
+        for widget in (
+            dialog.only_selected,
+            dialog.more_button,
+            dialog.as_view,
+            dialog.reproject_row,
+            dialog.without_crs,
+            dialog.crs_note,
+        ):
+            if widget is not None:
+                window.options.addWidget(widget, 0, Qt.AlignmentFlag.AlignLeft)
+        for row in window.rows.values():
+            row.changed.connect(self.sync)
+        self._fill_destinations()
+        self.sync()
+
+    def _fill_destinations(self) -> None:
+        """Base y esquema (#148): las bases en escritura y, al final, «Tabla temporal (solo esta sesión)»."""
+        window = self._window()
+        dialog = window.send_dialog
+        if dialog is None:
+            return
+        databases: list[str] = []
+        for database, _schema in dialog.destinations:
+            if database not in databases:
+                databases.append(database)
+        current = dialog.destination_value
+        window.database.blockSignals(True)
+        window.database.clear()
+        for database in databases:
+            text = tr("Temporary table (this session only)") if (database, "main") == TEMPORARY else database
+            window.database.addItem(text, database)
+        window.database.setCurrentIndex(max(0, databases.index(current[0]) if current[0] in databases else 0))
+        window.database.blockSignals(False)
+        self._fill_schemas(current[1])
+
+    def _fill_schemas(self, wanted: str | None = None) -> None:
+        window = self._window()
+        dialog = window.send_dialog
+        if dialog is None:
+            return
+        database = window.database.currentData()
+        schemas = [s for d, s in dialog.destinations if d == database]
+        window.schema.blockSignals(True)
+        window.schema.clear()
+        for schema in schemas:
+            window.schema.addItem(schema)
+        if wanted in schemas:
+            window.schema.setCurrentIndex(schemas.index(wanted))
+        elif "main" in schemas:
+            window.schema.setCurrentIndex(schemas.index("main"))
+        window.schema.blockSignals(False)
+        window.schema.setVisible((database, "main") != TEMPORARY)
+
+    def database_changed(self) -> None:
+        self._fill_schemas()
+        self.schema_changed()
+
+    def schema_changed(self) -> None:
+        window = self._window()
+        dialog = window.send_dialog
+        if dialog is None:
+            return
+        wanted = (window.database.currentData(), window.schema.currentText() or "main")
+        if wanted in dialog.destinations:
+            dialog.destination.setCurrentIndex(dialog.destinations.index(wanted))
+        self.sync()
+
+    def _effective_names(self) -> list[str]:
+        """El nombre con que se crea cada tabla: el de la fila, o «nombre_2» si ya existe y se eligió «Usar
+        «nombre_2»» (lo propuesto, #148, punto 16)."""
+        window = self._window()
+        dialog = window.send_dialog
+        target = dialog._target if dialog is not None else None
+        taken = [*target.tables, *target.views] if target is not None else []
+        names = []
+        for c in self._candidates:
+            row = window.rows.get(c.layer_id)
+            name = row.name if row is not None else c.table
+            renamed = row is not None and row.included and row.choice == RENAME
+            if renamed and target is not None and name.lower() in target.tables:
+                name = unique_name(name, taken)
+            taken.append(name)
+            names.append(name)
+        return names
+
+    def sync(self) -> None:
+        """Lleva lo elegido en la ventana a las reglas y trae de vuelta qué pasa con cada fila."""
+        window = self.window
+        dialog = window.send_dialog if window is not None else None
+        if window is None or dialog is None or self.running:
+            return
+        conflict = {REPLACE: Conflict.REPLACE, APPEND: Conflict.APPEND, RENAME: Conflict.SKIP}
+        dialog.tree.blockSignals(True)
+        for i, (c, name) in enumerate(zip(self._candidates, self._effective_names(), strict=True)):
+            row = window.rows.get(c.layer_id)
+            if row is None:
+                continue
+            state = Qt.CheckState.Checked if row.included else Qt.CheckState.Unchecked
+            dialog.items[i].setCheckState(0, state)
+            dialog.names[i].blockSignals(True)
+            dialog.names[i].setText(name)
+            dialog.names[i].blockSignals(False)
+            box = dialog.conflicts[i]
+            box.blockSignals(True)
+            box.setCurrentIndex(max(0, box.findData(conflict[row.choice])))
+            box.blockSignals(False)
+        dialog.tree.blockSignals(False)
+        dialog.refresh()
+        self._show_notes()
+        self.choice_changed()
+
+    def _show_notes(self) -> None:
+        """Bajo cada fila: «Ya existe en memory.main · Usar «lecturas_2» · Reemplazar · Añadir filas», o por
+        qué no se puede."""
+        window = self._window()
+        dialog = window.send_dialog
+        if dialog is None:
+            return
+        target = dialog._target
+        database, schema = dialog.destination_value
+        where = tr("this session (temporary)") if dialog.temporary else f"{database}.{schema}"
+        taken = [*target.tables, *target.views] if target is not None else []
+        for i, c in enumerate(self._candidates):
+            row = window.rows.get(c.layer_id)
+            if row is None or c.problem is not None:
+                continue
+            if not row.included:
+                row.set_note(None)
+                continue
+            state = dialog.row_state(i)
+            exists = target is not None and row.name.lower() in target.tables
+            if exists:
+                text = tr("Already exists in {0}").format(where)
+                if state.kind == "blocked":
+                    text += " · " + state.text
+                row.set_note(
+                    CONFLICT,
+                    text,
+                    {
+                        RENAME: tr("Use «{0}»").format(unique_name(row.name, taken)),
+                        REPLACE: tr("Replace"),
+                        APPEND: tr("Add rows"),
+                    },
+                )
+            elif state.kind == "blocked":
+                row.set_note(ERROR, state.text)
+            else:
+                row.set_note(None)
+
+    def _show_form(self) -> None:
+        window = self._window()
+        self._final_shown = None
+        count = sum(1 for c in self._candidates if c.problem is None)
+        if self.files:
+            source = (
+                "file",
+                tr("1 file") if len(self._paths) == 1 else tr("{0} files").format(len(self._paths)),
+            )
+            title = tr("Import to GeoDuck")
+        else:
+            source = ("layers", tr("1 QGIS layer") if count == 1 else tr("{0} QGIS layers").format(count))
+            title = tr("Send to GeoDuck")
+        window.set_route(title, source, ("logo", tr("GeoDuck")))
+        window.show_form()
+        self.count_label = label("", "muted")
         cancel = button(tr("Cancel"))
         cancel.clicked.connect(window.reject)
         self.add_button = button("", "primary")
         self.add_button.setDefault(True)
         self.add_button.clicked.connect(self.start)
-        window.set_footer([back], [cancel, self.add_button])
-        self._sync_timer = QTimer(window)
-        self._sync_timer.setInterval(150)
-        self._sync_timer.timeout.connect(self._sync_add)
-        self._sync_timer.start()
-        self._sync_add()
+        self.next_button = self.add_button  # compatibilidad: «Siguiente» ya no existe (un solo paso)
+        window.set_footer([self.count_label], [cancel, self.add_button])
+        window.fit_screen()
+        self.choice_changed()
 
-    def _sync_add(self) -> None:
-        dialog = self.window.send_dialog if self.window is not None else None
-        if dialog is None:
+    def choice_changed(self) -> None:
+        window = self.window
+        if window is None or window.stack.currentIndex() != FORM or not hasattr(self, "add_button"):
             return
-        count = len(dialog.request().items) if dialog.target_ready else 0
-        text = tr("Add 1 layer to GeoDuck") if count == 1 else tr("Add {0} layers to GeoDuck").format(count)
-        self.add_button.setText(text)
-        self.add_button.setEnabled(dialog.send_button.isEnabled() and count > 0)
-
-    def _show_choose_again(self) -> None:
-        self._drop_send_dialog()
-        self._show_choose()
+        dialog = window.send_dialog
+        count = len(dialog.request().items) if dialog is not None and dialog.target_ready else 0
+        chosen = len(window.chosen())
+        self.count_label.setText(
+            tr("1 layer chosen") if chosen == 1 else tr("{0} layers chosen").format(chosen)
+        )
+        verb = tr("Import") if self.files else tr("Send")
+        self.add_button.setText(
+            verb + " " + (tr("1 layer") if count == 1 else tr("{0} layers").format(count))
+        )
+        self.add_button.setEnabled(dialog is not None and dialog.send_button.isEnabled() and count > 0)
 
     def _drop_send_dialog(self) -> None:
-        if getattr(self, "_sync_timer", None) is not None:
-            self._sync_timer.stop()
         window = self.window
         if window is not None and window.send_dialog is not None:
+            window.send_dialog.on_target = None
             window.send_dialog.hide()
             window.send_dialog.setParent(None)
             window.send_dialog.deleteLater()
@@ -604,6 +637,7 @@ class AddLayers:
         dialog = window.send_dialog
         if dialog is None or not self.add_button.isEnabled():
             return
+        self.sync()
         request = dialog.request()
         only = request.only_selected
         by_id = {c.layer_id: c for c in self._candidates}
@@ -625,7 +659,7 @@ class AddLayers:
         self.tables = []
         self._stop_all = False
         self.running = True
-        self._sync_timer.stop()
+        self.started = time.monotonic()
         self._build_progress()
         self._host.show_progress(self.progress_text(), 0)
         QTimer.singleShot(0, self._next)
@@ -702,7 +736,7 @@ class AddLayers:
                 needs
                 and not event.loaded
                 and self.window is not None
-                and self.window.stack.currentIndex() == 0
+                and self.window.stack.currentIndex() == FORM
             ):
                 self._show_speed_note()
             return True
@@ -711,6 +745,9 @@ class AddLayers:
             self._spatial_installed = self._spatial_loaded = True
             if self.window is not None:
                 self.window.note.setVisible(False)
+                if self.window.send_dialog is not None:  # desde ya, las capas de archivo las copia DuckDB
+                    self.window.send_dialog.duckdb_reads = True
+                    self.sync()
             self._host.notify(tr("«spatial» is loaded: DuckDB copies the layers that come from a file."))
             return True
         if not self.files and isinstance(event, SpatialActivationFailed) and self._activating:
@@ -819,6 +856,9 @@ class AddLayers:
             return
         self.running = False
         self._current = None
+        self.seconds = time.monotonic() - getattr(self, "started", time.monotonic())
+        if getattr(self, "_clock", None) is not None:
+            self._clock.stop()
         self._host.hide_progress()
         self._refresh()
         text = lines_html(self.done_lines())
@@ -884,97 +924,41 @@ class AddLayers:
             self._undoing = False
             self._host.notify(tr("It could not be undone:") + f" {exc.message}")
 
-    # -- paso 3: la vista ---------------------------------------------------------------------------------
+    # -- progreso: la línea de tiempo (#148, punto 19) ------------------------------------------------------
 
     def _build_progress(self) -> None:
-        """Paso 3: cada capa con su trazabilidad (workspace-pro-spec §9): a la izquierda el nombre, por qué va
-        por ese camino y su estado; a la derecha el diagrama, que es también el avance; «×» al final."""
+        """El mismo diálogo pasa a la línea de tiempo: el total arriba y una fila plegable por capa."""
         window = self._window()
-        self._drop_send_dialog()
-        old = window.progress_page.layout()
-        if old is not None:
-            QWidget().setLayout(old)  # suelta la grilla anterior
-        column = QVBoxLayout(window.progress_page)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(0)
-        self.summary = label("", "muted")
-        column.addWidget(self.summary)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        inner = QWidget()
-        grid = QGridLayout(inner)
-        grid.setContentsMargins(0, 4, 0, 0)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(2)
+        window.show_progress()
+        view = window.timeline
+        view.clear()
         assert self.request is not None
-        by_id = {c.layer_id: c for c in self._candidates}
-        self.names: list[QLabel] = []
-        self.whys: list[QLabel] = []
-        self.details: list[QLabel] = []
-        self.traces: list[TraceView] = []
-        self.removes: list[QWidget] = []
-        dest = self.request.database if not self.request.temporary else "temp"
-        for i, item in enumerate(self.request.items):
-            self._progress_row(grid, i, item, by_id[item.layer_id], dest)
-        grid.setColumnStretch(0, 2)
-        grid.setColumnStretch(1, 3)
-        grid.setRowStretch(len(self.request.items), 1)
-        scroll.setWidget(inner)
-        scroll.viewport().setAutoFillBackground(False)  # el fondo de la ventana, no el gris del área
-        inner.setAutoFillBackground(False)
-        column.addWidget(scroll, 1)
-        self.background = button(tr("Continue in the background"))
+        self.timeline_rows = [
+            view.add_row(self.states[i]["name"], on_remove=lambda _c=False, index=i: self.remove(index))
+            for i in range(len(self.request.items))
+        ]
+        stop = button(tr("Cancel") + " · Esc")
+        stop.clicked.connect(self.cancel_all)
+        self.cancel_all_button = stop
+        self.background = button(tr("Continue in the background"), "ghost")
         self.background.clicked.connect(window.hide)
-        self.cancel_all_button = button(tr("Cancel all"))
-        self.cancel_all_button.clicked.connect(self.cancel_all)
-        window.set_footer([self.background], [self.cancel_all_button])
-        window.set_step(PROGRESS, "")
+        window.set_footer([self.background], [stop])
+        self._clock = QTimer(window)
+        self._clock.setInterval(250)
+        self._clock.timeout.connect(self._refresh)
+        self._clock.start()
         self._refresh()
 
-    def _progress_row(self, grid: QGridLayout, i: int, item: Any, c: SendCandidate, dest: str) -> None:
-        window = self._window()
+    def _candidate(self, index: int) -> SendCandidate:
         assert self.request is not None
-        texts = QWidget()
-        box = QVBoxLayout(texts)
-        box.setContentsMargins(0, 6, 0, 6)
-        box.setSpacing(2)
-        name = label(c.name)
-        font = name.font()
-        font.setBold(True)
-        name.setFont(font)
-        why = label("", "muted")
-        why.setWordWrap(True)
-        detail = label("", "muted")
-        for widget in (name, why, detail):
-            box.addWidget(widget)
-        grid.addWidget(texts, i, 0)
-        trace = TraceView(
-            window.colors,
-            source_kind=c.source_kind,
-            source_label=c.source_format or c.source,
-            dest_label=item.table,
-            bridge=False,
-            qgis=c.file is None,
-        )
-        trace.setToolTip(f"{dest}.{self.request.schema}.{item.table}")
-        grid.addWidget(trace, i, 1)
-        remove = button("×", "ghost")
-        remove.setAccessibleName(tr("Remove this layer"))
-        remove.clicked.connect(lambda _c=False, index=i: self.remove(index))
-        grid.addWidget(remove, i, 2, Qt.AlignmentFlag.AlignVCenter)
-        self.names.append(name)
-        self.whys.append(why)
-        self.details.append(detail)
-        self.traces.append(trace)
-        self.removes.append(remove)
+        item = self.request.items[index]
+        return next(x for x in self._candidates if x.layer_id == item.layer_id)
 
     def _route(self, index: int) -> tuple[bool, str]:
-        """El camino de una capa y por qué, en una frase (workspace-pro-spec §9): (puente, motivo)."""
+        """El camino de una capa y por qué, en una frase (workspace-pro-spec §9): (directo, motivo)."""
         assert self.request is not None
         request = self.request
-        item = request.items[index]
-        c = next(x for x in self._candidates if x.layer_id == item.layer_id)
+        c = self._candidate(index)
         fallback = bool(self.states[index].get("fallback"))
         reproject = request.reproject_to is not None
         path = c.path_for(
@@ -983,12 +967,12 @@ class AddLayers:
         if path == PATH_CONNECTED:
             return True, tr("Copied inside DuckDB (Connected layer)")
         if path != PATH_QGIS:
-            why = tr("Read directly by DuckDB")
+            why = tr("QGIS is skipped: DuckDB read the file")
             if c.filtered:
-                why += " · " + tr("with the layer filter")
+                why += " " + tr("with the same filter")
             return True, why
         if fallback and c.filtered:
-            reason = tr("DuckDB does not understand its filter")
+            reason = tr("DuckDB does not understand its filter, so QGIS applies it")
         elif fallback:
             reason = tr("DuckDB reads the file differently from QGIS")
         elif reproject and c.geometry is not None:
@@ -1005,73 +989,180 @@ class AddLayers:
             reason = tr("it comes from a web service ({0})").format(c.source_format)
         else:
             reason = tr("QGIS reads this kind of layer")
-        return False, tr("Goes through QGIS: {0}").format(reason)
+        return False, reason
 
-    def _status(self, i: int, bridge: bool, progress: float | None) -> tuple[str, str]:
-        """El estado de una capa en una línea («✓ 31 400 filas · 0,2 s · mismas filas que en QGIS»)."""
-        colors = self._window().colors
+    def _steps(self, index: int) -> list[Step]:  # noqa: PLR0912, PLR0915 - un paso por estado, en orden
+        """Los pasos de una capa: origen y filtro → lectura (⚡ DuckDB o QGIS y por qué) → copia → destino."""
+        assert self.request is not None
+        request = self.request
+        s = self.states[index]
+        c = self._candidate(index)
+        item = request.items[index]
+        state = s["state"]
+        direct, why = self._route(index)
+        origin = [c.file.path if c.file is not None else c.source]
+        if c.file is None:
+            origin.append(tr("layer «{0}»").format(c.name))
+        if c.filtered:
+            origin.append(tr("with filter"))
+        source_icon = SOURCE_ICONS.get(c.source_kind, "file")
+        fmt = c.source_format or c.source
+        started = state != WAITING
+        steps = [
+            Step(
+                source_icon,
+                tr("Source") + (f" · {fmt}" if fmt else ""),
+                " · ".join(o for o in origin if o),
+                DONE if started else WAITING,
+            )
+        ]
+        rows, total = s["rows"], s["total"]
+        seconds = s.get("seconds")
+        elapsed = time.monotonic() - s["started"] if state == RUNNING and s.get("started") else seconds
+        if direct:
+            read = Step(
+                "bolt",
+                tr("Direct read with DuckDB"),
+                why + (" · " + tr("same rows as in QGIS") if s.get("checked") else ""),
+            )
+        else:
+            read = Step("qgis-layers", tr("Read with QGIS"), why[:1].upper() + why[1:])
+        copy = Step("database", tr("Copy to DuckDB"))
+        where = ("temp" if request.temporary else request.database) + f".{request.schema}.{item.table}"
+        dest = Step("table", tr("Destination"), where)
+        if state == RUNNING:
+            if direct or rows > 0:
+                read.state = DONE
+                copy.state = RUNNING
+                copy.title = tr("Copying to DuckDB")
+                if total > 0:
+                    copy.progress = min(rows, total) / total
+                    copy.detail = tr("{0} of {1} rows").format(_count(rows), _count(total))
+                    rate = rows / elapsed if elapsed else 0
+                    if rate > 0 and rows < total:
+                        copy.detail += " · ≈ " + tr("{0} left").format(seconds_text((total - rows) / rate))
+                elif direct:
+                    copy.detail = tr("DuckDB copies it with SQL")
+                copy.seconds = elapsed
+            else:
+                read.state = RUNNING
+        elif state == DONE:
+            read.state = copy.state = dest.state = DONE
+            copy.seconds = seconds
+            copy.detail = tr("{0} rows").format(_count(rows))
+            crs = request.reproject_to or c.crs_label
+            dest.detail = " · ".join(
+                p
+                for p in (
+                    where,
+                    tr("{0} rows").format(_count(rows)),
+                    crs if c.geometry_type and not request.without_crs else "",
+                )
+                if p
+            )
+            if s["message"]:
+                dest.detail += "\n⚠ " + s["message"]
+        elif state == FAILED:
+            read.state = DONE if direct else FAILED
+            failed = copy if direct else read
+            failed.state = FAILED
+            failed.seconds = seconds
+            if s.get("card") is None:
+                card = ErrorCardView(
+                    explain("", s["message"] or tr("Unknown error"), "", None), self._window().colors
+                )
+                card.go_button.hide()
+                s["card"] = card
+            failed.card = s["card"]
+            copy.state = copy.state if failed is copy else SKIPPED
+            dest.state = SKIPPED
+        elif state == CANCELLED:
+            read.state = DONE if started else SKIPPED
+            copy.state = dest.state = SKIPPED
+        return [steps[0], read, copy, dest]
+
+    def _status(self, i: int) -> tuple[str, str | None]:
+        """La cabecera de cada fila: «Copiando… 182 000 de 300 000», «✓ 10 000 filas · 0,1 s», «En espera»."""
         s = self.states[i]
         state = s["state"]
-        detail = self.details[i]
-        color = colors.muted
         if state == RUNNING:
-            text = f"{round(progress * 100)} %" if progress is not None else tr("copying…")
-            color = colors.accent
-        elif state == DONE:
+            text = tr("Copying…")
+            if s["total"] > 0:
+                text += " " + tr("{0} of {1}").format(_count(s["rows"]), _count(s["total"]))
+            return text, "accent"
+        if state == DONE:
             text = "✓ " + tr("{0} rows").format(_count(s["rows"]))
             if s.get("seconds") is not None:
-                text += f" · {s['seconds']:.1f} s".replace(".", ",")
-            if bridge and s.get("checked"):
-                text += " · " + tr("same rows as in QGIS")
-            if s["message"]:
-                text += f" · ⚠ {s['message']}"
-            color = colors.ok
-        elif state == CANCELLED:
-            text = tr("cancelled")
-        elif state == FAILED:
-            text = tr("error: {0}").format(s["message"])
-            detail.setToolTip(s["message"])
-            color = colors.error
-        else:
-            text = tr("waiting")
-        return text, color
+                text += " · " + seconds_text(s["seconds"])
+            c = self._candidate(i)
+            if c.source_kind == "memory":
+                text += " · " + tr("temporary layer")
+            return text, "ok"
+        if state == CANCELLED:
+            return tr("Cancelled"), None
+        if state == FAILED:
+            return tr("Error"), "error"
+        return tr("Waiting"), None
 
     def _refresh(self) -> None:
         window = self.window
-        if window is None or self.request is None or not hasattr(self, "traces"):
+        if window is None or self.request is None or not getattr(self, "timeline_rows", None):
             return
+        view = window.timeline
         fast = 0
-        for i, s in enumerate(self.states):
-            state = s["state"]
-            detail, trace, remove = self.details[i], self.traces[i], self.removes[i]
-            bridge, why = self._route(i)
-            fast += bridge
-            trace.set_bridge(bridge)
-            self.whys[i].setText(why)
-            progress = None
-            if state == RUNNING and s["total"] > 0:
-                progress = min(s["rows"], s["total"]) / s["total"]
-            trace.set_state(state, progress)
-            text, color = self._status(i, bridge, progress)
-            detail.setText(text)
-            detail.setStyleSheet(f"color: {color}; font-weight: 600;" if state in (DONE, RUNNING) else "")
-            remove.setVisible(self.running and state in (WAITING, RUNNING))
-            remove.setToolTip(tr("Remove this layer") if state == WAITING else tr("Stop this layer"))
+        current = None
+        for i, row in enumerate(self.timeline_rows):
+            direct, _why = self._route(i)
+            fast += direct
+            row.set_steps(self._steps(i))
+            text, tone = self._status(i)
+            row.set_status(text, tone)
+            if row.remove is not None:
+                row.remove.setVisible(self.running and self.states[i]["state"] in (WAITING, RUNNING))
+                row.remove.setToolTip(
+                    tr("Remove this layer") if self.states[i]["state"] == WAITING else tr("Stop this layer")
+                )
+            if self.states[i]["state"] in (RUNNING, FAILED) and current is None:
+                current = row
         total = len(self.states)
-        self.summary.setText(
-            "⚡ "
-            + tr("{0} directly by DuckDB").format(fast)
-            + " · "
-            + tr("{0} through QGIS").format(total - fast)
-            if not self.files
-            else "⚡ " + tr("{0} directly by DuckDB").format(fast)
-        )
-        where = self.request.database
+        finished = sum(1 for s in self.states if s["state"] in (DONE, CANCELLED, FAILED))
+        request = self.request
+        where = ("temp" if request.temporary else request.database) + f" · {request.schema}"
+        seconds = time.monotonic() - getattr(self, "started", time.monotonic())
+        head = tr("Files → DuckDB") if self.files else tr("QGIS layers → DuckDB")
         if self.running:
-            window.subtitle.setText(tr("Adding {0} layers to GeoDuck · {1}…").format(total, where))
+            fraction = finished
+            if self._current is not None:
+                s = self.states[self._current]
+                if s["total"] > 0:
+                    fraction += min(s["rows"], s["total"]) / s["total"]
+            view.set_header(
+                head, where + " · " + tr("{0} of {1}").format(min(finished + 1, total), total), seconds
+            )
+            view.set_total(fraction / total if total else None)
+            view.follow(current)
             self._host.set_progress(self.progress_text())
         else:
-            window.subtitle.setText(tr("Done:") + " " + self.done_text())
+            added = sum(1 for s in self.states if s["state"] == DONE)
+            rows = sum(s["rows"] for s in self.states if s["state"] == DONE)
+            title = (
+                tr("Done: 1 layer in DuckDB")
+                if added == 1
+                else tr("Done: {0} layers in DuckDB").format(added)
+            )
+            if added < total:
+                title = tr("{0} of {1} layers in DuckDB").format(added, total)
+            spent = getattr(self, "seconds", seconds)
+            pill = "⚡ " + tr("{0} directly by DuckDB").format(fast)
+            if not self.files:
+                pill += " · " + tr("{0} through QGIS").format(total - fast)
+            view.set_header(
+                title,
+                f"{where} · " + tr("{0} rows").format(_count(rows)) + f" · {seconds_text(spent)}",
+                pill=pill,
+            )
+            view.set_total(None)
+            view.follow(current)
             self._final_footer()
 
     def _final_footer(self) -> None:
@@ -1089,6 +1180,15 @@ class AddLayers:
         close = button(tr("Close"), "primary")
         close.clicked.connect(window.hide)
         window.set_footer([undo], [open_button, close])
+
+    def escape(self) -> None:
+        """Esc: mientras corre, «Cancelar · Esc» (las terminadas quedan); si no, cierra."""
+        window = self._window()
+        if self.running:
+            self.cancel_all()
+            return
+        self.window_closed()
+        window.hide()
 
     def detach(self) -> None:
         self._unsubscribe()

@@ -66,6 +66,9 @@ PATHS: dict[str, str] = {
     ' fill="currentColor"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/>',
     "globe": '<circle cx="12" cy="12" r="8.5"/>'
     '<path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/>',
+    # Línea de tiempo (#148): lectura directa con DuckDB y la consulta de origen
+    "bolt": '<path d="M13 3 5.5 13.5H12L11 21l7.5-10.5H12z"/>',
+    "code": '<path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4"/>',
     # Explorador (#147): fijar y el tipo de cada columna
     "pin": '<path d="M9 3.5h6M10 3.5v6l-3 3.5h10l-3-3.5v-6M12 13v7.5"/>',
     "type-text": '<path d="M6 6h12M12 6v13"/>',

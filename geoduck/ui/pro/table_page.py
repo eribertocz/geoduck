@@ -50,7 +50,7 @@ from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
 from geoduck.ui.pro.grid import GRID, DataGrid
-from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
+from geoduck.ui.pro.load import export_menu, export_query, layer_name, load_menu, popup_under
 from geoduck.ui.pro.places import VIEW, Place
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -299,7 +299,9 @@ class TablePage(QWidget):
         row.addWidget(self.export_button)
         self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
         self.load_button.setToolTip(tr("Loads the table into QGIS (with its filters and search, if any)"))
-        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
+        self.load_menu = load_menu(
+            self, self.colors, self.load_in_qgis, more=True, name=lambda: self.place.name
+        )
         self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
         row.addWidget(self.load_button)
         return foot
@@ -316,7 +318,7 @@ class TablePage(QWidget):
         whole = not self.browse.filtered
         self._loader(
             self._query_sql(),
-            self.place.name,
+            layer_name(self.load_menu, self.place.name),
             kind,
             source=self.source if whole else None,
             source_kind=("view" if self.is_view else "table") if whole else None,
