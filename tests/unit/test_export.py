@@ -106,3 +106,14 @@ def test_cancel_and_failure_return_to_ready(ready):
         and not events[-1].cancelled
         and "t no existe" in events[-1].message
     )
+
+
+def test_shapefile_is_written_in_utf8_and_warns_about_long_names():
+    """#141: `.cpg` en UTF-8 y aviso de los nombres que GDAL acorta a 10 bytes."""
+    options, warnings = copy_options(
+        [("id", "INTEGER"), ("región", "VARCHAR"), ("nombre_muy_largo", "VARCHAR"), ("geom", "GEOMETRY")],
+        ExportFormat.SHP,
+    )
+    assert "DRIVER 'ESRI Shapefile'" in options and "ENCODING=UTF-8" in options
+    assert len(warnings) == 1 and "«nombre_muy_largo»" in warnings[0] and "región" not in warnings[0]
+    assert copy_options([("id", "INTEGER"), ("geom", "GEOMETRY")], ExportFormat.SHP)[1] == ()

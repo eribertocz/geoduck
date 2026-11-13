@@ -103,6 +103,17 @@ El panel detecta `centro` y `poligono` y permite marcar una o ambas. Por cada co
 | AX-4c | CRS desconocido y el usuario elige `EPSG:4326` | válido, `EPSG:4326` | x = −68,15, y = −16,5 | elegir etiqueta; no transforma |
 | AX-5 | «Reproyectar a EPSG:32719» desde `OGC:CRS84`, Memoria e Instantánea | válido, `EPSG:32719` | `590716.04, 8175564.99` | el origen en DuckDB no cambia; el mensaje indica la reproyección |
 
+### 8.1 Ida y vuelta QGIS → GeoDuck → QGIS (#141)
+`tests/qgis/test_roundtrip.py` envía cada caso por el camino general y lo vuelve a cargar en las tres
+modalidades, en toda la matriz de CI. Debe volver **idéntico**: el mismo SRC (UTM 19S, 20S y 21S, PSAD56
+EPSG:24879, un SRC propio PROJ sin código y uno ESRI: nunca «el más parecido»), el mismo tipo de geometría con
+Z y M, cada geometría (WKB; vacías y nulas como tales; una inválida tal cual, sin reparar), el orden lon/lat y
+cada valor (entero de 64 bits mayor que 2^53, fecha, fecha y hora al milisegundo, hora, lógico, texto con tildes,
+real). Excepciones documentadas: las **curvas** (CircularString, CompoundCurve…) vuelven en **segmentos
+rectos**, porque DuckDB no tiene curvas, y el envío lo avisa («Las curvas se convierten en segmentos rectos»);
+las **listas** vuelven como JSON de solo lectura; en la **Instantánea** la hora vuelve como texto ISO. Con
+100 000 puntos, mismas filas y la misma suma de coordenadas.
+
 ## 9. Validez y reparación (GD-SPA-004; decisión del propietario, 2026-11-02)
 **Estados distintos**, que se cuentan por separado: `NULL`, vacía, **ilegible** (WKB/WKT que no se puede leer, solo posible en columnas marcadas §2.2: DuckDB no admite `GEOMETRY` corrupta), **inválida** (legible pero topológicamente inválida según GEOS) y válida.
 

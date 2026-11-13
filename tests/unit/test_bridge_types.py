@@ -50,7 +50,7 @@ CASES = [
     ("TIMESTAMP_MS", K.DATETIME, False, False),
     ("TIMESTAMP_NS", K.DATETIME, False, True),
     ("TIMESTAMP WITH TIME ZONE", K.DATETIME_TZ, True, False),
-    ("TIME", K.TEXT, False, True),
+    ("TIME", K.TIME, True, False),  # hora del día: QTime (#141)
     ("TIME WITH TIME ZONE", K.TEXT, False, True),
     ("INTERVAL", K.TEXT, False, True),
     ("BLOB", K.BINARY, True, False),

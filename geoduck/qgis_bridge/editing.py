@@ -82,6 +82,8 @@ def to_python(value: Any, kind: FieldKind) -> Any:  # noqa: PLR0911 - una salida
             instant = dt.datetime.fromtimestamp(value.toMSecsSinceEpoch() / 1000, tz=dt.timezone.utc)
             return instant if kind is FieldKind.DATETIME_TZ else instant.replace(tzinfo=None)
         return value
+    if kind is FieldKind.TIME:
+        return value.toPyTime() if hasattr(value, "toPyTime") else value
     if kind is FieldKind.BINARY:
         return bytes(value)
     return str(value)

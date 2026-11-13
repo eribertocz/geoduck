@@ -21,6 +21,7 @@ from typing import Any
 
 import pyarrow as pa
 from qgis.core import (
+    Qgis,
     QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsFeatureRequest,
@@ -247,7 +248,7 @@ def direct_source(layer: Any) -> tuple[str, str | None, Reader] | None:
     return path, None, fmt.reader
 
 
-def plan_layer(  # noqa: PLR0912 - un camino por rama (§5)
+def plan_layer(  # noqa: PLR0912, PLR0915 - un camino por rama (§5)
     layer: QgsVectorLayer,
     *,
     table: str,
@@ -286,6 +287,8 @@ def plan_layer(  # noqa: PLR0912 - un camino por rama (§5)
         geometry = ImportGeometry(geometry_column_name(layer), crs)
     skipped = copy_fid_fields(layer)
     fields = [(i, f) for i, f in enumerate(layer.fields()) if i not in skipped]
+    if geometry is not None and QgsWkbTypes.isCurvedType(layer.wkbType()):
+        warnings.append(tr("Curves are converted to straight segments: DuckDB has no curves"))
     taken = [geometry.name] if geometry is not None else []
     names, renamed = column_names([*taken, *(f.name() for _i, f in fields)])
     warnings += renamed
@@ -498,6 +501,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
         self._sources = [
             (i, p.job, p.fids, p.reprojector, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans
         ]
+        self._linear = {i: may_have_curves(p.layer.wkbType()) for i, p in plans}
         self._channel = channel
         self._on_read = on_read
         self._total = max(sum(max(p.features, 0) for _, p in plans), 1)
@@ -524,6 +528,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
         if job.geometry is None:
             request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
         indexes = [int(c.source[1:]) for c in job.columns]  # `c{i}`: el campo i de la capa
+        linearize = self._linear.get(index, False)
         rows: list[list[Any]] = []
         wkbs: list[bytes | None] = []
         sent = False
@@ -536,6 +541,8 @@ class LayerReader(QgsTask):  # type: ignore[misc]
             rows.append([_value(attrs[k]) for k in indexes])
             if job.geometry is not None:
                 g = f.geometry()
+                if linearize and not g.isNull() and QgsWkbTypes.isCurvedType(g.wkbType()):
+                    g.convertToStraightSegment()  # DuckDB no tiene curvas: segmentos rectos (#141)
                 if reprojector is not None and not g.isNull() and not g.isEmpty():
                     g = reprojector.geometry(g, f.id())  # el FID: la entidad que falla, para buscarla en QGIS
                 wkbs.append(None if g.isNull() else bytes(g.asWkb()))
@@ -550,6 +557,15 @@ class LayerReader(QgsTask):  # type: ignore[misc]
         self._read_rows += len(rows)
         self._on_read(self._read_rows)
         self.setProgress(min(99.0, 100.0 * self._read_rows / self._total))
+
+
+def may_have_curves(wkb_type: Any) -> bool:
+    """La capa es de curvas, o de un tipo que puede traerlas (colecciones, «desconocido»)."""
+    flat = QgsWkbTypes.flatType(wkb_type)
+    return bool(QgsWkbTypes.isCurvedType(wkb_type)) or flat in (
+        Qgis.WkbType.Unknown,
+        Qgis.WkbType.GeometryCollection,
+    )
 
 
 # -- orquestación ------------------------------------------------------------------------------------

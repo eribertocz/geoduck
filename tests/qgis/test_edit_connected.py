@@ -350,3 +350,21 @@ def test_key_with_default_is_filled_by_duckdb(session):
     assert layer.commitChanges(), layer.commitErrors()
     assert rows(session, "SELECT count(DISTINCT id), count(*) FROM ud") == ((2, 2),)
     assert sorted(f["nombre"] for f in layer.getFeatures()) == ["a", "b"]
+
+
+def test_a_time_column_is_edited_as_a_time(session):
+    """#141: una columna TIME llega a QGIS como hora (QTime) y se escribe de vuelta como TIME."""
+    from qgis.PyQt.QtCore import QTime
+
+    session.sql(
+        "CREATE TABLE turnos (id INTEGER PRIMARY KEY, entrada TIME); "
+        "INSERT INTO turnos VALUES (1, '08:30:15.250')"
+    )
+    layer = load(session, "turnos")
+    index = layer.fields().indexOf("entrada")
+    [feature] = layer.getFeatures()
+    assert feature["entrada"] == QTime(8, 30, 15, 250)
+    assert layer.startEditing()
+    assert layer.changeAttributeValue(feature.id(), index, QTime(17, 45, 0, 500))
+    assert layer.commitChanges(), layer.commitErrors()
+    assert str(rows(session, "SELECT entrada FROM turnos WHERE id = 1")[0][0]) == "17:45:00.500000"
