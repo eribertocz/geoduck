@@ -698,3 +698,15 @@ def test_the_lake_swims_and_rests_with_reduced_motion(qgis_app, monkeypatch):
     lake.show()
     assert not lake.animated  # menos animaciones: el pato queda quieto
     lake.close()
+
+
+def test_the_run_button_is_a_compact_filled_square(coordinator):
+    """Propietario (2026-11-13, opción 1): ▶ lleno, 28 × 28, a la altura del selector de base."""
+    from geoduck.ui.pro.query_page import RUN_SIZE
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1;")
+    assert page.run_button.size().width() == page.run_button.size().height() == RUN_SIZE == 28
+    assert page.run_button.text() == "" and page.run_button.property("pro") == "primary"
+    page.set_compact(True)
+    assert page.run_button.width() == RUN_SIZE  # igual en el panel acoplado

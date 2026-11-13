@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
@@ -80,6 +80,8 @@ RESULT, MESSAGES = 0, 1
 MARK_MS = 60
 #: La franja «Ejecutando…» aparece solo si la consulta tarda más que esto (#138: sin parpadeo).
 RUNNING_MS = 300
+#: El ▶ de la barra de la consulta: cuadrado y compacto (px).
+RUN_SIZE = 28
 
 
 def _seconds(ms: float) -> str:
@@ -212,7 +214,11 @@ class QueryPage(QWidget):
         # Una sola idea por zona (propietario, 2026-11-12): esta barra es «correr el SQL»: ▶ (solo ícono; la
         # ayuda dice qué corre y su atajo) y la base. El archivo va en la pestaña; las filas, en el resultado.
         self.run_button = button("", "primary", icon="play")
-        self.run_button.setIcon(self._icon("play", self.colors.on_accent))
+        # ▶ lleno, cuadrado y compacto (propietario, 2026-11-13, opción 1): 28 × 28, icono de 12
+        self.run_button.setProperty("square", True)
+        self.run_button.setFixedSize(RUN_SIZE, RUN_SIZE)
+        self.run_button.setIcon(self._icon("play", self.colors.on_accent, 12))
+        self.run_button.setIconSize(QSize(12, 12))
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
         row.addSpacing(6)
@@ -231,10 +237,10 @@ class QueryPage(QWidget):
         self.run_all_action.triggered.connect(lambda: self.execute(RunScope.ALL))
         return bar
 
-    def _icon(self, name: str, color: str) -> Any:
+    def _icon(self, name: str, color: str, size: int = 16) -> Any:
         from geoduck.ui.pro import icons  # noqa: PLC0415
 
-        return icons.icon(name, color)
+        return icons.icon(name, color, size)
 
     def _build_results(self) -> QWidget:  # noqa: PLR0915 - el panel de resultados, en un solo lugar
         panel = QWidget()
