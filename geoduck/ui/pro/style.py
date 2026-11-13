@@ -99,6 +99,15 @@ def stylesheet(c: Colors) -> str:
 {r} QLabel[pro="null"] {{ color: {c.null}; font-style: italic; }}
 {r} QLabel[pro="error"] {{ color: {c.error}; }}
 {r} QLabel[pro="link"] {{ color: {c.accent}; }}
+{r} QLabel[pro="code-block"] {{ font-family: "{mono}"; font-size: {m.font_small}px; background: {c.segment};
+    border-radius: {m.radius_sm}px; padding: 8px 10px; }}
+{r} QPushButton[pro="link"] {{ border: 0; background: transparent; color: {c.muted}; padding: 0;
+    min-height: 0; text-align: left; }}
+{r} QPushButton[pro="link"]:hover {{ color: {c.text}; }}
+{r} QFrame[pro="error-card"] {{ background: {c.bg}; border: 1px solid {c.error_soft};
+    border-left: 4px solid {c.error}; border-radius: {m.radius}px; }}
+{r} QFrame[pro="error-card"] QLabel {{ background: transparent; }}
+{r} QFrame[pro="error-card"] QLabel[pro="code-block"] {{ background: {c.segment}; }}
 {r} QLabel[pro="kbd"] {{ color: {c.faint}; font-size: {m.font_tiny}px; border: 1px solid {c.border};
     border-radius: 4px; padding: 0 4px; }}
 {r} QLabel[pro="badge"] {{ color: {c.muted}; background: {c.segment}; font-size: {m.font_tiny}px;

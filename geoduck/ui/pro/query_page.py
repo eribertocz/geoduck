@@ -16,6 +16,7 @@ Guardar escribe el SQL tal cual en un `.sql`; una consulta con archivo se autogu
 from __future__ import annotations
 
 import contextlib
+import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -34,6 +35,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QScrollArea,
     QShortcut,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QTabBar,
@@ -49,6 +51,9 @@ from geoduck.app.events import (
     ScriptFinished,
     ScriptRejected,
     SessionStateChanged,
+    SpatialActivated,
+    SpatialActivationFailed,
+    SpatialChecked,
     StatementFinished,
     VocabularyChanged,
 )
@@ -59,11 +64,23 @@ from geoduck.domain.export import ExportFormat
 from geoduck.domain.files import create_sql, editor_readable, format_for, gdal_readable
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, error_token, result_title
-from geoduck.domain.sql_text import load_sql
+from geoduck.domain.sql_errors import (
+    CHOOSE_FILE,
+    INSERT,
+    LOAD_EXTENSION,
+    OPEN_FOLDER,
+    ErrorCard,
+    Fix,
+    char_offset,
+    explain,
+    syntax_error,
+)
+from geoduck.domain.sql_text import load_sql, quote_string_literal
 from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
 from geoduck.ui.pro import icons
+from geoduck.ui.pro.error_card import ErrorCardView
 from geoduck.ui.pro.grid import DataGrid
 from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
@@ -73,6 +90,10 @@ from geoduck.ui.pro.tokens import METRICS, Colors
 from geoduck.ui.pro.widgets import Lake, Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
 
+#: Pausa tras dejar de escribir antes del aviso de sintaxis de DuckDB (#145).
+SYNTAX_MS = 500
+#: Más caracteres que esto no se analizan mientras se escribe (se verá al ejecutar).
+SYNTAX_MAX = 200_000
 #: Espera tras el último cambio antes de autoguardar en el archivo de la consulta.
 AUTOSAVE_MS = 1500
 #: Resultado o mensajes.
@@ -190,6 +211,12 @@ class QueryPage(QWidget):
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(AUTOSAVE_MS)
         self._autosave.timeout.connect(self.save_if_saved)
+        # aviso mientras se escribe (#145): el analizador de DuckDB, ½ s después de dejar de escribir
+        self._syntax = QTimer(self)
+        self._syntax.setSingleShot(True)
+        self._syntax.setInterval(SYNTAX_MS)
+        self._syntax.timeout.connect(self.check_syntax)
+        self._live_error = False
         self._shortcuts()
         self.show_databases(coordinator.catalog, database)
         self._unsubscribe = coordinator.subscribe(self._on_event)
@@ -280,6 +307,10 @@ class QueryPage(QWidget):
         self.error_link.linkActivated.connect(lambda _l: self._go_to_error())
         self.error_link.hide()
         row.addWidget(self.error_link)
+        # en una ventana angosta, el resumen y el enlace se recortan; «Resultado | Mensajes» nunca (#145)
+        self.view.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        for text in (self.summary, self.error_link):
+            text.setMinimumWidth(1)  # por debajo de su texto: se recorta en vez de apretar lo demás
         # Consulta en curso (#143, punto 1): el pato nadando en el lago, «Ejecutando… 12 s» y
         # ■ Cancelar · Esc, solo si tarda más de `RUNNING_MS` (sin parpadeo en las rápidas)
         self.running = QWidget()
@@ -708,9 +739,11 @@ class QueryPage(QWidget):
                 return
             self.results = list(event.run.results) or run.results
             parse_error, parse_offset = event.run.parse_error, event.run.parse_error_offset
+            self._parse_detail = event.run.parse_error_detail or parse_error
         else:
             self.results = []
             parse_error, parse_offset = event.message, None
+            self._parse_detail = ""
         self._failed = bool(parse_error) or any(
             r.status in (StatementStatus.FAILED, StatementStatus.CANCELLED) for r in self.results
         )
@@ -958,10 +991,27 @@ class QueryPage(QWidget):
         box.setContentsMargins(16, 10, 28, 10)
         box.setSpacing(6)
         self._log: list[tuple[bool, str]] = []
+        self.cards: list[ErrorCardView] = []
         if parse_error:
-            box.addLayout(self._line(False, parse_error, text, parse_offset))
+            detail = getattr(self, "_parse_detail", "") or parse_error
+            self._log.append((False, parse_error))
+            kind = "ParserException" if detail.startswith("Parser") else ""
+            card = explain(kind, detail, text, parse_offset)
+            box.addWidget(self._card(card, text))
         for result in results:
             if result.status is StatementStatus.SKIPPED:
+                continue
+            if result.status is StatementStatus.FAILED:  # primer nivel (#145): qué, dónde y cómo arreglarlo
+                self._log.append((False, result.message))
+                card = explain(
+                    result.error_kind,
+                    result.error_detail or result.message,
+                    text,
+                    result.error_offset,
+                    statement_start=self._code_start(text, result.statement.start),
+                    statement_end=result.statement.end,
+                )
+                box.addWidget(self._card(card, text))
                 continue
             ok = result.status is StatementStatus.OK
             if ok:
@@ -976,6 +1026,104 @@ class QueryPage(QWidget):
             box.addLayout(self._line(ok, message, text, None if ok else result.error_offset))
         box.addStretch(1)  # lo que no corrió ya lo dicen la marca «–» y el resumen (#139)
         self.messages.setWidget(body)
+
+    def check_syntax(self) -> None:
+        """El aviso mientras se escribe (#145, punto 13): DuckDB analiza el texto con `json_serialize_sql`
+        —solo la sintaxis: no ejecuta nada ni lee datos— y un error se subraya al instante, con su mensaje
+        al pasar el ratón. Solo con la sesión lista y sin nada en curso."""
+        text = self.editor.text()
+        if (
+            self._closed
+            or not text.strip()
+            or len(text) > SYNTAX_MAX
+            or self.run is not None
+            or self._coordinator.state is not SessionState.READY
+            or self.editor.status.shown
+        ):
+            return
+
+        def done(outcome: Any) -> None:
+            if self._closed or isinstance(outcome, BaseException) or not outcome.rows:
+                return
+            if self.editor.text() != text or self.run is not None:
+                return  # el texto cambió: ya viene otro análisis
+            try:
+                found = syntax_error(json.loads(str(outcome.rows[0][0])))
+            except (TypeError, ValueError):
+                return
+            if found is None or found[1] is None:
+                return
+            message, position = found
+            offset = char_offset(text, position)
+            word = error_token(text, offset, message)
+            end = offset + max(1, len(word))
+            line = text.count("\n", 0, offset)
+            note = message + "\n" + tr("DuckDB parser · not run yet")
+            self.editor.status.show([(line, pro_editor.ERROR_MARK)], [(offset, end, note)])
+            self._live_error = True
+
+        with contextlib.suppress(GeoDuckError):
+            self._coordinator.read_rows(f"SELECT json_serialize_sql({quote_string_literal(text)})", 1, done)
+
+    def _card(self, card: ErrorCard, text: str) -> ErrorCardView:
+        view = ErrorCardView(card, self.colors)
+        view.fix_requested.connect(lambda fix, t=text: self.apply_fix(fix, t))
+        if card.line is not None:
+            offset = card.offset if card.offset is not None else 0
+            line, index = line_index_from(text, offset) if card.offset is not None else (card.line, 0)
+            view.go_requested.connect(lambda ln=line, ix=index: self.go_to(ln, ix))
+        self.cards.append(view)
+        return view
+
+    def apply_fix(self, fix: Fix, text: str) -> None:
+        """Un arreglo de la tarjeta (#145). Solo cambia el texto del editor (se puede deshacer con Ctrl+Z);
+        nunca ejecuta nada. Cargar `spatial` pide permiso; abrir la carpeta, solo la muestra."""
+        if fix.kind == OPEN_FOLDER:
+            self._open_folder(fix.value)
+            return
+        if fix.kind == LOAD_EXTENSION:
+            self.load_extension(fix.value)
+            return
+        if self.editor.text() != text:  # las posiciones son las del texto que corrió
+            self.notice.emit(tr("The SQL changed since it ran: run it again to fix this error"))
+            return
+        replacement = fix.text
+        if fix.kind == CHOOSE_FILE:
+            path = self._ask_path(tr("Choose file"), "", tr("All files (*)"))
+            if not path:
+                return
+            replacement = "'" + path.replace("'", "''") + "'"
+        start = fix.start if fix.start >= 0 else 0
+        end = fix.end if fix.kind != INSERT and fix.end >= 0 else start
+        first, first_index = line_index_from(text, start)
+        last, last_index = line_index_from(text, end)
+        self.editor.setSelection(first, first_index, last, last_index)
+        self.editor.replaceSelectedText(replacement)
+        self.editor.setFocus()
+
+    def _open_folder(self, folder: str) -> None:
+        from qgis.PyQt.QtCore import QUrl  # noqa: PLC0415
+        from qgis.PyQt.QtGui import QDesktopServices  # noqa: PLC0415
+
+        if not folder or not Path(folder).is_dir():
+            self.notice.emit(tr("The folder «{}» does not exist either").format(folder))
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+
+    def load_extension(self, name: str) -> None:
+        """«Cargar «spatial»…» (#145): pide permiso y, si se da, la instala (si hace falta) y la carga para
+        esta sesión (spatial-spec §10, ADR-0011). Nunca vuelve a ejecutar la consulta: eso lo decide el
+        usuario."""
+        if name != "spatial":
+            return
+        if not ASK_EXTENSION(name):
+            return
+        try:
+            self._loading_extension = True
+            self._coordinator.check_spatial()  # instalada o no: la respuesta decide INSTALL + LOAD o LOAD
+        except GeoDuckError as exc:
+            self._loading_extension = False
+            self.notice.emit(exc.message)
 
     def _line(self, ok: bool, message: str, text: str, offset: int | None) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -1080,7 +1228,9 @@ class QueryPage(QWidget):
             self.editor.status.clear()
             self.error_link.hide()
             self._error_at = None
+        self._live_error = False
         self.changed.emit()
+        self._syntax.start()
         if self.place.path:
             self._autosave.start()
 
@@ -1202,6 +1352,29 @@ class QueryPage(QWidget):
             self.show_databases(event.catalog)
         elif isinstance(event, PreviewsInvalidated) and self.view.current == RESULT:
             self._show_grid()
+        elif isinstance(event, (SpatialChecked, SpatialActivated, SpatialActivationFailed)):
+            self._on_spatial(event)
+
+    def _on_spatial(self, event: AppEvent) -> None:
+        """La respuesta a «Cargar «spatial»…» de una tarjeta: cargar, o decir cómo quedó."""
+        if not getattr(self, "_loading_extension", False):
+            return
+        if isinstance(event, SpatialChecked):
+            if event.loaded:
+                self._loading_extension = False
+                self.notice.emit(tr("«spatial» is already loaded: run the query again"))
+                return
+            try:
+                self._coordinator.activate_spatial(install=not event.installed)
+            except GeoDuckError as exc:
+                self._loading_extension = False
+                self.notice.emit(exc.message)
+        elif isinstance(event, SpatialActivated):
+            self._loading_extension = False
+            self.notice.emit(tr("«spatial» is loaded: run the query again"))
+        elif isinstance(event, SpatialActivationFailed):
+            self._loading_extension = False
+            self.notice.emit(tr("«spatial» could not be loaded: {}").format(event.message))
 
     def close_page(self) -> None:
         """La pestaña se cierra: deja de escuchar; lo pendiente se guarda en su archivo."""
@@ -1265,6 +1438,29 @@ class _DoubleClicks(QObject):
             self._toggle()
             return True
         return False
+
+
+def confirm_extension(name: str) -> bool:
+    """Permiso para instalar (si hace falta) y cargar una extensión de DuckDB desde una tarjeta de error."""
+    from qgis.PyQt.QtWidgets import QApplication, QMessageBox  # noqa: PLC0415
+
+    box = QMessageBox(QApplication.activeWindow())
+    box.setWindowTitle(tr("GeoDuck"))
+    box.setText(
+        tr(
+            "This query needs DuckDB's «{0}» extension. GeoDuck will install it if needed (only once) and "
+            "load it for this session. The query does not run again by itself."
+        ).format(name)
+    )
+    go = box.addButton(tr("Load «{}»").format(name), QMessageBox.ButtonRole.AcceptRole)
+    box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(go)
+    box.exec()
+    return box.clickedButton() is go
+
+
+#: La pregunta antes de cargar una extensión (las pruebas la reemplazan).
+ASK_EXTENSION: Callable[[str], bool] = confirm_extension
 
 
 #: El alto del resultado, recordado entre sesiones (#144, punto 10).

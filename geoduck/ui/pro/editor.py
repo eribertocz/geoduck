@@ -377,7 +377,7 @@ def make(colors: Colors, *, dark: bool) -> Any:
     editor = QgsCodeEditorSQL()
     editor.setLineNumbersVisible(True)
     editor.setFrameShape(QFrame.Shape.NoFrame)
-    free_keys(editor, ("Ctrl+Return", "Ctrl+Shift+Return", "Ctrl+S", "Ctrl+O", "Ctrl+W", "Ctrl+T"))
+    free_keys(editor, ("Ctrl+Return", "Ctrl+Shift+Return", "Ctrl+S", "Ctrl+O", "Ctrl+W", "Ctrl+T", "Ctrl+J"))
     paint(editor, colors, dark=dark)
     editor.layer_drops = _LayerDrops(editor)
     editor.viewport().installEventFilter(editor.layer_drops)

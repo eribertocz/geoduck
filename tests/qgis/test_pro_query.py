@@ -146,9 +146,10 @@ def test_an_error_shows_messages_with_its_line_and_go_moves_the_cursor(coordinat
     assert any(tr("Line {0} · near «{1}»").format(2, "no_existe") in t for t in texts)
     # «columna N» confunde: solo línea y palabra (#139)
     assert not any(tr("line {}, column {}").format(2, 8) in t for t in texts)
-    links = [w for w in page.messages.widget().findChildren(type(page.summary)) if "href" in w.text()]
-    assert links
-    links[0].linkActivated.emit("#")
+    # la tarjeta del error (#145): título, lugar y «Ir»
+    [card] = page.cards
+    assert card.title.text() == tr("The column «{}» does not exist").format("no_existe")
+    card.go_button.click()
     assert page.editor.getCursorPosition() == (1, 7)
     summary = tr("{} OK · {} with error").format(1, 1) + " · " + tr("{} not run").format(1)
     assert page.summary.text() == summary
@@ -710,3 +711,71 @@ def test_the_run_button_is_a_compact_filled_square(coordinator):
     assert page.run_button.text() == "" and page.run_button.property("pro") == "primary"
     page.set_compact(True)
     assert page.run_button.width() == RUN_SIZE  # igual en el panel acoplado
+
+
+# -- #145: errores de primer nivel -----------------------------------------------------------------------
+
+
+def test_an_error_card_fixes_only_the_editor_text_and_copies_the_original(coordinator):
+    from qgis.PyQt.QtWidgets import QApplication
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "CREATE TABLE lecturas AS SELECT 1.5 AS kwh;\nSELECT kwhh FROM lecturas;")
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    [card] = page.cards
+    assert card.title.text() == tr("The column «{}» does not exist").format("kwhh")
+    assert card.where.text() == tr("Line {0} · near «{1}»").format(2, "kwhh")
+    assert card.explanation.text() == tr("DuckDB suggests: {}.").format("kwh")
+    assert not card.original.isVisibleTo(card)  # el mensaje original, plegado
+    card.toggle.click()
+    assert card.original.isVisibleTo(card) and card.original.text().startswith("Binder Error")
+    card.copy_button.click()
+    assert QApplication.clipboard().text() == card.card.original
+    runs = []
+    page.execute = runs.append  # un arreglo nunca ejecuta nada
+    card.fix_buttons[0].click()
+    assert page.editor.text() == "CREATE TABLE lecturas AS SELECT 1.5 AS kwh;\nSELECT kwh FROM lecturas;"
+    assert runs == []
+    page.editor.undo()  # se puede deshacer
+    assert "kwhh" in page.editor.text()
+
+
+def test_a_card_does_not_fix_a_text_that_changed_and_loading_spatial_asks_first(coordinator, monkeypatch):
+    from geoduck.domain.sql_errors import LOAD_EXTENSION, Fix
+    from geoduck.ui.pro import query_page as module
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT kwhh FROM range(1);")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    [card] = page.cards
+    notices = []
+    page.notice.connect(notices.append)
+    page.editor.setText("SELECT kwhh FROM range(1); -- cambiado")
+    page.apply_fix(card.card.fixes[0], page.run_text)
+    assert page.editor.text().endswith("-- cambiado") and notices
+    asked = []
+    monkeypatch.setattr(module, "ASK_EXTENSION", lambda name: asked.append(name) or False)
+    page.apply_fix(Fix(LOAD_EXTENSION, "x", value="spatial"), page.run_text)
+    assert asked == ["spatial"]  # sin permiso, nada se instala ni se carga (ADR-0011)
+
+
+def test_a_syntax_error_is_underlined_while_typing_without_running(coordinator):
+    from geoduck.ui.pro import editor as pro_editor
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "")
+    page.editor.setText("SELECT zona, sum(kwh)\nFROM lecturas\nGROUP zona;")
+    assert page._syntax.isActive()
+    page.check_syntax()
+    assert wait_for(lambda: page.editor.status.shown)
+    assert page.editor.markersAtLine(2) & (1 << pro_editor.ERROR_MARK)
+    offset = len("SELECT zona, sum(kwh)\nFROM lecturas\nGROUP ")
+    assert tr("DuckDB parser · not run yet") in page.editor.status.message_at(offset)
+    assert page.results == [] and page.run is None  # no se ejecutó nada
+    page.editor.setText("SELECT 1;")  # al escribir, el aviso se va y se vuelve a revisar
+    assert not page.editor.status.shown
+    page.check_syntax()
+    wait_for(lambda: False, 0.3)
+    assert not page.editor.status.shown
