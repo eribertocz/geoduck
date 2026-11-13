@@ -398,10 +398,10 @@ def create_sql(
     spatial: str = "",
     reserved: frozenset[str] | None = None,
 ) -> str:
-    """Archivos soltados en el editor (decisión del propietario, 2026-11-07): llevarlos a DuckDB con un
-    `CREATE TABLE … AS SELECT *` por archivo, sin ejecutarlo. Nombres que no chocan con `taken` (nunca
-    `OR REPLACE`). `spatial`: «load» o «install» antepone `LOAD spatial;` (o también `INSTALL`), visible
-    para que el usuario decida (ADR-0011)."""
+    """«Escribir consulta» (decisión del propietario, 2026-11-07; qgis-import-spec §5.4): llevar archivos a
+    DuckDB con un `CREATE TABLE … AS SELECT *` por archivo, sin ejecutarlo. Nombres que no chocan con
+    `taken` (nunca `OR REPLACE`). `spatial`: «load» o «install» antepone `LOAD spatial;` (o también
+    `INSTALL`), visible para que el usuario decida (ADR-0011)."""
     names = list(taken)
     parts = []
     if spatial == "install":
@@ -417,4 +417,30 @@ def create_sql(
         target = ".".join(sql_name(x, reserved) for x in (database, schema, table))
         reading = editor_sql_for_path(path).removeprefix("SELECT * FROM ")
         parts.append(f"CREATE TABLE {target} AS\nSELECT * FROM {reading};")
+    return "\n\n".join(parts)
+
+
+#: Lo que DuckDB lee con solo nombrar el archivo (`FROM 'ruta'`), por su extensión.
+_REPLACEMENT_SCAN = (".parquet", ".csv", ".tsv", ".json", ".jsonl", ".ndjson")
+
+
+def from_sql(paths: list[str], *, spatial: str = "") -> str:
+    """Archivos soltados en el editor (#146, punto 14): una sentencia por archivo, sin ejecutarla.
+    `FROM 'ruta';` si DuckDB lo lee solo por su extensión; si no, con su función (`read_csv(…)`), o
+    `FROM ST_Read('ruta');` para los formatos de GDAL. `spatial`: «load» o «install» antepone `LOAD spatial;`
+    (o también `INSTALL`), visible para que el usuario decida (ADR-0011)."""
+    parts = []
+    if spatial == "install":
+        parts.append("INSTALL spatial;\nLOAD spatial;")
+    elif spatial == "load":
+        parts.append("LOAD spatial;")
+    for path in paths:
+        real = source_path(path)
+        fmt = format_for(path)
+        if fmt.reader is Reader.GDAL or (fmt is OTHER and gdal_readable(path)):
+            parts.append(f"FROM {gdal_read(vsi_path(real), None)};")
+        elif real.lower().endswith(_REPLACEMENT_SCAN):
+            parts.append(f"FROM {quote_string_literal(real)};")
+        else:
+            parts.append(editor_sql_for_path(path).replace("SELECT * FROM ", "FROM ", 1) + ";")
     return "\n\n".join(parts)

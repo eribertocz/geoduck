@@ -96,6 +96,9 @@ def free_keys(editor: Any, keys: tuple[str, ...]) -> None:
                 command.setAlternateKey(0)
 
 
+_SCI_POSITIONFROMPOINT = 2022
+
+
 class _LayerDrops(QObject):
     """Capas de QGIS arrastradas al editor: el editor no las toma como texto (las «movía» y QGIS las borraba,
     observación del propietario, 2026-11-06); siguen a GeoDuck, que las añade a DuckDB como en cualquier otra
@@ -127,6 +130,11 @@ class _LayerDrops(QObject):
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
         if event.type() == QEvent.Type.Drop:
+            # donde se suelta (#146, punto 14): el cursor va a esa línea y ahí se escribe
+            point = event.position().toPoint() if hasattr(event, "position") else event.pos()
+            position = self._editor.SendScintilla(_SCI_POSITIONFROMPOINT, point.x(), point.y())
+            line, _index = self._editor.lineIndexFromPosition(position)
+            self._editor.setCursorPosition(line, len(self._editor.text(line).rstrip("\r\n")))
             self.on_files(paths)
         return True
 

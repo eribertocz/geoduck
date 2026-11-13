@@ -629,6 +629,41 @@ class Sidebar(QFrame):
             visit(self.tree.topLevelItem(index))
         return found
 
+    def reveal(self, database: str, schema: str, name: str) -> bool:
+        """Ctrl+clic en una tabla del SQL (#146): el filtro se limpia, sus carpetas se abren y queda elegida
+        y a la vista. Devuelve si estaba en el árbol."""
+        if self.search.edit.text():
+            self.search.edit.clear()
+
+        def visit(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
+            data = item.data(0, ROLE)
+            if data and data[0] == PLACE:
+                place = data[1]
+                if (
+                    not place.is_query
+                    and catalog_key(place.database) == catalog_key(database)
+                    and place.schema.casefold() == schema.casefold()
+                    and place.name.casefold() == name.casefold()
+                ):
+                    return item
+            for index in range(item.childCount()):
+                found = visit(item.child(index))
+                if found is not None:
+                    return found
+            return None
+
+        for index in range(self.tree.topLevelItemCount()):
+            found = visit(self.tree.topLevelItem(index))
+            if found is not None:
+                parent = found.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                self.tree.setCurrentItem(found)
+                self.tree.scrollToItem(found)
+                return True
+        return False
+
     def _open_first_match(self) -> None:
         if not self.search.edit.text().strip():
             return

@@ -317,3 +317,103 @@ def _rank(found: list[Suggestion], prefix: str) -> tuple[Suggestion, ...]:
         kept.append(item)
     kept.sort(key=lambda s: (_ORDER.index(s.kind), s.label.casefold()))
     return tuple(kept[:MAX_ITEMS])
+
+
+# -- lo que hay bajo el cursor (#146, punto 30: información al pasar el ratón y Ctrl+clic) ---------------
+
+_CHAIN = re.compile(rf"{_IDENT}(?:\s*\.\s*{_IDENT})*")
+
+
+@dataclass(frozen=True)
+class Target:
+    """Un nombre del texto: una tabla o vista (`source`), una columna (`source` y `column`, si se conocen) o
+    una función (`name`). `start`/`end`: la parte del nombre bajo el cursor."""
+
+    kind: Kind
+    start: int
+    end: int
+    name: str
+    source: Source | None = None
+    column: ColumnInfo | None = None
+
+
+def target_at(  # noqa: PLR0911 - un caso por clase de nombre
+    text: str,
+    offset: int,
+    *,
+    catalog: CatalogSnapshot | None,
+    columns: Mapping[Source, tuple[ColumnInfo, ...]],
+    vocabulary: Vocabulary | None,
+) -> Target | None:
+    """Qué es el nombre en `offset` (fuera de comentarios y textos), o `None` si no se sabe."""
+    code, _ = blank_code(text)
+    for chain in _CHAIN.finditer(code):
+        if chain.start() > offset:
+            return None
+        if chain.end() < offset:
+            continue
+        parts = list(_PART.finditer(chain.group(0)))
+        index = next(
+            (
+                i
+                for i, p in enumerate(parts)
+                if chain.start() + p.start() <= offset <= chain.start() + p.end()
+            ),
+            None,
+        )
+        if index is None:
+            return None
+        part = parts[index]
+        start, end = chain.start() + part.start(), chain.start() + part.end()
+        names = [unquote(p.group(0)) for p in parts[: index + 1]]
+        name = names[-1]
+        call = code[chain.end() :].lstrip().startswith("(") and len(parts) == 1
+        if call:
+            known = vocabulary.functions if vocabulary is not None else ()
+            if name.casefold() in {f.casefold() for f in known}:
+                return Target(Kind.FUNCTION, start, end, name)
+            return None
+        if catalog is None:
+            return None
+        source = _resolve_object(catalog, names)
+        if source is not None:
+            obj = next(o for o in catalog.objects if (o.database, o.schema, o.name) == source)
+            return Target(_kind_of(obj.kind.value), start, end, name, source)
+        bounds = _statement_bounds(code, offset)
+        statement = code[bounds[0] : bounds[1]]
+        return _column_target(
+            catalog, columns=columns, statement=statement, names=names, start=start, end=end
+        )
+    return None
+
+
+def _column_target(
+    catalog: CatalogSnapshot,
+    *,
+    columns: Mapping[Source, tuple[ColumnInfo, ...]],
+    statement: str,
+    names: list[str],
+    start: int,
+    end: int,
+) -> Target | None:
+    """Una columna: de la tabla o del alias que la califica, o de alguno de los objetos de la sentencia."""
+    name = names[-1]
+    references = _references(statement)
+    sources: list[Source] = []
+    if len(names) > 1:
+        qualifier = names[:-1]
+        for parts, alias in references:
+            if len(qualifier) == 1 and alias is not None and alias.casefold() == qualifier[0].casefold():
+                found = _resolve_object(catalog, parts)
+                if found is not None:
+                    sources.append(found)
+        found = _resolve_object(catalog, qualifier)
+        if found is not None:
+            sources.append(found)
+    else:
+        sources = [s for s in (_resolve_object(catalog, parts) for parts, _a in references) if s is not None]
+    for source in sources:
+        for column in columns.get(source, ()):
+            if column.name.casefold() == name.casefold():
+                return Target(Kind.COLUMN, start, end, column.name, source, column)
+    return None

@@ -541,11 +541,11 @@ class ProWorkspace(QWidget):
 
     def write_query(self, paths: list[str]) -> None:
         """«Escribir consulta»: una pestaña nueva con un `CREATE TABLE … AS SELECT * FROM ST_Read(…)` por
-        archivo, sin ejecutar (lo mismo que soltarlos en el editor)."""
+        archivo, sin ejecutar."""
         self.new_query()
         page = self.tabs.page(self.tabs.bar.currentIndex())
         if isinstance(page, QueryPage):
-            page.drop_files(paths, any_format=True)
+            page.drop_files(paths, any_format=True, create=True)
 
     def _export_trace(self, event: Any) -> None:
         """«Exportar ▾» con su trazabilidad (propietario, 2026-11-07): DuckDB ⚡→ archivo, en un aviso que se
@@ -750,6 +750,15 @@ class ProWorkspace(QWidget):
             self.overlay_open = open_
             self._apply_sidebar()
 
+    def reveal(self, source: tuple[str, str, str]) -> None:
+        """Una tabla o vista en el explorador (#146: Ctrl+clic en el SQL), abriéndolo si estaba cerrado."""
+        if self.wide and not self.sidebar_open:
+            self.set_sidebar_open(True)
+            self.sidebar_changed.emit(True)
+        elif not self.wide and not self.overlay_open:
+            self.set_overlay_open(True)
+        self.sidebar.reveal(*source)
+
     def toggle_sidebar(self) -> None:
         """Ctrl+B o el botón: en la ventana pliega o abre la barra lateral; en el panel, abre o cierra el
         explorador encima del contenido."""
@@ -943,6 +952,7 @@ class ProWorkspace(QWidget):
         page.notice.connect(self.notify)
         page.import_files_requested.connect(lambda paths: self.import_files(paths=paths))
         page.view_sql_requested.connect(self.open_sql)  # «Ver SQL» del resultado filtrado (#144)
+        page.reveal_requested.connect(self.reveal)  # Ctrl+clic en una tabla del SQL (#146)
         return page
 
     def _query_changed(self, page: QueryPage) -> None:

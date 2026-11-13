@@ -153,6 +153,16 @@ def stylesheet(c: Colors) -> str:
 {r} QLineEdit[pro="filter-box"][invalid="true"], {r} QLineEdit[pro="where"][invalid="true"] {{
     border-color: {c.error}; background: {c.error_soft}; }}
 {r} QLineEdit[pro="where"] {{ font-family: "{mono}"; }}
+{r} QFrame[pro="find-bar"] {{ background: {c.side}; border-bottom: 1px solid {c.line}; }}
+{r} QLineEdit[pro="find"] {{ font-family: "{mono}"; min-height: {m.control - 6}px; }}
+{r} QLineEdit[pro="find"][invalid="true"] {{ border-color: {c.error}; background: {c.error_soft}; }}
+{r} QPushButton[pro="find-option"] {{ border: 1px solid transparent; background: transparent;
+    color: {c.muted}; padding: 0; min-height: {m.control - 6}px; min-width: {m.control - 6}px;
+    max-width: {m.control - 6}px; border-radius: {m.radius_sm}px;
+    font-family: "{mono}"; font-size: {m.font_small}px; }}
+{r} QPushButton[pro="find-option"]:hover {{ background: {c.segment}; }}
+{r} QPushButton[pro="find-option"]:checked {{ background: {c.accent_soft}; color: {c.accent};
+    border-color: {c.accent}; }}
 {r} QFrame[pro="chip"] {{ background: {c.chip_bg}; border: 1px solid {c.chip_border};
     border-radius: {m.pill}px; }}
 {r} QFrame[pro="field"] {{ background: {c.bg}; border: 1px solid {c.border}; border-radius: {m.radius}px; }}
