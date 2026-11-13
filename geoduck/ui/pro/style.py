@@ -111,6 +111,8 @@ def stylesheet(c: Colors) -> str:
 {r} QPushButton:disabled {{ color: {c.null}; border-color: {c.line}; }}
 {r} QPushButton[pro="primary"] {{ background: {c.accent_fill}; border-color: {c.accent_fill};
     color: {c.on_accent}; font-weight: 600; padding: 0 {m.space_lg - 2}px; }}
+{r} QPushButton[pro="primary"][square="true"] {{ padding: 0; min-height: 0;
+    border-radius: {m.radius_sm + 1}px; }}
 {r} QPushButton[pro="primary"]:hover {{ background: {c.accent_hover}; border-color: {c.accent_hover}; }}
 {r} QPushButton[pro="primary"]:disabled {{ background: {c.segment}; border-color: {c.segment};
     color: {c.null}; }}

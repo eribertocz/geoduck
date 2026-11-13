@@ -273,6 +273,144 @@ class LogoBar(QProgressBar):
         painter.end()
 
 
+def reduced_motion(widget: QWidget) -> bool:
+    """El sistema pide menos animaciones (Qt: duración de las animaciones de widgets = 0)."""
+    from qgis.PyQt.QtWidgets import QStyle  # noqa: PLC0415
+
+    hint = getattr(QStyle.StyleHint, "SH_Widget_Animation_Duration", None)
+    return hint is not None and widget.style().styleHint(hint) == 0
+
+
+class Lake(QWidget):
+    """«El lago» (propietario, 2026-11-13): el progreso de GeoDuck. Una línea de agua de 3 px y un pato que
+    nada en ella. Con avance (`set_progress(0..1)`), el agua se llena de turquesa con un brillo suave y el
+    pato va en la punta, meciéndose; sin avance (`None`), el pato nada de un lado a otro con ondas detrás.
+    Con «menos animaciones» en el sistema, el pato queda quieto."""
+
+    DUCK = 22
+
+    def __init__(self, colors: Colors, *, accessible_name: str = "") -> None:
+        super().__init__()
+        self.colors = colors
+        self.progress: float | None = None
+        self.phase = 0.0
+        self.setFixedHeight(self.DUCK + 4)
+        self.setMinimumWidth(80)
+        self.setAccessibleName(accessible_name or tr("Progress"))
+        self._timer = QTimer(self)
+        self._timer.setInterval(33)
+        self._timer.timeout.connect(self._tick)
+
+    def set_progress(self, progress: float | None) -> None:
+        self.progress = None if progress is None else min(1.0, max(0.0, progress))
+        self.update()
+
+    @property
+    def animated(self) -> bool:
+        return self._timer.isActive()
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        super().showEvent(event)
+        if not reduced_motion(self):
+            self._timer.start()
+
+    def hideEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
+        super().hideEvent(event)
+        self._timer.stop()
+
+    def _tick(self) -> None:
+        self.phase = (self.phase + 0.012) % 2.0
+        self.update()
+
+    def duck_x(self) -> float:
+        """Dónde está el pato (su centro), en píxeles."""
+        s = self.DUCK / 22.0  # la cola a la izquierda, el pico a la derecha: siempre enteros
+        left, right = 13 * s, self.width() - 16 * s
+        if self.progress is not None:
+            at = self.progress
+        else:  # va y vuelve, con suavidad en las orillas
+            import math  # noqa: PLC0415
+
+            t = self.phase if self.phase <= 1 else 2 - self.phase
+            at = (1 - math.cos(math.pi * t)) / 2
+        return left + (right - left) * at
+
+    def paintEvent(self, _event: object) -> None:  # noqa: N802 - API de Qt
+        import math  # noqa: PLC0415
+
+        from qgis.PyQt.QtCore import QRectF  # noqa: PLC0415
+        from qgis.PyQt.QtGui import QLinearGradient  # noqa: PLC0415
+
+        c = self.colors
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        water = self.height() - 4.0
+        width = float(self.width())
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(c.border))
+        painter.drawRoundedRect(QRectF(0, water, width, 3), 1.5, 1.5)
+        x = self.duck_x()
+        if self.progress is not None and self.progress > 0:
+            fill = QLinearGradient(0, 0, x, 0)
+            fill.setColorAt(0, QColor(c.accent_fill))
+            shine = QColor(c.accent)
+            shine.setAlpha(230)
+            fill.setColorAt(1, shine)
+            painter.setBrush(fill)
+            painter.drawRoundedRect(QRectF(0, water, x, 3), 1.5, 1.5)
+        facing = 1
+        if self.progress is None and self.phase > 1:
+            facing = -1  # de vuelta, mira hacia la izquierda
+        # las ondas detrás del pato
+        ripple = QColor(c.accent)
+        for k in range(3):
+            ripple.setAlpha(max(0, 120 - 40 * k))
+            pen = QPen(ripple, 1.2)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            r = 4 + 4 * k + 3 * ((self.phase * 3) % 1)
+            painter.drawArc(QRectF(x - facing * (8 + 3 * k) - r, water - 1.5, 2 * r, 3), 0, 180 * 16)
+        bob = math.sin(self.phase * math.pi * 6) * 1.2 if self.animated else 0.0
+        self._paint_duck(painter, x, water - 1 + bob, facing)
+        painter.end()
+
+    def _paint_duck(self, painter: QPainter, x: float, y: float, facing: int) -> None:
+        """El pato del logo, de perfil, flotando en (x, y): cuerpo y cabeza turquesa, pico ámbar."""
+        from qgis.PyQt.QtCore import QPointF, QRectF  # noqa: PLC0415
+        from qgis.PyQt.QtGui import QPainterPath  # noqa: PLC0415
+
+        from geoduck.ui.pro.tokens import BEAK  # noqa: PLC0415
+
+        c = self.colors
+        s = self.DUCK / 22.0
+        painter.save()
+        painter.translate(x, y)
+        painter.scale(facing * s, s)
+        body = QPainterPath()
+        body.moveTo(-10, -6)
+        body.cubicTo(-12, -1, -6, 1, 0, 1)
+        body.cubicTo(7, 1, 10, -2, 9, -7)
+        body.cubicTo(5, -5, -3, -5, -10, -6)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(c.accent if c.dark else c.accent_fill))
+        painter.drawPath(body)
+        painter.drawEllipse(QPointF(5.5, -11), 4.6, 4.6)  # la cabeza
+        beak = QPainterPath()
+        beak.moveTo(9.4, -12)
+        beak.quadTo(14.5, -11, 14.5, -9.8)
+        beak.quadTo(14.5, -8.6, 9.4, -8.4)
+        beak.closeSubpath()
+        painter.setBrush(QColor(BEAK))
+        painter.drawPath(beak)
+        painter.setBrush(QColor(c.on_accent))
+        painter.drawEllipse(QPointF(6.6, -12.2), 1.1, 1.1)  # el ojo
+        wing = QColor(c.on_accent)
+        wing.setAlpha(110)
+        painter.setPen(QPen(wing, 1.2))
+        painter.drawArc(QRectF(-5, -8, 9, 5), 200 * 16, 140 * 16)
+        painter.restore()
+
+
 class StatusDot(QWidget):
     """Estado de la sesión: `ok` (lista), `busy` (ocupada), `error`, `off` (sin sesión).
 

@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 
 import pytest
-from qgis.PyQt.QtCore import QCoreApplication, QEvent
+from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
 
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
@@ -171,13 +171,24 @@ def test_the_query_runs_in_its_database(coordinator, tmp_path):
 
 
 def test_cancel_stops_a_long_query(coordinator):
+    from qgis.PyQt.QtTest import QTest
+
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT count(*) FROM range(100000000000) a;")
     page.run_button.click()
-    assert wait_for(page.cancel_button.isEnabled)
-    page.cancel_button.click()
+    # #143, punto 1: pasados 0,3 s, el pato en el lago, «Ejecutando… N s» y ■ Cancelar · Esc en la barra del
+    # resultado, sin copiar, exportar ni cargar
+    assert wait_for(lambda: page.running.isVisibleTo(page) and page.stop_button.isEnabled())
+    assert page.lake.progress is None and page.lake.isVisibleTo(page)  # nada de un lado a otro
+    assert page.elapsed_label.text().startswith(tr("Running… {} s").format("")[:5])
+    assert page.stop_button.text() == tr("Cancel · Esc")
+    assert not page.export_button.isVisibleTo(page) and not page.run_button.isEnabled()
+    assert not page.copy_button.isVisibleTo(page)
+    QTest.keyClick(page.editor, Qt.Key.Key_Escape)  # Esc cancela mientras corre
     assert wait_for(lambda: done(coordinator, page), 30)
     assert page._log and page._log[0] == (False, tr("Cancelled"))
+    assert not page.running.isVisibleTo(page) and not page._escape.isEnabled()
+    assert page.export_button.isVisibleTo(page)
 
 
 def _ctrl_enter(page, *, shift=False):
@@ -233,7 +244,7 @@ def test_run_never_fails_silently(coordinator):
     notices = []
     page.notice.connect(notices.append)
     page.run_button.click()
-    assert wait_for(page.cancel_button.isEnabled)
+    assert wait_for(page.stop_button.isEnabled)
     _ctrl_enter(page)
     assert notices == [tr("A query is already running · «Cancel» stops it")]
     other = new_query(ws, "SELECT 1;")
@@ -242,7 +253,7 @@ def test_run_never_fails_silently(coordinator):
     assert notices[-1] == tr(
         "GeoDuck is finishing another task (loading, exporting or importing): run it when it ends"
     )
-    page.cancel_button.click()
+    page.stop_button.click()
     assert wait_for(lambda: done(coordinator, page), 30)
 
 
@@ -315,7 +326,8 @@ def test_save_as_autosave_and_reopen(coordinator, tmp_path):
     assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()) == "consumo.sql"
     assert [p.name for p in ws.places.recents] == ["consumo.sql"]
     page.editor.setText("SELECT 43;")
-    assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()) == "consumo.sql •"
+    index = ws.tabs.bar.currentIndex()
+    assert ws.tabs.bar.tabText(index) == "consumo.sql" and ws.tabs.is_modified(index)  # el ● ámbar
     assert wait_for(lambda: path.read_text(encoding="utf-8") == "SELECT 43;", 5)  # autoguardado
     again = workspace(coordinator, store=store)  # «reinicio»: la consulta guardada vuelve con su SQL
     restored = again.tabs.page(0)
@@ -364,7 +376,7 @@ def test_the_recovery_copy_brings_back_queries_after_a_crash(coordinator, recove
     page = ws.tabs.page(ws.tabs.bar.currentIndex())
     assert isinstance(page, QueryPage)
     assert page.editor.text() == "SELECT 7;" and page.database == "memory"
-    assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()).endswith("•")
+    assert ws.tabs.is_modified(ws.tabs.bar.currentIndex())
     assert not crashed.folder.exists()
     page.editor.setText("SELECT 8;")
     ws.recovery.save()
@@ -502,7 +514,7 @@ def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
     """Propietario (2026-11-06): un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
     (la sentencia del cursor, también en una línea en blanco, igual con DuckDB 1.5 y 2.0); con selección,
     «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Shift+Enter."""
-    from geoduck.ui.pro.editor import MARK
+    from geoduck.ui.pro.editor import MARK, PLAY
 
     ws = workspace(coordinator)
     text = "SELECT 1 AS uno;\n\nSELECT 2 AS dos\nFROM range(1);\n"
@@ -510,37 +522,44 @@ def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
     marked = lambda: [ln for ln in range(page.editor.lines()) if page.editor.markersAtLine(ln) & (1 << MARK)]  # noqa: E731
     page.editor.setCursorPosition(1, 0)  # la línea en blanco entre las dos: la anterior
     page.mark_statement()
-    assert marked() == [0] and page.run_button.text() == tr("Run · line {}").format(1)
+    assert marked() == [0] and page.run_button.accessibleName() == tr("Run · line {}").format(1)
     page.run_button.click()
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert [c.name for c in page.model.columns] == ["uno"]
     page.editor.setCursorPosition(3, 2)
     page.mark_statement()
-    assert marked() == [2, 3] and page.run_button.text() == tr("Run · line {}").format(3)
-    assert tr("Ctrl+Shift+Enter: runs all ({} statements)").format(2) in page.run_button.toolTip()
+    assert marked() == [2, 3] and page.run_button.accessibleName() == tr("Run · line {}").format(3)
+    assert tr("Run all ({} statements) · Ctrl+Shift+Enter").format(2) in page.run_button.toolTip()
+    assert page.editor.markersAtLine(2) & (1 << PLAY)  # ▶ en el margen, primera línea de la sentencia
     page.run_button.click()
     assert wait_for(lambda: done(coordinator, page) and page.results[0].statement.text.startswith("SELECT 2"))
     assert [c.name for c in page.model.columns] == ["dos"]
     page.editor.setSelection(0, 0, 0, 8)
     page.mark_statement()
-    assert marked() == [] and page.run_button.text() == tr("Run selection")
+    assert marked() == [] and page.run_button.accessibleName() == tr("Run selection")
     assert page.run_all_action.text().startswith(tr("Run all ({} statements)").format(2))
     page.editor.setSelection(0, 0, 0, 0)
     page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)
 
 
-def test_open_and_save_are_by_the_tabs_and_run_all_is_in_the_editor_menu(coordinator, tmp_path):
-    """Propietario (2026-11-06): el archivo arriba (el «⋯» junto a las pestañas), la ejecución en la barra de
-    la consulta («Se ejecuta en»), y «Ejecutar todo» en el clic derecho del editor."""
+def test_file_is_on_the_tab_right_click_and_run_all_is_in_the_editor_menu(coordinator, tmp_path):
+    """#143: una sola idea por zona. El archivo, en el clic derecho de la pestaña; al final de las pestañas,
+    «Cerrar todas»; la barra de la consulta solo ejecuta; las filas, en la barra del resultado."""
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 1 AS uno;\nSELECT 2 AS dos;")
-    ws._fill_file_menu()
-    texts = [a.text() for a in ws.file_menu.actions() if not a.isSeparator()]
-    assert texts[0].startswith(tr("Open query…"))
-    assert texts[1].startswith(tr("Save «{}»").format(page.place.name))
-    assert all(a.isEnabled() for a in ws.file_menu.actions())
-    assert not hasattr(page, "file_button")  # la barra de la consulta ya no tiene «⋯»
+    bar = ws.tabs.bar
+    ws._tab_menu(bar.tabRect(bar.currentIndex()).center())
+    texts = [a.text() for a in ws._last_tab_menu.actions() if not a.isSeparator()]
+    assert texts[0] == tr("Save") + "\tCtrl+S"
+    assert texts[1] == tr("Save as…") and texts[2].startswith(tr("Open query…"))
+    assert texts[3].startswith(tr("Close"))
+    ws._last_tab_menu.close()
+    assert not hasattr(ws, "file_button")  # sin «⋯»
+    assert ws.close_all_button.toolTip() == tr("Close all tabs") and ws.close_all_button.isVisibleTo(ws)
+    assert page.run_button.text() == ""  # solo el ícono ▶
+    for icon in (page.copy_button, page.export_button, page.load_button):  # junto a las filas, solo íconos
+        assert icon.text() == "" and icon.parentWidget() is page.summary.parentWidget()
     assert any(lab.text() == tr("Runs in") for lab in page.findChildren(type(page.summary)))
     page.editor.setCursorPosition(0, 2)
     page.mark_statement()
@@ -551,3 +570,143 @@ def test_open_and_save_are_by_the_tabs_and_run_all_is_in_the_editor_menu(coordin
     assert len(actions) > 2  # y debajo, el menú de siempre del editor
     page.run_all_action.trigger()
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)
+
+
+def test_close_all_tabs_and_play_in_the_margin(coordinator):
+    """«Cerrar todas las pestañas» al final de la barra; ▶ del margen ejecuta la sentencia de esa línea."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;\n\nSELECT 2 AS dos;")
+    page._play_line(2)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert [c.name for c in page.model.columns] == ["dos"]
+    page.saved_text = page.editor.text()  # sin cambios: cerrar no pregunta
+    new_query(ws, "")
+    assert len(ws.tabs) == 2
+    ws.close_all_button.click()
+    assert len(ws.tabs) == 0 and not ws.close_all_button.isVisibleTo(ws)
+
+
+# -- #143: consulta por zonas --------------------------------------------------------------------------
+
+
+def _rename(ws, name):
+    """Doble clic en el nombre de la pestaña actual, escribir y Enter (#143, punto 6)."""
+    from qgis.PyQt.QtTest import QTest
+
+    ws.tabs.start_rename(ws.tabs.bar.currentIndex())
+    editor = ws.tabs.rename_editor
+    assert editor is not None and editor.isVisible() and editor.selectedText()
+    editor.setText(name)
+    QTest.keyClick(editor, Qt.Key.Key_Return)
+
+
+def test_double_click_renames_a_new_query_and_esc_cancels(coordinator):
+    from qgis.PyQt.QtTest import QTest
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1;")
+    ws.tabs.bar.tabBarDoubleClicked.emit(ws.tabs.bar.currentIndex())
+    assert ws.tabs.rename_editor is not None
+    QTest.keyClick(ws.tabs.rename_editor, Qt.Key.Key_Escape)  # Esc: nada cambia
+    assert ws.tabs.rename_editor is None and page.place.name == tr("Query {}").format(1)
+    _rename(ws, "ventas")
+    assert (
+        page.place == Place(QUERY, "ventas") and ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()) == "ventas"
+    )
+    other = new_query(ws, "SELECT 2;")
+    _rename(ws, "ventas")  # otra pestaña ya se llama así: no se repite
+    assert other.place.name != "ventas"
+    assert tr("A tab named «{}» is already open").format("ventas") in ws.notice.text()
+
+
+def test_renaming_a_saved_query_renames_its_file_and_never_overwrites(coordinator, tmp_path):
+    ws = workspace(coordinator, paths=[str(tmp_path / "consumo.sql")])
+    page = new_query(ws, "SELECT 42;")
+    assert page.save()
+    _rename(ws, "ventas")
+    assert page.place == Place(QUERY, "ventas.sql", path=str(tmp_path / "ventas.sql"))
+    assert (tmp_path / "ventas.sql").read_text(encoding="utf-8") == "SELECT 42;"
+    assert not (tmp_path / "consumo.sql").exists()
+    assert [p.name for p in ws.places.recents] == ["ventas.sql"]
+    (tmp_path / "otra.sql").write_text("SELECT 0;", encoding="utf-8")
+    assert page.rename("otra") == tr("«{}» already exists in that folder: the query keeps its name").format(
+        "otra.sql"
+    )
+    assert page.place.name == "ventas.sql" and (tmp_path / "otra.sql").read_text() == "SELECT 0;"
+    assert page.rename("mal/nombre") and page.place.name == "ventas.sql"
+
+
+def test_unsaved_changes_show_the_amber_dot_and_close_all_asks(coordinator):
+    keep = workspace(coordinator, confirm="cancel")
+    new_query(keep, "SELECT 1;")
+    new_query(keep, "")
+    assert keep.tabs.is_modified(0) and not keep.tabs.is_modified(1)
+    assert tr("Unsaved changes") in keep.tabs.bar.tabToolTip(0)
+    keep.close_all_button.click()  # la vacía se cierra; la que tiene cambios pregunta y se queda
+    assert len(keep.tabs) == 1
+    drop = workspace(coordinator, confirm="discard")
+    new_query(drop, "SELECT 1;")
+    new_query(drop, "SELECT 2;")
+    drop.close_all_button.click()
+    assert len(drop.tabs) == 0 and not drop.close_all_button.isVisibleTo(drop)
+
+
+def test_copy_puts_the_rows_in_the_clipboard_with_their_names(coordinator):
+    from qgis.PyQt.QtGui import QGuiApplication
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n, 'a' || range AS t FROM range(3);")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.model.rowCount() == 3)
+    assert page.copy_button.isEnabled() and page.copy_button.toolTip()
+    page.copy_button.click()
+    assert QGuiApplication.clipboard().text() == "n\tt\n0\ta0\n1\ta1\n2\ta2"
+
+
+def test_the_margin_play_runs_that_statement(coordinator):
+    from geoduck.ui.pro.editor import PLAY
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;\nSELECT 2 AS dos;")
+    page.editor.setCursorPosition(1, 0)
+    page.mark_statement()
+    assert page.editor.markersAtLine(1) & (1 << PLAY) and not page.editor.markersAtLine(0) & (1 << PLAY)
+    page._play_line(0)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert [c.name for c in page.model.columns] == ["uno"]
+
+
+def test_the_lake_swims_and_rests_with_reduced_motion(qgis_app, monkeypatch):
+    from geoduck.ui.pro import widgets
+    from geoduck.ui.pro.tokens import LIGHT
+
+    lake = widgets.Lake(LIGHT)
+    lake.resize(200, lake.height())
+    lake.show()
+    assert lake.animated and lake.progress is None
+    lake.phase = 0.0
+    left = lake.duck_x()
+    lake.phase = 1.0
+    assert lake.duck_x() > left  # de un lado al otro
+    lake.set_progress(0.5)
+    assert lake.duck_x() == pytest.approx((13 + 200 - 16) / 2)
+    lake.set_progress(2)
+    assert lake.progress == 1.0
+    lake.hide()
+    assert not lake.animated
+    monkeypatch.setattr(widgets, "reduced_motion", lambda _w: True)
+    lake.show()
+    assert not lake.animated  # menos animaciones: el pato queda quieto
+    lake.close()
+
+
+def test_the_run_button_is_a_compact_filled_square(coordinator):
+    """Propietario (2026-11-13, opción 1): ▶ lleno, 28 × 28, a la altura del selector de base."""
+    from geoduck.ui.pro.query_page import RUN_SIZE
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1;")
+    assert page.run_button.size().width() == page.run_button.size().height() == RUN_SIZE == 28
+    assert page.run_button.text() == "" and page.run_button.property("pro") == "primary"
+    page.set_compact(True)
+    assert page.run_button.width() == RUN_SIZE  # igual en el panel acoplado

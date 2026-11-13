@@ -88,16 +88,31 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
 ## 5. Pestaña de consulta (GD-WSP-004)
 - Editor SQL de QGIS con resaltado, números de línea y el autocompletado de G6 (bases, tablas, columnas,
   funciones).
-- **El archivo arriba, la ejecución abajo** (propietario, 2026-11-06): «⋯» junto a «+» en la fila de pestañas
-  con «Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; la barra de la consulta solo tiene lo de
-  ejecutar: ▶ Ejecutar, Cancelar y **«Se ejecuta en [base ▾]»**.
+- **Una sola idea por zona** (#143; propietario, 2026-11-12, maquetas `consulta-maqueta` y
+  `consulta-turquesa`):
+  - **La pestaña es el archivo.** Clic derecho en la pestaña: Guardar (Ctrl+S), Guardar como…, Abrir
+    consulta… (Ctrl+O) y Cerrar (Ctrl+W). La ✕ en la pestaña y, con cambios sin guardar, el **● ámbar** en
+    lugar de su icono. **Doble clic en el nombre lo renombra** (Enter guarda, Esc o salir del campo cancela):
+    con archivo, el `.sql` se renombra en la misma carpeta; sin archivo, solo cambia el nombre (se propone al
+    guardar); si ya existe un archivo o una pestaña con ese nombre, avisa y no cambia nada (nunca
+    sobrescribe). Al final de las pestañas, un único **«Cerrar todas las pestañas»**, que pregunta antes por
+    las que tienen cambios sin guardar.
+  - **La barra de la consulta solo ejecuta:** el ▶ (solo el icono; la ayuda dice qué corre y los atajos) y
+    **«Se ejecuta en [base ▾]»**. Un ▶ en el margen, junto a la primera línea de la sentencia marcada, la
+    ejecuta con un clic.
+  - **La barra «Resultado» es de las filas:** solo iconos con su ayuda: copiar (la página, con los nombres de
+    las columnas, separada por tabuladores), exportar el resultado completo ▾, cargar en QGIS ▾ y el detalle.
+  - **Consulta en curso:** pasados 300 ms (sin parpadeo en las rápidas), la barra «Resultado» muestra **«el
+    lago»** —una línea de agua de 3 px con el pato nadando de un lado a otro—, «Ejecutando… N s» y
+    **■ Cancelar · Esc**; mientras corre no hay copiar, exportar ni cargar. Esc cancela solo mientras corre
+    (el resto del tiempo, Esc es del editor). Con «menos animaciones» en el sistema, el pato queda quieto.
 - **Un solo «▶ Ejecutar»** (Ctrl+Enter; propietario, 2026-11-06, tras la prueba en Windows): corre la
   selección o, sin ella, **la sentencia marcada**. Una barra de acento a la izquierda del texto marca la
   sentencia que correrá y el botón lo dice («Ejecutar · línea 5», «Ejecutar selección»); se ejecuta
   exactamente lo marcado (se calcula en GeoDuck, igual con DuckDB 1.5 y 2.0; en una línea en blanco entre
   dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Shift+Enter y el **clic derecho
-  del editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón «Todo». **Cancelar**. La selección se ve con un azul
-  claramente distinto del fondo, en claro y en oscuro.
+  del editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón
+  «Todo». La selección se ve con un turquesa claramente distinto del fondo, en claro y en oscuro.
 - **Ejecutar nunca falla en silencio** (#139): Ctrl+Enter y Ctrl+Shift+Enter los toma el editor antes que
   cualquier atajo con la misma tecla (de QGIS o de otro complemento) y cierran la lista de autocompletado si
   está abierta; si no se puede ejecutar (otra consulta en curso —«Cancelar» la detiene—, otra tarea, la sesión iniciándose, la
@@ -112,8 +127,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   «palabra»» y lleva al error. Lo que no corrió no se repite en una frase: lo dicen la marca y el resumen
   («1 OK · 1 con error · 1 sin ejecutar»). Al editar, las marcas se van.
 - **El resultado se maneja como la pestaña de tabla** (propietario, 2026-11-06, tras la prueba en Windows): el
-  mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s», ‹ › de 100 filas, «Exportar ▾» y «Cargar en QGIS ▾»;
-  y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y
+  mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s» y ‹ › de 100 filas (exportar y cargar, en la barra
+  «Resultado»); y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y
   el total repiten la lectura (`LIMIT`/`OFFSET`, `count(*)`) en el worker, sin bloquear. Sin `ORDER BY`, el
   orden entre páginas no está garantizado. Una escritura con filas (`… RETURNING`) nunca se repite: muestra su
   primera página, «Filas 1–100 de más de 100», sin ‹ ›.
