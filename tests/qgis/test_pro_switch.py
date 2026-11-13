@@ -343,7 +343,10 @@ def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugi
     ws.set_overlay_open(False)
     # de vuelta a la ventana: todo con texto y la barra lateral en su sitio
     item.workspace.set_mode(Mode.WINDOW)
-    ws.resize(1300, 800)
+    ws.window().resize(1300, 800)  # #147: compacto si la página no cabe, no solo por debajo de 640 px
+    from qgis.PyQt.QtWidgets import QApplication
+
+    QApplication.processEvents()
     query.mark_statement()
     assert not ws.compact and query.runs_in_label.isVisibleTo(query)
     assert table.mode.isVisibleTo(table) and not table.structure_button.isVisibleTo(table)

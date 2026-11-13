@@ -117,8 +117,16 @@ def read_columns(handle: ConnectionHandle, database: str, schema: str, name: str
         )
     if not out.rows:  # una tabla o vista siempre tiene columnas: el objeto ya no existe
         raise EngineError(tr("{0}.{1}.{2} no longer exists").format(database, schema, name))
+    keys = handle.execute(
+        "SELECT unnest(constraint_column_names) FROM duckdb_constraints() "
+        f"WHERE {where} AND constraint_type = 'PRIMARY KEY'",
+        max_rows=COLUMN_LIMIT,
+    )
+    primary = {str(row[0]) for row in keys.rows}
     return tuple(
-        ColumnInfo(str(col), str(data_type), None if nullable is None else bool(nullable))
+        ColumnInfo(
+            str(col), str(data_type), None if nullable is None else bool(nullable), str(col) in primary
+        )
         for col, data_type, nullable in out.rows
     )
 

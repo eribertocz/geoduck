@@ -153,6 +153,9 @@ def stylesheet(c: Colors) -> str:
 {r} QLineEdit[pro="filter-box"][invalid="true"], {r} QLineEdit[pro="where"][invalid="true"] {{
     border-color: {c.error}; background: {c.error_soft}; }}
 {r} QLineEdit[pro="where"] {{ font-family: "{mono}"; }}
+{r} QLabel[pro="drop-guide"] {{ color: {c.accent}; background: {c.accent_soft}; border: 1px dashed {c.accent};
+    border-radius: {m.radius}px; padding: 6px 10px; }}
+{r} QPushButton[pro="icon"][drop="true"] {{ background: {c.accent_soft}; border: 1.5px solid {c.accent}; }}
 {r} QFrame[pro="find-bar"] {{ background: {c.side}; border-bottom: 1px solid {c.line}; }}
 {r} QLineEdit[pro="find"] {{ font-family: "{mono}"; min-height: {m.control - 6}px; }}
 {r} QLineEdit[pro="find"][invalid="true"] {{ border-color: {c.error}; background: {c.error_soft}; }}
@@ -212,6 +215,7 @@ def stylesheet(c: Colors) -> str:
 {r} QTreeWidget[pro="nav"]::item:hover {{ background: {c.segment}; }}
 {r} QTreeWidget[pro="nav"]::item:selected {{ background: {c.accent_soft}; color: {c.text}; }}
 {r} QTreeWidget[pro="nav"]::branch {{ background: transparent; }}
+{r} QTreeWidget[pro="nav"]::branch:selected {{ background: {c.accent_soft}; }}
 {r} QTreeWidget[pro="nav"]::branch:has-children:closed {{ image: url("{closed}"); }}
 {r} QTreeWidget[pro="nav"]::branch:has-children:open {{ image: url("{opened}"); }}
 

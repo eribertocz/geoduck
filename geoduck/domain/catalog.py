@@ -57,6 +57,8 @@ class ColumnInfo:
     data_type: str
     #: `None` si DuckDB no lo informa.
     nullable: bool | None
+    #: Parte de la clave primaria (`duckdb_constraints()`; #147: la llave en el explorador).
+    primary_key: bool = False
 
     @property
     def is_geometry(self) -> bool:

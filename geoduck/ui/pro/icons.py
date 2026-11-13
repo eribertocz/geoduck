@@ -66,6 +66,15 @@ PATHS: dict[str, str] = {
     ' fill="currentColor"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/>',
     "globe": '<circle cx="12" cy="12" r="8.5"/>'
     '<path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/>',
+    # Explorador (#147): fijar y el tipo de cada columna
+    "pin": '<path d="M9 3.5h6M10 3.5v6l-3 3.5h10l-3-3.5v-6M12 13v7.5"/>',
+    "type-text": '<path d="M6 6h12M12 6v13"/>',
+    "type-number": '<path d="M9.5 4l-2 16M16.5 4l-2 16M4.5 9h15M4 15h15"/>',
+    "type-date": '<rect x="4" y="5.5" width="16" height="14" rx="2"/>'
+    '<path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+    "type-bool": '<rect x="3.5" y="7.5" width="17" height="9" rx="4.5"/><circle cx="16" cy="12" r="2.5"/>',
+    "type-other": '<path d="M9 5H7.5a2 2 0 0 0-2 2v3l-1.5 2 1.5 2v3a2 2 0 0 0 2 2H9M15 5h1.5a2 2 0 0 1 2 2v3'
+    'l1.5 2-1.5 2v3a2 2 0 0 1-2 2H15"/>',
     "qgis-layers": '<path d="M12 3l9 5-9 5-9-5z" fill="currentColor"/>'
     '<path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5"/>',
 }
