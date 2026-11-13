@@ -79,6 +79,13 @@ acción explica que hay que iniciar una.
    y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
    esa capa se copia por el camino 3, sin error. **Trazabilidad** (paso 3 y «Exportar ▾»): origen (ícono por
    tipo) → QGIS (capas) → DuckDB; el puente azul «⚡ DuckDB» salta QGIS; el diagrama es también el avance.
+   **También sin `spatial` (#140):** una capa que viene de un **Parquet/GeoParquet, Arrow, CSV o JSON** la lee
+   DuckDB con su lector propio (`read_parquet`, `read_csv`, `read_json`, PyArrow para Arrow), sin `spatial` y
+   con el filtro como `WHERE`. La geometría y el SRC salen de la capa de QGIS (sin `pyarrow.parquet`, que en
+   algunos QGIS de Windows no carga: F-130). CSV y JSON solo sin geometría (QGIS la arma de columnas de texto
+   que DuckDB no ve como geometría) y siempre con la comprobación de filas. Si la lectura directa falla o da
+   otras filas, esa capa se copia por el camino 3 («DuckDB lee el archivo distinto que QGIS»). Una unidad
+   montada (Google Drive, OneDrive) es una ruta más.
 
 ## 6. Columnas y tipos (GD-IMP-005)
 | QGIS (`QMetaType`) | DuckDB |

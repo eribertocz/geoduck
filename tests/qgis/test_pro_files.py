@@ -383,3 +383,28 @@ def test_a_filter_that_gives_other_rows_in_duckdb_falls_back_to_qgis(coordinator
     assert not flow.traces[0].bridge
     assert tr("DuckDB does not understand its filter") in flow.whys[0].text()
     assert read_one(coordinator, "SELECT count(*) FROM memory.main.rara")[0] == 50
+
+
+def test_a_filtered_geoparquet_layer_is_copied_by_duckdb_without_spatial(coordinator, tmp_path):
+    """#140: una capa GeoParquet con filtro la copia DuckDB (`read_parquet`), sin pedir `spatial` y con la
+    comprobación de filas: puente, ✓ y «mismas filas que en QGIS»."""
+    from qgis.core import QgsProject, QgsVectorLayer
+
+    from geoduck.domain.importing import PATH_GDAL
+    from tests.qgis.test_import_layers import make_parquet
+
+    make_parquet(tmp_path / "rios.parquet")
+    layer = QgsVectorLayer(str(tmp_path / "rios.parquet"), "rios", "ogr")
+    layer.setSubsetString("\"nombre\" <> 'río 0'")
+    QgsProject.instance().addMapLayer(layer)
+    ws = workspace(coordinator)
+    ws.send_layers([layer.id()], (DB, "main"))
+    flow = ws.to_duckdb
+    candidate = flow._candidates[0]
+    assert candidate.path == PATH_GDAL and not candidate.needs_spatial
+    dialog = to_step_two(ws)
+    assert candidate.path_for(False, False, dialog.duckdb_reads) == PATH_GDAL  # sin `spatial`
+    add_all(ws, coordinator)
+    assert flow.states[0]["state"] == "done" and not flow.states[0].get("fallback")
+    assert flow.traces[0].bridge and flow.states[0]["checked"]
+    assert read_one(coordinator, "SELECT count(*) FROM memory.main.rios")[0] == 3

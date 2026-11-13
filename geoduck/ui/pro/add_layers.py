@@ -345,7 +345,7 @@ class AddLayers:
         self._candidates = coordinator.send_candidates(layer_ids)
         self._destination = destination
         self._spatial_loaded = False
-        if any(c.path == PATH_GDAL for c in self._candidates):
+        if any(c.path == PATH_GDAL and c.needs_spatial for c in self._candidates):
             coordinator.check_spatial()  # responde con SpatialChecked: nota «Instalar y acelerar»
         marked = set(layer_ids) if layer_ids is not None else set(checked or [])
         window = self._window()
@@ -644,6 +644,7 @@ class AddLayers:
             self.request,
             items=(self.request.items[index],),
             duckdb_reads=self.request.duckdb_reads and not fallback,  # §5.4: tras un filtro distinto, QGIS
+            direct=self.request.direct and not fallback,  # #140: tras un intento directo que falló, QGIS
         )
         self._current = index
         self.states[index]["state"] = RUNNING
@@ -696,7 +697,7 @@ class AddLayers:
         if not self.files and not self.running and isinstance(event, SpatialChecked):
             self._spatial_installed = event.installed
             self._spatial_loaded = event.loaded
-            needs = any(c.path == PATH_GDAL for c in self._candidates)
+            needs = any(c.path == PATH_GDAL and c.needs_spatial for c in self._candidates)
             if (
                 needs
                 and not event.loaded
@@ -750,11 +751,20 @@ class AddLayers:
             started = self.states[index].get("started")
             self.states[index]["seconds"] = time.monotonic() - started if started else None
             request = self.request
+            candidate = (
+                next((c for c in self._candidates if c.layer_id == request.items[index].layer_id), None)
+                if request is not None
+                else None
+            )
             self.states[index]["checked"] = bool(
                 request is not None
-                and request.duckdb_reads
+                and candidate is not None
+                and candidate.filtered
                 and not self.states[index].get("fallback")
-                and any(c.filtered for c in self._candidates if c.layer_id == request.items[index].layer_id)
+                and candidate.path_for(
+                    request.only_selected, request.reproject_to is not None, request.duckdb_reads
+                )
+                == PATH_GDAL
             )
             self._mark(index, DONE, " · ".join(event.report.warnings))
             self.tables.extend(event.report.tables)
@@ -781,15 +791,21 @@ class AddLayers:
             self._host.notify(tr("It could not be undone:") + f" {event.message}")
 
     def _retry(self, index: int, event: SendFailed) -> bool:
-        """Una capa de archivo leída por DuckDB con el filtro de QGIS que falló (filtro que DuckDB no entiende
-        o que da otras filas): se copia por QGIS, sin error para el usuario (§5.4). True si se reintenta."""
+        """Una capa de archivo leída por DuckDB que falló (filtro que DuckDB no entiende o que da otras
+        filas; o un Parquet, Arrow, CSV o JSON que DuckDB entiende distinto que QGIS, #140): se copia por
+        QGIS, sin error para el usuario (§5.4). True si se reintenta."""
         state = self.states[index]
-        if event.cancelled or state.get("fallback") or self.request is None or not self.request.duckdb_reads:
+        if event.cancelled or state.get("fallback") or self.request is None:
             return False
-        candidate = next(
-            (c for c in self._candidates if c.layer_id == self.request.items[index].layer_id), None
-        )
-        if candidate is None or candidate.path != PATH_GDAL or not candidate.filtered:
+        request = self.request
+        candidate = next((c for c in self._candidates if c.layer_id == request.items[index].layer_id), None)
+        if candidate is None or candidate.path != PATH_GDAL:
+            return False
+        if candidate.path_for(
+            request.only_selected, request.reproject_to is not None, request.duckdb_reads
+        ) != (PATH_GDAL):
+            return False  # no se leyó directo: el error es de QGIS, no se repite
+        if candidate.needs_spatial and not candidate.filtered:
             return False
         state["fallback"] = True
         state["state"] = WAITING
@@ -961,7 +977,9 @@ class AddLayers:
         c = next(x for x in self._candidates if x.layer_id == item.layer_id)
         fallback = bool(self.states[index].get("fallback"))
         reproject = request.reproject_to is not None
-        path = c.path_for(request.only_selected, reproject, request.duckdb_reads and not fallback)
+        path = c.path_for(
+            request.only_selected, reproject, request.duckdb_reads and not fallback, not fallback
+        )
         if path == PATH_CONNECTED:
             return True, tr("Copied inside DuckDB (Connected layer)")
         if path != PATH_QGIS:
@@ -969,13 +987,15 @@ class AddLayers:
             if c.filtered:
                 why += " · " + tr("with the layer filter")
             return True, why
-        if fallback:
+        if fallback and c.filtered:
             reason = tr("DuckDB does not understand its filter")
+        elif fallback:
+            reason = tr("DuckDB reads the file differently from QGIS")
         elif reproject and c.geometry is not None:
             reason = tr("it is reprojected")
         elif request.only_selected and c.selected:
             reason = tr("only the selection")
-        elif c.path == PATH_GDAL:
+        elif c.path == PATH_GDAL and c.needs_spatial:
             reason = tr("«spatial» is not loaded")
         elif c.source_kind == "memory":
             reason = tr("temporary layer, without a file")

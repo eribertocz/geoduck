@@ -26,6 +26,7 @@ from geoduck.domain.errors import GeoDuckError, OperationCancelledError
 from geoduck.domain.importing import ImportMode, ImportReport
 from geoduck.qgis_bridge.importer import (
     PATH_CONNECTED,
+    PATH_GDAL,
     PATH_PARQUET,
     PATH_QGIS,
     LayerImport,
@@ -345,10 +346,64 @@ def test_geoparquet_copy_and_view(session, tmp_path):
             ("GEOMETRY('EPSG:4326')", 4),
         )
     assert rows(session, "SELECT count(*) FROM duckdb_views() WHERE view_name = 'rios_vista'") == ((1,),)
-    layer.setSubsetString("\"nombre\" = 'río 1'")  # con filtro, se copia leyendo QGIS
-    assert plan_layer(layer, table="uno").path == PATH_QGIS
+    layer.setSubsetString("\"nombre\" = 'río 1'")  # con filtro: lo lee DuckDB con su `WHERE` (#140)
+    assert plan_layer(layer, table="uno").path == PATH_GDAL
+    assert plan_layer(layer, table="uno", direct=False).path == PATH_QGIS  # tras fallar, QGIS
     with pytest.raises(GeoDuckError):
         plan_layer(layer, table="uno", as_view=True)
+
+
+def test_a_filtered_geoparquet_is_read_directly_by_duckdb(session, tmp_path):
+    """#140: un GeoParquet con filtro ya no pasa por QGIS: `read_parquet` con el filtro como `WHERE` y la
+    comprobación de filas; sin `spatial`."""
+    make_parquet(tmp_path / "rios.parquet")
+    layer = QgsVectorLayer(str(tmp_path / "rios.parquet"), "rios", "ogr")
+    layer.setSubsetString("\"nombre\" IN ('río 1', 'río 2')")
+    plan = plan_layer(layer, table="dos")
+    assert plan.path == PATH_GDAL and plan.job.expected_rows == 2
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    geometry = plan.job.geometry.name
+    assert rows(session, f"SELECT typeof({geometry}), count(*) FROM dos GROUP BY 1") == (
+        ("GEOMETRY('EPSG:4326')", 2),
+    )
+
+
+def test_a_geoparquet_is_read_directly_even_without_pyarrow_parquet(session, tmp_path, monkeypatch):
+    """#140: en algunos QGIS de Windows `pyarrow.parquet` no carga (F-130); antes el Parquet pasaba por QGIS.
+    Ahora la geometría y el SRC salen de la capa de QGIS y lo lee DuckDB."""
+    from geoduck.qgis_bridge import importer
+
+    make_parquet(tmp_path / "rios.parquet")
+    monkeypatch.setattr(importer, "_parquet_metadata", lambda _path: None)
+    layer = QgsVectorLayer(str(tmp_path / "rios.parquet"), "rios", "ogr")
+    plan = plan_layer(layer, table="rios")
+    assert plan.path == PATH_GDAL
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    geometry = plan.job.geometry.name
+    assert rows(session, f"SELECT typeof({geometry}), count(*) FROM rios GROUP BY 1") == (
+        ("GEOMETRY('EPSG:4326')", 4),
+    )
+
+
+def test_a_csv_without_geometry_is_read_directly_and_checked(session, tmp_path):
+    """#140: un CSV sin geometría lo lee DuckDB (`read_csv`) y se comprueba que dé las filas de QGIS; un CSV
+    con geometría (QGIS la arma de una columna de texto) sigue por QGIS."""
+    plain = tmp_path / "lecturas.csv"
+    plain.write_text("id,zona,kwh\n1,Norte,50.8\n2,Sur,71.2\n3,Sur,88.1\n", encoding="utf-8")
+    layer = QgsVectorLayer(str(plain), "lecturas", "ogr")
+    assert layer.isValid() and not layer.isSpatial()
+    plan = plan_layer(layer, table="lecturas")
+    assert plan.path == PATH_GDAL and plan.job.expected_rows == 3
+    report, _ = send(session, [plan])
+    assert isinstance(report, ImportReport), report
+    assert rows(session, "SELECT count(*), sum(kwh) FROM lecturas") == ((3, 210.1),)
+    spatial = tmp_path / "puntos.csv"
+    spatial.write_text('id,WKT\n1,"POINT (1 2)"\n', encoding="utf-8")
+    with_geometry = QgsVectorLayer(str(spatial), "puntos", "ogr")
+    assert with_geometry.isValid() and with_geometry.isSpatial()
+    assert plan_layer(with_geometry, table="puntos").path == PATH_QGIS
 
 
 # -- «Reproyectar a…» (E4; qgis-import-spec §3; AT-IMP-003, spatial-spec §8: 0,01 m) -------------------
