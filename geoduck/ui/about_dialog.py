@@ -144,7 +144,7 @@ class AboutDialog(QDialog):
         layout.addLayout(buttons)
 
     def _build_header(self, palette: theme.Palette) -> QHBoxLayout:
-        """Icono, nombre, versión en una etiqueta y resumen."""
+        """Icono, nombre y versión en una etiqueta: sin frase, la marca habla sola (#142)."""
         icon = QLabel()
         icon.setPixmap(QIcon(str(_ICON)).pixmap(56, 56))
         name = QLabel(f'Geo<span style="color: {palette.action};">Duck</span>')  # «Geo» + «Duck» en turquesa
@@ -163,15 +163,9 @@ class AboutDialog(QDialog):
         name_row.addWidget(name)
         name_row.addWidget(self.version, 0, Qt.AlignmentFlag.AlignVCenter)
         name_row.addStretch(1)
-        summary = QLabel(
-            tr("DuckDB session inside QGIS. DuckDB processes, GeoDuck transfers and QGIS manages.")
-        )
-        summary.setProperty("geoduck", "muted")
-        summary.setWordWrap(True)
         heading = QVBoxLayout()
         heading.setSpacing(4)
         heading.addLayout(name_row)
-        heading.addWidget(summary)
         top = QHBoxLayout()
         top.setSpacing(14)
         top.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)

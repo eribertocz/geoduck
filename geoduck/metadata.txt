@@ -3,8 +3,8 @@ name=GeoDuck
 qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 supportsQt6=True
-description=Sesión DuckDB dentro de QGIS: SQL, bases adjuntas y carga de resultados como capas en memoria, GeoPackage o conectadas y editables.
-about=GeoDuck integra una sesión DuckDB en QGIS. DuckDB procesa, GeoDuck transfiere y QGIS administra. Los resultados se cargan como copia en memoria, como copia rápida (GeoPackage) o conectados a DuckDB, con edición atómica; y las capas de QGIS se envían a DuckDB como tablas.
+description=DuckDB en QGIS: SQL espacial y capas en los dos sentidos.
+about=GeoDuck lleva DuckDB a QGIS: consultas SQL y capas que van y vuelven entre QGIS y DuckDB.
 
     ESTADO: Alpha (0.10.0a1, Workspace Pro). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 
