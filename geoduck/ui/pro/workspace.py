@@ -68,7 +68,7 @@ from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import accepts, drop_hint, file_paths, layer_ids, menu_title, place_job
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu, popup_under
+from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu
 from geoduck.ui.pro.open_files import open_in_qgis
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
@@ -275,12 +275,13 @@ class ProWorkspace(QWidget):
         self.new_query_button = icon_button("plus", tr("New query"), self.colors)
         self.new_query_button.clicked.connect(self.new_query)
         row.addWidget(self.new_query_button, 0, Qt.AlignmentFlag.AlignVCenter)
-        # el archivo de la consulta, a la altura de las pestañas (propietario, 2026-11-06)
-        self.file_button = icon_button("more", tr("Open, save, save as…"), self.colors)
-        self.file_menu = QMenu(self)
-        self.file_menu.aboutToShow.connect(self._fill_file_menu)
-        self.file_button.clicked.connect(lambda: popup_under(self.file_menu, self.file_button))
-        row.addWidget(self.file_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        # Al final de las pestañas, «Cerrar todas las pestañas» (propietario, 2026-11-12); el archivo de cada
+        # pestaña, en su clic derecho
+        self.close_all_button = icon_button("close", tr("Close all tabs"), self.colors)
+        self.close_all_button.clicked.connect(self.tabs.close_all)
+        row.addWidget(self.close_all_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.tabs.bar.customContextMenuRequested.connect(self._tab_menu)
+        self.tabs.rename_requested.connect(self._rename_tab)
         row.addStretch(1)
         self.search_button = button(tr("Search"), "ghost", icon="search", colors=self.colors)
         self.search_button.setToolTip(tr("Go to a table or run an action (Ctrl+K)"))
@@ -311,22 +312,38 @@ class ProWorkspace(QWidget):
             more=len(places) == 1,
         )
 
-    def _fill_file_menu(self) -> None:
-        """«Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; guardar, solo con una consulta elegida."""
-        menu = self.file_menu
-        menu.clear()
+    def _rename_tab(self, page: QWidget, name: str) -> None:
+        """Doble clic en el nombre de una consulta y Enter (#143, punto 6): renombra la pestaña y su archivo,
+        sin sobrescribir nunca; si no se puede, el pie dice por qué."""
+        if not isinstance(page, QueryPage):
+            return
+        if not page.place.path:
+            twin = self.tabs.index_of(Place(QUERY, name.strip()))
+            if twin >= 0 and self.tabs.page(twin) is not page:
+                self.notify(tr("A tab named «{}» is already open").format(name.strip()))
+                return
+        reason = page.rename(name)
+        if reason:
+            self.notify(reason)
+
+    def _tab_menu(self, pos: Any) -> None:
+        """Clic derecho en una pestaña (#143, punto 4): Guardar, Guardar como…, Abrir consulta… y Cerrar.
+        Guardar y Guardar como, solo en una consulta; «Abrir consulta…» abre otra pestaña."""
+        index = self.tabs.bar.tabAt(pos)
+        if index < 0:
+            return
+        page = self.tabs.page(index)
+        query = page if isinstance(page, QueryPage) else None
+        menu = QMenu(self)
+        if query is not None:
+            menu.addAction(tr("Save") + "\tCtrl+S", query.save)
+            menu.addAction(tr("Save as…"), query.save_as)
         menu.addAction(tr("Open query…") + "\tCtrl+O", self.open_query_file)
         menu.addSeparator()
-        page = self.tabs.page(self.tabs.bar.currentIndex()) if len(self.tabs) else None
-        query = page if isinstance(page, QueryPage) else None
-        name = query.place.name if query is not None else ""
-        save = menu.addAction(
-            (tr("Save «{}»").format(name) if query is not None else tr("Save")) + "\tCtrl+S",
-            lambda: query.save() if query is not None else None,
-        )
-        save_as = menu.addAction(tr("Save as…"), lambda: query.save_as() if query is not None else None)
-        save.setEnabled(query is not None)
-        save_as.setEnabled(query is not None)
+        menu.addAction(tr("Close") + "\tCtrl+W", lambda: self.tabs.close_tab(self.tabs.index_of_page(page)))
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        menu.popup(self.tabs.bar.mapToGlobal(pos))
+        self._last_tab_menu = menu
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         super().resizeEvent(event)
@@ -775,7 +792,8 @@ class ProWorkspace(QWidget):
         self.sidebar.set_session(dot, engine, status, ready=ready)
         self.status_changed.emit(dot, text)
         has_session = self._coordinator.engine_info is not None and state is not SessionState.DISCONNECTED
-        for widget in (self.new_query_button, self.file_button, self.search_button):
+        self.close_all_button.setVisible(len(self.tabs) > 0)
+        for widget in (self.new_query_button, self.search_button):
             widget.setEnabled(has_session)
         self.tabs.bar.setVisible(len(self.tabs) > 0)
         if not has_session or state is SessionState.CLOSING:

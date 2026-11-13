@@ -16,13 +16,14 @@ Guardar escribe el SQL tal cual en un `.sql`; una consulta con archivo se autogu
 from __future__ import annotations
 
 import contextlib
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QKeySequence
+from qgis.PyQt.QtGui import QGuiApplication, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QAction,
@@ -68,7 +69,7 @@ from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_unde
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns, tighten
 from geoduck.ui.pro.tokens import METRICS, Colors
-from geoduck.ui.pro.widgets import Segmented, button, icon_button, label, spacer
+from geoduck.ui.pro.widgets import Lake, Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
 
 #: Espera tras el último cambio antes de autoguardar en el archivo de la consulta.
@@ -77,6 +78,8 @@ AUTOSAVE_MS = 1500
 RESULT, MESSAGES = 0, 1
 #: Espera tras mover el cursor o escribir antes de volver a marcar la sentencia que correrá.
 MARK_MS = 60
+#: La franja «Ejecutando…» aparece solo si la consulta tarda más que esto (#138: sin parpadeo).
+RUNNING_MS = 300
 
 
 def _seconds(ms: float) -> str:
@@ -138,6 +141,8 @@ class QueryPage(QWidget):
         self._pages: dict[int, dict[str, Any]] = {}
         self.detail_open = True
         self.compact = False
+        self._started = 0.0  # consulta en curso (#138): cuándo empezó
+        self._running_timer = QTimer(self, timeout=self._tick_running)
         self.saved_text = sql if place.path else None  # lo que hay en el archivo
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
@@ -154,7 +159,9 @@ class QueryPage(QWidget):
         # Ctrl+Enter / Ctrl+Shift+Enter desde el editor, antes que cualquier atajo y con la lista de
         # autocompletado abierta (#139); los atajos de abajo cubren el resto de la página (resultado, barra)
         self._run_keys = pro_editor.RunKeys(
-            self.editor, lambda every: self.execute(RunScope.ALL if every else RunScope.CURRENT)
+            self.editor,
+            lambda every: self.execute(RunScope.ALL if every else RunScope.CURRENT),
+            self._escape_cancels,
         )
         self.editor.installEventFilter(self._run_keys)
         self._wire_mark()
@@ -171,21 +178,28 @@ class QueryPage(QWidget):
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(AUTOSAVE_MS)
         self._autosave.timeout.connect(self.save_if_saved)
+        self._shortcuts()
+        self.show_databases(coordinator.catalog, database)
+        self._unsubscribe = coordinator.subscribe(self._on_event)
+        self._render_state()
+        self.mark_statement()
+        self._show_results()
+
+    def _shortcuts(self) -> None:
         for keys, slot in (
             ("Ctrl+Return", lambda: self.execute(RunScope.CURRENT)),
             ("Ctrl+Enter", lambda: self.execute(RunScope.CURRENT)),
             ("Ctrl+Shift+Return", lambda: self.execute(RunScope.ALL)),
             ("Ctrl+Shift+Enter", lambda: self.execute(RunScope.ALL)),
             ("Ctrl+S", self.save),
+            ("Escape", self.cancel),
         ):  # Ctrl+O es del workspace (abre en una pestaña nueva)
             shortcut = QShortcut(QKeySequence(keys), self)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(slot)
-        self.show_databases(coordinator.catalog, database)
-        self._unsubscribe = coordinator.subscribe(self._on_event)
-        self._render_state()
-        self.mark_statement()
-        self._show_results()
+        # Esc cancela solo mientras corre (#143): el resto del tiempo es del editor (autocompletado…)
+        self._escape = shortcut
+        self._escape.setEnabled(False)
 
     # -- construcción ---------------------------------------------------------------------------------
 
@@ -195,20 +209,13 @@ class QueryPage(QWidget):
         row = QHBoxLayout(bar)
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(6)
-        # Un solo «Ejecutar» (propietario, 2026-11-06): la selección o la sentencia marcada; «Ejecutar todo»
-        # un paso atrás (Ctrl+Shift+Enter y el menú «⋯»). El texto y la marca dicen qué correrá.
-        self.run_button = button(tr("Run"), "primary", icon="play")
+        # Una sola idea por zona (propietario, 2026-11-12): esta barra es «correr el SQL»: ▶ (solo ícono; la
+        # ayuda dice qué corre y su atajo) y la base. El archivo va en la pestaña; las filas, en el resultado.
+        self.run_button = button("", "primary", icon="play")
         self.run_button.setIcon(self._icon("play", self.colors.on_accent))
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
-        self.kbd_label = label("Ctrl+Enter", "kbd")
-        row.addWidget(self.kbd_label, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addSpacing(6)
-        self.cancel_button = button(tr("Cancel"), "ghost", icon="stop", colors=self.colors)
-        self.cancel_button.setToolTip(tr("Stops the running SQL"))
-        self.cancel_button.clicked.connect(self.cancel)
-        row.addWidget(self.cancel_button)
-        row.addWidget(spacer(), 1)
         self.runs_in_label = label(tr("Runs in"), "muted")
         row.addWidget(self.runs_in_label)
         self.base = QComboBox()
@@ -217,6 +224,7 @@ class QueryPage(QWidget):
         self.base.setMinimumWidth(110)
         self.base.currentIndexChanged.connect(lambda _i: self.changed.emit())
         row.addWidget(self.base)
+        row.addWidget(spacer(), 1)
         # «Ejecutar todo»: Ctrl+Shift+Enter y el clic derecho del editor (abrir y guardar están junto a las
         # pestañas: el archivo arriba, la ejecución aquí; propietario, 2026-11-06)
         self.run_all_action = QAction(tr("Run all") + "\tCtrl+Shift+Enter", self)
@@ -249,7 +257,37 @@ class QueryPage(QWidget):
         self.error_link.linkActivated.connect(lambda _l: self._go_to_error())
         self.error_link.hide()
         row.addWidget(self.error_link)
+        # Consulta en curso (#143, punto 1): el pato nadando en el lago, «Ejecutando… 12 s» y
+        # ■ Cancelar · Esc, solo si tarda más de `RUNNING_MS` (sin parpadeo en las rápidas)
+        self.running = QWidget()
+        strip = QHBoxLayout(self.running)
+        strip.setContentsMargins(0, 0, 0, 0)
+        strip.setSpacing(10)
+        self.lake = Lake(self.colors, accessible_name=tr("Running"))
+        self.lake.setMinimumWidth(120)
+        self.lake.setMaximumWidth(220)
+        strip.addWidget(self.lake, 1)
+        self.elapsed_label = label("", "muted")
+        strip.addWidget(self.elapsed_label)
+        self.stop_button = button(tr("Cancel · Esc"), "ghost", icon="stop", colors=self.colors)
+        self.stop_button.setToolTip(tr("Stops the running SQL (Esc)"))
+        self.stop_button.clicked.connect(self.cancel)
+        strip.addWidget(self.stop_button)
+        self.running.hide()
+        row.addWidget(self.running, 1)
         row.addWidget(spacer(), 1)
+        # Las filas (#143, punto 3): solo íconos, con la ayuda que dice qué hace y sobre qué
+        self.copy_button = icon_button("copy", tr("Copy the rows of this page"), self.colors)
+        self.copy_button.clicked.connect(self.copy_result)
+        row.addWidget(self.copy_button)
+        self.export_button = icon_button("export", tr("Export the full result ▾"), self.colors)
+        self.export_menu = export_menu(self, self.export)
+        self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
+        row.addWidget(self.export_button)
+        self.load_button = icon_button("layers", tr("Load the full result in QGIS ▾"), self.colors)
+        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
+        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
+        row.addWidget(self.load_button)
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
         self.detail_button.setCheckable(True)
         self.detail_button.setChecked(True)
@@ -309,8 +347,8 @@ class QueryPage(QWidget):
         return panel
 
     def _build_footer(self) -> QWidget:
-        """El pie del resultado, igual que el de la pestaña de tabla: «Filas 1–100 de N · tiempo», ‹ ›,
-        «Exportar» y «Cargar en QGIS» (propietario, 2026-11-06)."""
+        """El pie del resultado: «Filas 1–100 de N · tiempo» y ‹ ›. Exportar y cargar están en la barra del
+        resultado, junto a las filas (propietario, 2026-11-12)."""
         foot = QFrame()
         foot.setProperty("pro", "rule-top")
         foot.setFixedHeight(METRICS.bar - 4)
@@ -326,16 +364,6 @@ class QueryPage(QWidget):
         row.addWidget(self.prev_button)
         row.addWidget(self.next_button)
         row.addStretch(1)
-        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
-        self.export_button.setToolTip(tr("Exports the full query of this result"))
-        self.export_menu = export_menu(self, self.export)
-        self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
-        row.addWidget(self.export_button)
-        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
-        self.load_button.setToolTip(tr("Loads the full result as a QGIS layer"))
-        self.load_menu = load_menu(self, self.colors, self.load_in_qgis, more=True)
-        self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
-        row.addWidget(self.load_button)
         return foot
 
     # -- base de la consulta --------------------------------------------------------------------------
@@ -457,7 +485,9 @@ class QueryPage(QWidget):
         self.run = Run(run_id, text)
         self.editor.status.clear()  # las marcas son de la ejecución anterior (#139)
         self.error_link.hide()
-        self.summary.setText(tr("Running…"))
+        self.summary.setText("")
+        self._started = time.monotonic()
+        self._running_timer.start(RUNNING_MS)
         self._render_state()
 
     def _blocked(self) -> str:
@@ -477,24 +507,56 @@ class QueryPage(QWidget):
             return tr("The transaction failed: run ROLLBACK (or close it) before running more SQL")
         return tr("GeoDuck is not started: start it to run SQL")
 
+    def _tick_running(self) -> None:
+        """Muestra o actualiza «Ejecutando… N s» mientras la consulta sigue (#143, punto 1)."""
+        if self.run is None:
+            self._stop_running()
+            return
+        seconds = int(time.monotonic() - self._started)
+        self.elapsed_label.setText(
+            tr("{} s").format(seconds) if self.compact else tr("Running… {} s").format(seconds)
+        )
+        if self.running.isHidden():
+            self.running.show()
+            for widget in (self.summary, self.error_link):
+                widget.hide()
+            self._running_timer.start(1000)
+
+    def _stop_running(self) -> None:
+        """Termina la franja «Ejecutando…»; el resumen del resultado vuelve a su lugar."""
+        self._running_timer.stop()
+        self.running.hide()
+        self.summary.show()
+        self._started = 0.0
+
+    def copy_result(self) -> None:
+        """Copiar (#143, punto 3): la página que se ve, con los nombres de las columnas, separadas por
+        tabuladores (se pegan en una hoja de cálculo). Copiar una selección llega con #144."""
+        model = self.model
+        if not model.columns:
+            return
+        rows = range(len(model.rows))
+        names = [column.name for column in model.columns]
+        lines = ["\t".join(names)]
+        lines += ["\t".join("" if v is None else str(v) for v in model.rows[r]) for r in rows]
+        QGuiApplication.clipboard().setText("\n".join(lines))
+        copied = len(lines) - 1
+        self.notice.emit(tr("1 row copied") if copied == 1 else tr("{} rows copied").format(_count(copied)))
+
     def set_compact(self, compact: bool) -> None:
-        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): ▶ sin texto, ■, la base
-        sin «Se ejecuta en»; «Exportar» y «Cargar en QGIS» como íconos; el detalle de la fila, cerrado. Todo
-        sigue ahí, con su tooltip."""
+        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): la base sin «Se ejecuta
+        en», «12 s» en vez de «Ejecutando… 12 s» y el detalle de la fila cerrado. Todo sigue ahí."""
         self.compact = compact
-        self.kbd_label.setVisible(not compact)
         self.runs_in_label.setVisible(not compact)
         self.base.setMinimumWidth(80 if compact else 110)
-        for widget, text in (
-            (self.cancel_button, tr("Cancel")),
-            (self.export_button, tr("Export")),
-            (self.load_button, tr("Load in QGIS")),
-        ):
-            widget.setText("" if compact else text)
-            widget.setAccessibleName(text)
         self.detail_button.setChecked(not compact)
+        self.stop_button.setText("" if compact else tr("Cancel · Esc"))  # compacto: solo ■, con su ayuda
+        self.stop_button.setAccessibleName(tr("Cancel · Esc"))
+        self.lake.setMinimumWidth(60 if compact else 120)
+        self.lake.setMaximumWidth(120 if compact else 220)
         tighten(self.range_label.parentWidget().layout(), compact, (16, 0, 16, 0), 10)
         tighten(self.run_button.parentWidget().layout(), compact, (12, 8, 12, 8), 6)
+        tighten(self.view.parentWidget().layout(), compact, (12, 6, 12, 6), 10)
         self.mark_statement()
         self._update_range(self.current_result if self.view.current == RESULT else None)
 
@@ -508,8 +570,15 @@ class QueryPage(QWidget):
         for signal in (editor.cursorPositionChanged, editor.selectionChanged, editor.textChanged):
             signal.connect(lambda *_a: self._mark_timer.start())
         pro_editor.prepare_mark(editor, self.colors)
+        pro_editor.prepare_play(editor, self.colors, self._play_line)
         self._context = _EditorMenu(self)
         editor.viewport().installEventFilter(self._context)
+
+    def _play_line(self, line: int) -> None:
+        """▶ del margen: ejecuta la sentencia de esa línea (el cursor va ahí; sin selección)."""
+        self.editor.setCursorPosition(line, 0)
+        self.mark_statement()
+        self.execute(RunScope.CURRENT)
 
     def current_span(self) -> tuple[int, int] | None:
         """(inicio, fin) de la sentencia marcada en el texto del editor."""
@@ -535,15 +604,22 @@ class QueryPage(QWidget):
             what = tr("Run · line {}").format(lines[0] + 1)
         else:
             what = tr("Run")
-        # en el modo compacto, solo el ícono ▶ (propietario, 2026-11-07); el texto va al tooltip
-        self.run_button.setText("" if self.compact else what)
+        # solo el ícono ▶ (propietario, 2026-11-12): la ayuda dice qué corre y sus atajos
         self.run_button.setAccessibleName(what)
-        tips = [
-            tr("Ctrl+Enter: runs the selection or, without one, the marked statement"),
-            tr("Ctrl+Shift+Enter: runs all ({} statements)").format(count),
-        ]
-        self.run_button.setToolTip("\n".join([what, *tips] if self.compact else tips))
+        self.run_button.setToolTip(
+            "\n".join(
+                [what + " · Ctrl+Enter", tr("Run all ({} statements) · Ctrl+Shift+Enter").format(count)]
+            )
+        )
+        pro_editor.mark_play(self.editor, lines[0] if lines is not None else None)
         self.run_all_action.setText(tr("Run all ({} statements)").format(count) + "\tCtrl+Shift+Enter")
+
+    def _escape_cancels(self) -> bool:
+        """Esc en el editor: cancela si hay una consulta en curso (#143); si no, la tecla sigue su camino."""
+        if self.run is None:
+            return False
+        self.cancel()
+        return True
 
     def cancel(self) -> None:
         if self.run is not None:
@@ -572,6 +648,7 @@ class QueryPage(QWidget):
         )
         self._messages(run.text, self.results, parse_error, parse_offset)
         self.run = None
+        self._stop_running()
         self.run_text = run.text
         self._mark_run(run.text, self.results, parse_error, parse_offset)
         self._show_results(run.text)
@@ -977,6 +1054,33 @@ class QueryPage(QWidget):
         self.renamed.emit(old)
         return True
 
+    def rename(self, name: str) -> str:
+        """Doble clic en el nombre de la pestaña (#143, punto 6). Con archivo, el `.sql` se renombra en la
+        misma carpeta; sin archivo, solo cambia el nombre (se propone al guardar). Nunca sobrescribe: si ya
+        existe un archivo con ese nombre, no cambia nada. Devuelve el motivo si no se pudo, o vacío."""
+        name = name.strip()
+        if not name or name == self.place.name:
+            return ""
+        if any(ch in name for ch in '/\\:*?"<>|'):
+            return tr("A file name cannot have / \\ : * ? < > | or quotes")
+        old = self.place
+        if old.path:
+            source = Path(old.path)
+            target = source.with_name(name if name.lower().endswith(".sql") else name + ".sql")
+            same = target.exists() and target.resolve() == source.resolve()  # solo mayúsculas (Windows)
+            if target.exists() and not same:
+                return tr("«{}» already exists in that folder: the query keeps its name").format(target.name)
+            self.save_if_saved()
+            try:
+                source.rename(target)
+            except OSError as exc:
+                return tr("The file could not be renamed: {}").format(exc.strerror or str(exc))
+            self.place = Place(QUERY, target.name, path=str(target))
+        else:
+            self.place = Place(QUERY, name)
+        self.renamed.emit(old)
+        return ""
+
     def _write(self, path: str) -> bool:
         from geoduck.ui.notebook_store import write_text  # noqa: PLC0415 - escritura atómica (G7)
 
@@ -1007,7 +1111,12 @@ class QueryPage(QWidget):
         for widget in (self.run_button, self.base):
             widget.setEnabled(ready and self.run is None)
         self.run_all_action.setEnabled(ready and self.run is None)
-        self.cancel_button.setEnabled(self.run is not None and state is SessionState.BUSY)
+        running = self.run is not None
+        self._escape.setEnabled(running)
+        self.stop_button.setEnabled(running and state is SessionState.BUSY)
+        for widget in (self.copy_button, self.export_button, self.load_button, self.detail_button):
+            widget.setVisible(not running)  # mientras corre no hay filas que copiar ni exportar (#143)
+        self.copy_button.setEnabled(self.current_result is not None and self.view.current == RESULT)
         usable = (
             self.current_result is not None
             and self.view.current == RESULT
@@ -1029,6 +1138,7 @@ class QueryPage(QWidget):
         elif isinstance(event, SessionStateChanged):
             if event.current is SessionState.DISCONNECTED:
                 self.run = None  # la sesión se cerró: la ejecución no terminará
+                self._stop_running()
             self._render_state()
         elif isinstance(event, (ColumnsListed, VocabularyChanged)):
             if self.completer is not None:
@@ -1066,7 +1176,7 @@ class _EditorMenu(QObject):
         if menu is None:
             menu = QMenu(editor)
         first = menu.actions()[0] if menu.actions() else None
-        run = QAction(page.run_button.text() + "\tCtrl+Enter", menu)
+        run = QAction(page.run_button.accessibleName() + "\tCtrl+Enter", menu)
         run.setEnabled(page.run_button.isEnabled())
         run.triggered.connect(lambda: page.execute(RunScope.CURRENT))
         menu.insertAction(first, run)

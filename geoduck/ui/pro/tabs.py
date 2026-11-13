@@ -12,13 +12,14 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from qgis.PyQt.QtCore import QEvent, QObject, Qt, pyqtSignal
-from qgis.PyQt.QtWidgets import QPlainTextEdit, QStackedWidget, QTabBar, QVBoxLayout, QWidget
+from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPixmap
+from qgis.PyQt.QtWidgets import QLineEdit, QPlainTextEdit, QStackedWidget, QTabBar, QVBoxLayout, QWidget
 
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
 from geoduck.ui.pro.places import QUERY, Place, icon_name
 from geoduck.ui.pro.style import ui_font
-from geoduck.ui.pro.tokens import Colors
+from geoduck.ui.pro.tokens import BEAK, Colors
 from geoduck.ui.pro.widgets import label
 
 
@@ -58,6 +59,8 @@ class TabArea(QObject):
 
     #: Cambió el conjunto, el orden o la pestaña activa (para recordarlas).
     changed = pyqtSignal()
+    #: Doble clic en el nombre y Enter (#143, punto 6): (página, nombre nuevo). Quien escucha renombra.
+    rename_requested = pyqtSignal(object, str)
 
     def __init__(
         self,
@@ -86,7 +89,12 @@ class TabArea(QObject):
         self.bar.currentChanged.connect(self._show)
         self.bar.tabMoved.connect(lambda _a, _b: self.changed.emit())
         self.bar.installEventFilter(self)
+        # Clic derecho en una pestaña: su archivo (propietario, 2026-11-12); el menú, del área de trabajo
+        self.bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.bar.tabBarDoubleClicked.connect(self.start_rename)
         self.stack = QStackedWidget()
+        self.rename_editor: QLineEdit | None = None
+        self._modified: set[int] = set()  # id() de las páginas con cambios sin guardar
 
     # -- consultas ------------------------------------------------------------------------------------
 
@@ -152,24 +160,76 @@ class TabArea(QObject):
             return
         if hasattr(page, "close_page"):
             page.close_page()  # deja de escuchar a la sesión antes de borrarse
+        self._modified.discard(id(page))
+        self.cancel_rename()
         self.bar.removeTab(index)
         self.stack.removeWidget(page)
         page.deleteLater()
         self.changed.emit()
 
     def retitle(self, page: QWidget, *, modified: bool = False) -> None:
-        """El nombre de la pestaña de `page` (tras «Guardar como…») y «•» si tiene cambios sin guardar."""
-        index = self.stack.indexOf(page)
-        for i in range(self.bar.count()):
-            if self.page(i) is page:
-                index = i
-                break
-        else:
+        """El nombre de la pestaña de `page` (tras guardar o renombrar) y, con cambios sin guardar, el ●
+        ámbar en lugar de su icono (#143, punto 4)."""
+        index = self.index_of_page(page)
+        if index < 0:
             return
         place: Place = page.place  # type: ignore[attr-defined]
-        self.bar.setTabText(index, place.name + (" •" if modified else ""))
-        self.bar.setTabToolTip(index, place.path or f"{place.location} · {place.name}")
+        self.bar.setTabText(index, place.name)
+        if modified:
+            self._modified.add(id(page))
+            self.bar.setTabIcon(index, _dot(BEAK))
+        else:
+            self._modified.discard(id(page))
+            self.bar.setTabIcon(index, icons.icon(icon_name(place), self.colors.muted, 14))
+        tip = place.path or f"{place.location} · {place.name}"
+        self.bar.setTabToolTip(index, tip + ("\n● " + tr("Unsaved changes") if modified else ""))
         self.changed.emit()
+
+    def index_of_page(self, page: QWidget) -> int:
+        return next((i for i in range(self.bar.count()) if self.page(i) is page), -1)
+
+    def is_modified(self, index: int) -> bool:
+        """La pestaña `index` tiene el ● de «sin guardar»."""
+        return 0 <= index < self.bar.count() and id(self.page(index)) in self._modified
+
+    def start_rename(self, index: int) -> None:
+        """Doble clic en el nombre (#143, punto 6): un campo encima de la pestaña; Enter renombra, Esc o
+        salir del campo lo deja como estaba. Solo las consultas se renombran."""
+        if not 0 <= index < self.bar.count() or not hasattr(self.page(index), "rename"):
+            return
+        self.cancel_rename()
+        page = self.page(index)
+        editor = QLineEdit(page.place.name, self.bar)  # type: ignore[attr-defined]
+        editor.setAccessibleName(tr("Tab name"))
+        editor.setGeometry(self.bar.tabRect(index).adjusted(4, 4, -4, -4))
+        editor.selectAll()
+        editor.installEventFilter(self)
+        editor.returnPressed.connect(lambda: self._finish_rename(page, editor))
+        editor.show()
+        editor.setFocus()
+        self.rename_editor = editor
+
+    def _finish_rename(self, page: QWidget, editor: QLineEdit) -> None:
+        name = editor.text().strip()
+        self.cancel_rename()
+        if name and name != page.place.name:  # type: ignore[attr-defined]
+            self.rename_requested.emit(page, name)
+
+    def cancel_rename(self) -> None:
+        editor, self.rename_editor = self.rename_editor, None
+        if editor is not None:
+            editor.removeEventFilter(self)
+            editor.hide()
+            editor.deleteLater()
+
+    def close_all(self) -> None:
+        """«Cerrar todas las pestañas» (propietario, 2026-11-12): de la última a la primera; una consulta con
+        cambios pregunta antes (`can_close`) y, si el usuario la deja abierta, se detiene ahí."""
+        for index in range(self.bar.count() - 1, -1, -1):
+            count = self.bar.count()
+            self.close_tab(index)
+            if self.bar.count() == count:
+                return
 
     def close_current(self) -> None:
         self.close_tab(self.bar.currentIndex())
@@ -180,6 +240,13 @@ class TabArea(QObject):
         self.changed.emit()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - API de Qt
+        if watched is self.rename_editor:
+            if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:  # type: ignore[attr-defined]
+                self.cancel_rename()
+                return True
+            if event.type() == QEvent.Type.FocusOut:
+                self.cancel_rename()
+            return False
         if (
             watched is getattr(self, "bar", None)  # al destruirse, Qt aún puede llamar al filtro
             and event.type() == QEvent.Type.MouseButtonRelease
@@ -188,3 +255,17 @@ class TabArea(QObject):
             self.close_tab(self.bar.tabAt(event.pos()))  # type: ignore[attr-defined]
             return True
         return False
+
+
+def _dot(color: str, size: int = 14) -> QIcon:
+    """El ● de «sin guardar» (ámbar, como el pico del pato)."""
+    pixmap = QPixmap(size * 2, size * 2)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    painter.drawEllipse(size - 7, size - 7, 14, 14)
+    painter.end()
+    pixmap.setDevicePixelRatio(2.0)
+    return QIcon(pixmap)

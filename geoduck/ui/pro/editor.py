@@ -162,6 +162,36 @@ def prepare_mark(editor: Any, colors: Colors) -> None:
     editor.setMarkerForegroundColor(QColor(colors.accent), MARK)
 
 
+#: ▶ en el margen, junto a la sentencia marcada (propietario, 2026-11-12): un clic la ejecuta.
+PLAY = 19  # 25–31 son de los pliegues de Scintilla; 20–24, de la marca y de los estados
+_PLAY_MARGIN = 3
+
+
+def prepare_play(editor: Any, colors: Colors, on_click: Any) -> None:
+    """Un margen angosto con ▶ en la primera línea de la sentencia marcada; `on_click(line)` al pulsarlo."""
+    from qgis.PyQt.Qsci import QsciScintilla  # noqa: PLC0415
+
+    from geoduck.ui.pro import icons  # noqa: PLC0415
+
+    editor.setMarginType(_PLAY_MARGIN, QsciScintilla.MarginType.SymbolMargin)
+    editor.setMarginWidth(_PLAY_MARGIN, 16)
+    editor.setMarginMarkerMask(_PLAY_MARGIN, 1 << PLAY)
+    for margin in (m for m in range(_STATUS_MARGIN + 1) if m != _PLAY_MARGIN):  # el ▶, solo en su margen
+        editor.setMarginMarkerMask(margin, editor.marginMarkerMask(margin) & ~(1 << PLAY))
+    editor.setMarginSensitivity(_PLAY_MARGIN, True)
+    # a escala 1: QScintilla pinta el mapa de bits a su tamaño real, sin la densidad de la pantalla
+    editor.markerDefine(icons.pixmap("play", colors.accent, 11, scale=1.0), PLAY)
+    editor.marginClicked.connect(
+        lambda margin, line, _keys: on_click(line) if margin == _PLAY_MARGIN else None
+    )
+
+
+def mark_play(editor: Any, line: int | None) -> None:
+    editor.markerDeleteAll(PLAY)
+    if line is not None:
+        editor.markerAdd(line, PLAY)
+
+
 def mark_lines(editor: Any, lines: tuple[int, int] | None) -> None:
     """Marca las líneas `lines` (primera y última, incluidas); `None` quita la marca."""
     editor.markerDeleteAll(MARK)
@@ -295,14 +325,18 @@ def _offset(text: str, line: int, index: int) -> int:
 class RunKeys(QObject):
     """Ctrl+Enter y Ctrl+Shift+Enter en el editor (#139). El editor las toma antes que cualquier atajo (de
     QGIS o de otro complemento con la misma tecla, que dejaría el atajo ambiguo y sin efecto) y cierra la
-    lista de autocompletado si está abierta: así «Ejecutar» funciona siempre que se escribe."""
+    lista de autocompletado si está abierta: así «Ejecutar» funciona siempre que se escribe. Esc, solo
+    mientras `cancel()` diga que hay algo que cancelar (#143): el resto del tiempo, Esc es del editor."""
 
     _KEYS = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
 
-    def __init__(self, editor: Any, run: Callable[[bool], None]) -> None:
+    def __init__(
+        self, editor: Any, run: Callable[[bool], None], cancel: Callable[[], bool] | None = None
+    ) -> None:
         super().__init__(editor)
         self._editor = editor
         self._run = run
+        self._cancel = cancel
 
     def _wanted(self, event: Any) -> bool:
         modifiers = event.modifiers()
@@ -312,7 +346,11 @@ class RunKeys(QObject):
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
         kind = event.type()
-        if kind not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress) or not self._wanted(event):
+        if kind not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
+            return False
+        if kind == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape and self._cancel is not None:
+            return self._cancel()  # True: había algo que cancelar y la tecla se usó
+        if not self._wanted(event):
             return False
         event.accept()
         if kind == QEvent.Type.ShortcutOverride:

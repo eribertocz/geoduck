@@ -322,7 +322,7 @@ def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugi
         1
     )
     assert tr("Run · line {}").format(1) in query.run_button.toolTip()
-    assert query.load_button.text() == "" and query.load_button.accessibleName() == tr("Load in QGIS")
+    assert query.load_button.text() == "" and not query.runs_in_label.isVisibleTo(query)
     assert not query.detail_button.isChecked() and not table.detail_button.isChecked()
     assert table.structure_button.isVisibleTo(table) and not table.mode.isVisibleTo(table)
     table.structure_button.setChecked(True)
@@ -345,7 +345,7 @@ def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugi
     item.workspace.set_mode(Mode.WINDOW)
     ws.resize(1300, 800)
     query.mark_statement()
-    assert not ws.compact and query.run_button.text() == tr("Run · line {}").format(1)
+    assert not ws.compact and query.runs_in_label.isVisibleTo(query)
     assert table.mode.isVisibleTo(table) and not table.structure_button.isVisibleTo(table)
 
 
