@@ -501,7 +501,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
         self._sources = [
             (i, p.job, p.fids, p.reprojector, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans
         ]
-        self._linear = {i: may_have_curves(p.layer.wkbType()) for i, p in plans}
+        self._linear = {i: p.layer is not None and may_have_curves(p.layer.wkbType()) for i, p in plans}
         self._channel = channel
         self._on_read = on_read
         self._total = max(sum(max(p.features, 0) for _, p in plans), 1)
