@@ -103,7 +103,7 @@ def test_import_files_lists_them_and_duckdb_copies_them(coordinator, data):
     flow = ws.to_duckdb
     window = flow.window
     assert wait_scanned(ws)
-    assert window.title.text().startswith(tr("Files → DuckDB"))
+    assert window.title.text().startswith(tr("Files → GeoDuck"))
     assert len(window.chosen()) == 3 and not window.note.isVisible()
     detail = window.rows["file:0"].text(1)
     assert "Parquet" in detail and tr("{0} rows").format(9) in detail
@@ -112,7 +112,7 @@ def test_import_files_lists_them_and_duckdb_copies_them(coordinator, data):
     add_all(ws, coordinator)
     assert [s["state"] for s in flow.states] == ["done"] * 3
     assert has_tables(coordinator, {"lecturas", "clientes", "medidas"})
-    assert tr("{0} tables added to DuckDB from files").format(3) in flow.done_text()
+    assert tr("{0} tables added to GeoDuck from files").format(3) in flow.done_text()
 
 
 def test_files_dropped_on_a_database_go_there_and_light_up_the_lake(coordinator, data):
@@ -148,7 +148,7 @@ def test_unsupported_files_get_a_clear_notice_and_the_others_go_on(coordinator, 
         tr("«{0}» is not in GeoDuck's list").format("vieja.sqlite"),
         tr("Read it with SQL in the editor, or open it in QGIS and then add the layer"),
         tr("GeoDuck cannot read: {0}").format("plano.dwg"),
-        tr("The other file goes on to «Files → DuckDB»"),
+        tr("The other file goes on to «Files → GeoDuck»"),
     ]
     assert text == lines_html(lines)
     assert wait_scanned(ws)

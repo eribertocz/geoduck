@@ -81,8 +81,8 @@ def run_qgis(locale: str, tmp_path: Path) -> dict:
 def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
     out = run_qgis("en_US", tmp_path)
     assert (out["start"], out["state"], out["status"]) == (
-        "Start DuckDB",
-        "DuckDB is not started",
+        "Start GeoDuck",
+        "GeoDuck is not started",
         "Not started",
     )
     assert out["dock"] == "Dock to QGIS"
@@ -93,8 +93,8 @@ def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
 def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
     out = run_qgis("es_ES", tmp_path)
     assert (out["start"], out["state"], out["status"]) == (
-        "Iniciar DuckDB",
-        "DuckDB no está iniciado",
+        "Iniciar GeoDuck",
+        "GeoDuck no está iniciado",
         "No iniciado",
     )
     assert out["dock"] == "Acoplar a QGIS"
@@ -104,7 +104,7 @@ def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
 
 def test_another_language_falls_back_to_english(tmp_path):
     out = run_qgis("de_DE", tmp_path)
-    assert out["start"] == "Start DuckDB" and out["after"] == out["before"]
+    assert out["start"] == "Start GeoDuck" and out["after"] == out["before"]
 
 
 def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, monkeypatch):
@@ -123,6 +123,6 @@ def test_translating_never_calls_qt_so_the_engine_thread_can_do_it(qgis_app, mon
         worker.start()
         worker.join(5)
         assert results == [spanish_catalog()["Operation cancelled"]]
-        assert i18n.tr("Start DuckDB") == "Iniciar DuckDB"
+        assert i18n.tr("Start GeoDuck") == "Iniciar GeoDuck"
     finally:
         ui_i18n.uninstall()

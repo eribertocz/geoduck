@@ -5,7 +5,7 @@
 Tres nodos en círculo, de izquierda a derecha: **de dónde viene** (archivo, base, servicio web, capa
 temporal o DuckDB, con su formato corto), **QGIS** (la pila de capas) y **el destino** (el logo y la
 tabla).
-Cuando DuckDB lee el archivo, un **puente** azul («⚡ DuckDB») salta por encima de QGIS, que queda punteado y
+Cuando DuckDB lee el archivo, un **puente** («⚡ DuckDB») salta por encima de QGIS, que queda punteado y
 apagado («se saltó»); si no, la línea pasa por QGIS. El avance llena la línea (o el anillo del destino); al
 terminar, el destino se pone verde con ✓. En «Archivos → DuckDB» no hay QGIS: dos nodos y el puente.
 """
@@ -60,7 +60,7 @@ class TraceView(QWidget):
         self._timer.timeout.connect(self._tick)
         self.setMinimumSize(260, 78)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setAccessibleName(tr("How this layer reaches DuckDB"))
+        self.setAccessibleName(tr("How this layer reaches GeoDuck"))
 
     def sizeHint(self) -> QSize:  # noqa: N802 - API de Qt
         return QSize(400, 78)

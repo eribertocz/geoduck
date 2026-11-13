@@ -257,7 +257,7 @@ def test_without_session_it_explains_what_to_do(iface):
     try:
         layer = points("sin sesión")
         plugin.content.send_layers([layer.id()])
-        assert "Inicia DuckDB" in plugin.content.notice.text()
+        assert "Inicia GeoDuck" in plugin.content.notice.text()
     finally:
         plugin.unload()
         QgsProject.instance().removeAllMapLayers()

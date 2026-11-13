@@ -128,7 +128,7 @@ def test_two_geometries_make_two_complete_layers(session, mode):
     assert {f["id"]: f.geometry().asPoint().x() for f in centro.getFeatures()}[7] == 7
     text = finished_message(ev.report)
     assert (
-        "Capas «zonas · centro», «zonas · poligono» añadidas a QGIS desde DuckDB" in text
+        "Capas «zonas · centro», «zonas · poligono» añadidas a QGIS desde GeoDuck" in text
         and "300 entidades cada una" in text
     )
 

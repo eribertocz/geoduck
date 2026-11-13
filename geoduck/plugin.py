@@ -7,6 +7,7 @@ el diagnóstico aunque DuckDB o PyArrow falten o no carguen (AT-BOOT-002).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -168,21 +169,41 @@ def selected_layer_ids(iface: Any) -> list[str]:
     return [layer.id() for layer in layers]
 
 
+def brand_submenu(menu: Any) -> bool:
+    """El logo de GeoDuck en el submenú «GeoDuck» de `menu` (#142, punto 24). Solo el nuestro: el resto del
+    menú de QGIS no se toca (ADR-0011). Devuelve si lo encontró."""
+    name = tr("GeoDuck")
+    for action in menu.actions():
+        if action.menu() is not None and action.text().replace("&", "") == name:
+            action.setIcon(QIcon(ICON))
+            return True
+    return False
+
+
 class SendToDuckDB:
-    """«Añadir a DuckDB…» en el menú de las capas vectoriales del panel de capas (qgis-import-spec §2): abre
-    «Capas de QGIS → DuckDB» con las capas seleccionadas, como al arrastrarlas (F-131)."""
+    """«Enviar a GeoDuck…» en el submenú «GeoDuck» de las capas vectoriales del panel de capas
+    (qgis-import-spec §2): abre «Capas de QGIS → GeoDuck» con las capas seleccionadas, como al arrastrarlas
+    (F-131). QGIS crea ese submenú cada vez que se abre el menú: el logo se le pone justo antes (#142)."""
 
     def __init__(self, iface: Any, send: Any) -> None:
         self.iface = iface
-        self.action = QAction(QIcon(ICON), tr("Add to DuckDB…"), iface.mainWindow())
+        self.action = QAction(QIcon(ICON), tr("Send to GeoDuck…"), iface.mainWindow())
         self.action.setObjectName("geoduckSendToDuckDB")
-        self.action.setToolTip(tr("Adds the selected layers to DuckDB as tables (GeoDuck)"))
+        self.action.setToolTip(tr("Sends the selected layers to GeoDuck as tables"))
         self.action.triggered.connect(lambda: send(selected_layer_ids(self.iface)))
         self._layer_api = hasattr(iface, "addCustomActionForLayerType")
         if self._layer_api:  # en todas las capas vectoriales (allLayers=True)
             iface.addCustomActionForLayerType(self.action, tr("GeoDuck"), _vector_layer_type(), True)
+        view = iface.layerTreeView() if hasattr(iface, "layerTreeView") else None
+        self._view = view if hasattr(view, "contextMenuAboutToShow") else None  # QGIS ≥ 3.32
+        if self._view is not None:
+            self._view.contextMenuAboutToShow.connect(brand_submenu)
 
     def unload(self) -> None:
+        if self._view is not None:
+            with contextlib.suppress(TypeError, RuntimeError):  # ya desconectado, o QGIS cerrándose
+                self._view.contextMenuAboutToShow.disconnect(brand_submenu)
+            self._view = None
         if self._layer_api:
             self.iface.removeCustomActionForLayerType(self.action)
         self.action.deleteLater()
@@ -238,8 +259,10 @@ class GeoDuckPlugin:
         self.about_action.setObjectName("geoduckAbout")
         self.about_action.triggered.connect(self.content.show_about)
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.about_action)
+        if hasattr(self.iface, "databaseMenu"):  # Base de datos › GeoDuck, con el logo (#142)
+            brand_submenu(self.iface.databaseMenu())
         self.validity = GeometryValidity(self.iface, self.content.notify)
-        # «Enviar a DuckDB»: el menú de capa hace lo mismo que soltar; «+» y Ctrl+K abren el diálogo
+        # «Enviar a GeoDuck…»: el menú de capa hace lo mismo que soltar; «+» y Ctrl+K abren el diálogo
         self.send_action = SendToDuckDB(self.iface, self._send_layers)
         self.content.send_layers_requested.connect(
             lambda: self.content.add_layers(selected_layer_ids(self.iface)) if self.content else None
@@ -254,7 +277,7 @@ class GeoDuckPlugin:
             self.action.setChecked(self.workspace.is_visible())
 
     def _send_layers(self, layer_ids: list[str]) -> None:
-        """Menú de capa «Añadir a DuckDB…»: GeoDuck visible y la ventana «Capas de QGIS → DuckDB»."""
+        """Menú de capa «Enviar a GeoDuck…»: GeoDuck visible y la ventana «Capas de QGIS → GeoDuck»."""
         if self.workspace is not None and self.content is not None:
             self.workspace.set_visible(True)
             self.content.send_layers(layer_ids)

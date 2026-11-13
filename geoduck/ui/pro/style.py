@@ -11,12 +11,14 @@ varias familias; por eso la fuente va en la regla general, con la primera famili
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from qgis.PyQt.QtCore import QT_VERSION_STR
 from qgis.PyQt.QtGui import QFont, QFontDatabase, QPalette
 from qgis.PyQt.QtWidgets import QWidget
 
-from geoduck.ui.pro import icons
-from geoduck.ui.pro.tokens import DARK, FONT_FAMILIES, LIGHT, METRICS, MONO_FAMILIES, Colors
+from geoduck.ui.pro import icons, tokens
+from geoduck.ui.pro.tokens import FONT_FAMILIES, METRICS, MONO_FAMILIES, Colors
 
 #: Nombre de objeto de la raíz de Workspace Pro: la hoja no sale de aquí.
 ROOT = "geoduckPro"
@@ -41,8 +43,21 @@ def is_dark(widget: QWidget) -> bool:
     return widget.palette().color(QPalette.ColorRole.Window).lightness() < 128
 
 
+@lru_cache(maxsize=8)
+def _colors(base: str, window: str, text: str, dark: bool) -> Colors:
+    return tokens.from_palette(base, window, text, dark=dark)
+
+
 def colors_for(widget: QWidget) -> Colors:
-    return DARK if is_dark(widget) else LIGHT
+    """Los colores de GeoDuck en el tema de QGIS del widget (#142): neutros de su paleta, turquesa propio."""
+    palette = widget.palette()
+    role = QPalette.ColorRole
+    return _colors(
+        palette.color(role.Base).name(),
+        palette.color(role.Window).name(),
+        palette.color(role.Text).name(),
+        is_dark(widget),
+    )
 
 
 def ui_font(size: int = METRICS.font, *, mono: bool = False, bold: bool = False) -> QFont:
@@ -130,7 +145,7 @@ def stylesheet(c: Colors) -> str:
 {r} QFrame[pro="toast"] QPushButton:hover {{ text-decoration: underline; }}
 
 {r} QLineEdit {{ background: {c.bg}; border: 1px solid {c.border}; border-radius: {m.radius}px;
-    padding: 0 {m.space_sm + 1}px; min-height: {m.control - 2}px; selection-background-color: {c.accent};
+    padding: 0 {m.space_sm + 1}px; min-height: {m.control - 2}px; selection-background-color: {c.accent_fill};
     selection-color: {c.on_accent}; }}
 {r} QLineEdit:focus {{ border-color: {c.accent}; }}
 {r} QLineEdit:disabled {{ color: {c.null}; }}
@@ -175,7 +190,7 @@ def stylesheet(c: Colors) -> str:
     color: {c.muted}; background: transparent; border: 1px solid transparent; border-bottom: 0;
     border-top-left-radius: {m.radius_lg}px; border-top-right-radius: {m.radius_lg}px; }}
 {r} QTabBar[pro="tabs"]::tab:selected {{ color: {c.text}; background: {c.bg}; border-color: {c.border};
-    font-weight: 600; }}
+    border-top: 2px solid {c.accent}; font-weight: 600; }}
 {r} QTabBar[pro="tabs"]::tab:hover:!selected {{ color: {c.text}; }}
 {r} QTabBar[pro="tabs"]::close-button {{ image: url("{close}"); subcontrol-position: right; width: 16px;
     height: 16px; border-radius: 4px; }}

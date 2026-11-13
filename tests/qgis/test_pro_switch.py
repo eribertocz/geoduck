@@ -241,7 +241,7 @@ def test_the_layer_menu_opens_step_one_with_the_selected_layers(plugin, iface):
     points("otra")
     iface.selected_layers = (layer,)
     try:
-        assert item.send_action.action.text() == tr("Add to DuckDB…")
+        assert item.send_action.action.text() == tr("Send to GeoDuck…")
         item.send_action.action.trigger()
         ws = item.content
         assert item.workspace.is_visible()
@@ -257,7 +257,7 @@ def test_the_plus_entry_opens_step_one_with_every_layer(plugin, iface):
     layer, other = points("zonas"), points("otra")
     iface.selected_layers = (layer,)
     try:
-        assert item.content.sidebar.send_action.text() == tr("Add QGIS layers to DuckDB…")
+        assert item.content.sidebar.send_action.text() == tr("Add QGIS layers to GeoDuck…")
         item.content.sidebar.send_action.trigger()
         window = item.content.to_duckdb.window
         assert set(window.rows) == {layer.id(), other.id()}
@@ -285,7 +285,7 @@ def test_a_narrow_panel_keeps_every_action_within_reach(plugin):
         tr("Execution history"),
         tr("Open database…"),
         tr("Create database…"),
-        tr("Add QGIS layers to DuckDB…"),
+        tr("Add QGIS layers to GeoDuck…"),
         tr("Refresh databases"),
         tr("Open in a window"),
         tr("Environment diagnostics"),

@@ -67,7 +67,7 @@ from geoduck.ui.pro import editor as pro_editor
 from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns, tighten
-from geoduck.ui.pro.tokens import DARK, METRICS, Colors
+from geoduck.ui.pro.tokens import METRICS, Colors
 from geoduck.ui.pro.widgets import Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
 
@@ -146,7 +146,7 @@ class QueryPage(QWidget):
         self.split = QSplitter(Qt.Orientation.Vertical)
         self.split.setHandleWidth(1)
         self.split.setChildrenCollapsible(False)
-        self.editor = pro_editor.make(colors, dark=colors is DARK)
+        self.editor = pro_editor.make(colors, dark=colors.dark)
         self.editor.setAccessibleName(tr("SQL editor"))
         self.editor.setText(sql)
         self.editor.textChanged.connect(self._text_changed)
@@ -472,10 +472,10 @@ class QueryPage(QWidget):
                 "GeoDuck is finishing another task (loading, exporting or importing): run it when it ends"
             )
         if state is SessionState.CONNECTING:
-            return tr("DuckDB is starting: run it in a moment")
+            return tr("GeoDuck is starting: run it in a moment")
         if state is SessionState.ERROR_RECOVERABLE:
             return tr("The transaction failed: run ROLLBACK (or close it) before running more SQL")
-        return tr("DuckDB is not started: start it to run SQL")
+        return tr("GeoDuck is not started: start it to run SQL")
 
     def set_compact(self, compact: bool) -> None:
         """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): ▶ sin texto, ■, la base

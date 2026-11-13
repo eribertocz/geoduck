@@ -164,7 +164,7 @@ class SendDialog(QDialog):
         pro: bool = False,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Send to DuckDB"))
+        self.setWindowTitle(tr("Send to GeoDuck"))
         self.setMinimumWidth(600)  # cabe en una pantalla pequeña; las columnas se ajustan
         self.resize(780, 540)
         #: G9 · E5: con `pro`, el sistema de diseño de Workspace Pro; el comportamiento no cambia.
@@ -208,7 +208,7 @@ class SendDialog(QDialog):
         self.tree = QTreeWidget()
         self.tree.setObjectName("geoduckSendLayers")
         self.tree.setColumnCount(3)
-        self.tree.setHeaderLabels([tr("Layer"), tr("Table in DuckDB"), tr("What will happen")])
+        self.tree.setHeaderLabels([tr("Layer"), tr("Table in GeoDuck"), tr("What will happen")])
         self.tree.setRootIsDecorated(True)
         self.tree.setUniformRowHeights(False)
         self.tree.setItemDelegateForColumn(0, LayerDelegate(self.tree))

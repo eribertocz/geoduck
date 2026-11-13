@@ -131,7 +131,7 @@ def file_filters() -> list[str]:
 
 
 def unsupported_reason() -> str:
-    return tr("Format not supported: open it in QGIS first, then add the layer to DuckDB")
+    return tr("Format not supported: open it in QGIS first, then add the layer to GeoDuck")
 
 
 @dataclass(frozen=True)
@@ -376,9 +376,9 @@ def unsupported_lines(paths: list[str], supported: int) -> list[str]:
         lines.append(tr("GeoDuck cannot read: {0}").format(_names(other)))
     if supported:
         lines.append(
-            tr("The other file goes on to «Files → DuckDB»")
+            tr("The other file goes on to «Files → GeoDuck»")
             if supported == 1
-            else tr("The other {0} files go on to «Files → DuckDB»").format(supported)
+            else tr("The other {0} files go on to «Files → GeoDuck»").format(supported)
         )
     return lines
 

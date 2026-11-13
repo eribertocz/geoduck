@@ -76,7 +76,7 @@ class _NavDelegate(QStyledItemDelegate):
         target = getattr(tree, "drop_item", None)
         lake = target is not None and tree.itemFromIndex(index) is target  # la base donde se soltarán
         box = QRectF(option.rect).adjusted(1, 1, -1, -1)  # type: ignore[attr-defined]
-        if lake:  # «el lago» (marca, 2026-11-07): la base se pinta de azul claro, con el pato a la derecha
+        if lake:  # «el lago» (marca): la base se pinta de turquesa claro, con el pato a la derecha
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -325,7 +325,7 @@ class Sidebar(QFrame):
         # El menú de la sesión: solo lo que aplica (propietario, 2026-11-07): sin sesión, «Iniciar DuckDB»;
         # con sesión, «Cerrar sesión»; nunca un «Iniciar» en gris.
         self.session_menu = QMenu(self)
-        self.start_action = self.session_menu.addAction(tr("Start DuckDB"))
+        self.start_action = self.session_menu.addAction(tr("Start GeoDuck"))
         self.start_action.triggered.connect(self.start_requested.emit)
         self.session_open_db = self.session_menu.addAction(tr("Open database…"))
         self.session_open_db.triggered.connect(self.open_database_requested.emit)
@@ -362,7 +362,7 @@ class Sidebar(QFrame):
         self.add_menu.addSeparator()
         self.import_action = self.add_menu.addAction(tr("Import files…"))
         self.import_action.triggered.connect(lambda: self.import_files_requested.emit(None))
-        self.send_action = self.add_menu.addAction(tr("Add QGIS layers to DuckDB…"))
+        self.send_action = self.add_menu.addAction(tr("Add QGIS layers to GeoDuck…"))
         self.send_action.triggered.connect(self.send_layers_requested.emit)
         self.add_button.clicked.connect(lambda: self._popup(self.add_menu, self.add_button))
         row.addWidget(self.add_button)
@@ -458,7 +458,7 @@ class Sidebar(QFrame):
         self._add_places("★ " + tr("Favorites"), "favorites", self.places.favorites)
         self._section(tr("Databases"), "databases")
         if catalog is None:
-            hint = QTreeWidgetItem([tr("Start DuckDB to see your databases")])
+            hint = QTreeWidgetItem([tr("Start GeoDuck to see your databases")])
             hint.setFlags(Qt.ItemFlag.NoItemFlags)
             hint.setForeground(0, QColor(self.colors.faint))
             tree.addTopLevelItem(hint)
