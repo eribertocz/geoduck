@@ -174,8 +174,8 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
   transacción, con el conteo de §4.
 - **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
   archivo (p. ej. SpatiaLite) no entra al diálogo: un aviso claro dice cuáles, qué hacer y si los demás siguen. Si el GDAL de
-  DuckDB lo lee (SpatiaLite, DXF, GML, GPX, MapInfo, ODS…): «Escribir consulta» (una pestaña con su `CREATE
-  TABLE … AS SELECT * FROM ST_Read(…)`, sin ejecutar) y «Abrir en QGIS» (luego se añade la capa); si no son
+  DuckDB lo lee (SpatiaLite, DXF, GML, GPX, MapInfo, ODS…): «Escribir consulta» (una pestaña con su
+  `FROM ST_Read('ruta');`, sin ejecutar y lista para añadirle parámetros; propietario, 2026-11-13) y «Abrir en QGIS» (luego se añade la capa); si no son
   datos: «GeoDuck no puede leer: …», sin acciones. **Sin SpatiaLite ni SQLite** en la lista (decisión del propietario, 2026-11-07): GeoPackage es el formato
   moderno sobre SQLite; el GDAL de DuckDB no escribe SpatiaLite.
 - **Geometría y SRC:** la que da el lector (`GEOMETRY('EPSG:…')`); un GeoParquet sin `spatial` toma el SRC

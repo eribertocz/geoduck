@@ -58,10 +58,10 @@ from geoduck.app.events import (
     VocabularyChanged,
 )
 from geoduck.domain.browse import PAGE, Browse, page_label
-from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo
+from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
-from geoduck.domain.files import create_sql, editor_readable, format_for, from_sql, gdal_readable
+from geoduck.domain.files import editor_readable, format_for, from_sql, gdal_readable
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, error_token, result_title
 from geoduck.domain.sql_errors import (
@@ -451,49 +451,21 @@ class QueryPage(QWidget):
 
     # -- archivos soltados en el editor (decisión del propietario, 2026-11-07) -------------------------
 
-    def drop_target(self) -> tuple[str, str] | None:
-        """Dónde crear las tablas: la base «Se ejecuta en» (si se escribe); `main` o su primer esquema."""
-        catalog = self._coordinator.catalog
-        if catalog is None:
-            return None
-        name = self.base.currentData() or catalog.default_database.name
-        db = catalog.get(name)
-        if db is None or db.access is not AccessMode.READ_WRITE:
-            writable = [d for d in catalog.databases if d.access is AccessMode.READ_WRITE]
-            if not writable:
-                return None
-            db = writable[0]
-        schemas = catalog.schemas_of(db.name)
-        return db.name, "main" if "main" in schemas or not schemas else schemas[0]
-
-    def drop_files(self, paths: list[str], *, any_format: bool = False, create: bool = False) -> bool:
-        """Archivos soltados en el editor (#146, punto 14): una sentencia `FROM 'ruta';` por archivo (o
-        `FROM ST_Read('ruta');` para los de GDAL), donde se sueltan y sin ejecutar. `create` («Escribir
-        consulta», qgis-import-spec §5.4): un `CREATE TABLE … AS SELECT *` por archivo. Los que no se leen
-        con SQL (Arrow, no compatibles) siguen a «Importar archivos». Con `spatial` sin cargar, la primera
-        línea la carga (visible: lo decide el usuario al ejecutar, ADR-0011)."""
+    def drop_files(self, paths: list[str], *, any_format: bool = False) -> bool:
+        """Archivos soltados en el editor o «Escribir consulta» (#146, punto 14; propietario, 2026-11-13): una
+        sentencia `FROM 'ruta';` por archivo (o `FROM ST_Read('ruta');` para los de GDAL), lista para ejecutar
+        o para añadirle parámetros, sin ejecutarla. Los que no se leen con SQL (Arrow, no compatibles) siguen
+        a «Importar archivos». Con `spatial` sin cargar, la primera línea la carga (visible: lo decide el
+        usuario al ejecutar, ADR-0011)."""
         readable = [p for p in paths if editor_readable(p) or (any_format and gdal_readable(p))]
         rest = [p for p in paths if p not in readable]
         if rest:
             self.import_files_requested.emit(rest)
         if not readable:
             return False
-        target = self.drop_target() if create else None
-        if create and target is None:
-            self.notice.emit(tr("There is no database in read and write mode to create the tables."))
-            return True
-        catalog = self._coordinator.catalog
-        vocabulary = self._coordinator.vocabulary()
 
         def write(spatial: str) -> None:
-            if target is None:
-                pro_editor.insert_sql(self.editor, from_sql(readable, spatial=spatial))
-                return
-            database, schema = target
-            taken = [o.name for o in catalog.objects_in(database, schema)] if catalog is not None else []
-            reserved = vocabulary.reserved if vocabulary is not None else None
-            text = create_sql(readable, database, schema, taken, spatial=spatial, reserved=reserved)
-            pro_editor.insert_sql(self.editor, text)
+            pro_editor.insert_sql(self.editor, from_sql(readable, spatial=spatial))
 
         if not any(format_for(p).needs_spatial or gdal_readable(p) for p in readable):
             write("")

@@ -540,12 +540,12 @@ class ProWorkspace(QWidget):
             )
 
     def write_query(self, paths: list[str]) -> None:
-        """«Escribir consulta»: una pestaña nueva con un `CREATE TABLE … AS SELECT * FROM ST_Read(…)` por
-        archivo, sin ejecutar."""
+        """«Escribir consulta»: una pestaña nueva con un `FROM ST_Read('ruta');` por archivo, sin ejecutar
+        (lo mismo que soltarlos en el editor; propietario, 2026-11-13)."""
         self.new_query()
         page = self.tabs.page(self.tabs.bar.currentIndex())
         if isinstance(page, QueryPage):
-            page.drop_files(paths, any_format=True, create=True)
+            page.drop_files(paths, any_format=True)
 
     def _export_trace(self, event: Any) -> None:
         """«Exportar ▾» con su trazabilidad (propietario, 2026-11-07): DuckDB ⚡→ archivo, en un aviso que se

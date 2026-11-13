@@ -273,7 +273,8 @@ def test_with_the_click_spatial_loads_and_the_layers_appear(coordinator, tmp_pat
 
 
 def test_write_query_reads_a_file_outside_the_list_with_sql(coordinator, data):
-    """«Escribir consulta»: el GDAL de DuckDB lo lee; una pestaña con su CREATE TABLE, sin ejecutar."""
+    """«Escribir consulta»: el GDAL de DuckDB lo lee; una pestaña con su `FROM ST_Read(…)`, sin ejecutar
+    (propietario, 2026-11-13: lo mismo que soltarlo en el editor, nunca un CREATE TABLE)."""
     ws = workspace(coordinator)
     path = str(data / "vieja.sqlite")
     ws.write_query([path])
@@ -281,7 +282,7 @@ def test_write_query_reads_a_file_outside_the_list_with_sql(coordinator, data):
     assert wait_for(lambda: "ST_Read" in page.editor.text(), TIMEOUT)
     text = page.editor.text()
     assert "spatial;" in text.splitlines()[0]  # visible: lo decide el usuario al ejecutar
-    assert f"SELECT * FROM ST_Read('{path}');" in text and "CREATE TABLE" in text
+    assert f"FROM ST_Read('{path}');" in text and "CREATE TABLE" not in text
     assert not page.results
 
 
