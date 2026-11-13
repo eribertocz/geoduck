@@ -464,8 +464,9 @@ def test_a_connected_layer_from_memory_goes_to_a_file_database_inside_duckdb(coo
     from geoduck.domain.importing import PATH_CONNECTED
 
     coordinator.execute_sql(
-        "CREATE TABLE pozos AS SELECT range AS id,"
-        " ('POINT (' || range || ' 1)')::GEOMETRY('OGC:CRS84') AS geom FROM range(1000);",
+        # sin geometría: una base nueva en archivo con DuckDB 1.5 no guarda el SRC (F-120) y el paso 2 lo
+        # preguntaría; el camino (dentro de DuckDB) es el mismo
+        "CREATE TABLE pozos AS SELECT range AS id, 'pozo ' || range AS nombre FROM range(1000);",
         RunScope.ALL,
     )
     assert wait_for(lambda: coordinator.state is SessionState.READY)
