@@ -31,6 +31,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from geoduck.domain.i18n import decimal
+from geoduck.domain.i18n import number as number_text
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
 from geoduck.ui.pro.style import ui_font
@@ -61,13 +63,13 @@ def seconds_text(seconds: float | None) -> str:
     if seconds is None:
         return ""
     if seconds < 60:
-        return f"{seconds:.1f} s".replace(".", ",")
+        return f"{decimal(seconds)} s"
     minutes, rest = divmod(round(seconds), 60)
     return f"{minutes} min {rest} s"
 
 
 def count_text(n: int) -> str:
-    return f"{n:,}".replace(",", " ")
+    return number_text(n)
 
 
 class _Node(QWidget):

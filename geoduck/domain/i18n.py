@@ -53,6 +53,39 @@ def load_catalog(path: Path) -> dict[str, str]:
     return catalog
 
 
+#: Idioma de los números (#149): «1 000 000 · 3,4» en español, «1,000,000 · 3.4» en inglés.
+_language = "en"
+
+
+def set_language(language: str) -> None:
+    """El idioma de QGIS en uso (`es`, `en`…): decide cómo se escriben los números."""
+    global _language  # noqa: PLW0603 - un único idioma para todo el complemento
+    _language = language or "en"
+
+
+def get_language() -> str:
+    return _language
+
+
+def number(value: int) -> str:
+    """Un entero con separador de miles: «1 000 000» (español) o «1,000,000» (inglés)."""
+    text = f"{value:,}"
+    return text.replace(",", " ") if _language == "es" else text
+
+
+def decimal(value: float, digits: int = 1) -> str:
+    """Un decimal: «3,4» (español) o «3.4» (inglés), con separador de miles si hace falta."""
+    text = f"{value:,.{digits}f}"
+    if _language == "es":
+        return text.replace(",", " ").replace(".", ",")
+    return text
+
+
+def rows(count: int) -> str:
+    """«1 fila», «1 000 000 filas» (#149: nunca «1 filas»)."""
+    return tr("1 row") if count == 1 else tr("{0} rows").format(number(count))
+
+
 def N_(text: str) -> str:  # noqa: N802 - convención de gettext/Qt para marcar sin traducir aún
     """Marca un texto para el catálogo sin traducirlo aquí (constantes que se traducen al usarse)."""
     return text

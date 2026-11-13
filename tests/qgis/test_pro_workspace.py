@@ -127,9 +127,9 @@ def test_without_session_it_offers_to_start_and_then_welcomes(coordinator):
     ws.start_button.click()
     assert wait_for(lambda: ready(coordinator))
     assert wait_for(lambda: ws.body.currentIndex() == WELCOME)
-    assert ws.sidebar.title.text().startswith("DuckDB ")
+    assert ws.sidebar.title.text() == "GeoDuck"  # sin la versión de DuckDB (#149)
     assert ws.sidebar.status.text() == tr("Ready") + " · " + tr("in memory")
-    assert ws.status()[1].startswith(tr("Ready") + " · DuckDB ")
+    assert ws.status()[1] == tr("Ready") + " · " + tr("in memory")
 
 
 def test_the_sidebar_lists_databases_schemas_tables_views_and_temporaries(coordinator):

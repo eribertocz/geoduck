@@ -16,7 +16,8 @@ def spanish_catalog() -> dict[str, str]:
 
 # G6 · E4: las pruebas ven GeoDuck en español, como hasta G5 (los textos del código están en inglés). Las de
 # GD-I18N-001 comprueban aparte el inglés y el catálogo real de Qt (.qm).
-from geoduck.domain.i18n import set_translator  # noqa: E402
+from geoduck.domain.i18n import set_language, set_translator  # noqa: E402
 
 _CATALOG = spanish_catalog()
 set_translator(lambda text: _CATALOG.get(text) or text)
+set_language("es")  # las pruebas, en español: «1 000 000 · 3,4» (#149)

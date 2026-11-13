@@ -16,7 +16,7 @@ import zipfile
 from dataclasses import dataclass
 from enum import Enum
 
-from geoduck.domain.i18n import tr
+from geoduck.domain.i18n import decimal, tr
 from geoduck.domain.importing import (
     PATH_FILE,
     ImportGeometry,
@@ -244,7 +244,7 @@ def size_label(size: int) -> str:
     value = float(size)
     for unit in ("B", "KB", "MB", "GB"):
         if value < 1024 or unit == "GB":
-            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}".replace(".", ",")
+            return f"{value:.0f} {unit}" if unit == "B" else f"{decimal(value)} {unit}"
         value /= 1024
     return ""
 

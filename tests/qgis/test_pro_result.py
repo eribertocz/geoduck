@@ -113,8 +113,8 @@ def test_sort_with_the_header_icon_and_choose_a_whole_column(lecturas):
     page.grid.selectColumn(3)  # clic en el nombre: la columna entera (lógica: todas las filas)
     assert page.data.whole_columns() == [3]
     # el resumen de la columna (#144, punto 11), de DuckDB sobre las 250 filas, no solo la página
-    assert wait_for(lambda: page.column_summary.text().startswith("kwh · Σ 16 687.5 · x̄ 66.75"))
-    assert tr("max {}").format("148.5") in page.column_summary.text()
+    assert wait_for(lambda: page.column_summary.text().startswith("kwh · Σ 16 687,5 · x̄ 66,75"))
+    assert tr("max {}").format("148,5") in page.column_summary.text()
     assert tr("nulls {}").format(0) in page.column_summary.text()
 
 
