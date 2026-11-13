@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Pestaña de consulta de Workspace Pro (workspace-pro-spec §5; GD-WSP-004; AT-WSP-005).
 
-Una sola barra fina: «▶ Ejecutar» (la sentencia bajo el cursor o la selección, Ctrl+Intro), «Todo»
-(Ctrl+Mayús+Intro), «Cancelar», la base de la consulta y «⋯» (abrir, guardar, guardar como). Debajo, el
+Una sola barra fina: «▶ Ejecutar» (la sentencia bajo el cursor o la selección, Ctrl+Enter), «Todo»
+(Ctrl+Shift+Enter), «Cancelar», la base de la consulta y «⋯» (abrir, guardar, guardar como). Debajo, el
 editor SQL de QGIS (con el autocompletado de G6 y los colores de GeoDuck) y el resultado, con un divisor que
 se arrastra: **Resultado** (la grilla de E3; una pestaña por sentencia con tabla, sin pestañas si es una) y
-**Mensajes** (✓ o ✕ por sentencia, con la línea y la columna del error e «Ir»). «Exportar ▾» exporta la
+**Mensajes** (✓ o ✕ por sentencia, con la línea y la palabra del error e «Ir»; ante un error se abre solo y el
+editor marca cada sentencia con ✓, ✕ o –, #139). «Exportar ▾» exporta la
 consulta completa del resultado elegido.
 
 El SQL se ejecuta por el coordinador (`execute_sql`, con la base de la consulta); esta página solo muestra.
@@ -58,7 +59,7 @@ from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.files import create_sql, editor_readable, format_for, gdal_readable
 from geoduck.domain.session import SessionState
-from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, result_title
+from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, error_token, result_title
 from geoduck.domain.sql_text import load_sql
 from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
@@ -80,6 +81,10 @@ MARK_MS = 60
 
 def _seconds(ms: float) -> str:
     return f"{ms:.0f} ms" if ms < 1000 else f"{ms / 1000:.2f} s".replace(".", ",")
+
+
+def _html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _count(n: int) -> str:
@@ -146,6 +151,12 @@ class QueryPage(QWidget):
         self.editor.setText(sql)
         self.editor.textChanged.connect(self._text_changed)
         self.editor.layer_drops.on_files = self.drop_files
+        # Ctrl+Enter / Ctrl+Shift+Enter desde el editor, antes que cualquier atajo y con la lista de
+        # autocompletado abierta (#139); los atajos de abajo cubren el resto de la página (resultado, barra)
+        self._run_keys = pro_editor.RunKeys(
+            self.editor, lambda every: self.execute(RunScope.ALL if every else RunScope.CURRENT)
+        )
+        self.editor.installEventFilter(self._run_keys)
         self._wire_mark()
         self.split.addWidget(self.editor)
         self.split.addWidget(self._build_results())
@@ -185,12 +196,12 @@ class QueryPage(QWidget):
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(6)
         # Un solo «Ejecutar» (propietario, 2026-11-06): la selección o la sentencia marcada; «Ejecutar todo»
-        # un paso atrás (Ctrl+Mayús+Intro y el menú «⋯»). El texto y la marca dicen qué correrá.
+        # un paso atrás (Ctrl+Shift+Enter y el menú «⋯»). El texto y la marca dicen qué correrá.
         self.run_button = button(tr("Run"), "primary", icon="play")
         self.run_button.setIcon(self._icon("play", self.colors.on_accent))
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
-        self.kbd_label = label("Ctrl+Intro", "kbd")
+        self.kbd_label = label("Ctrl+Enter", "kbd")
         row.addWidget(self.kbd_label, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addSpacing(6)
         self.cancel_button = button(tr("Cancel"), "ghost", icon="stop", colors=self.colors)
@@ -206,7 +217,7 @@ class QueryPage(QWidget):
         self.base.setMinimumWidth(110)
         self.base.currentIndexChanged.connect(lambda _i: self.changed.emit())
         row.addWidget(self.base)
-        # «Ejecutar todo»: Ctrl+Mayús+Intro y el clic derecho del editor (abrir y guardar están junto a las
+        # «Ejecutar todo»: Ctrl+Shift+Enter y el clic derecho del editor (abrir y guardar están junto a las
         # pestañas: el archivo arriba, la ejecución aquí; propietario, 2026-11-06)
         self.run_all_action = QAction(tr("Run all") + "\tCtrl+Shift+Enter", self)
         self.run_all_action.triggered.connect(lambda: self.execute(RunScope.ALL))
@@ -232,6 +243,12 @@ class QueryPage(QWidget):
         row.addWidget(self.view)
         self.summary = label("", "muted")
         row.addWidget(self.summary)
+        # «✕ Error en la línea N, cerca de «palabra»»: un clic lleva el cursor ahí (#139)
+        self.error_link = label("", "error")
+        self.error_link.setTextFormat(Qt.TextFormat.RichText)
+        self.error_link.linkActivated.connect(lambda _l: self._go_to_error())
+        self.error_link.hide()
+        row.addWidget(self.error_link)
         row.addWidget(spacer(), 1)
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
         self.detail_button.setCheckable(True)
@@ -404,7 +421,9 @@ class QueryPage(QWidget):
     def execute(self, scope: RunScope) -> None:
         """«Ejecutar» (la selección, o la sentencia marcada) o «Ejecutar todo». Lo marcado es exactamente lo
         que corre: la sentencia se calcula aquí (`domain.statements`), igual con DuckDB 1.5 y 2.0."""
-        if self._coordinator.state is not SessionState.READY or self.run is not None:
+        blocked = self._blocked()
+        if blocked:
+            self.notice.emit(blocked)  # nunca en silencio (#139)
             return
         text = self.editor.text()
         if not text.strip():
@@ -436,8 +455,27 @@ class QueryPage(QWidget):
             self.notice.emit(exc.message)
             return
         self.run = Run(run_id, text)
+        self.editor.status.clear()  # las marcas son de la ejecución anterior (#139)
+        self.error_link.hide()
         self.summary.setText(tr("Running…"))
         self._render_state()
+
+    def _blocked(self) -> str:
+        """Por qué «Ejecutar» no puede correr ahora, o vacío si puede."""
+        if self.run is not None:
+            return tr("A query is already running · «Cancel» stops it")
+        state = self._coordinator.state
+        if state is SessionState.READY:
+            return ""
+        if state is SessionState.BUSY:
+            return tr(
+                "GeoDuck is finishing another task (loading, exporting or importing): run it when it ends"
+            )
+        if state is SessionState.CONNECTING:
+            return tr("DuckDB is starting: run it in a moment")
+        if state is SessionState.ERROR_RECOVERABLE:
+            return tr("The transaction failed: run ROLLBACK (or close it) before running more SQL")
+        return tr("DuckDB is not started: start it to run SQL")
 
     def set_compact(self, compact: bool) -> None:
         """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): ▶ sin texto, ■, la base
@@ -525,14 +563,90 @@ class QueryPage(QWidget):
             if event.run.run_id != run.run_id:
                 return
             self.results = list(event.run.results) or run.results
-            self._messages(run.text, self.results, event.run.parse_error, event.run.parse_error_offset)
+            parse_error, parse_offset = event.run.parse_error, event.run.parse_error_offset
         else:
             self.results = []
-            self._messages(run.text, [], event.message, None)
+            parse_error, parse_offset = event.message, None
+        self._failed = bool(parse_error) or any(
+            r.status in (StatementStatus.FAILED, StatementStatus.CANCELLED) for r in self.results
+        )
+        self._messages(run.text, self.results, parse_error, parse_offset)
         self.run = None
         self.run_text = run.text
+        self._mark_run(run.text, self.results, parse_error, parse_offset)
         self._show_results(run.text)
         self._render_state()
+
+    def _mark_run(
+        self, text: str, results: list[StatementResult], parse_error: str, parse_offset: int | None
+    ) -> None:
+        """Las marcas de la ejecución en el editor y el enlace al primer error (#139). Solo si el texto
+        sigue siendo el que corrió: si cambió mientras corría, las posiciones ya no valdrían."""
+        self._error_at: tuple[int, int] | None = None
+        status = self.editor.status
+        status.clear()
+        self.error_link.hide()
+        if self.editor.text() != text:
+            return
+        marks: list[tuple[int, int]] = []
+        errors: list[tuple[int, int, str]] = []
+        first: tuple[int, str, int | None] | None = None  # (línea, palabra, posición) del primer error
+        if parse_error:
+            first = self._error_place(text, parse_offset, parse_error, errors)
+        for result in results:
+            line = line_index_from(text, self._code_start(text, result.statement.start))[0]
+            if result.status is StatementStatus.OK:
+                marks.append((line, pro_editor.OK_MARK))
+            elif result.status is StatementStatus.SKIPPED:
+                marks.append((line, pro_editor.SKIPPED_MARK))
+            elif result.status is StatementStatus.FAILED:
+                marks.append((line, pro_editor.ERROR_MARK))
+                offset = result.error_offset
+                if offset is None:  # sin lugar: la sentencia entera es el error
+                    errors.append(
+                        (self._code_start(text, result.statement.start), result.statement.end, result.message)
+                    )
+                    place: tuple[int, str, int | None] = (line, "", None)
+                else:
+                    place = self._error_place(text, offset, result.message, errors)
+                first = first or place
+        if parse_error and first is not None:
+            marks.append((first[0], pro_editor.ERROR_MARK))
+        status.show(marks, errors)
+        if first is None:
+            return
+        line, word, offset = first
+        self._error_at = (line, line_index_from(text, offset)[1] if offset is not None else 0)
+        where = (
+            tr("Error on line {0}, near «{1}»").format(line + 1, word)
+            if word
+            else tr("Error on line {0}").format(line + 1)
+        )
+        self.error_link.setText(f'✕ <a href="#" style="color: {self.colors.error};">{_html(where)}</a>')
+        self.error_link.setToolTip(tr("Goes to the error in the editor"))
+        self.error_link.show()
+
+    @staticmethod
+    def _code_start(text: str, start: int) -> int:
+        """El primer carácter de código de una sentencia (sin los espacios ni los comentarios de antes)."""
+        for first, last in statement_spans(text):
+            if first <= last and start <= first:
+                return first
+        return start
+
+    @staticmethod
+    def _error_place(
+        text: str, offset: int | None, message: str, errors: list[tuple[int, int, str]]
+    ) -> tuple[int, str, int | None]:
+        if offset is None or not 0 <= offset < len(text):
+            return (0, "", None) if not errors else (line_index_from(text, errors[-1][0])[0], "", None)
+        word = error_token(text, offset, message)
+        errors.append((offset, offset + max(1, len(word)), message.split("\n", 1)[0]))
+        return line_index_from(text, offset)[0], word, offset
+
+    def _go_to_error(self) -> None:
+        if getattr(self, "_error_at", None) is not None:
+            self.go_to(*self._error_at)
 
     def _show_results(self, text: str = "") -> None:
         """Una pestaña por sentencia con tabla (sin pestañas si es una); si ninguna tiene tabla, los
@@ -547,12 +661,15 @@ class QueryPage(QWidget):
         self.result_tabs.blockSignals(False)
         self.result_tabs.setVisible(len(tabular) > 1)
         self._tabular = tabular
-        failed = any(r.status in (StatementStatus.FAILED, StatementStatus.CANCELLED) for r in self.results)
+        # ante cualquier error, también uno de sintaxis que no dejó correr nada, se abre «Mensajes» (#139)
+        failed = getattr(self, "_failed", False) or any(
+            r.status in (StatementStatus.FAILED, StatementStatus.CANCELLED) for r in self.results
+        )
         if tabular and not failed:
             self.result_tabs.setCurrentIndex(len(tabular) - 1)
             self.view.set_current(RESULT)
         elif self.results or failed:
-            self.view.set_current(MESSAGES if (failed or not tabular) else RESULT)
+            self.view.set_current(MESSAGES)
         self._show_view(self.view.current)
 
     def _show_view(self, index: int) -> None:
@@ -735,15 +852,7 @@ class QueryPage(QWidget):
             else:
                 message = result.message
             box.addLayout(self._line(ok, message, text, None if ok else result.error_offset))
-        skipped = sum(r.status is StatementStatus.SKIPPED for r in results)
-        if skipped:
-            text_skipped = (
-                tr("1 statement was not run after the error")
-                if skipped == 1
-                else tr("{} statements were not run after the error").format(skipped)
-            )
-            box.addWidget(label(text_skipped, "muted"))
-        box.addStretch(1)
+        box.addStretch(1)  # lo que no corrió ya lo dicen la marca «–» y el resumen (#139)
         self.messages.setWidget(body)
 
     def _line(self, ok: bool, message: str, text: str, offset: int | None) -> QHBoxLayout:
@@ -752,16 +861,28 @@ class QueryPage(QWidget):
         mark = label("✓" if ok else "✕", None if ok else "error")
         mark.setStyleSheet(f"color: {self.colors.ok}; font-weight: 600;" if ok else "font-weight: 600;")
         row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
-        body = label(message, None if ok else "error")
+        place = ""
+        if not ok and offset is not None and 0 <= offset < len(text):
+            line, _index = line_index_from(text, offset)
+            word = error_token(text, offset, message)
+            place = (
+                tr("Line {0} · near «{1}»").format(line + 1, word)
+                if word
+                else tr("Line {0}").format(line + 1)
+            )
+        body = label(
+            f"<b>{_html(place)}</b> · {_html(message)}" if place else message, None if ok else "error"
+        )
+        if place:
+            body.setTextFormat(Qt.TextFormat.RichText)
         body.setWordWrap(True)
         body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         row.addWidget(body, 1)
         self._log.append((ok, message))
-        if offset is not None and 0 <= offset <= len(text):
+        if not ok and offset is not None and 0 <= offset <= len(text):
             line, index = line_index_from(text, offset)
-            where = tr("line {}, column {}").format(line + 1, index + 1)
             link = f'<a href="#" style="color: {self.colors.accent}; text-decoration: none;">{tr("Go")}</a>'
-            go = label(f'<span style="color: {self.colors.muted};">{where}</span> · {link}', "link")
+            go = label(link, "link")
             go.setTextFormat(Qt.TextFormat.RichText)
             go.linkActivated.connect(lambda _l, ln=line, ix=index: self.go_to(ln, ix))
             row.addWidget(go, 0, Qt.AlignmentFlag.AlignTop)
@@ -773,7 +894,11 @@ class QueryPage(QWidget):
         if not log:
             self.summary.setText("")
         elif errors:
-            self.summary.setText(tr("{} OK · {} with error").format(len(log) - errors, errors))
+            skipped = sum(r.status is StatementStatus.SKIPPED for r in self.results)
+            text = tr("{} OK · {} with error").format(len(log) - errors, errors)
+            if skipped:
+                text += " · " + tr("{} not run").format(skipped)
+            self.summary.setText(text)
         else:
             self.summary.setText(tr("{} OK").format(len(log)))
 
@@ -799,6 +924,7 @@ class QueryPage(QWidget):
             self._ask_path,
             self.notice.emit,
         )
+        self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
     def load_in_qgis(self, kind: str) -> None:
         """«Cargar en QGIS ▾»: el resultado elegido como «Copia» o «Conectada» (repite la consulta)."""
@@ -807,6 +933,7 @@ class QueryPage(QWidget):
             return
         name = result_title(self.run_text, result.statement) if self.run_text else self.place.name
         self._loader(result.statement.text, name, kind, database=result.database)
+        self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
     # -- archivo --------------------------------------------------------------------------------------
 
@@ -819,6 +946,10 @@ class QueryPage(QWidget):
         return self.editor.text() != (self.saved_text or "") if self.place.path else bool(self.editor.text())
 
     def _text_changed(self) -> None:
+        if self.editor.status.shown:  # las marcas eran de otro texto (#139)
+            self.editor.status.clear()
+            self.error_link.hide()
+            self._error_at = None
         self.changed.emit()
         if self.place.path:
             self._autosave.start()

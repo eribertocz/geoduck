@@ -3,7 +3,7 @@
 
 import pytest
 
-from geoduck.domain.sql import SqlStatement, error_offset_in, statement_at
+from geoduck.domain.sql import SqlStatement, error_offset_in, error_token, statement_at
 
 
 def st(i, start, end, kind="SELECT"):
@@ -53,3 +53,21 @@ def test_error_offset_is_unknown_when_duckdb_truncates_the_line():
 
 def test_error_offset_is_unknown_without_position():
     assert error_offset_in("SELECT 1", "Catalog Error: sin posición") is None
+
+
+def test_error_token_uses_the_word_duckdb_names_at_the_offset():
+    text = "SELECT zona\nFROM t GROUP zona;"
+    offset = text.rindex("zona")
+    assert error_token(text, offset, 'Parser Error: syntax error at or near "zona"') == "zona"
+    text = "SELECT zona, kwhh FROM norte"
+    message = 'Binder Error: Referenced column "kwhh" not found in FROM clause!\nCandidate bindings: "kwh"'
+    assert error_token(text, text.index("kwhh"), message) == "kwhh"
+
+
+def test_error_token_falls_back_to_the_token_at_the_offset():
+    text = 'SELECT "Nombre Cliente", x::DOUBLE FROM t'
+    assert error_token(text, text.index('"Nombre'), "Some error") == '"Nombre Cliente"'
+    assert error_token(text, text.index("::"), "Conversion Error: …") == ":"
+    assert error_token(text, text.index("x::"), "Conversion Error: …") == "x"
+    assert error_token(text, None, "x") == ""
+    assert error_token(text, len(text), "x") == ""

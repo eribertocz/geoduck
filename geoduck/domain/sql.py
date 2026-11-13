@@ -174,6 +174,25 @@ def error_offset_in(text: str, message: str) -> int | None:
     return None
 
 
+_QUOTED_IN_MESSAGE = re.compile(r'"((?:[^"]|"")+)"')
+_TOKEN_AT = re.compile(r'"(?:[^"]|"")*"?|\'(?:[^\']|\'\')*\'?|[\w$]+|\S')
+
+
+def error_token(text: str, offset: int | None, message: str) -> str:
+    """La palabra del error en `text` (#139): «cerca de «zona»». Primero la que DuckDB nombra entre comillas
+    en su mensaje («at or near "zona"», «column "kwhh"»), si está justo en `offset`; si no, el token que
+    empieza en `offset` (un identificador, un texto entre comillas o un signo). Vacío si no hay lugar."""
+    if offset is None or not 0 <= offset < len(text):
+        return ""
+    first = message.split("\n", 1)[0]
+    for quoted in _QUOTED_IN_MESSAGE.findall(first):
+        word = str(quoted).replace('""', '"')
+        if word and text.startswith(word, offset):
+            return word
+    match = _TOKEN_AT.match(text, offset)
+    return str(match.group(0)) if match else ""
+
+
 # -- títulos de resultado -------------------------------------------------------------------------
 
 _TITLE_MAX = 28
