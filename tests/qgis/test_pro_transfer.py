@@ -168,9 +168,36 @@ def _colors():
 
 
 def test_copy_is_still_one_click(coordinator):
-    """Los atajos siguen: «Copia» del menú carga con el nombre propuesto, sin abrir el diálogo."""
+    """Los atajos siguen: «Copia» del menú carga con el nombre propuesto; si termina antes de 2 s, sin
+    abrir el diálogo (basta el aviso)."""
     ws = workspace(coordinator)
     page = open_table(ws, "puntos")
     page.load_in_qgis(COPY)
     assert wait_for(lambda: layers_named("puntos") and coordinator.state is SessionState.READY, 30)
     assert ws.to_qgis.window is None
+
+
+def test_a_slow_one_click_load_opens_the_timeline(coordinator, monkeypatch):
+    """La opción intermedia (propietario, 2026-11-13): si el atajo sigue cargando a los 2 s, se abre la línea
+    de tiempo con lo que va y sin aviso aparte; si termina antes, solo el aviso (prueba de arriba)."""
+    from geoduck.ui.pro import load_window
+    from geoduck.ui.pro.load import CONNECTED
+
+    assert load_window.REVEAL_MS == 2000
+    started = load_window.LoadWindow.job_started
+
+    def slow(self, index, request):  # «pasaron los 2 s» justo al empezar: sin esperar de verdad
+        started(self, index, request)
+        self._reveal()
+
+    monkeypatch.setattr(load_window.LoadWindow, "job_started", slow)
+    ws = workspace(coordinator)
+    page = open_table(ws, "puntos")
+    page.load_in_qgis(CONNECTED)
+    assert wait_for(lambda: ws.to_qgis.window is not None)
+    window = ws.to_qgis.window
+    assert window.stack.currentIndex() == 1  # directo a la línea de tiempo, sin el formulario
+    assert wait_for(lambda: not ws.to_qgis.running and coordinator.state is SessionState.READY, 30)
+    assert window.timeline.title.text() == tr("Done: 1 layer in QGIS")
+    assert layers_named("puntos")
+    assert ws.to_qgis.showing() and ws._loaded(ws.loader.last_report)  # la ventana ya lo dice: sin aviso

@@ -150,7 +150,7 @@ class PlacesDropHandler(QgsCustomDropHandler):
         menu = load_menu(
             workspace,
             workspace.colors,
-            lambda kind: workspace.loader.start_many(
+            lambda kind: workspace.to_qgis.quick(
                 [dict(jobs[0], name=layer_name(menu, jobs[0]["name"]))] if single else jobs, kind
             ),
             title=menu_title(len(places)),

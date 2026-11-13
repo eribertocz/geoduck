@@ -387,7 +387,7 @@ def test_right_click_on_one_or_more_tables_loads_them_with_the_same_menu(plugin)
     items["c"].setSelected(True)
     assert [p.name for p in ws.sidebar.selected_places()] == ["a", "c"]
     picked = []
-    ws.loader.start_many = lambda jobs, kind: picked.append(([j["name"] for j in jobs], kind))
+    ws.loader.start_many = lambda jobs, kind, **_: picked.append(([j["name"] for j in jobs], kind))
     menu = ws._load_menu_for(ws, ws.sidebar.selected_places())
     copy = next(a for a in menu.actions() if a.text() == tr("Copy (mode)"))
     copy.trigger()
