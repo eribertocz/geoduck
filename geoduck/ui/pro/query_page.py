@@ -652,7 +652,7 @@ class QueryPage(QWidget):
         self.lake.setMaximumWidth(120 if compact else 220)
         tighten(self.range_label.parentWidget().layout(), compact, (16, 0, 16, 0), 10)
         tighten(self.run_button.parentWidget().layout(), compact, (12, 8, 12, 8), 6)
-        tighten(self.view.parentWidget().layout(), compact, (12, 6, 12, 6), 10)
+        tighten(self.view.parentWidget().layout(), compact, (12, 6, 12, 6), 10, tight=(6, 0))
         self.mark_statement()
         self._update_range(self.current_result if self.view.current == RESULT else None)
 

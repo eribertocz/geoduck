@@ -10,10 +10,24 @@ workspace.
 
 from __future__ import annotations
 
+import math
+import time
 from collections.abc import Callable
 from typing import Any
 
-from qgis.PyQt.QtCore import QMimeData, QModelIndex, QObject, QPoint, QRect, QRectF, QSize, Qt, pyqtSignal
+from qgis.PyQt.QtCore import (
+    QMimeData,
+    QModelIndex,
+    QObject,
+    QPoint,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+    pyqtSignal,
+)
 from qgis.PyQt.QtGui import QColor, QDrag, QFont, QFontMetrics, QIcon, QPainter, QPen
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
@@ -31,7 +45,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from geoduck import __version__
-from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ObjectKind, catalog_key
+from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo, ObjectKind, catalog_key
+from geoduck.domain.sql_text import sql_name
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import fuzzy, icons
 from geoduck.ui.pro.drag import (
@@ -46,7 +61,15 @@ from geoduck.ui.pro.drag import (
 from geoduck.ui.pro.places import Place, Places, icon_name, missing_reason, place_of
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
-from geoduck.ui.pro.widgets import LOGO, ElidedLabel, SearchField, StatusDot, icon_button, label
+from geoduck.ui.pro.widgets import (
+    LOGO,
+    ElidedLabel,
+    SearchField,
+    StatusDot,
+    icon_button,
+    label,
+    reduced_motion,
+)
 
 #: Qué es cada fila del árbol (rol `ROLE`): una sección, una base, un esquema, un grupo o un lugar.
 ROLE = Qt.ItemDataRole.UserRole
@@ -54,7 +77,47 @@ ROLE = Qt.ItemDataRole.UserRole
 META = Qt.ItemDataRole.UserRole + 1
 #: (base, esquema) donde se envían las capas soltadas sobre esta fila (solo bases y esquemas escribibles).
 TARGET = Qt.ItemDataRole.UserRole + 2
+#: El texto secundario en turquesa (la geometría) en vez de gris.
+ACCENT_META = Qt.ItemDataRole.UserRole + 3
 SECTION, DATABASE, SCHEMA, GROUP, PLACE = "section", "database", "schema", "group", "place"
+#: Una columna de una tabla o vista (#147): (fuente, ColumnInfo).
+COLUMN = "column"
+#: Una fila de espera mientras se leen las columnas.
+LOADING = "loading"
+#: Tablas como mucho de las que se piden las columnas al buscar (la búsqueda también encuentra columnas).
+SEARCH_COLUMNS_LIMIT = 200
+#: Cuánto dura el resaltado de una tabla nueva (#147: «nuevo», que se desvanece).
+NEW_SECONDS = 2.0
+#: El lago: ondas en bucle (1,2 s) y la salpicadura al soltar (0,4 s).
+WAVE_MS = 1200
+SPLASH_MS = 400
+
+
+def column_icon(column: ColumnInfo) -> str:  # noqa: PLR0911 - un icono por familia de tipos
+    """El icono de una columna por su tipo (#147): llave, geometría, texto, número, fecha, sí/no u otro."""
+    if column.primary_key:
+        return "key"
+    if column.is_geometry:
+        return "geometry"
+    kind = column.data_type.upper()
+    if kind.startswith(("VARCHAR", "CHAR", "TEXT", "STRING", "UUID", "ENUM")):
+        return "type-text"
+    if kind.startswith(
+        ("INT", "BIGINT", "SMALLINT", "TINYINT", "HUGEINT", "UBIGINT", "UINTEGER", "USMALLINT", "UTINYINT",
+         "UHUGEINT", "DOUBLE", "FLOAT", "REAL", "DECIMAL", "NUMERIC")
+    ):  # fmt: skip
+        return "type-number"
+    if kind.startswith(("DATE", "TIME", "TIMESTAMP", "INTERVAL")):
+        return "type-date"
+    if kind.startswith("BOOL"):
+        return "type-bool"
+    return "type-other"
+
+
+def column_type_text(column: ColumnInfo) -> str:
+    """El tipo a la derecha, corto: «VARCHAR», «DECIMAL(10,2)», «GEOMETRY»."""
+    text = column.data_type.strip()
+    return text if len(text) <= 18 else text.split("(", 1)[0]
 
 
 def _access_text(access: AccessMode, in_memory: bool) -> str:
@@ -74,8 +137,21 @@ class _NavDelegate(QStyledItemDelegate):
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
         tree = option.widget  # type: ignore[attr-defined]
         target = getattr(tree, "drop_item", None)
-        lake = target is not None and tree.itemFromIndex(index) is target  # la base donde se soltarán
+        item = tree.itemFromIndex(index) if tree is not None else None
+        splash = getattr(tree, "splash_item", None)
+        lake = item is not None and (item is target or item is splash)  # la base donde se soltarán
         box = QRectF(option.rect).adjusted(1, 1, -1, -1)  # type: ignore[attr-defined]
+        fresh = tree.fresh(item) if item is not None and hasattr(tree, "fresh") else 0.0
+        if fresh > 0:  # una tabla nueva (#147): turquesa con una barra a la izquierda, que se desvanece
+            painter.save()
+            soft = QColor(self.colors.accent_soft)
+            soft.setAlphaF(fresh)
+            painter.fillRect(option.rect, soft)  # type: ignore[attr-defined]
+            bar = QColor(self.colors.accent)
+            bar.setAlphaF(fresh)
+            rect = option.rect  # type: ignore[attr-defined]
+            painter.fillRect(QRect(0, rect.y(), 3, rect.height()), bar)
+            painter.restore()
         if lake:  # «el lago» (marca): la base se pinta de turquesa claro, con el pato a la derecha
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -84,32 +160,75 @@ class _NavDelegate(QStyledItemDelegate):
             painter.drawRoundedRect(box, 5, 5)
             painter.restore()
         self._lake = lake  # en el lago, el pato ocupa el sitio del texto de la derecha
+        self._fresh = fresh > 0
         self._paint(painter, option, index)
         self._lake = False
-        if lake:
-            painter.save()
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            pen = QPen(QColor(self.colors.accent))
-            pen.setWidthF(1.5)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(box, 5, 5)
-            side = 16
-            x = int(box.right()) - side - 6
-            y = int(box.center().y()) - side // 2 - 1
-            ripple = QColor(self.colors.accent)  # la onda bajo el pato
-            for k, alpha in ((0, 150), (1, 80)):
-                ripple.setAlpha(alpha)
-                wave = QPen(ripple)
-                wave.setWidthF(1.2)
-                painter.setPen(wave)
-                grow = 4 + 5 * k
-                painter.drawArc(QRectF(x - grow, y + side - 3, side + 2 * grow, 6), 200 * 16, 140 * 16)
-            painter.drawPixmap(x, y, QIcon(LOGO).pixmap(side, side))
-            painter.restore()
+        self._fresh = False
+        if lake and item is not None:
+            self._paint_lake(painter, option, item, box, tree)
+
+    def _paint_lake(
+        self, painter: QPainter, option: QStyleOptionViewItem, item: Any, box: QRectF, tree: Any
+    ) -> None:
+        """El lago (#147, maqueta `explorador-lago`): borde turquesa, «Soltar aquí · esquema», el pato con
+        ondas que se expanden en bucle y, al soltar, un anillo que cruza la fila y un pequeño salto."""
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        accent = QColor(self.colors.accent)
+        pen = QPen(accent)
+        pen.setWidthF(1.5)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(box, 5, 5)
+        target = item.data(0, TARGET)
+        if target:
+            name_width = QFontMetrics(item.font(0)).horizontalAdvance(item.text(0))
+            rect = option.rect  # type: ignore[attr-defined]
+            left = rect.x() + 26 + name_width + 10
+            painter.setFont(self.small)
+            painter.setPen(accent)
+            painter.drawText(
+                QRect(left, rect.y(), max(0, int(box.right()) - 40 - left), rect.height()),
+                int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+                QFontMetrics(self.small).elidedText(
+                    tr("Drop here · {}").format(target[1]),
+                    Qt.TextElideMode.ElideRight,
+                    max(0, int(box.right()) - 40 - left),
+                ),
+            )
+        side = 16
+        splash = getattr(tree, "splash", 0.0) if item is getattr(tree, "splash_item", None) else 0.0
+        x = int(box.right()) - side - 6
+        hop = round(4 * math.sin(math.pi * splash)) if splash else 0
+        y = int(box.center().y()) - side // 2 - 1 - hop
+        phase = getattr(tree, "phase", 0.0)
+        ripple = QColor(accent)
+        for k in range(2):  # las ondas bajo el pato, que se expanden y se apagan en bucle
+            t = (phase + k / 2) % 1.0
+            ripple.setAlphaF(max(0.0, 0.65 * (1 - t)))
+            wave = QPen(ripple)
+            wave.setWidthF(1.2)
+            painter.setPen(wave)
+            grow = 3 + 9 * t
+            painter.drawArc(QRectF(x - grow, y + hop + side - 3, side + 2 * grow, 6), 200 * 16, 140 * 16)
+        if splash:  # el anillo grande que sale del pato y cruza la fila
+            ring = QColor(accent)
+            ring.setAlphaF(max(0.0, 0.7 * (1 - splash)))
+            wave = QPen(ring)
+            wave.setWidthF(1.5)
+            painter.setPen(wave)
+            radius = 8 + splash * box.width()
+            center = box.right() - side / 2 - 6
+            painter.setClipRect(box)
+            painter.drawEllipse(
+                QRectF(center - radius, box.center().y() - radius * 0.35, 2 * radius, radius * 0.7)
+            )
+            painter.setClipping(False)
+        painter.drawPixmap(x, y, QIcon(LOGO).pixmap(side, side))
+        painter.restore()
 
     def _paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
-        meta = index.data(META)
+        meta = index.data(META) or (tr("new") if getattr(self, "_fresh", False) else None)
         if not meta:
             super().paint(painter, option, index)
             return
@@ -129,7 +248,12 @@ class _NavDelegate(QStyledItemDelegate):
             return
         painter.save()
         painter.setFont(self.small)
-        painter.setPen(QColor(self.colors.faint))
+        tone = (
+            self.colors.accent
+            if index.data(ACCENT_META) or getattr(self, "_fresh", False)
+            else self.colors.faint
+        )
+        painter.setPen(QColor(tone))
         painter.drawText(
             QRect(rect.right() - width, rect.y(), width - 4, rect.height()),
             int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight),
@@ -152,20 +276,92 @@ class NavTree(QTreeWidget):
     files_dropped = pyqtSignal(list, object)
     #: Texto para el pie mientras se arrastra («Suelta para enviar 3 capas a «db»»); "" al salir.
     drop_hint = pyqtSignal(str)
+    #: Algo que se puede soltar entra (True) o sale o se suelta (False): la guía «Suelta sobre una base…».
+    drag_active = pyqtSignal(bool)
 
     def __init__(self) -> None:
         super().__init__()
         self.drop_item: QTreeWidgetItem | None = None
         self.current_target: Callable[[], tuple[str, str] | None] = lambda: None
+        #: El lago (#147): la fase de las ondas (0–1, en bucle) y la salpicadura al soltar.
+        self.phase = 0.0
+        self.splash = 0.0
+        self.splash_item: QTreeWidgetItem | None = None
+        #: (base, esquema, nombre) → cuándo empezó su resaltado de tabla nueva.
+        self.new_since: dict[tuple[str, str, str], float] = {}
+        self._wave = QVariantAnimation(self)
+        self._wave.setStartValue(0.0)
+        self._wave.setEndValue(1.0)
+        self._wave.setDuration(WAVE_MS)
+        self._wave.setLoopCount(-1)
+        self._wave.valueChanged.connect(self._waved)
+        self._splash = QVariantAnimation(self)
+        self._splash.setStartValue(0.0)
+        self._splash.setEndValue(1.0)
+        self._splash.setDuration(SPLASH_MS)
+        self._splash.valueChanged.connect(self._splashed)
+        self._splash.finished.connect(self._splash_done)
+        self._fade = QTimer(self)
+        self._fade.setInterval(50)
+        self._fade.timeout.connect(self._faded)
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
         self.setDefaultDropAction(Qt.DropAction.CopyAction)
 
+    # -- el lago y lo nuevo (#147) ----------------------------------------------------------------------
+
+    def _waved(self, value: Any) -> None:
+        self.phase = float(value)
+        self.viewport().update()
+
+    def _splashed(self, value: Any) -> None:
+        self.splash = float(value)
+        self.viewport().update()
+
+    def _splash_done(self) -> None:
+        self.splash = 0.0
+        self.splash_item = None
+        self.viewport().update()
+
+    def start_splash(self, item: QTreeWidgetItem | None) -> None:
+        """Al soltar: el anillo y el salto del pato; sin animaciones, nada se mueve."""
+        if item is None or reduced_motion(self):
+            return
+        self.splash_item = item
+        self._splash.stop()
+        self._splash.start()
+
+    def fresh(self, item: QTreeWidgetItem) -> float:
+        """Cuánto resalta una tabla nueva (1 → 0 en `NEW_SECONDS`); con menos animaciones, fijo y luego
+        nada."""
+        data = item.data(0, ROLE)
+        if not self.new_since or not data or data[0] != PLACE:
+            return 0.0
+        place = data[1]
+        since = self.new_since.get((place.database, place.schema, place.name))
+        if since is None:
+            return 0.0
+        elapsed = time.monotonic() - since
+        if elapsed >= NEW_SECONDS:
+            return 0.0
+        return 1.0 if reduced_motion(self) else 1.0 - elapsed / NEW_SECONDS
+
+    def start_fade(self) -> None:
+        if not self._fade.isActive():
+            self._fade.start()
+
+    def _faded(self) -> None:
+        now = time.monotonic()
+        self.new_since = {k: v for k, v in self.new_since.items() if now - v < NEW_SECONDS}
+        if not self.new_since:
+            self._fade.stop()
+        self.viewport().update()
+
     # -- hacia QGIS -----------------------------------------------------------------------------------
 
     def mimeTypes(self) -> list[str]:  # noqa: N802 - API de Qt
-        return [PLACES_MIME]
+        return [PLACES_MIME, "text/plain"]
 
     def mimeData(self, items: Any) -> QMimeData:  # noqa: N802 - API de Qt
         places = []
@@ -175,9 +371,23 @@ class NavTree(QTreeWidget):
                 places.append(data[1])
         return places_mime(places)
 
+    #: Las columnas elegidas como texto para el editor (las pone la barra lateral, citadas si hace falta).
+    column_text: Callable[[list[QTreeWidgetItem]], str] = staticmethod(  # type: ignore[assignment]
+        lambda _items: ""
+    )
+
     def startDrag(self, actions: Any) -> None:  # noqa: N802 - API de Qt
-        """Arrastrar tablas al mapa: se arrastra el pato de GeoDuck (con cuántas lleva) hacia QGIS."""
+        """Arrastrar tablas al mapa: se arrastra el pato de GeoDuck (con cuántas lleva) hacia QGIS. Arrastrar
+        columnas (#147): su nombre, como texto, se escribe donde se suelte en el editor."""
         items = self.selectedItems()
+        columns = [i for i in items if (d := i.data(0, ROLE)) and d[0] == COLUMN]
+        if columns:
+            data = QMimeData()
+            data.setText(self.column_text(columns))
+            drag = QDrag(self)
+            drag.setMimeData(data)
+            drag.exec(Qt.DropAction.CopyAction)
+            return
         count = sum(1 for i in items if (d := i.data(0, ROLE)) and d[0] == PLACE and not d[1].is_query)
         if not count:
             return
@@ -207,11 +417,18 @@ class NavTree(QTreeWidget):
     def _set_drop(self, item: QTreeWidgetItem | None) -> None:
         if item is not self.drop_item:
             self.drop_item = item
+            if item is not None and not reduced_motion(self):
+                if self._wave.state() != QVariantAnimation.State.Running:
+                    self._wave.start()
+            else:
+                self._wave.stop()
+                self.phase = 0.0
             self.viewport().update()
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         if accepts(event.mimeData()) and self.isEnabled():
             event.acceptProposedAction()
+            self.drag_active.emit(True)
             self.dragMoveEvent(event)
         else:
             event.ignore()
@@ -230,14 +447,18 @@ class NavTree(QTreeWidget):
     def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         self._set_drop(None)
         self.drop_hint.emit("")
+        self.drag_active.emit(False)
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802 - API de Qt
         ids = layer_ids(event.mimeData())
         files = file_paths(event.mimeData())
-        _item, target = self._target(_pos(event))
+        item, target = self._target(_pos(event))
         self._set_drop(None)
         self.drop_hint.emit("")
+        self.drag_active.emit(False)
+        if ids or files:
+            self.start_splash(item)
         if not ids and not files:
             event.ignore()
             return
@@ -272,12 +493,26 @@ class Sidebar(QFrame):
     diagnostics_requested = pyqtSignal()
     about_requested = pyqtSignal()
     start_requested = pyqtSignal()
+    #: El 📌 del panel acoplado (#147): fijar al lado (True) o flotar encima (False).
+    pin_toggled = pyqtSignal(bool)
+    #: Hacen falta las columnas de (base, esquema, objeto): las pide el workspace (#147).
+    columns_wanted = pyqtSignal(tuple)
+    #: Doble clic en columnas (#147): sus nombres, ya citados si hace falta, para el editor.
+    columns_requested = pyqtSignal(str)
 
     def __init__(self, colors: Colors, places: Places) -> None:
         super().__init__()
         self.colors = colors
         self.places = places
         self.catalog: CatalogSnapshot | None = None
+        #: Columnas conocidas por objeto (del catálogo que se muestra) y los objetos abiertos en el árbol.
+        self.columns: dict[tuple[str, str, str], tuple[ColumnInfo, ...]] = {}
+        self._tables_open: set[tuple[str, str, str]] = set()
+        self._asked: set[tuple[str, str, str]] = set()
+        #: Palabras que obligan a citar un nombre (las pone el workspace cuando DuckDB las da).
+        self.reserved: frozenset[str] | None = None
+        #: Tablas nuevas que aún no están en el árbol (se resaltan al aparecer).
+        self._pending_new: set[tuple[str, str, str]] = set()
         self._collapsed: set[tuple[str, ...]] = set()
         self._opened: set[tuple[str, ...]] = set()
         self._quiet = False
@@ -290,12 +525,20 @@ class Sidebar(QFrame):
         #: La sesión arriba («DuckDB 2.0.0», «Lista · en memoria», «⋯»); en el panel la lleva su cabecera.
         self.session_head = self._build_header()
         box.addWidget(self.session_head)
+        self.dock_head = self._build_dock_head()
+        box.addWidget(self.dock_head)
         box.addLayout(self._build_filter())
         self.tree = self._build_tree()
         trees = QVBoxLayout()
         trees.setContentsMargins(8, 2, 8, 4)
+        trees.setSpacing(6)
+        box.addLayout(trees, 1)  # antes de sus widgets: sin padre, uno visible sería una ventana suelta
+        # la guía mientras se arrastra (#147): dónde soltar
+        self.drop_guide = label(tr("Drop on a database to bring it to DuckDB"), "drop-guide")
+        self.drop_guide.setWordWrap(True)
+        self.drop_guide.hide()
+        trees.addWidget(self.drop_guide)
         trees.addWidget(self.tree)
-        box.addLayout(trees, 1)
         box.addWidget(self._build_footer())
         self.render(None)
 
@@ -343,11 +586,55 @@ class Sidebar(QFrame):
         row.addWidget(self.session_button)
         return head
 
+    def _build_dock_head(self) -> QWidget:
+        """En el panel acoplado (#147, maqueta `explorador-lago`): «Explorador» y el 📌 para fijarlo al lado o
+        dejarlo flotar encima."""
+        head = QFrame()
+        row = QHBoxLayout(head)
+        row.setContentsMargins(14, 10, 8, 0)
+        row.setSpacing(6)
+        title = label(tr("Explorer"))
+        title.setFont(ui_font(bold=True))
+        row.addWidget(title, 1)
+        self.pin_button = icon_button("pin", "", self.colors, size=14)
+        self.pin_button.setIcon(icons.toggle("pin", self.colors.muted, self.colors.accent, 14))
+        self.pin_button.setCheckable(True)
+        self.pin_button.toggled.connect(self._pin_changed)
+        self._pin_changed(False, emit=False)
+        row.addWidget(self.pin_button)
+        head.hide()
+        return head
+
+    def _pin_changed(self, pinned: bool, *, emit: bool = True) -> None:
+        tip = (
+            tr("Pinned: stays beside the editor. Click to let it float")
+            if pinned
+            else tr("Floating: closes with a click outside or Esc. Click to pin it beside the editor")
+        )
+        self.pin_button.setToolTip(tip)
+        self.pin_button.setAccessibleName(tr("Pin the explorer"))
+        if emit:
+            self.pin_toggled.emit(pinned)
+
+    def set_docked(self, docked: bool, *, pinned: bool) -> None:
+        """Panel acoplado: la cabecera «Explorador 📌»; en la ventana, la de la sesión."""
+        self.session_head.setVisible(not docked)
+        self.dock_head.setVisible(docked)
+        self.pin_button.blockSignals(True)
+        self.pin_button.setChecked(pinned)
+        self.pin_button.blockSignals(False)
+        self._pin_changed(pinned, emit=False)
+
+    def show_drop_guide(self, on: bool) -> None:
+        self.drop_guide.setVisible(on and self.catalog is not None)
+
     def _build_filter(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setContentsMargins(12, 10, 8, 6)
         row.setSpacing(4)
-        self.search = SearchField(tr("Filter tables…"), self.colors, accessible_name=tr("Filter tables"))
+        self.search = SearchField(
+            tr("Search tables and columns…"), self.colors, accessible_name=tr("Search tables and columns")
+        )
         self.search.edit.textChanged.connect(self._apply_filter)
         self.search.edit.returnPressed.connect(self._open_first_match)
         row.addWidget(self.search, 1)
@@ -388,6 +675,8 @@ class Sidebar(QFrame):
         tree.itemActivated.connect(self._activated)
         tree.itemExpanded.connect(lambda item: self._remember_expanded(item, True))
         tree.itemCollapsed.connect(lambda item: self._remember_expanded(item, False))
+        tree.drag_active.connect(self.show_drop_guide)
+        tree.column_text = self.column_text
         return tree
 
     def _build_footer(self) -> QWidget:
@@ -450,7 +739,12 @@ class Sidebar(QFrame):
         return None
 
     def render(self, catalog: CatalogSnapshot | None) -> None:
-        """Rehace el árbol (favoritos y bases; sin «Recientes», 2026-11-06), con lo plegado y el filtro."""
+        """Rehace el árbol (favoritos y bases; sin «Recientes», 2026-11-06), con lo plegado y el filtro. Un
+        catálogo nuevo puede traer columnas cambiadas (ALTER, CREATE OR REPLACE, #147): las de los objetos
+        abiertos se vuelven a pedir."""
+        if catalog is not self.catalog:
+            self.columns = {}
+            self._asked = set()
         self.catalog = catalog
         tree = self.tree
         tree.setUpdatesEnabled(False)
@@ -472,6 +766,8 @@ class Sidebar(QFrame):
                     self._add_object(temp, place_of(obj.database, obj.schema, obj.name, obj.kind))
         self._apply_filter(self.search.edit.text())
         tree.setUpdatesEnabled(True)
+        if self._pending_new:
+            self._show_new()
 
     def _section(self, text: str, key: str) -> QTreeWidgetItem:
         item = QTreeWidgetItem([text.upper()])
@@ -560,6 +856,117 @@ class Sidebar(QFrame):
         item.setIcon(0, icons.icon(icon_name(place), self.colors.muted, 14))
         item.setToolTip(0, f"{place.location} · {place.name}")
         parent.addChild(item)
+        # sus columnas, al expandir (#147): del catálogo de DuckDB, sin leer datos
+        item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
+        source = (place.database, place.schema, place.name)
+        if source in self._tables_open:
+            self._fill_columns(item, source)
+            self._quiet = True
+            item.setExpanded(True)
+            self._quiet = False
+
+    # -- columnas (#147, maqueta `explorador-columnas`) ---------------------------------------------------
+
+    def _fill_columns(self, item: QTreeWidgetItem, source: tuple[str, str, str]) -> None:
+        """Las columnas bajo su tabla, o «Cargando…» mientras DuckDB las lee."""
+        item.takeChildren()
+        known = self.columns.get(source)
+        if known is None:
+            wait = QTreeWidgetItem([tr("Loading…")])
+            wait.setData(0, ROLE, (LOADING, source))
+            wait.setFlags(Qt.ItemFlag.NoItemFlags)
+            wait.setForeground(0, QColor(self.colors.faint))
+            item.addChild(wait)
+            self._want(source)
+            return
+        for column in known:
+            child = QTreeWidgetItem([column.name])
+            child.setData(0, ROLE, (COLUMN, (source, column)))
+            child.setData(0, META, column_type_text(column))
+            child.setData(0, ACCENT_META, column.is_geometry)
+            tone = self.colors.accent if column.is_geometry else self.colors.faint
+            child.setIcon(0, icons.icon(column_icon(column), tone, 13))
+            child.setToolTip(
+                0,
+                f"{column.name} · {column.data_type}"
+                + (" · " + tr("primary key") if column.primary_key else "")
+                + "\n"
+                + tr("Double-click or drag it to the editor"),
+            )
+            child.setFlags(
+                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
+            )
+            item.addChild(child)
+
+    def _want(self, source: tuple[str, str, str]) -> None:
+        if source not in self._asked:
+            self._asked.add(source)
+            self.columns_wanted.emit(source)
+
+    def set_columns(self, source: tuple[str, str, str], columns: tuple[ColumnInfo, ...] | None) -> None:
+        """Llegaron las columnas de `source` (o `None`: no se pudieron leer)."""
+        if columns is None:
+            self.columns.pop(source, None)
+        else:
+            self.columns[source] = columns
+        for item in self._items_of(source):
+            if item.isExpanded() or source in self._tables_open:
+                if columns is None:
+                    item.takeChildren()
+                else:
+                    self._fill_columns(item, source)
+        if self.search.edit.text().strip():
+            self._apply_filter(self.search.edit.text())
+
+    def _items_of(self, source: tuple[str, str, str]) -> list[QTreeWidgetItem]:
+        found: list[QTreeWidgetItem] = []
+
+        def visit(item: QTreeWidgetItem) -> None:
+            data = item.data(0, ROLE)
+            if data and data[0] == PLACE and _source(data[1]) == source:
+                found.append(item)
+                return
+            for index in range(item.childCount()):
+                visit(item.child(index))
+
+        for index in range(self.tree.topLevelItemCount()):
+            visit(self.tree.topLevelItem(index))
+        return found
+
+    def column_text(self, items: list[QTreeWidgetItem]) -> str:
+        """Los nombres de las columnas para el editor: citados si hace falta, separados por «, »."""
+        names = []
+        for item in items:
+            data = item.data(0, ROLE)
+            if data and data[0] == COLUMN:
+                names.append(sql_name(data[1][1].name, self.reserved))
+        return ", ".join(names)
+
+    # -- lo nuevo (#147) ----------------------------------------------------------------------------------
+
+    def mark_new(self, sources: list[tuple[str, str, str]]) -> None:
+        """Tablas recién llevadas a DuckDB: resaltadas en turquesa con «nuevo», que se desvanece en 2 s, y el
+        árbol abierto hasta ellas. Si aún no están en el árbol, al llegar el catálogo."""
+        self._pending_new.update(s for s in sources if all(s))
+        self._show_new()
+
+    def _show_new(self) -> None:
+        shown = set()
+        last = None
+        for source in self._pending_new:
+            for item in self._items_of(source):
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                self.tree.new_since[source] = time.monotonic()
+                shown.add(source)
+                last = item
+        self._pending_new -= shown
+        if last is not None:
+            self.tree.scrollToItem(last)
+            self.tree.start_fade()
+            self.tree.viewport().update()
 
     def _is_open(self, key: tuple[str, ...]) -> bool:
         """Las bases y esquemas, abiertos salvo que el usuario los pliegue; los grupos de vistas, al revés."""
@@ -569,6 +976,16 @@ class Sidebar(QFrame):
 
     def _remember_expanded(self, item: QTreeWidgetItem, expanded: bool) -> None:
         data = item.data(0, ROLE)
+        if data and data[0] == PLACE and not data[1].is_query and item.parent() is not None:
+            source = _source(data[1])
+            if expanded:
+                if not self._quiet:
+                    self._tables_open.add(source)
+                if item.childCount() == 0 or item.child(0).data(0, ROLE)[0] == LOADING:
+                    self._fill_columns(item, source)
+            elif not self._quiet:
+                self._tables_open.discard(source)
+            return
         if self._quiet or not data or data[0] not in (DATABASE, SCHEMA, GROUP):
             return
         key = data[1]
@@ -582,22 +999,51 @@ class Sidebar(QFrame):
     def _apply_filter(self, text: str) -> None:
         """Con texto, solo las tablas y vistas de «Bases» que coinciden (letras en orden, sin acentos)."""
         query = fuzzy.fold(text.strip())
+        if query:
+            self._want_all_columns()
         self._quiet = True
+
+        def matches(name: str) -> bool:
+            return not query or fuzzy.score(query, fuzzy.fold(name)) is not None
 
         def visit(item: QTreeWidgetItem) -> bool:
             data = item.data(0, ROLE)
             if not data:
                 return True
             if data[0] == PLACE:
-                visible = not query or fuzzy.score(query, fuzzy.fold(item.text(0))) is not None
-                item.setHidden(not visible)
-                return visible
+                return show_place(item, data[1])
+            if data[0] in (COLUMN, LOADING):
+                return True
             any_child = False
             for index in range(item.childCount()):
                 any_child = visit(item.child(index)) or any_child
             item.setHidden(bool(query) and not any_child)
             item.setExpanded(any_child if query else self._is_open(data[1]))
             return any_child
+
+        def show_place(item: QTreeWidgetItem, place: Place) -> bool:
+            """La tabla, si coincide su nombre o alguna de sus columnas (la búsqueda encuentra columnas)."""
+            source = _source(place)
+            if query and item.parent() is not None and source in self.columns:
+                hits = {c.name for c in self.columns[source] if matches(c.name)}
+                if hits:
+                    if item.childCount() == 0 or item.child(0).data(0, ROLE)[0] != COLUMN:
+                        self._fill_columns(item, source)
+                    for index in range(item.childCount()):
+                        child = item.child(index)
+                        child.setHidden(child.text(0) not in hits)
+                    item.setHidden(False)
+                    item.setExpanded(True)
+                    return True
+            for index in range(item.childCount()):
+                item.child(index).setHidden(False)
+            if not query and item.parent() is not None:
+                item.setExpanded(source in self._tables_open)
+            visible = matches(item.text(0))
+            item.setHidden(not visible)
+            if query and visible:
+                item.setExpanded(False)
+            return visible
 
         section = None
         for index in range(self.tree.topLevelItemCount()):
@@ -611,6 +1057,19 @@ class Sidebar(QFrame):
             else:
                 visit(item)
         self._quiet = False
+
+    def _want_all_columns(self) -> None:
+        """Al buscar, las columnas de las tablas y vistas que aún no se conocen (como mucho
+        `SEARCH_COLUMNS_LIMIT`), para que la búsqueda también las encuentre."""
+        if self.catalog is None:
+            return
+        wanted = [
+            (o.database, o.schema, o.name)
+            for o in self.catalog.objects
+            if (o.database, o.schema, o.name) not in self.columns
+        ]
+        for source in wanted[:SEARCH_COLUMNS_LIMIT]:
+            self._want(source)
 
     def visible_places(self) -> list[Place]:
         """Los lugares visibles con el filtro actual, en orden (para Intro y para las pruebas)."""
@@ -675,6 +1134,10 @@ class Sidebar(QFrame):
         data = item.data(0, ROLE)
         if not data:
             return
+        if data[0] == COLUMN:  # doble clic: su nombre (o los de las elegidas) donde está el cursor
+            chosen = [i for i in self.tree.selectedItems() if (d := i.data(0, ROLE)) and d[0] == COLUMN]
+            self.columns_requested.emit(self.column_text(chosen if item in chosen else [item]))
+            return
         if data[0] == PLACE:
             self.open_requested.emit(data[1])
         elif data[0] in (DATABASE, SCHEMA, GROUP):
@@ -728,3 +1191,7 @@ class Sidebar(QFrame):
             return
         menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         menu.popup(self.tree.viewport().mapToGlobal(pos))
+
+
+def _source(place: Place) -> tuple[str, str, str]:
+    return (place.database, place.schema, place.name)

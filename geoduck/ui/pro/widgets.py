@@ -563,6 +563,20 @@ class Toast(QFrame):
         self.deleteLater()
 
 
+def relayout(root: QWidget) -> None:
+    """Rehace las medidas de `root` y sus hijos: al cambiar de modo (compacto o no) una página oculta no
+    avisa a sus layouts, que guardaban el ancho mínimo de antes (#147: el panel no bajaba de 524 px)."""
+    from qgis.PyQt.QtWidgets import QLayout  # noqa: PLC0415
+
+    for layout in root.findChildren(QLayout):
+        layout.invalidate()
+    if root.layout() is not None:
+        root.layout().invalidate()
+    for widget in root.findChildren(QWidget):
+        widget.updateGeometry()
+    root.updateGeometry()
+
+
 def spacer() -> QWidget:
     widget = QWidget()
     widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)

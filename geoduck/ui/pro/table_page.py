@@ -566,12 +566,21 @@ def _key_text(kind: str) -> str:
     return {"PRIMARY KEY": tr("primary"), "UNIQUE": tr("unique")}.get(kind, kind.lower())
 
 
-def tighten(layout: Any, compact: bool, margins: tuple[int, int, int, int], spacing: int) -> None:
-    """En el modo compacto, márgenes y separaciones más cortos (el panel baja a 340 px sin montar nada)."""
+def tighten(
+    layout: Any,
+    compact: bool,
+    margins: tuple[int, int, int, int],
+    spacing: int,
+    *,
+    tight: tuple[int, int] = (8, 4),
+) -> None:
+    """En el modo compacto, márgenes y separaciones más cortos (`tight`: margen a los lados y
+    separación), para que el panel baje a 320 px sin montar nada (#147, punto 28)."""
     left, top, right, bottom = margins
     if compact:
-        layout.setContentsMargins(8, top, 8, bottom)
-        layout.setSpacing(4)
+        side, gap = tight
+        layout.setContentsMargins(side, top, side, bottom)
+        layout.setSpacing(gap)
     else:
         layout.setContentsMargins(left, top, right, bottom)
         layout.setSpacing(spacing)

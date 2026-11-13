@@ -1503,16 +1503,34 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Barra lateral** (plegable, Ctrl+B): búsqueda; **★ Favoritos**; **Bases** (árbol: bases,
   esquemas, tablas, vistas, temporales, con su acceso); «+» (abrir o crear base, importar capas de QGIS); al pie,
   «Diagnóstico», «Acerca de» y la versión.
+- **Columnas en el explorador** (#147, punto 23; maqueta `explorador-columnas`): cada tabla y vista se expande y
+  muestra sus columnas, leídas al expandir de `duckdb_columns()` (la llave, de `duckdb_constraints()`), sin leer
+  datos y con «Cargando…» mientras tanto. Icono pequeño y gris según el tipo (texto, número, fecha, sí/no,
+  otro), **llave** para la clave primaria y la **geometría en turquesa**; el tipo a la derecha, gris y corto.
+  **Doble clic** escribe el nombre donde está el cursor de la consulta (o de una nueva); **arrastrar** lo escribe
+  donde se suelta; con varias elegidas, «zona, kwh»; entre comillas si hace falta (`"Nombre Cliente"`). Nunca
+  se ejecuta nada. La búsqueda («Buscar tablas y columnas…») también encuentra columnas (abre la tabla y muestra
+  solo las que coinciden). Tras un `ALTER` o `CREATE OR REPLACE`, las columnas de las tablas abiertas se
+  vuelven a leer solas.
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
   Ctrl+W), reordenar y recordar las abiertas.
 - **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde GeoDuck · Conectada · Ver en el mapa»).
-- **Panel acoplado** (propietario, 2026-11-07, tras la prueba en Windows; antes no bajaba de 690 px): **modo
-  compacto, mínimo 340 px** sin que nada se monte. Las mismas opciones que la ventana, con ícono y tooltip
+- **Panel acoplado** (propietario, 2026-11-07, tras la prueba en Windows; antes no bajaba de 690 px; #147,
+  punto 28): **modo compacto, mínimo 320 px** con cualquier pestaña (tabla, vista, estructura, consulta con
+  resultado o con una tarjeta de error, historial) y sin que nada se monte; una prueba lo comprueba con cada
+  una. Las mismas opciones que la ventana, con ícono y tooltip
   donde no cabe el texto: ▶ sin «Ejecutar», ■, la base sin «Se ejecuta en», «Exportar» y «Cargar en QGIS»
   como íconos, «Ver SQL» y el filtro como íconos, «Estructura» como ícono ⓘ arriba; el detalle de fila,
-  cerrado. El **explorador** se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B), sin
-  repetir la sesión (está en la cabecera del panel), y se cierra al elegir algo, con Esc o con un clic fuera.
-  Una ventana de menos de 640 px usa el mismo modo compacto.
+  cerrado. El **explorador** (#147, punto 20; maqueta `explorador-lago`) lleva arriba «Explorador» y un 📌:
+  **flotando** (por defecto) se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B), sin
+  repetir la sesión (está en la cabecera del panel), y se cierra al elegir algo, con Esc o con un clic fuera;
+  **fijado** queda al lado (240 px; el editor se angosta) y no se cierra solo. Se recuerda entre sesiones; en
+  la ventana sigue siempre al lado. **Mientras se arrastran capas o archivos nunca se cierra**; arrastrando
+  sobre ☰, el botón se ilumina («Mantén para abrir el explorador») y a los ½ s el explorador se abre, con la
+  guía punteada «Suelta sobre una base para llevar a DuckDB» (también al pasar con algo arrastrado por el
+  árbol). Una ventana usa el mismo modo compacto por debajo de 640 px **o cuando la página no cabe con sus
+  textos**; recuerda cuánto pedía y vuelve al modo normal cuando vuelve a caber (nunca se queda atascado: el
+  ancho mínimo de la ventana no lo fija la página).
 - **Clic derecho en una o varias tablas** (Ctrl/Mayús + clic, como en el Explorador de Windows o QGIS) ›
   «Cargar en QGIS ▸» / «Cargar N tablas en QGIS ▸»: el mismo menú que al soltarlas en el mapa (§9); con una
   sola, también «Más opciones…».
@@ -1528,7 +1546,11 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   franja turquesa arriba y «Geo**Duck**». En el paso 3 de «Capas de QGIS → GeoDuck», la barra de cada capa lleva el
   logo en su punta. **«Un pato al lago»:** al arrastrar tablas de la barra lateral se ve el pato con cuántas
   lleva (globito ámbar); la base donde se soltarán capas de QGIS se pinta de turquesa claro con el pato (la imagen
-  de las capas que se arrastran desde QGIS la dibuja QGIS).
+  de las capas que se arrastran desde QGIS la dibuja QGIS). **El lago, más notorio** (#147, punto 21): al pasar
+  por encima, la fila de la base en turquesa suave con borde, «Soltar aquí · main» y el pato con ondas que se
+  expanden en bucle (1,2 s); al soltar, un anillo sale del pato y cruza la fila (0,4 s) y el pato da un pequeño
+  salto; después, la tabla nueva aparece resaltada en turquesa con «nuevo» y se desvanece en 2 s, con el árbol
+  abierto hasta ella. Con «menos animaciones» en el sistema, los mismos estados sin movimiento.
 
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.

@@ -120,10 +120,11 @@ class HistoryPage(QWidget):
         self.filter.changed.connect(self.set_filter)
         row.addWidget(self.filter)
         self.counts = label("", "muted")
+        self.counts.setMinimumWidth(1)  # por debajo de su texto: se recorta en vez de ensanchar el panel
         row.addWidget(self.counts)
         row.addStretch(1)
-        hint = label(tr("Double-click: open in a new query"), "faint")
-        row.addWidget(hint)
+        self.hint = label(tr("Double-click: open in a new query"), "faint")
+        row.addWidget(self.hint)
         self.clear_button = button(tr("Clear"), "ghost")
         self.clear_button.clicked.connect(self.clear)
         row.addWidget(self.clear_button)
@@ -159,6 +160,15 @@ class HistoryPage(QWidget):
         history.added.connect(self._add)
         self._update_counts()
         self.table.scrollToBottom()
+
+    def set_compact(self, compact: bool) -> None:
+        """Modo compacto (#147, punto 28): sin la ayuda del doble clic (sigue en la ayuda de cada fila) y con
+        márgenes cortos, para que el panel baje a 320 px."""
+        from geoduck.ui.pro.table_page import tighten  # noqa: PLC0415
+
+        self.hint.setVisible(not compact)
+        self.filter.set_compact(compact)
+        tighten(self.filter.parentWidget().layout(), compact, (16, 8, 16, 8), 10)
 
     def _add(self, entry: Entry) -> None:
         row = self.table.rowCount()

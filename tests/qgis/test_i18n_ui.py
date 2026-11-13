@@ -43,7 +43,7 @@ out = {
     "start": ws.start_button.text(),
     "state": ws.state_title.text(),
     "status": ws.sidebar.status.text(),
-    "dock": ws.dock_button.text(),
+    "dock": ws.dock_button.accessibleName(),  # angosto, el botón es solo su ícono (#147)
     "after": [QgsApplication.locale(), QLocale().name()],
     "before": list(before),
 }

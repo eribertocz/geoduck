@@ -49,6 +49,22 @@ def test_columns_keep_their_order_exact_type_and_nullability(worker):
     assert [c.is_geometry for c in columns] == [False, False, True, False, False, False]
 
 
+def test_the_primary_key_columns_are_marked(worker):
+    """#147: la llave del explorador sale de `duckdb_constraints()`, también con una clave de varias
+    columnas."""
+    run_sql(worker, "CREATE TABLE simple (id INTEGER PRIMARY KEY, zona VARCHAR)")
+    run_sql(worker, "CREATE TABLE doble (a INTEGER, b VARCHAR, c DOUBLE, PRIMARY KEY (a, b))")
+    run_sql(worker, "CREATE VIEW sin AS SELECT 1 AS id")
+
+    def keys(name):
+        return [
+            c.name for c in worker.list_columns(root(worker), "main", name).result(TIMEOUT) if c.primary_key
+        ]
+
+    keys = {name: keys(name) for name in ("simple", "doble", "sin")}
+    assert keys == {"simple": ["id"], "doble": ["a", "b"], "sin": []}
+
+
 def test_views_temporaries_and_attached_bases_in_other_schemas(worker, tmp_path):
     path = tmp_path / "otra base.duckdb"
     con = duckdb.connect(str(path))
