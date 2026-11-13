@@ -148,7 +148,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
     mayúsculas al escribir») y en las ayudas de la barra de búsqueda.
 - **Archivos soltados en el editor** (#146, punto 14): `FROM 'ruta';` por archivo (o `FROM ST_Read('ruta');`
   para los de GDAL, con `LOAD spatial;` visible delante si hace falta) en la línea donde se sueltan, sin
-  ejecutar. «Escribir consulta» (qgis-import-spec §5.4) sigue escribiendo un `CREATE TABLE … AS SELECT *`.
+  ejecutar, lista para añadirle parámetros (p. ej. `FROM read_csv('ruta', delim = ';')`). «Escribir
+  consulta» (qgis-import-spec §5.4) escribe lo mismo; nunca un `CREATE TABLE` (propietario, 2026-11-13).
 - **Una sola idea por zona** (#143; propietario, 2026-11-12, maquetas `consulta-maqueta` y
   `consulta-turquesa`):
   - **La pestaña es el archivo.** Clic derecho en la pestaña: Guardar (Ctrl+S), Guardar como…, Abrir

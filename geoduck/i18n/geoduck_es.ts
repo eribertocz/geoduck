@@ -70,8 +70,8 @@
         </message>
         <message>
             <location filename="../../geoduck/app/coordinator.py" line="308" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="541" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="553" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="513" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="525" />
             <source>There is no SQL to run</source>
             <translation>No hay SQL que ejecutar</translation>
         </message>
@@ -408,67 +408,67 @@
             <translation>La geometría «{0}» no tiene SRC: quien abra el archivo supondrá grados (OGC:CRS84). Si tus datos usan otro sistema, indícalo con ST_SetCRS en la consulta antes de exportar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="134" />
+            <location filename="../../geoduck/domain/files.py" line="132" />
             <source>Format not supported: open it in QGIS first, then add the layer to GeoDuck</source>
             <translation>Formato no compatible: ábrelo primero en QGIS y luego añade la capa a GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="86" />
+            <location filename="../../geoduck/domain/files.py" line="84" />
             <source>ArcGIS Geodatabase</source>
             <translation>Geodatabase de ArcGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="87" />
+            <location filename="../../geoduck/domain/files.py" line="85" />
             <source>JSON (one object per line)</source>
             <translation>JSON (un objeto por línea)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="88" />
+            <location filename="../../geoduck/domain/files.py" line="86" />
             <source>Unsupported format</source>
             <translation>Formato no compatible</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="126" />
+            <location filename="../../geoduck/domain/files.py" line="124" />
             <source>All supported files</source>
             <translation>Todos los compatibles</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="263" />
+            <location filename="../../geoduck/domain/files.py" line="261" />
             <source>and</source>
             <translation>y</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="371" />
+            <location filename="../../geoduck/domain/files.py" line="369" />
             <source>Read it with SQL in the editor, or open it in QGIS and then add the layer</source>
             <translation>Léelo con SQL en el editor, o ábrelo en QGIS y luego añade la capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="373" />
+            <location filename="../../geoduck/domain/files.py" line="371" />
             <source>Read them with SQL in the editor, or open them in QGIS and then add the layers</source>
             <translation>Léelos con SQL en el editor, o ábrelos en QGIS y luego añade las capas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="379" />
+            <location filename="../../geoduck/domain/files.py" line="377" />
             <source>The other file goes on to «Files → GeoDuck»</source>
             <translation>El otro archivo sigue a «Archivos → GeoDuck»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="376" />
+            <location filename="../../geoduck/domain/files.py" line="374" />
             <source>GeoDuck cannot read: {0}</source>
             <translation>GeoDuck no puede leer: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="366" />
+            <location filename="../../geoduck/domain/files.py" line="364" />
             <source>«{0}» is not in GeoDuck's list</source>
             <translation>«{0}» no está en la lista de GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="368" />
+            <location filename="../../geoduck/domain/files.py" line="366" />
             <source>{0} files are not in GeoDuck's list: {1}</source>
             <translation>{0} archivos no están en la lista de GeoDuck: {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/files.py" line="381" />
+            <location filename="../../geoduck/domain/files.py" line="379" />
             <source>The other {0} files go on to «Files → GeoDuck»</source>
             <translation>Los otros {0} archivos siguen a «Archivos → GeoDuck»</translation>
         </message>
@@ -810,7 +810,7 @@
         </message>
         <message>
             <location filename="../../geoduck/domain/sql_errors.py" line="131" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1166" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1138" />
             <source>Line {0}</source>
             <translation>Línea {0}</translation>
         </message>
@@ -867,7 +867,7 @@
         <message>
             <location filename="../../geoduck/domain/sql_errors.py" line="130" />
             <location filename="../../geoduck/domain/sql_errors.py" line="230" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1164" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1136" />
             <source>Line {0} · near «{1}»</source>
             <translation>Línea {0} · cerca de «{1}»</translation>
         </message>
@@ -1669,7 +1669,7 @@
             <location filename="../../geoduck/ui/pro/load.py" line="240" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="53" />
             <location filename="../../geoduck/ui/pro/project_copies.py" line="39" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1507" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1479" />
             <location filename="../../geoduck/ui/pro/shell.py" line="65" />
             <location filename="../../geoduck/ui/pro/shell.py" line="105" />
             <location filename="../../geoduck/ui/pro/shell.py" line="150" />
@@ -2293,7 +2293,7 @@
             <location filename="../../geoduck/ui/pro/load.py" line="523" />
             <location filename="../../geoduck/ui/pro/load.py" line="284" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="71" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1515" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1487" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="1008" />
             <location filename="../../geoduck/ui/send_dialog.py" line="294" />
             <source>Cancel</source>
@@ -2846,125 +2846,125 @@
             <translation>{} tablas · ¿cómo cargarlas?</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="830" />
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="831" />
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="934" />
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="935" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="838" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="839" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="942" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="943" />
             <source>Find</source>
             <translation>Buscar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="835" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="843" />
             <source>Match case</source>
             <translation>Mayúsculas y minúsculas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="836" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="844" />
             <source>Whole word</source>
             <translation>Palabra entera</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="837" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="845" />
             <source>Regular expression</source>
             <translation>Expresión regular</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="838" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="846" />
             <source>In the selection</source>
             <translation>En la selección</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="845" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="853" />
             <source>Previous match (Shift+Enter)</source>
             <translation>Anterior (Shift+Intro)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="847" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="855" />
             <source>Next match (Enter)</source>
             <translation>Siguiente (Intro)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="849" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="857" />
             <source>Close (Esc)</source>
             <translation>Cerrar (Esc)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="858" />
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="859" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="866" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="867" />
             <source>Replace with</source>
             <translation>Reemplazar por</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="863" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="871" />
             <location filename="../../geoduck/ui/send_dialog.py" line="74" />
             <source>Replace</source>
             <translation>Reemplazar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="866" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="874" />
             <source>Replace all</source>
             <translation>Reemplazar todo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="716" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="724" />
             <source>View</source>
             <translation>Vista</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="716" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="724" />
             <source>Table</source>
             <translation>Tabla</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="721" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="729" />
             <source>Ctrl+click: show in the explorer</source>
             <translation>Ctrl+clic: mostrar en el explorador</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="863" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="871" />
             <source>Replaces this match and goes to the next one</source>
             <translation>Reemplaza esta coincidencia y pasa a la siguiente</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="929" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="937" />
             <source>Go to line</source>
             <translation>Ir a la línea</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1031" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1039" />
             <source>Invalid</source>
             <translation>No válida</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="712" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="720" />
             <source>Column «{0}» · {1}
 of {2}</source>
             <translation>Columna «{0}» · {1}
 de {2}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1126" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1134" />
             <source>{} replaced</source>
             <translation>{} reemplazadas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="928" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="936" />
             <source>Go to line (1–{})</source>
             <translation>Ir a la línea (1–{})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1035" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1043" />
             <source>No results</source>
             <translation>Sin resultados</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="720" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="728" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="112" />
             <source>{} columns</source>
             <translation>{} columnas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1037" />
+            <location filename="../../geoduck/ui/pro/editor_tools.py" line="1045" />
             <source>{0} of {1}</source>
             <translation>{0} de {1}</translation>
         </message>
@@ -2980,13 +2980,13 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/error_card.py" line="76" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1179" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1151" />
             <source>Go</source>
             <translation>Ir</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/error_card.py" line="77" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="829" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="801" />
             <source>Goes to the error in the editor</source>
             <translation>Lleva al error en el editor</translation>
         </message>
@@ -3147,7 +3147,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/grid.py" line="1173" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1045" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1017" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="114" />
             <source>{} rows</source>
             <translation>{} filas</translation>
@@ -3221,7 +3221,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/history.py" line="56" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1048" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1020" />
             <source>Cancelled</source>
             <translation>Cancelada</translation>
         </message>
@@ -3341,7 +3341,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/load.py" line="583" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1332" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1304" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="295" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="464" />
             <source>Export</source>
@@ -3655,7 +3655,7 @@ de {2}</translation>
             <translation>GeoDuck está ocupado: el resultado se leerá cuando termine.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="592" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="564" />
             <source>GeoDuck is not started: start it to run SQL</source>
             <translation>GeoDuck no está iniciado: inícialo para ejecutar SQL</translation>
         </message>
@@ -3681,14 +3681,14 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/query_page.py" line="315" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="647" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="619" />
             <source>Hide the result · Ctrl+J</source>
             <translation>Ocultar el resultado · Ctrl+J</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/query_page.py" line="345" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="678" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="677" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="650" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="649" />
             <source>Cancel · Esc</source>
             <translation>Cancelar · Esc</translation>
         </message>
@@ -3736,54 +3736,54 @@ de {2}</translation>
             <translation>Página siguiente</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="580" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="552" />
             <source>A query is already running · «Cancel» stops it</source>
             <translation>Ya hay una consulta en curso · «Cancelar» la detiene</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="585" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="557" />
             <source>GeoDuck is finishing another task (loading, exporting or importing): run it when it ends</source>
             <translation>GeoDuck está terminando otra tarea (carga, exportación o importación): ejecuta cuando termine</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="589" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="561" />
             <source>GeoDuck is starting: run it in a moment</source>
             <translation>GeoDuck se está iniciando: ejecuta en un momento</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="591" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="563" />
             <source>The transaction failed: run ROLLBACK (or close it) before running more SQL</source>
             <translation>La transacción falló: ejecuta ROLLBACK (o ciérrala) antes de ejecutar más SQL</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="647" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="619" />
             <source>Show the result · Ctrl+J</source>
             <translation>Mostrar el resultado · Ctrl+J</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="726" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="698" />
             <source>Run selection</source>
             <translation>Ejecutar selección</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1276" />
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1332" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1248" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1304" />
             <source>Save query</source>
             <translation>Guardar consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1276" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1248" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="971" />
             <source>SQL files (*.sql)</source>
             <translation>Archivos SQL (*.sql)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1297" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1269" />
             <source>A file name cannot have / \ : * ? &lt; &gt; | or quotes</source>
             <translation>Un nombre de archivo no puede tener / \ : * ? &lt; &gt; | ni comillas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1468" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1440" />
             <source>Keywords in upper case while typing</source>
             <translation>Palabras clave en mayúsculas al escribir</translation>
         </message>
@@ -3808,187 +3808,182 @@ de {2}</translation>
             <translation>Ejecutando</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="483" />
-            <source>There is no database in read and write mode to create the tables.</source>
-            <translation>No hay una base en lectura y escritura donde crear las tablas.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="730" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="702" />
             <source>Run</source>
             <translation>Ejecutar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="898" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="870" />
             <source>Run a query to see its result here.</source>
             <translation>Ejecuta una consulta para ver aquí su resultado.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="970" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="942" />
             <source>may be out of date</source>
             <translation>puede estar desactualizado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1086" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1058" />
             <source>DuckDB parser · not run yet</source>
             <translation>Analizador de DuckDB · aún no se ejecutó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1113" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1085" />
             <source>The SQL changed since it ran: run it again to fix this error</source>
             <translation>El SQL cambió desde que se ejecutó: vuelve a ejecutarlo para arreglar este error</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1117" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1089" />
             <source>Choose file</source>
             <translation>Elegir archivo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1117" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1089" />
             <source>All files (*)</source>
             <translation>Todos los archivos (*)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1451" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1423" />
             <source>Find…</source>
             <translation>Buscar…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1452" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1424" />
             <source>Replace…</source>
             <translation>Reemplazar…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1453" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1425" />
             <source>Go to line…</source>
             <translation>Ir a la línea…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1454" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1426" />
             <source>Comment or uncomment</source>
             <translation>Comentar o descomentar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1455" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1427" />
             <source>Format SQL</source>
             <translation>Formatear SQL</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1456" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1428" />
             <source>Upper or lower case</source>
             <translation>Mayúsculas o minúsculas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1457" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1429" />
             <source>Show parameters</source>
             <translation>Ver parámetros</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1509" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1481" />
             <source>This query needs DuckDB's «{0}» extension. GeoDuck will install it if needed (only once) and load it for this session. The query does not run again by itself.</source>
             <translation>Esta consulta necesita la extensión «{0}» de DuckDB. GeoDuck la instalará si hace falta (solo una vez) y la cargará para esta sesión. La consulta no se vuelve a ejecutar sola.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1514" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1486" />
             <source>Load «{}»</source>
             <translation>Cargar «{}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="824" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="796" />
             <source>Error on line {0}, near «{1}»</source>
             <translation>Error en la línea {0}, cerca de «{1}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="826" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="798" />
             <source>Error on line {0}</source>
             <translation>Error en la línea {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="966" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="938" />
             <source>Rows {} of more than {}</source>
             <translation>Filas {} de más de {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1327" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1299" />
             <source>Query saved in {}</source>
             <translation>Consulta guardada en {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1394" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1366" />
             <source>«spatial» is already loaded: run the query again</source>
             <translation>«spatial» ya está cargada: vuelve a ejecutar la consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1403" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1375" />
             <source>«spatial» is loaded: run the query again</source>
             <translation>«spatial» está cargada: vuelve a ejecutar la consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1463" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1435" />
             <source>Wrap long lines</source>
             <translation>Ajustar líneas largas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="601" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="573" />
             <source>{} s</source>
             <translation>{} s</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="601" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="573" />
             <source>Running… {} s</source>
             <translation>Ejecutando… {} s</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="728" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="700" />
             <source>Run · line {}</source>
             <translation>Ejecutar · línea {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="739" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="711" />
             <source>Run all ({} statements)</source>
             <translation>Ejecutar todo ({} sentencias)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1134" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1106" />
             <source>The folder «{}» does not exist either</source>
             <translation>La carpeta «{}» tampoco existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1193" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1165" />
             <source>{} OK · {} with error</source>
             <translation>{} OK · {} con error</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1304" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1276" />
             <source>«{}» already exists in that folder: the query keeps its name</source>
             <translation>«{}» ya existe en esa carpeta: la consulta conserva su nombre</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="735" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="707" />
             <source>Run all ({} statements) · Ctrl+Shift+Enter</source>
             <translation>Ejecutar todo ({} sentencias) · Ctrl+Shift+Enter</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1198" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1170" />
             <source>{} OK</source>
             <translation>{} OK</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1309" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1281" />
             <source>The file could not be renamed: {}</source>
             <translation>No se pudo renombrar el archivo: {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1323" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1295" />
             <source>The query could not be saved: {}</source>
             <translation>No se pudo guardar la consulta: {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1195" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1167" />
             <source>{} not run</source>
             <translation>{} sin ejecutar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/query_page.py" line="1406" />
+            <location filename="../../geoduck/ui/pro/query_page.py" line="1378" />
             <source>«spatial» could not be loaded: {}</source>
             <translation>No se pudo cargar «spatial»: {}</translation>
         </message>
