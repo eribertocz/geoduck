@@ -13,7 +13,17 @@ from typing import Any
 
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QCheckBox, QDialog, QHBoxLayout, QVBoxLayout, QWidget
+from qgis.PyQt.QtGui import QGuiApplication
+from qgis.PyQt.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLineEdit,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from geoduck.domain.bridge_types import GeometryFormat, LoadPlan
 from geoduck.ui.i18n import tr
@@ -21,6 +31,11 @@ from geoduck.ui.pro import style
 from geoduck.ui.pro.widgets import Segmented, button, label
 
 COPY_INDEX, CONNECTED_INDEX = 0, 1
+#: Con más columnas, «Buscar columna…» y «Todas · Ninguna» (#148, punto 25).
+SEARCH_FROM = 8
+#: Filas que se ven de la lista de geometrías; el resto, con desplazamiento.
+VISIBLE_ROWS = 6
+ROW_HEIGHT = 28
 
 
 def _columns(plan: LoadPlan) -> list[Any]:
@@ -54,11 +69,19 @@ class LoadOptionsDialog(QDialog):
         box = QVBoxLayout(self)
         box.setContentsMargins(22, 20, 22, 18)
         box.setSpacing(10)
-        box.addWidget(label(tr("Load «{}» with options").format(name), "title"))
+        box.addWidget(label(tr("Load in QGIS with options"), "title"))
         self.mode = Segmented([tr("Copy (mode)"), tr("Connected")], accessible_name=tr("How to load"))
         self.mode.set_current(kind_index)
         self.mode.changed.connect(lambda _i: self._refresh())
         box.addWidget(self.mode, 0, Qt.AlignmentFlag.AlignLeft)
+        # el nombre de la capa (#148, punto 25), ya relleno
+        box.addWidget(label(tr("Layer name"), "section"))
+        self.name_edit = QLineEdit(name)
+        self.name_edit.setAccessibleName(tr("Layer name in QGIS"))
+        self.name_edit.setToolTip(
+            tr("With several geometries, the name is the prefix: «{0} · geom»").format(name)
+        )
+        box.addWidget(self.name_edit)
 
         self._build_geometries(box, plan)
         self._build_options(box)
@@ -78,32 +101,83 @@ class LoadOptionsDialog(QDialog):
         box.addLayout(actions)
         self.setMinimumWidth(520)
         self._refresh()
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:  # nunca más alto que la pantalla: nombre, opciones y botones a la vista
+            self.setMaximumHeight(max(360, screen.availableGeometry().height() - 60))
 
-    def _build_geometries(self, box: QVBoxLayout, plan: LoadPlan) -> None:
-        """«Qué geometrías»: solo si hay algo que elegir (varias geometrías o una columna WKB/WKT)."""
+    def _build_geometries(self, box: QVBoxLayout, plan: LoadPlan) -> None:  # noqa: PLR0915 - una lista
+        """«Qué geometrías»: solo si hay algo que elegir (varias geometrías o una columna WKB/WKT), en una
+        lista de alto fijo con desplazamiento (#148, punto 25); con más de `SEARCH_FROM`, «Buscar columna…» y
+        «Todas · Ninguna»."""
         columns = _columns(plan)
         self.geometry_checks: dict[str, QCheckBox] = {}
-        if len(columns) > 1 or plan.candidates:  # solo si hay algo que elegir
-            box.addWidget(label(tr("Which geometries"), "section"))
+        self._single = [c.name for c in columns] if len(columns) == 1 else []
+        self.candidate_checks: dict[str, tuple[QCheckBox, GeometryFormat]] = {}
+        checks: list[QCheckBox] = []
         for column in columns if len(columns) > 1 else ():
             crs = column.declared_crs or tr("no CRS")
             check = QCheckBox(f"{column.name}  ·  {crs}")
             check.setChecked(True)
-            check.toggled.connect(lambda _c: self._refresh())
             self.geometry_checks[column.name] = check
-            box.addWidget(check)
-        self._single = [c.name for c in columns] if len(columns) == 1 else []
-        self.candidate_checks: dict[str, tuple[QCheckBox, GeometryFormat]] = {}
+            checks.append(check)
         for name_, fmt in plan.candidates:
             text = tr("Use «{0}» as geometry ({1})").format(
                 name_, "WKB" if fmt is GeometryFormat.WKB else "WKT"
             )
             check = QCheckBox(text)
-            check.toggled.connect(lambda _c: self._refresh())
+            check.setToolTip(tr("The column has coordinates written as text or bytes: QGIS will draw them."))
             self.candidate_checks[name_] = (check, fmt)
-            _option(
-                box, check, tr("The column has coordinates written as text or bytes: QGIS will draw them.")
-            )
+            checks.append(check)
+        self.checks = checks
+        self.search: QLineEdit | None = None
+        self.count = label("", "faint")
+        if not checks:
+            return
+        head = QHBoxLayout()
+        box.addLayout(head)
+        head.addWidget(label(tr("Which geometries · {0} columns").format(len(checks)), "section"), 1)
+        many = len(checks) > SEARCH_FROM
+        if many:
+            every = button(tr("All"), "link")
+            every.clicked.connect(lambda: self._check_all(True))
+            none = button(tr("None"), "link")
+            none.clicked.connect(lambda: self._check_all(False))
+            head.addWidget(every)
+            head.addWidget(label("·", "faint"))
+            head.addWidget(none)
+            self.search = QLineEdit()
+            self.search.setPlaceholderText(tr("Search column…"))
+            self.search.setAccessibleName(tr("Search column"))
+            self.search.setClearButtonEnabled(True)
+            self.search.textChanged.connect(self._filter)
+            box.addWidget(self.search)
+        holder = QWidget()
+        column_box = QVBoxLayout(holder)
+        column_box.setContentsMargins(8, 4, 8, 4)
+        column_box.setSpacing(0)
+        for check in checks:
+            check.setMinimumHeight(ROW_HEIGHT)
+            check.toggled.connect(lambda _c: self._refresh())
+            column_box.addWidget(check)
+        column_box.addStretch(1)
+        self.list = QScrollArea()
+        self.list.setWidgetResizable(True)
+        self.list.setFrameShape(QFrame.Shape.StyledPanel)
+        self.list.setWidget(holder)
+        self.list.setFixedHeight(min(len(checks), VISIBLE_ROWS) * ROW_HEIGHT + 10)
+        self.list.setAccessibleName(tr("Which geometries"))
+        box.addWidget(self.list)
+        box.addWidget(self.count)
+
+    def _check_all(self, on: bool) -> None:
+        for check in self.checks:
+            if not check.isHidden():
+                check.setChecked(on)
+
+    def _filter(self, text: str) -> None:
+        wanted = text.strip().lower()
+        for check in self.checks:
+            check.setHidden(bool(wanted) and wanted not in check.text().lower())
 
     def _build_options(self, box: QVBoxLayout) -> None:
         """«Reproyectar a…» (Copia) y «Separar por tipo» (Conectada): solo la que aplica se ve."""
@@ -157,6 +231,12 @@ class LoadOptionsDialog(QDialog):
         else:
             text = tr("It will load {} layers, one per geometry · {}").format(len(chosen), how)
         self.summary.setText(text)
+        if self.checks:
+            picked = sum(1 for check in self.checks if check.isChecked())
+            count = tr("{0} of {1} chosen").format(picked, len(self.checks))
+            if len(self.checks) > VISIBLE_ROWS:
+                count += " · " + tr("scroll to see them all")
+            self.count.setText(count)
 
     def choice(self) -> dict[str, Any]:
         """Modo («copy» o «connected»), geometrías, formatos de las columnas marcadas, SRC de destino y
@@ -169,6 +249,7 @@ class LoadOptionsDialog(QDialog):
             "formats": [(n, f.value) for n, (c, f) in self.candidate_checks.items() if c.isChecked()],
             "reproject_to": None if self.connected else reproject,
             "separate_types": self.connected and self.separate.isChecked(),
+            "name": self.name_edit.text().strip(),
         }
 
     @staticmethod

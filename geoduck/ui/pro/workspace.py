@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import contextlib
 import os
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from qgis.core import QgsSettings
-from qgis.PyQt.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QDesktopServices, QIcon, QKeySequence
+from qgis.PyQt.QtCore import QEvent, QObject, QPoint, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -73,8 +72,10 @@ from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import accepts, drop_hint, file_paths, layer_ids, menu_title, place_job
+from geoduck.ui.pro.export_progress import ExportProgress
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_lines, load_menu
+from geoduck.ui.pro.load import QuickLoad, finished_lines, layer_name, load_menu
+from geoduck.ui.pro.load_window import LoadWindow
 from geoduck.ui.pro.open_files import open_in_qgis
 from geoduck.ui.pro.palette import CommandPalette, Entry
 from geoduck.ui.pro.places import (
@@ -96,7 +97,6 @@ from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
 from geoduck.ui.pro.tokens import METRICS
-from geoduck.ui.pro.trace import TraceView
 from geoduck.ui.pro.widgets import LOGO, Toast, button, icon_button, label, lines_html, relayout
 
 #: Páginas del cuerpo: estado de la sesión, pestañas, o «abre una tabla» (sesión lista sin pestañas).
@@ -214,6 +214,8 @@ class ProWorkspace(QWidget):
         self.loader.on_loaded = self._loaded
         #: Capas de QGIS soltadas sobre GeoDuck (E5): sin diálogo si no hay nada que decidir.
         self.to_duckdb = AddLayers(coordinator, self)
+        #: GeoDuck → QGIS con nombres y línea de tiempo (#148): «Cambiar nombres…» con varias tablas.
+        self.to_qgis = LoadWindow(self, coordinator, self.loader)
         self.last_toast: Toast | None = None
         self.aborted_toast: Toast | None = None
         self.setAcceptDrops(True)
@@ -332,13 +334,19 @@ class ProWorkspace(QWidget):
         """Clic derecho en una o varias tablas › «Cargar en QGIS ▸»: el mismo menú que al soltarlas en el
         mapa; con una sola, también «Más opciones…»."""
         jobs = [place_job(place) for place in places]
-        return load_menu(
+        single = len(places) == 1
+        menu = load_menu(
             parent,
             self.colors,
-            lambda kind: self.loader.start_many(jobs, kind),
-            title=menu_title(len(places)),
-            more=len(places) == 1,
+            lambda kind: self.loader.start_many(
+                [dict(jobs[0], name=layer_name(menu, jobs[0]["name"]))] if single else jobs, kind
+            ),
+            title="" if single else menu_title(len(places)),
+            more=single,
+            name=(lambda: jobs[0]["name"]) if single else None,
+            rename=None if single else lambda: self.to_qgis.open(jobs),
         )
+        return menu
 
     def _rename_tab(self, page: QWidget, name: str) -> None:
         """Doble clic en el nombre de una consulta y Enter (#143, punto 6): renombra la pestaña y su archivo,
@@ -576,58 +584,20 @@ class ProWorkspace(QWidget):
             page.drop_files(paths, any_format=True)
 
     def _export_trace(self, event: Any) -> None:
-        """«Exportar ▾» con su trazabilidad (propietario, 2026-11-07): DuckDB ⚡→ archivo, en un aviso que se
-        llena mientras escribe y termina con las filas, el tiempo y «Mostrar en la carpeta»."""
+        """«Exportar ▾» con su línea de tiempo (#148, punto 19): Consulta → DuckDB escribe el archivo →
+        Archivo, con «Cancelar · Esc» y, al terminar, «Abrir carpeta», «Cargar en QGIS» y «Cerrar»."""
         if isinstance(event, ExportStarted):
-            path = Path(event.request.path)
-            fmt = event.request.format
-            toast = Toast(
-                self, "<b>" + tr("Exporting with DuckDB to {0}…").format(fmt.label) + "</b>", seconds=0
+            self._exports[event.export_id] = ExportProgress(
+                self,
+                event,
+                cancel=self._coordinator.cancel_current_operation,
+                load=lambda path: self.open_in_qgis([path]),
             )
-            box = toast.layout()
-            trace = TraceView(
-                self.colors,
-                source_kind="duckdb",
-                source_label=event.request.database or tr("DuckDB"),
-                dest_label=path.name,
-                bridge=True,
-                qgis=False,
-                dest_kind="file",
-            )
-            trace.setMinimumWidth(320)
-            box.insertWidget(2, trace)  # type: ignore[union-attr]
-            trace.set_state("running")
-            toast.trace = trace  # type: ignore[attr-defined]
-            toast.started = time.monotonic()  # type: ignore[attr-defined]
-            toast.show_at_corner(bottom=40)
-            self._exports[event.export_id] = toast
             return
-        toast = self._exports.pop(event.export_id, None)
-        if toast is None:
-            return
-        with contextlib.suppress(RuntimeError):
-            seconds = time.monotonic() - toast.started
-            if isinstance(event, ExportFinished):
-                toast.trace.set_state("done")
-                folder = str(Path(event.report.path).parent)
-                text = "✓ " + tr("{0} rows exported in {1} s").format(
-                    f"{event.report.rows:,}".replace(",", " "), f"{seconds:.1f}".replace(".", ",")
-                )
-                toast.text.setText(lines_html([text, *event.report.warnings]))
-                toast.add_action(
-                    tr("Show in folder"), lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
-                )
-                toast.layout().addWidget(toast.close_button)  # type: ignore[union-attr]
-                QTimer.singleShot(12_000, toast.dismiss)
-            else:
-                toast.trace.set_state("cancelled" if event.cancelled else "failed")
-                toast.text.setText(
-                    lines_html(
-                        [tr("Export cancelled") if event.cancelled else tr("Cannot export: ") + event.message]
-                    )
-                )
-                QTimer.singleShot(12_000, toast.dismiss)
-            toast.adjustSize()
+        progress = self._exports.pop(event.export_id, None)
+        if progress is not None:
+            with contextlib.suppress(RuntimeError):
+                progress.finish(event)
 
     def open_in_qgis(self, paths: list[str]) -> None:
         """«Abrir en QGIS» para archivos que GeoDuck no importa: QGIS los abre (todas sus capas); después se
@@ -1354,6 +1324,7 @@ class ProWorkspace(QWidget):
                 page.close_page()  # una consulta con archivo guarda lo pendiente
         self.recovery.stop()
         self.loader.detach()
+        self.to_qgis.detach()
         self.history.detach()
         self.to_duckdb.detach()
         if self.project_copies is not None:

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
+from qgis.PyQt.QtWidgets import QPushButton
 
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
@@ -28,7 +29,6 @@ from geoduck.ui.dispatcher import QtDispatcher
 from geoduck.ui.notebook_store import RecoveryStore
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.query_page import MESSAGES, RESULT, QueryPage
-from geoduck.ui.pro.trace import TraceView
 from geoduck.ui.pro.workspace import ProWorkspace
 from tests.qgis.conftest import wait_for
 
@@ -397,10 +397,20 @@ def test_export_writes_the_full_query(coordinator, tmp_path):
     next(a for a in page.export_menu.actions() if a.data() == "csv").trigger()
     assert wait_for(lambda: target.exists() and coordinator.state is SessionState.READY, 20)
     assert len(target.read_text().splitlines()) == 5001  # entera, no la vista previa
-    # la trazabilidad (propietario, 2026-11-07): DuckDB ⚡→ archivo, terminada con ✓
-    traces = [t for t in ws.findChildren(TraceView) if t.dest_kind == "file"]
-    assert wait_for(lambda: traces and traces[-1].state == "done", 20)
-    assert traces[-1].bridge and not traces[-1].qgis and traces[-1].dest_label == "salida.csv"
+    # la línea de tiempo (#148): Consulta → DuckDB escribe el archivo → Archivo, terminada con ✓
+    from geoduck.ui.pro.timeline import TimelineWindow
+
+    windows = ws.findChildren(TimelineWindow)
+    assert wait_for(
+        lambda: windows and windows[-1].view.title.text() == tr("Exported: {0}").format("salida.csv")
+    )
+    view = windows[-1].view
+    [row] = view.rows
+    assert [v.title.text() for v in row.views] == [tr("Query"), tr("DuckDB writes the file"), tr("File")]
+    assert all(v.node.state == "done" for v in row.views)
+    assert row.status.text() == "✓ " + tr("{0} rows").format("5 000")
+    texts = [b.text() for b in windows[-1].findChildren(QPushButton) if b.isVisible()]
+    assert tr("Open folder") in texts and tr("Load in QGIS") in texts and tr("Close") in texts
 
 
 def test_export_menu_shows_four_formats_and_the_rest_one_step_back(coordinator):

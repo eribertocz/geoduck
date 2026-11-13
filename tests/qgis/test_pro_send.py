@@ -156,13 +156,12 @@ def ended(coordinator, ws):
 
 
 def to_step_two(ws):
-    """Paso 1 → «Siguiente» → paso 2 con el destino ya leído."""
+    """El diálogo único (#148): el destino ya leído, con lo que pasa con cada fila."""
     flow = ws.to_duckdb
     window = flow.window
     assert window.stack.currentIndex() == 0
-    flow.next_button.click()
     assert wait_for(lambda: window.send_dialog is not None and window.send_dialog.target_ready, TIMEOUT)
-    flow._sync_add()
+    flow.sync()
     return window.send_dialog
 
 
@@ -191,7 +190,7 @@ def test_the_layers_panel_format_gives_the_dragged_layer_ids(coordinator):
 
 
 def test_dropping_on_a_database_opens_the_three_steps_with_that_database(coordinator):
-    """Arrastrar → paso 1 con esas capas → paso 2 con la base donde se soltaron → paso 3 (F-131)."""
+    """Arrastrar → el diálogo único (#148) con esas capas y la base donde se soltaron → la línea de tiempo."""
     ws = workspace(coordinator)
     a, b = points("medidores", 12), points("zonas", 3)
     points("otra", 2)  # en el proyecto, pero no se arrastró
@@ -208,18 +207,17 @@ def test_dropping_on_a_database_opens_the_three_steps_with_that_database(coordin
     assert set(window.chosen()) == {a.id(), b.id()} and len(window.rows) == 2  # solo las arrastradas
     dialog = to_step_two(ws)
     assert dialog.destination_value == (DB, "main")
-    assert not dialog.tree.isColumnHidden(2)  # «Qué pasará» siempre a la vista
-    assert ws.to_duckdb.add_button.text() == tr("Add {0} layers to GeoDuck").format(2)
+    assert (window.database.currentData(), window.schema.currentText()) == (DB, "main")
+    assert window.title.text() == tr("Send to GeoDuck")
+    assert window.source_chip.text.text() == tr("{0} QGIS layers").format(2)
+    assert ws.to_duckdb.add_button.text() == tr("Send") + " " + tr("{0} layers").format(2)
     add_all(ws, coordinator)
     assert [s["state"] for s in ws.to_duckdb.states] == ["done", "done"]
     assert has_tables(coordinator, {"medidores", "zonas"})
-    assert window.isVisible() and window.stack.currentIndex() == 2  # el resumen, en el paso 3
-    summary = (
-        tr("{0} QGIS layers added to GeoDuck").format(2)
-        + " · "
-        + tr("Catalog: {0} · Schema: {1}").format(DB, "main")
-    )
-    assert window.subtitle.text() == tr("Done:") + " " + summary
+    assert window.isVisible() and window.stack.currentIndex() == 1  # la línea de tiempo, en el mismo diálogo
+    assert window.timeline.title.text() == tr("Done: {0} layers in DuckDB").format(2)
+    assert window.timeline.pill.text().startswith("⚡ ")
+    assert all(row.status.text().startswith("✓ ") for row in window.timeline.rows)
     assert not ws.progress.isVisible()
 
 
@@ -266,7 +264,7 @@ def test_in_the_background_the_footer_brings_it_back_and_the_end_shows_a_closabl
     assert tr("Show progress: QGIS layers → GeoDuck") in [e.title for e in ws.palette_entries()]
     assert ws.progress_button.text().startswith("⟳ ")
     ws.progress_button.click()  # la línea del pie vuelve al paso 3
-    assert window.isVisible() and window.stack.currentIndex() == 2
+    assert window.isVisible() and window.stack.currentIndex() == 1
     window.hide()
     assert wait_for(lambda: ended(coordinator, ws), 60)
     toast = ws.last_toast
@@ -292,9 +290,22 @@ def test_a_layer_that_fails_is_marked_and_the_others_go_on(coordinator):
     assert states["choca"]["state"] == "failed" and states["choca"]["message"]
     assert states["sigue"]["state"] == "done"
     assert tr("{0} with error ({1})").format(1, "choca") in ws.to_duckdb.done_text()
+    # #148: en la línea de tiempo, el paso que falló en rojo con su tarjeta de error
+    rows = {row.name.text(): row for row in ws.to_duckdb.window.timeline.rows}
+    assert rows["choca"].status.text() == tr("Error")
+    failed = [v for v in rows["choca"].views if v.node.state == "failed"]
+    assert failed and failed[0]._card is not None
+    assert rows["sigue"].status.text().startswith("✓ ")
 
 
-def test_an_existing_table_is_shown_and_skipped_unless_chosen(coordinator):
+def test_an_existing_name_proposes_name_2_and_can_replace_or_add_rows(coordinator):
+    """#148, punto 16: si el nombre ya existe en DuckDB, «Usar «zonas_2»» (por defecto), «Reemplazar» o
+    «Añadir filas»; el nombre se cambia con doble clic o F2."""
+    from qgis.PyQt.QtTest import QTest
+
+    from geoduck.domain.importing import ImportMode
+    from geoduck.ui.pro.transfer import APPEND, RENAME, REPLACE
+
     ws = workspace(coordinator)
     layer = points("zonas", 3)
     ws.send_layers([layer.id()], (DB, "main"))
@@ -302,22 +313,42 @@ def test_an_existing_table_is_shown_and_skipped_unless_chosen(coordinator):
     add_all(ws, coordinator)
     ws.send_layers([layer.id()], (DB, "main"))
     dialog = to_step_two(ws)
-    assert not dialog.tree.isColumnHidden(2)
-    assert dialog.row_state(0).kind == "skip"  # ya existe: no se envía hasta elegir qué hacer
-    assert not ws.to_duckdb.add_button.isEnabled()
+    flow = ws.to_duckdb
+    row = flow.window.rows[layer.id()]
+    assert row.note.isVisibleTo(row) and row.choice == RENAME
+    assert row.pills[RENAME].text() == tr("Use «{0}»").format("zonas_2")
+    assert dialog.request().items[0].table == "zonas_2" and flow.add_button.isEnabled()
+    row.pills[REPLACE].click()
+    assert dialog.row_state(0).mode is ImportMode.REPLACE
+    row.pills[APPEND].click()
+    assert dialog.row_state(0).mode is ImportMode.APPEND
+    row.start_edit()  # doble clic o F2
+    assert row.editing
+    QTest.keyClicks(row.edit, "barrios")
+    QTest.keyClick(row.edit, Qt.Key.Key_Return)
+    assert not row.editing and row.name == "barrios" and not row.note.isVisibleTo(row)
+    assert dialog.request().items[0].table == "barrios"
+    row.setFocus()
+    QTest.keyClick(row, Qt.Key.Key_F2)
+    assert row.editing
+    QTest.keyClick(row.edit, Qt.Key.Key_Escape)  # Esc deja el nombre como estaba
+    assert not row.editing and row.name == "barrios"
+    add_all(ws, coordinator)
+    assert has_tables(coordinator, {"zonas", "barrios"})
 
 
 def test_add_layers_shows_every_layer_grouped_and_an_empty_project_says_so(coordinator):
     ws = workspace(coordinator)
     ws.add_layers()
     window = ws.to_duckdb.window
-    assert window.empty.isVisible() and not ws.to_duckdb.next_button.isEnabled()
+    assert window.empty.isVisible() and not ws.to_duckdb.add_button.isEnabled()
     window.hide()
     point = points("pozos", 2)
     points_table("clientes")
     ws.add_layers([point.id()])
-    groups = [window.tree.topLevelItem(i).text(0) for i in range(window.tree.topLevelItemCount())]
-    assert groups == [tr("Points"), "pozos", tr("Tables without geometry"), "clientes"]
+    names = [row.name for row in window.names.rows]
+    assert names == ["pozos", "clientes"]  # puntos primero, las tablas sin geometría después
+    assert window.names.rows[0].origin.text().startswith(tr("from: {0}").format("pozos"))
     assert window.chosen() == [point.id()]  # las seleccionadas en QGIS, ya marcadas
     assert ws.to_duckdb.count_label.text() == tr("1 layer chosen")
 
@@ -330,7 +361,7 @@ def test_while_adding_another_drop_shows_the_progress(coordinator):
     ws.to_duckdb.add_button.click()
     ws.send_layers([layer.id()], (DB, "main"))
     assert ws.notice.text() == tr("Finish or cancel these layers to add more.")
-    assert ws.to_duckdb.window.stack.currentIndex() == 2
+    assert ws.to_duckdb.window.stack.currentIndex() == 1
     assert wait_for(lambda: ended(coordinator, ws), 60)
 
 
@@ -487,7 +518,9 @@ def test_a_connected_layer_from_memory_goes_to_a_file_database_inside_duckdb(coo
     to_step_two(ws)
     add_all(ws, coordinator)
     assert flow.states[0]["state"] == "done"
-    assert flow.traces[0].bridge
+    assert flow._route(0)[0]  # dentro de DuckDB: el paso de lectura es ⚡
+    read = flow._steps(0)[1]
+    assert read.icon == "bolt" and read.detail == tr("Copied inside DuckDB (Connected layer)")
     rows = []
     coordinator.read_rows("SELECT count(*) FROM db.main.pozos", 1, rows.append)
     assert wait_for(lambda: rows, TIMEOUT)
