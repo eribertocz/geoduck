@@ -749,8 +749,9 @@ class DataGrid(QWidget):
         self.funnel_button.setCheckable(True)
         self.funnel_button.toggled.connect(self.set_filters_open)
         row.addWidget(self.funnel_button)
-        self.sql_button = button(tr("View SQL"), "ghost", icon="sql", colors=self.colors)
-        self.sql_button.setToolTip(tr("Opens the full query, with its filters and order, in a new query tab"))
+        self.sql_button = icon_button(  # solo icono, también en la ventana (propietario, 2026-11-13)
+            "sql", tr("Opens the full query, with its filters and order, in a new query tab"), self.colors
+        )
         self.sql_button.clicked.connect(self.view_sql)
         row.addWidget(self.sql_button)
         self.sql_button.setVisible(self._view_sql is not None)
@@ -1358,8 +1359,6 @@ class DataGrid(QWidget):
 
     def set_compact(self, compact: bool) -> None:
         self.compact = compact
-        self.sql_button.setText("" if compact else tr("View SQL"))
-        self.sql_button.setAccessibleName(tr("View SQL"))
         self.filter_bar.layout().setContentsMargins(8 if compact else 16, 8, 8 if compact else 12, 8)
 
     def close_grid(self) -> None:

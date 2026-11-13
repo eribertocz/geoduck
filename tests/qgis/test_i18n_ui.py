@@ -43,7 +43,7 @@ out = {
     "start": ws.start_button.text(),
     "state": ws.state_title.text(),
     "status": ws.sidebar.status.text(),
-    "dock": ws.dock_button.accessibleName(),  # angosto, el botón es solo su ícono (#147)
+    "dock": ws.dock_button.toolTip(),  # solo su ícono, en la ventana y en el panel (propietario, 2026-11-13)
     "after": [QgsApplication.locale(), QLocale().name()],
     "before": list(before),
 }
@@ -85,7 +85,7 @@ def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
         "GeoDuck is not started",
         "Not started",
     )
-    assert out["dock"] == "Dock to QGIS"
+    assert out["dock"] == "Shows GeoDuck as a QGIS panel, with the same session"
     assert "cannot be empty" in out["error"]  # también los mensajes del motor
     assert out["after"] == out["before"]  # el idioma de QGIS no cambia
 
@@ -97,7 +97,7 @@ def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
         "GeoDuck no está iniciado",
         "No iniciado",
     )
-    assert out["dock"] == "Acoplar a QGIS"
+    assert out["dock"] == "Muestra GeoDuck como un panel de QGIS, con la misma sesión"
     assert "no puede estar vacío" in out["error"]
     assert out["after"] == out["before"]
 
