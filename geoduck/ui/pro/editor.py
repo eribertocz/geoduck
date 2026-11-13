@@ -80,8 +80,8 @@ def _monospace() -> QFont:
 
 
 def free_keys(editor: Any, keys: tuple[str, ...]) -> None:
-    """Quita esas teclas de los comandos de QScintilla de este editor (p. ej. Ctrl+Intro), para que lleguen
-    a los atajos de GeoDuck. Solo en los editores de GeoDuck."""
+    """Quita esas teclas de los comandos de QScintilla de este editor para que lleguen
+    a los atajos de GeoDuck (p. ej. Ctrl+Enter). Solo en los editores de GeoDuck."""
     from qgis.PyQt.QtGui import QKeySequence  # noqa: PLC0415
 
     commands = editor.standardCommands()
@@ -170,9 +170,169 @@ def mark_lines(editor: Any, lines: tuple[int, int] | None) -> None:
             editor.markerAdd(line, MARK)
 
 
+#: Estado de cada sentencia tras ejecutar (#139): ✓, ✕ o – en un margen junto al texto; la línea del error con
+#: fondo rojizo y la palabra subrayada con una onda.
+OK_MARK, ERROR_MARK, SKIPPED_MARK, ERROR_LINE = 21, 22, 23, 24
+_STATUS_MARGIN = 4
+_ERROR_INDICATOR = 20
+_SCI_SETMOUSEDWELLTIME = 2264
+_DWELL_MS = 400
+
+
+def _symbol(text: str, color: str, size: int) -> Any:
+    from qgis.PyQt.QtGui import QPainter, QPixmap  # noqa: PLC0415
+
+    pixmap = QPixmap(size, size)
+    pixmap.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    font = QFont()
+    font.setPixelSize(max(9, size - 4))
+    font.setBold(True)
+    painter.setFont(font)
+    painter.setPen(QColor(color))
+    painter.drawText(pixmap.rect(), int(Qt.AlignmentFlag.AlignCenter), text)
+    painter.end()
+    return pixmap
+
+
+class StatusMarks(QObject):
+    """Las marcas de la última ejecución en el editor: `show()` las pone, `clear()` las quita. Al pasar el
+    ratón por la palabra del error se ve su mensaje."""
+
+    def __init__(self, editor: Any, colors: Colors) -> None:
+        from qgis.PyQt.Qsci import QsciScintilla  # noqa: PLC0415
+
+        super().__init__(editor)
+        self._editor = editor
+        self._errors: list[tuple[int, int, str]] = []  # (inicio, fin) en caracteres y mensaje
+        height = max(12, editor.fontMetrics().height())
+        editor.setMarginType(_STATUS_MARGIN, QsciScintilla.MarginType.SymbolMargin)
+        editor.setMarginWidth(_STATUS_MARGIN, 0)
+        editor.setMarginSensitivity(_STATUS_MARGIN, False)
+        mask = (1 << OK_MARK) | (1 << ERROR_MARK) | (1 << SKIPPED_MARK)
+        editor.setMarginMarkerMask(_STATUS_MARGIN, mask)
+        for margin in range(_STATUS_MARGIN):  # los símbolos solo en su margen
+            editor.setMarginMarkerMask(margin, editor.marginMarkerMask(margin) & ~mask)
+        self._width = height + 4
+        editor.markerDefine(_symbol("✓", colors.ok, height), OK_MARK)
+        editor.markerDefine(_symbol("✕", colors.error, height), ERROR_MARK)
+        editor.markerDefine(_symbol("–", colors.faint, height), SKIPPED_MARK)
+        editor.markerDefine(QsciScintilla.MarkerSymbol.Background, ERROR_LINE)
+        tint = QColor(colors.error)
+        tint.setAlpha(28)
+        editor.setMarkerBackgroundColor(tint, ERROR_LINE)
+        editor.indicatorDefine(QsciScintilla.IndicatorStyle.SquiggleIndicator, _ERROR_INDICATOR)
+        editor.setIndicatorForegroundColor(QColor(colors.error), _ERROR_INDICATOR)
+        editor.SendScintilla(_SCI_SETMOUSEDWELLTIME, _DWELL_MS)
+        editor.SCN_DWELLSTART.connect(self._dwell)
+        editor.SCN_DWELLEND.connect(self._dwell_end)
+
+    @property
+    def shown(self) -> bool:
+        return self._editor.marginWidth(_STATUS_MARGIN) > 0
+
+    def show(self, marks: list[tuple[int, int]], errors: list[tuple[int, int, str]]) -> None:
+        """`marks`: (línea, marcador) por sentencia; `errors`: (inicio, fin, mensaje) en caracteres."""
+        self.clear()
+        editor = self._editor
+        for line, marker in marks:
+            editor.markerAdd(line, marker)
+        text = editor.text()
+        for start, end, _message in errors:
+            line, index = _line_index(text, start)
+            last, last_index = _line_index(text, max(start + 1, end))
+            editor.markerAdd(line, ERROR_LINE)
+            editor.fillIndicatorRange(line, index, last, last_index, _ERROR_INDICATOR)
+        self._errors = list(errors)
+        editor.setMarginWidth(_STATUS_MARGIN, self._width if marks or errors else 0)
+
+    def clear(self) -> None:
+        editor = self._editor
+        for marker in (OK_MARK, ERROR_MARK, SKIPPED_MARK, ERROR_LINE):
+            editor.markerDeleteAll(marker)
+        lines = max(1, editor.lines())
+        editor.clearIndicatorRange(0, 0, lines - 1, len(editor.text(lines - 1)), _ERROR_INDICATOR)
+        editor.setMarginWidth(_STATUS_MARGIN, 0)
+        self._errors = []
+
+    def message_at(self, position: int) -> str:
+        """El mensaje del error en esa posición del texto (caracteres), o vacío."""
+        for start, end, message in self._errors:
+            if start <= position <= max(start + 1, end):
+                return message
+        return ""
+
+    def _dwell(self, position: int, x: int, y: int) -> None:
+        from qgis.PyQt.QtCore import QPoint  # noqa: PLC0415
+        from qgis.PyQt.QtWidgets import QToolTip  # noqa: PLC0415
+
+        if position < 0 or not self._errors:
+            return
+        line, index = self._editor.lineIndexFromPosition(position)
+        message = self.message_at(_offset(self._editor.text(), line, index))
+        if message:
+            QToolTip.showText(self._editor.viewport().mapToGlobal(QPoint(x, y)), message, self._editor)
+
+    def _dwell_end(self, *_args: int) -> None:
+        from qgis.PyQt.QtWidgets import QToolTip  # noqa: PLC0415
+
+        QToolTip.hideText()
+
+
+def _line_index(text: str, offset: int) -> tuple[int, int]:
+    before = text[:offset]
+    line = before.count("\n")
+    return line, offset - (before.rfind("\n") + 1)
+
+
+def _offset(text: str, line: int, index: int) -> int:
+    lines = text.split("\n")
+    return sum(len(t) + 1 for t in lines[:line]) + index
+
+
+class RunKeys(QObject):
+    """Ctrl+Enter y Ctrl+Shift+Enter en el editor (#139). El editor las toma antes que cualquier atajo (de
+    QGIS o de otro complemento con la misma tecla, que dejaría el atajo ambiguo y sin efecto) y cierra la
+    lista de autocompletado si está abierta: así «Ejecutar» funciona siempre que se escribe."""
+
+    _KEYS = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+
+    def __init__(self, editor: Any, run: Callable[[bool], None]) -> None:
+        super().__init__(editor)
+        self._editor = editor
+        self._run = run
+
+    def _wanted(self, event: Any) -> bool:
+        modifiers = event.modifiers()
+        control = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        others = modifiers & (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier)
+        return control and not others and event.key() in self._KEYS
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        kind = event.type()
+        if kind not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress) or not self._wanted(event):
+            return False
+        event.accept()
+        if kind == QEvent.Type.ShortcutOverride:
+            return True  # el editor recibirá la tecla: ningún atajo la toma antes
+        if event.isAutoRepeat():
+            return True
+        editor = self._editor
+        with contextlib.suppress(AttributeError):
+            if editor.isListActive():
+                editor.cancelList()
+            if editor.isCallTipActive():
+                editor.cancelCallTip()
+        self._run(bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+        return True
+
+
 def make(colors: Colors, *, dark: bool) -> Any:
     """Un `QgsCodeEditorSQL` de GeoDuck: números de línea, sin marco, colores del tema y los atajos de la
-    consulta libres (Ctrl+Intro, Ctrl+Mayús+Intro, Ctrl+S, Ctrl+O, Ctrl+W)."""
+    consulta libres (Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+S, Ctrl+O, Ctrl+W) y las marcas de la última
+    ejecución (`editor.status`)."""
     from qgis.gui import QgsCodeEditorSQL  # noqa: PLC0415
     from qgis.PyQt.QtWidgets import QFrame  # noqa: PLC0415
 
@@ -183,4 +343,5 @@ def make(colors: Colors, *, dark: bool) -> Any:
     paint(editor, colors, dark=dark)
     editor.layer_drops = _LayerDrops(editor)
     editor.viewport().installEventFilter(editor.layer_drops)
+    editor.status = StatusMarks(editor, colors)
     return editor

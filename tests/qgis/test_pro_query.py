@@ -142,11 +142,16 @@ def test_an_error_shows_messages_with_its_line_and_go_moves_the_cursor(coordinat
     assert page.view.current == MESSAGES
     assert [ok for ok, _ in page._log] == [True, False]
     assert "no_existe" in page._log[1][1]
+    texts = [w.text() for w in page.messages.widget().findChildren(type(page.summary))]
+    assert any(tr("Line {0} · near «{1}»").format(2, "no_existe") in t for t in texts)
+    # «columna N» confunde: solo línea y palabra (#139)
+    assert not any(tr("line {}, column {}").format(2, 8) in t for t in texts)
     links = [w for w in page.messages.widget().findChildren(type(page.summary)) if "href" in w.text()]
-    assert links and tr("line {}, column {}").format(2, 8) in links[0].text()
+    assert links
     links[0].linkActivated.emit("#")
     assert page.editor.getCursorPosition() == (1, 7)
-    assert page.summary.text() == tr("{} OK · {} with error").format(1, 1)
+    summary = tr("{} OK · {} with error").format(1, 1) + " · " + tr("{} not run").format(1)
+    assert page.summary.text() == summary
 
 
 def test_the_query_runs_in_its_database(coordinator, tmp_path):
@@ -173,6 +178,129 @@ def test_cancel_stops_a_long_query(coordinator):
     page.cancel_button.click()
     assert wait_for(lambda: done(coordinator, page), 30)
     assert page._log and page._log[0] == (False, tr("Cancelled"))
+
+
+def _ctrl_enter(page, *, shift=False):
+    """Ctrl+Enter (o Ctrl+Shift+Enter) tecleado en el editor, como lo haría el usuario."""
+    from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtTest import QTest
+
+    modifiers = Qt.KeyboardModifier.ControlModifier
+    if shift:
+        modifiers |= Qt.KeyboardModifier.ShiftModifier
+    page.editor.setFocus()
+    QTest.keyClick(page.editor, Qt.Key.Key_Return, modifiers)
+
+
+def test_ctrl_enter_runs_even_with_the_completion_list_open(coordinator):
+    """#139: con la lista de autocompletado abierta, Ctrl+Enter la cierra y ejecuta (no escribe nada)."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n FROM ra")
+    page.editor.setCursorPosition(0, 25)
+    page.editor.showUserList(1, ["range", "rank"])
+    assert page.editor.isListActive()
+    _ctrl_enter(page)
+    assert not page.editor.isListActive()
+    assert page.editor.text() == "SELECT range AS n FROM ra"
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+
+
+def test_ctrl_enter_wins_over_another_shortcut_with_the_same_keys(coordinator):
+    """#139: otro atajo con Ctrl+Enter (de QGIS o de otro complemento) lo dejaría ambiguo y sin efecto; el
+    editor toma la tecla antes."""
+    from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtGui import QKeySequence
+    from qgis.PyQt.QtWidgets import QShortcut
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;")
+    other = QShortcut(QKeySequence("Ctrl+Return"), ws)
+    other.setContext(Qt.ShortcutContext.ApplicationShortcut)
+    hits = []
+    other.activated.connect(lambda: hits.append(1))
+    other.activatedAmbiguously.connect(lambda: hits.append(2))
+    _ctrl_enter(page)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert hits == []
+    _ctrl_enter(page, shift=True)  # Ctrl+Shift+Enter: todo
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+
+
+def test_run_never_fails_silently(coordinator):
+    """#139: si no puede ejecutar (otra consulta en curso), lo dice."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT count(*) FROM range(100000000000) a;")
+    notices = []
+    page.notice.connect(notices.append)
+    page.run_button.click()
+    assert wait_for(page.cancel_button.isEnabled)
+    _ctrl_enter(page)
+    assert notices == [tr("A query is already running · «Cancel» stops it")]
+    other = new_query(ws, "SELECT 1;")
+    other.notice.connect(notices.append)
+    _ctrl_enter(other)
+    assert notices[-1] == tr(
+        "GeoDuck is finishing another task (loading, exporting or importing): run it when it ends"
+    )
+    page.cancel_button.click()
+    assert wait_for(lambda: done(coordinator, page), 30)
+
+
+def test_a_syntax_error_opens_messages_and_marks_the_editor(coordinator):
+    """#139: un error de sintaxis (DuckDB no deja correr nada) abre «Mensajes», marca la línea y la palabra
+    en el editor y deja un enlace que lleva al error; al editar, las marcas se van."""
+    from geoduck.ui.pro import editor as pro_editor
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.view.current == RESULT
+    page.editor.setText("SELECT range AS zona\nFROM range(3)\nGROUP zona;")
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and page._log)
+    assert page.view.current == MESSAGES
+    marks = page.editor.markersAtLine(2)
+    assert marks & (1 << pro_editor.ERROR_MARK) and marks & (1 << pro_editor.ERROR_LINE)
+    assert page.error_link.isVisibleTo(page)
+    assert tr("Error on line {0}, near «{1}»").format(3, "zona") in page.error_link.text()
+    position = page.editor.text().rindex("zona")
+    assert "syntax error" in page.editor.status.message_at(position)
+    page.editor.setCursorPosition(0, 0)
+    page.error_link.linkActivated.emit("#")
+    assert page.editor.getCursorPosition() == (2, 6)
+    page.editor.insert(" ")
+    assert not page.editor.status.shown
+    assert not page.error_link.isVisibleTo(page)
+
+
+def test_each_statement_gets_its_mark(coordinator):
+    """#139: ✓ la que corrió, ✕ la del error, – la que no llegó a correr."""
+    from geoduck.ui.pro import editor as pro_editor
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1;\n\nSELECT no_existe FROM range(1);\n\nSELECT 3;")
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert page.editor.markersAtLine(0) & (1 << pro_editor.OK_MARK)
+    assert page.editor.markersAtLine(2) & (1 << pro_editor.ERROR_MARK)
+    assert page.editor.markersAtLine(4) & (1 << pro_editor.SKIPPED_MARK)
+    assert tr("Error on line {0}, near «{1}»").format(3, "no_existe") in page.error_link.text()
+
+
+def test_after_loading_the_keyboard_goes_back_to_the_editor(coordinator):
+    """#139: tras «Cargar en QGIS» el teclado vuelve al editor y Ctrl+Enter sigue funcionando."""
+    from qgis.PyQt.QtWidgets import QApplication
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT 1 AS uno;")
+    page.run_button.click()
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    loads = []
+    page._loader = lambda *args, **kwargs: loads.append(args)
+    page.grid.setFocus()
+    page.load_in_qgis("copy")
+    assert loads and QApplication.focusWidget() is page.editor
 
 
 def test_save_as_autosave_and_reopen(coordinator, tmp_path):
@@ -309,7 +437,7 @@ def test_without_duckdb_everything_is_grey_except_start(qgis_app):
 
 
 def test_run_sql_typed_by_the_user_through_execute_too(coordinator):
-    """Ctrl+Intro y Ctrl+Mayús+Intro llegan a la consulta aunque el foco esté en el editor."""
+    """Ctrl+Enter y Ctrl+Shift+Enter llegan a la consulta aunque el foco esté en el editor."""
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 5 AS cinco;")
     page.editor.setFocus()
@@ -373,7 +501,7 @@ def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinato
 def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
     """Propietario (2026-11-06): un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
     (la sentencia del cursor, también en una línea en blanco, igual con DuckDB 1.5 y 2.0); con selección,
-    «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Mayús+Intro."""
+    «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Shift+Enter."""
     from geoduck.ui.pro.editor import MARK
 
     ws = workspace(coordinator)
