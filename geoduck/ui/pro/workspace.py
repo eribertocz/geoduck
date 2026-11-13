@@ -380,7 +380,9 @@ class ProWorkspace(QWidget):
 
     def _build_state_page(self) -> QWidget:
         self.start_button = button(
-            tr("Start DuckDB"), "primary", tooltip=tr("Starts DuckDB in memory, in its own thread")
+            tr("Start GeoDuck"),
+            "primary",
+            tooltip=tr("Starts the DuckDB engine in memory, in its own thread"),
         )
         self.start_button.clicked.connect(self.start)
         self.open_button = button(tr("Open database…"), tooltip=tr("Opens a .duckdb file"))
@@ -491,7 +493,7 @@ class ProWorkspace(QWidget):
         """«Importar archivos…» (qgis-import-spec §10): el selector con los formatos compatibles y, con los
         archivos elegidos (o soltados: `paths`), «Archivos → DuckDB» en la base donde, o en la actual."""
         if self._coordinator.state is not SessionState.READY:
-            self.notify(tr("Start DuckDB to import files."))
+            self.notify(tr("Start GeoDuck to import files."))
             return
         if paths is None:
             paths = self._ask_files(tr("Import files"), file_filters())
@@ -591,7 +593,9 @@ class ProWorkspace(QWidget):
             self.notify(tr("QGIS could not open: {0}").format(names))
         elif opened:
             self.notify(
-                tr("{0} layer(s) opened in QGIS: now add them to DuckDB from the layers panel").format(opened)
+                tr("{0} layer(s) opened in QGIS: now add them to GeoDuck from the layers panel").format(
+                    opened
+                )
             )
 
     def add_layers(self, checked: list[str] | None = None) -> None:
@@ -822,7 +826,7 @@ class ProWorkspace(QWidget):
             state is SessionState.ERROR_RECOVERABLE and self._coordinator.engine_info is None
         )
         if state is SessionState.CONNECTING:
-            self.state_title.setText(tr("Starting DuckDB…"))
+            self.state_title.setText(tr("Starting GeoDuck…"))
             self.state_text.setText(tr("It takes a moment the first time."))
         elif state is SessionState.CLOSING:
             self.state_title.setText(tr("Closing the session…"))
@@ -835,8 +839,8 @@ class ProWorkspace(QWidget):
                 tr("Missing: {}. Press «Diagnostics» to see how to install it.").format(", ".join(failing))
             )
         else:
-            self.state_title.setText(tr("DuckDB is not started"))
-            self.state_text.setText(tr("Start DuckDB in memory, or open a database file."))
+            self.state_title.setText(tr("GeoDuck is not started"))
+            self.state_text.setText(tr("Start GeoDuck in memory, or open a database file."))
         for widget in (self.start_button, self.open_button, self.create_button):
             widget.setVisible(idle)
             widget.setEnabled(idle and self._coordinator.can_start and self.environment_ok)
@@ -1109,7 +1113,9 @@ class ProWorkspace(QWidget):
             found.append(Entry(tr("Roll back transaction"), action, "warning", self.rollback))
         if self.to_duckdb.running:
             found.append(
-                Entry(tr("Show progress: QGIS layers → DuckDB"), action, "layers", self.to_duckdb.show_window)
+                Entry(
+                    tr("Show progress: QGIS layers → GeoDuck"), action, "layers", self.to_duckdb.show_window
+                )
             )
         if ready:
             found += [
@@ -1118,7 +1124,7 @@ class ProWorkspace(QWidget):
                 ),
                 Entry(tr("Create database…"), action, "database", lambda: self.attach(OpenAction.CREATE_NEW)),
                 Entry(tr("Import files…"), action, "layers", self.import_files),
-                Entry(tr("Add QGIS layers to DuckDB…"), action, "layers", self.send_layers_requested.emit),
+                Entry(tr("Add QGIS layers to GeoDuck…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),
             ]
         found.append(Entry(tr("Show or hide the sidebar"), action, "sidebar", self.toggle_sidebar))

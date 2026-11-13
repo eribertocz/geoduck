@@ -231,7 +231,7 @@ def logo_icon(state: str) -> QIcon:
 
 
 class LogoBar(QProgressBar):
-    """La barra del paso 3 de «Capas de QGIS → DuckDB» (marca, 2026-11-07): una línea azul fina y el logo de
+    """La barra del paso 3 de «Capas de QGIS → DuckDB» (marca, 2026-11-07): una línea fina y el logo de
     GeoDuck en su punta, que avanza con la capa; sin avance conocido, el logo va y vuelve."""
 
     def __init__(self, colors: Colors) -> None:

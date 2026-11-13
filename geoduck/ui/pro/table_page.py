@@ -743,7 +743,7 @@ class TablePage(QWidget):
         self._pending = True
         state = self._coordinator.state
         if self._coordinator.engine_info is None or state is SessionState.DISCONNECTED:
-            self._show_message(tr("Start DuckDB to see this table."))
+            self._show_message(tr("Start GeoDuck to see this table."))
             return
         if state is not SessionState.READY:
             self._show_busy()
@@ -1054,7 +1054,7 @@ class TablePage(QWidget):
                 self.load()
             elif event.current is SessionState.DISCONNECTED:
                 self.browse = None
-                self._show_message(tr("Start DuckDB to see this table."))
+                self._show_message(tr("Start GeoDuck to see this table."))
 
     def close_page(self) -> None:
         """La pestaña se cierra: deja de escuchar y descarta las respuestas que lleguen después."""

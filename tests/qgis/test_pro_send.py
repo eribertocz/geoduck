@@ -209,13 +209,13 @@ def test_dropping_on_a_database_opens_the_three_steps_with_that_database(coordin
     dialog = to_step_two(ws)
     assert dialog.destination_value == (DB, "main")
     assert not dialog.tree.isColumnHidden(2)  # «Qué pasará» siempre a la vista
-    assert ws.to_duckdb.add_button.text() == tr("Add {0} layers to DuckDB").format(2)
+    assert ws.to_duckdb.add_button.text() == tr("Add {0} layers to GeoDuck").format(2)
     add_all(ws, coordinator)
     assert [s["state"] for s in ws.to_duckdb.states] == ["done", "done"]
     assert has_tables(coordinator, {"medidores", "zonas"})
     assert window.isVisible() and window.stack.currentIndex() == 2  # el resumen, en el paso 3
     summary = (
-        tr("{0} QGIS layers added to DuckDB").format(2)
+        tr("{0} QGIS layers added to GeoDuck").format(2)
         + " · "
         + tr("Catalog: {0} · Schema: {1}").format(DB, "main")
     )
@@ -263,7 +263,7 @@ def test_in_the_background_the_footer_brings_it_back_and_the_end_shows_a_closabl
     ws.to_duckdb.background.click()  # «Seguir en segundo plano»
     window = ws.to_duckdb.window
     assert not window.isVisible()
-    assert tr("Show progress: QGIS layers → DuckDB") in [e.title for e in ws.palette_entries()]
+    assert tr("Show progress: QGIS layers → GeoDuck") in [e.title for e in ws.palette_entries()]
     assert ws.progress_button.text().startswith("⟳ ")
     ws.progress_button.click()  # la línea del pie vuelve al paso 3
     assert window.isVisible() and window.stack.currentIndex() == 2

@@ -496,7 +496,7 @@ class LayerReader(QgsTask):  # type: ignore[misc]
     def __init__(
         self, plans: list[tuple[int, LayerPlan]], channel: BatchChannel[Any], on_read: Callable[[int], None]
     ) -> None:
-        super().__init__(tr("GeoDuck: add QGIS layers to DuckDB"), QgsTask.Flag.CanCancel)
+        super().__init__(tr("GeoDuck: send QGIS layers"), QgsTask.Flag.CanCancel)
         # Las fuentes se crean aquí, en el hilo principal; se leen en el hilo de la tarea (F-117)
         self._sources = [
             (i, p.job, p.fids, p.reprojector, QgsVectorLayerFeatureSource(p.layer)) for i, p in plans

@@ -15,7 +15,10 @@ from qgis.PyQt.QtSvg import QSvgRenderer
 
 _STAR = "M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"
 
-#: Nombre → cuerpo SVG (dentro de un `<svg viewBox="0 0 24 24">` con trazo de 1,8).
+#: Trazo de los iconos: fino (#142, componentes sutiles).
+STROKE = 1.6
+
+#: Nombre → cuerpo SVG (dentro de un `<svg viewBox="0 0 24 24">` con trazo `STROKE`).
 PATHS: dict[str, str] = {
     "table": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
     "view": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18" stroke-dasharray="2 2"/>',
@@ -70,7 +73,7 @@ def svg(name: str, color: str) -> bytes:
     body = PATHS[name]
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        f'stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" '
+        f'stroke="{color}" stroke-width="{STROKE}" stroke-linecap="round" stroke-linejoin="round" '
         f'color="{color}">{body.replace("currentColor", color)}</svg>'
     ).encode()
 

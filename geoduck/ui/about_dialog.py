@@ -24,6 +24,7 @@ from geoduck.domain.operations import EngineInfo
 from geoduck.domain.versions import release_stage
 from geoduck.ui import theme
 from geoduck.ui.i18n import tr
+from geoduck.ui.pro.tokens import BRAND_DEEP
 
 REPOSITORY = "https://github.com/eribertocz/geoduck"
 _ICON = Path(__file__).resolve().parent.parent / "resources" / "icon.svg"
@@ -52,7 +53,7 @@ def components(report: DiagnosticReport | None, engine: EngineInfo | None) -> li
 
 
 class _Band(QWidget):
-    """La franja de la marca arriba de «Acerca de» (azul lago → azul profundo)."""
+    """La franja de la marca arriba de «Acerca de» (turquesa lago → turquesa hondo)."""
 
     def __init__(self, start: QColor, end: QColor) -> None:
         super().__init__()
@@ -103,6 +104,11 @@ class AboutDialog(QDialog):
         self.links.setTextFormat(Qt.TextFormat.RichText)
         self.links.setOpenExternalLinks(True)
 
+        # la marca DuckDB es de su fundación: GeoDuck la nombra solo como el motor (#142)
+        self.trademark = QLabel(tr("DuckDB is a trademark of the DuckDB Foundation."))
+        self.trademark.setProperty("geoduck", "muted")
+        self.trademark.setWordWrap(True)
+
         note = QLabel(
             tr(
                 "Alpha version: it may change without notice. Certified compatibility on Windows is "
@@ -120,8 +126,8 @@ class AboutDialog(QDialog):
         buttons.addWidget(self.links, 1)
         buttons.addWidget(close)
 
-        # una franja azul arriba: solo aquí, el diálogo de presentación (marca, 2026-11-07)
-        band = _Band(QColor(palette.primary), QColor("#1D3F99"))
+        # una franja turquesa arriba: solo aquí, el diálogo de presentación (marca, 2026-11-07)
+        band = _Band(QColor(palette.primary), QColor(BRAND_DEEP))
         band.setFixedHeight(5)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -133,6 +139,7 @@ class AboutDialog(QDialog):
         layout.setSpacing(14)
         layout.addLayout(top)
         layout.addWidget(box)
+        layout.addWidget(self.trademark)
         layout.addWidget(note)
         layout.addLayout(buttons)
 
@@ -140,7 +147,7 @@ class AboutDialog(QDialog):
         """Icono, nombre, versión en una etiqueta y resumen."""
         icon = QLabel()
         icon.setPixmap(QIcon(str(_ICON)).pixmap(56, 56))
-        name = QLabel(f'Geo<span style="color: {palette.action};">Duck</span>')  # «Geo» + «Duck» en azul
+        name = QLabel(f'Geo<span style="color: {palette.action};">Duck</span>')  # «Geo» + «Duck» en turquesa
         name.setTextFormat(Qt.TextFormat.RichText)
         font = QFont(name.font())
         font.setPointSizeF(font.pointSizeF() * 1.6)

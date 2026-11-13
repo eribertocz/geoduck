@@ -265,7 +265,7 @@ class AddLayersWindow(QDialog):
 
     def set_step(self, step: int, subtitle: str) -> None:
         self.stack.setCurrentIndex(step)
-        head = tr("Files → DuckDB") if self.flow.files else tr("QGIS layers → DuckDB")
+        head = tr("Files → GeoDuck") if self.flow.files else tr("QGIS layers → GeoDuck")
         self.title.setText(head + f"  ·  {step + 1} " + tr("of") + " 3")
         self.subtitle.setText(subtitle)
 
@@ -339,7 +339,7 @@ class AddLayers:
             return
         coordinator = self._coordinator
         if coordinator.state is not SessionState.READY or coordinator.catalog is None:
-            self._host.notify(tr("Start DuckDB to add layers."))
+            self._host.notify(tr("Start GeoDuck to add layers."))
             return
         self.files = False
         self._candidates = coordinator.send_candidates(layer_ids)
@@ -365,7 +365,7 @@ class AddLayers:
             return
         coordinator = self._coordinator
         if coordinator.state is not SessionState.READY or coordinator.catalog is None:
-            self._host.notify(tr("Start DuckDB to import files."))
+            self._host.notify(tr("Start GeoDuck to import files."))
             return
         if not paths:
             return
@@ -508,9 +508,9 @@ class AddLayers:
         window = self._window()
         window.set_step(
             CHOOSE,
-            tr("Choose what to add to DuckDB. Each layer or sheet becomes a table.")
+            tr("Choose what to add to GeoDuck. Each layer or sheet becomes a table.")
             if self.files
-            else tr("Choose the layers to add to DuckDB. The ones selected in QGIS are already checked."),
+            else tr("Choose the layers to add to GeoDuck. The ones selected in QGIS are already checked."),
         )
         self.count_label = label("", "muted")
         cancel = button(tr("Cancel"))
@@ -559,7 +559,7 @@ class AddLayers:
             widget.hide()
         window.send_dialog = dialog
         window.where_box.addWidget(dialog)
-        window.set_step(WHERE, tr("Choose the DuckDB database and schema where to save them."))
+        window.set_step(WHERE, tr("Choose the database and schema where to save them."))
         back = button("‹  " + tr("Back"))
         back.clicked.connect(self._show_choose_again)
         cancel = button(tr("Cancel"))
@@ -579,7 +579,7 @@ class AddLayers:
         if dialog is None:
             return
         count = len(dialog.request().items) if dialog.target_ready else 0
-        text = tr("Add 1 layer to DuckDB") if count == 1 else tr("Add {0} layers to DuckDB").format(count)
+        text = tr("Add 1 layer to GeoDuck") if count == 1 else tr("Add {0} layers to GeoDuck").format(count)
         self.add_button.setText(text)
         self.add_button.setEnabled(dialog.send_button.isEnabled() and count > 0)
 
@@ -840,14 +840,14 @@ class AddLayers:
         schema = self.request.schema if self.request is not None else ""
         if self.files:
             lines = [
-                tr("1 table added to DuckDB from files")
+                tr("1 table added to GeoDuck from files")
                 if added == 1
-                else tr("{0} tables added to DuckDB from files").format(added)
+                else tr("{0} tables added to GeoDuck from files").format(added)
             ]
         elif added == 1:
-            lines = [tr("1 QGIS layer added to DuckDB")]
+            lines = [tr("1 QGIS layer added to GeoDuck")]
         else:
-            lines = [tr("{0} QGIS layers added to DuckDB").format(added)]
+            lines = [tr("{0} QGIS layers added to GeoDuck").format(added)]
         lines.append(tr("Catalog: {0} · Schema: {1}").format(database, schema))
         cancelled = [s["name"] for s in self.states if s["state"] == CANCELLED]
         failed = [s["name"] for s in self.states if s["state"] == FAILED]
@@ -865,7 +865,7 @@ class AddLayers:
         total = len(self.states)
         done = sum(1 for s in self.states if s["state"] in (DONE, CANCELLED, FAILED))
         index = self._current
-        text = "⟳ " + tr("Adding {0} of {1} to DuckDB").format(min(done + 1, total), total)
+        text = "⟳ " + tr("Adding {0} of {1} to GeoDuck").format(min(done + 1, total), total)
         if index is not None:
             s = self.states[index]
             text += f" · {s['name']}"
@@ -1068,7 +1068,7 @@ class AddLayers:
         )
         where = self.request.database
         if self.running:
-            window.subtitle.setText(tr("Adding {0} layers to DuckDB · {1}…").format(total, where))
+            window.subtitle.setText(tr("Adding {0} layers to GeoDuck · {1}…").format(total, where))
             self._host.set_progress(self.progress_text())
         else:
             window.subtitle.setText(tr("Done:") + " " + self.done_text())

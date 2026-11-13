@@ -7,7 +7,15 @@ iconos (`icons`) se generan de aquí: cambiar un color es cambiar una línea.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
+
+#: Marca de GeoDuck (#142): turquesa lago; en oscuro, uno más claro; el hondo para texto y el ojo del pato.
+#: El turquesa solo marca lo de GeoDuck: logo, ▶, pestaña activa y selección. Lo neutro sale de QGIS.
+BRAND = "#0e8a87"
+BRAND_DARK = "#3fc1bc"
+BRAND_DEEP = "#0a5e5c"
+#: El pico del pato: ámbar, también el punto de «sin guardar».
+BEAK = "#f2a33a"
 
 
 @dataclass(frozen=True)
@@ -42,6 +50,7 @@ class Colors:
     toast_text: str
     toast_link: str
     star: str
+    dark: bool = False  # tema oscuro de QGIS (el editor y los iconos lo siguen)
 
 
 LIGHT = Colors(
@@ -54,15 +63,15 @@ LIGHT = Colors(
     muted="#5f6673",
     faint="#80868f",
     null="#a3a9b2",
-    accent="#2f5fd0",
-    accent_fill="#2f5fd0",
-    accent_hover="#234aa6",
-    accent_soft="#e7ecfa",
-    selection="#bcd0fa",
+    accent="#0b7c79",
+    accent_fill="#0b7c79",
+    accent_hover="#0a5e5c",
+    accent_soft="#e3f3f2",
+    selection="#b5e2df",
     on_accent="#ffffff",
-    row_selected="#eef2fd",
-    chip_bg="#f3f6fe",
-    chip_border="#c9d6f5",
+    row_selected="#ecf7f6",
+    chip_bg="#f0f8f8",
+    chip_border="#bfe0de",
     segment="#eef0f3",
     ok="#1a7f45",
     warn="#955b00",
@@ -70,7 +79,7 @@ LIGHT = Colors(
     error_soft="#fdf0ec",
     toast="#1d2026",
     toast_text="#ffffff",
-    toast_link="#a8c1ff",
+    toast_link="#7fdad5",
     star="#d99a00",
 )
 
@@ -84,15 +93,15 @@ DARK = Colors(
     muted="#a3aab5",
     faint="#7f8793",
     null="#6b727d",
-    accent="#5b84e6",
-    accent_fill="#3b67d6",
-    accent_hover="#4c78e0",
-    accent_soft="#22304f",
-    selection="#33508f",
+    accent="#3fc1bc",
+    accent_fill="#127c78",
+    accent_hover="#16918c",
+    accent_soft="#183a3a",
+    selection="#1f5856",
     on_accent="#ffffff",
-    row_selected="#1f2a44",
-    chip_bg="#1d2740",
-    chip_border="#33466f",
+    row_selected="#173030",
+    chip_bg="#172e2e",
+    chip_border="#265a58",
     segment="#23262d",
     ok="#34c46e",
     warn="#e0a43a",
@@ -100,8 +109,9 @@ DARK = Colors(
     error_soft="#3a2019",
     toast="#e6e8ec",
     toast_text="#16181d",
-    toast_link="#2f5fd0",
+    toast_link="#0a5e5c",
     star="#f0b429",
+    dark=True,
 )
 
 #: Familias preferidas, en orden: la del sistema en Windows, macOS y Linux. Se usa la primera instalada.
@@ -156,3 +166,106 @@ def contrast(fg: str, bg: str) -> float:
 
     light, dark = sorted((luminance(fg), luminance(bg)), reverse=True)
     return (light + 0.05) / (dark + 0.05)
+
+
+def mix(fg: str, bg: str, amount: float) -> str:
+    """`fg` sobre `bg` con opacidad `amount` (0 = `bg`, 1 = `fg`), en `#rrggbb`."""
+    channels = (
+        round(int(bg[i : i + 2], 16) + (int(fg[i : i + 2], 16) - int(bg[i : i + 2], 16)) * amount)
+        for i in (1, 3, 5)
+    )
+    return "#" + "".join(f"{c:02x}" for c in channels)
+
+
+def _readable(fg: str, backgrounds: tuple[str, ...], ratio: float, start: float) -> str:
+    """El tono de `fg` más suave (mezclado con el primer fondo) que aún llega a `ratio` sobre todos."""
+    amount = start
+    while amount < 1:
+        candidate = mix(fg, backgrounds[0], amount)
+        if all(contrast(candidate, b) >= ratio for b in backgrounds):
+            return candidate
+        amount += 0.02
+    return fg
+
+
+def _fit(color: str, toward: str, backgrounds: tuple[str, ...], ratio: float = 4.6) -> str:
+    """`color` tal cual si se lee sobre todos los fondos; si no, acercado a `toward` (el texto) lo justo."""
+    amount = 0.0
+    while amount <= 1:
+        candidate = mix(toward, color, amount)
+        if all(contrast(candidate, b) >= ratio for b in backgrounds):
+            return candidate
+        amount += 0.05
+    return toward
+
+
+def meets_aa(c: Colors) -> bool:
+    """Las reglas de contraste de los tokens (workspace-pro-spec §10): texto y acciones ≥ 4,5:1 sobre cada
+    fondo; lo tenue ≥ 3:1; el texto del botón principal y de los avisos ≥ 4,5:1."""
+    for background in (c.bg, c.side, c.head):
+        if any(
+            contrast(getattr(c, name), background) < 4.5
+            for name in ("text", "muted", "accent", "error", "ok")
+        ):
+            return False
+        if contrast(c.faint, background) < 3.0:
+            return False
+    pairs = ((c.on_accent, c.accent_fill), (c.toast_text, c.toast), (c.toast_link, c.toast))
+    return all(contrast(fg, bg) >= 4.5 for fg, bg in pairs)
+
+
+def _lightness(color: str) -> int:
+    """Luminosidad HSL de Qt (0–255), la que usa `style.is_dark`."""
+    channels = [int(color[i : i + 2], 16) for i in (1, 3, 5)]
+    return (max(channels) + min(channels)) // 2
+
+
+def from_palette(base: str, window: str, text: str, *, dark: bool) -> Colors:
+    """Los colores de GeoDuck dentro del tema de QGIS (#142): los neutros (fondos, bordes, grises) salen de la
+    paleta de QGIS —solo se leen, nunca se cambian (ADR-0011)—; el turquesa y los colores fijos (ámbar sin
+    guardar, rojo error, verde bien) son de GeoDuck. Si la paleta no deja leer bien algo (contraste AA), se
+    usan los tokens propios del tema."""
+    tokens = DARK if dark else LIGHT
+    if any(len(v) != 7 or not v.startswith("#") for v in (base, window, text)):
+        return tokens
+    base, window, text = base.lower(), window.lower(), text.lower()
+    if (_lightness(base) < 128) != dark:  # paleta a medias (fondo claro en tema oscuro…): los tokens propios
+        return tokens
+    head = mix(window, base, 0.5)
+    backs = (base, window, head)
+    accent = _fit(tokens.accent, text, backs)
+
+    colors = replace(
+        tokens,
+        bg=base,
+        side=window,
+        head=head,
+        border=mix(text, base, 0.16 if dark else 0.13),
+        line=mix(text, base, 0.08 if dark else 0.06),
+        text=text,
+        muted=_readable(text, backs, 4.6, 0.55),
+        faint=_readable(text, backs, 3.1, 0.4),
+        null=mix(text, base, 0.42),
+        accent_soft=mix(accent, base, 0.2 if dark else 0.12),
+        selection=mix(accent, base, 0.4 if dark else 0.3),
+        row_selected=mix(accent, base, 0.13 if dark else 0.08),
+        chip_bg=mix(accent, base, 0.1 if dark else 0.06),
+        chip_border=mix(accent, base, 0.35 if dark else 0.28),
+        segment=mix(text, window, 0.08),
+        toast=text,
+        toast_text=base,
+        accent=accent,
+        ok=_fit(tokens.ok, text, backs),
+        error=_fit(tokens.error, text, backs),
+        warn=_fit(tokens.warn, text, backs),
+        error_soft=mix(tokens.error, base, 0.14 if dark else 0.07),
+    )
+    if contrast(colors.toast_link, colors.toast) < 4.5:
+        # el aviso es del color del texto: su enlace, el turquesa que se lea sobre él
+        link = BRAND_DARK if contrast(BRAND_DARK, text) >= 4.6 else _fit(BRAND_DEEP, base, (text,))
+        colors = replace(colors, toast_link=link)
+    return colors if meets_aa(colors) else tokens
+
+
+#: Campos de color (para pruebas y para recorrer el tema).
+COLOR_FIELDS = tuple(f.name for f in fields(Colors) if f.type in ("str", str))

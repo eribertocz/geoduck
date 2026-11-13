@@ -21,9 +21,13 @@ pytestmark = pytest.mark.qgis
 
 
 def root(dark: bool = False) -> QWidget:
+    """Un widget con la paleta de un tema de QGIS, claro u oscuro (fondo, ventana y texto)."""
     widget = QWidget()
     palette = widget.palette()
-    palette.setColor(QPalette.ColorRole.Window, QColor("#16181d" if dark else "#f0f0f0"))
+    role = QPalette.ColorRole
+    palette.setColor(role.Window, QColor("#31363b" if dark else "#f0f0f0"))
+    palette.setColor(role.Base, QColor("#232629" if dark else "#ffffff"))
+    palette.setColor(role.Text, QColor("#eff0f1" if dark else "#1f1f1f"))
     widget.setPalette(palette)
     QVBoxLayout(widget)
     return widget
@@ -40,7 +44,7 @@ def test_the_style_stays_inside_geoduck(qgis_app):
     outside.show()
     QApplication.processEvents()
     assert QApplication.instance().styleSheet() == before  # QGIS no cambia (ADR-0011)
-    assert pro.objectName() == style.ROOT and colors is LIGHT
+    assert pro.objectName() == style.ROOT and not colors.dark
     assert outside.styleSheet() == "" and outside.window() is not pro
     family = style.first_family(FONT_FAMILIES)
     assert QFontInfo(inside.font()).pixelSize() == METRICS.font or family not in style.installed_families()
@@ -49,8 +53,25 @@ def test_the_style_stays_inside_geoduck(qgis_app):
 
 
 def test_it_follows_the_qgis_theme(qgis_app):
-    assert style.apply(root(dark=True)) is DARK
-    assert style.apply(root(dark=False)) is LIGHT
+    """#142: los neutros son los del tema de QGIS (solo leídos); el turquesa, de GeoDuck."""
+    dark, light = style.apply(root(dark=True)), style.apply(root(dark=False))
+    assert dark.dark and not light.dark
+    assert (dark.bg, dark.side, dark.text) == ("#232629", "#31363b", "#eff0f1")
+    assert (light.bg, light.side, light.text) == ("#ffffff", "#f0f0f0", "#1f1f1f")
+    assert dark.accent == DARK.accent and light.accent_fill == LIGHT.accent_fill  # turquesa
+    for colors in (dark, light):  # a lo sumo, un poco más hondo para leerse sobre el fondo de QGIS
+        red, green, blue = (int(colors.accent[i : i + 2], 16) for i in (1, 3, 5))
+        assert green > red and blue > red
+
+
+def test_the_qgis_palette_is_only_read(qgis_app):
+    """ADR-0011: GeoDuck lee la paleta de QGIS y nunca la cambia."""
+    before = QApplication.instance().palette().color(QPalette.ColorRole.Base).name()
+    widget = root(dark=True)
+    mine = widget.palette().color(QPalette.ColorRole.Base).name()
+    style.apply(widget)
+    assert widget.palette().color(QPalette.ColorRole.Base).name() == mine
+    assert QApplication.instance().palette().color(QPalette.ColorRole.Base).name() == before
 
 
 def test_buttons_always_have_a_name_and_help(qgis_app):

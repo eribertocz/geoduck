@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <!-- Logo de GeoDuck (aprobado por el propietario, 2026-11-07): un marcador de mapa con un pato; marca
-       propia, sin el amarillo ni el círculo de DuckDB. Azul lago #2F5FD0, pico ámbar #F2A33A, ojo #1D3F99. -->
-  <path d="M64 4C37 4 16 25 16 52c0 34 48 72 48 72s48-38 48-72C112 25 91 4 64 4z" fill="#2F5FD0"/>
+       propia, sin el amarillo ni el círculo de DuckDB. Turquesa lago #0E8A87 (#142), pico ámbar #F2A33A, ojo #0A5E5C. -->
+  <path d="M64 4C37 4 16 25 16 52c0 34 48 72 48 72s48-38 48-72C112 25 91 4 64 4z" fill="#0E8A87"/>
   <path d="M33 66l-6-13 15 7z" fill="#fff"/>
   <ellipse cx="60" cy="69" rx="27" ry="14" fill="#fff"/>
   <circle cx="68" cy="44" r="15" fill="#fff"/>
   <path d="M81 41q16 1 16 6t-16 7z" fill="#F2A33A"/>
-  <circle cx="71" cy="40" r="3.4" fill="#1D3F99"/>
-  <path d="M44 66q14 9 30 0" fill="none" stroke="#2F5FD0" stroke-width="3" stroke-linecap="round" opacity=".35"/>
+  <circle cx="71" cy="40" r="3.4" fill="#0A5E5C"/>
+  <path d="M44 66q14 9 30 0" fill="none" stroke="#0E8A87" stroke-width="3" stroke-linecap="round" opacity=".35"/>
 </svg>

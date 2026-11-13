@@ -116,8 +116,8 @@ def finished_headline(report: LoadReport) -> str:
     """La primera línea del aviso: qué se añadió y en qué sentido (DuckDB → QGIS)."""
     if len(report.layers) > 1:  # una capa por geometría (spatial-spec §7)
         names = ", ".join(f"«{name}»" for _, name in report.layers)
-        return tr("Layers {} added to QGIS from DuckDB").format(names)
-    return tr("Layer «{}» added to QGIS from DuckDB").format(report.layer_name)
+        return tr("Layers {} added to QGIS from GeoDuck").format(names)
+    return tr("Layer «{}» added to QGIS from GeoDuck").format(report.layer_name)
 
 
 def finished_detail(report: LoadReport) -> str:

@@ -35,16 +35,15 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Estado de DuckDB** (propietario, 2026-11-06: sin una barra más): en la ventana, arriba de la barra lateral
   («DuckDB 2.0.0» y «● Lista · en memoria», con «⋯»: Actualizar, **Cerrar DuckDB**); en el panel, en su
   cabecera. La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
-- **Iniciar y cerrar** (propietario, 2026-11-06): **«Iniciar DuckDB»** (botón grande en el centro cuando no
-  está iniciado) y **«Cerrar DuckDB»** (menú «⋯»); la palabra «sesión» no aparece en la interfaz. Sin DuckDB
-  iniciado, **todo está en gris** salvo «Iniciar DuckDB», «Abrir base…», «Crear base…», «Diagnóstico» y
-  «Acerca de».
+- **Iniciar y cerrar** (propietario, 2026-11-06; nombre de #142): **«Iniciar GeoDuck»** (botón grande en el
+  centro cuando no está iniciado) y **«Cerrar sesión»** (menú «⋯»). Sin iniciar, **todo está en gris** salvo
+  «Iniciar GeoDuck», «Abrir base…», «Crear base…», «Diagnóstico» y «Acerca de».
 - **Barra lateral** (plegable, Ctrl+B): búsqueda; **★ Favoritos**; **Bases** (árbol: bases,
   esquemas, tablas, vistas, temporales, con su acceso); «+» (abrir o crear base, importar capas de QGIS); al pie,
   «Diagnóstico», «Acerca de» y la versión.
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
   Ctrl+W), reordenar y recordar las abiertas.
-- **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde DuckDB · Conectada · Ver en el mapa»).
+- **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde GeoDuck · Conectada · Ver en el mapa»).
 - **Panel acoplado** (propietario, 2026-11-07, tras la prueba en Windows; antes no bajaba de 690 px): **modo
   compacto, mínimo 340 px** sin que nada se monte. Las mismas opciones que la ventana, con ícono y tooltip
   donde no cabe el texto: ▶ sin «Ejecutar», ■, la base sin «Se ejecuta en», «Exportar» y «Cargar en QGIS»
@@ -59,14 +58,14 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **La marca** (propietario, 2026-11-07; `claude/marca.md` en el proyecto): el **logo de GeoDuck dice el estado
   de la sesión** en la barra lateral y en la cabecera del panel: un puntito en su esquina (verde lista, ámbar
   trabajando, rojo con error); sin sesión, el logo en gris y sin puntito. Un clic en el logo abre el menú de
-  la sesión, **solo con lo que aplica**: sin sesión «Iniciar DuckDB»; con sesión «Cerrar sesión» (nunca un
+  la sesión, **solo con lo que aplica**: sin sesión «Iniciar GeoDuck»; con sesión «Cerrar sesión» (nunca un
   «Iniciar» en gris; una sola sesión a la vez); además «Abrir base…», «Crear base…», «Diagnóstico del
   entorno» y «Acerca de GeoDuck». El botón de GeoDuck en la barra de QGIS lleva el mismo puntito. Sin sesión,
   la pantalla de inicio muestra el logo grande en gris. Los diálogos usan los colores de la marca (botón
-  principal y enlaces en azul `#2F5FD0`, advertencias con raya ámbar `#F2A33A`); «Acerca de» lleva además una
-  franja azul arriba y «Geo**Duck**». En el paso 3 de «Capas de QGIS → DuckDB», la barra de cada capa lleva el
+  principal y enlaces en turquesa, advertencias con raya ámbar `#F2A33A`; §10); «Acerca de» lleva además una
+  franja turquesa arriba y «Geo**Duck**». En el paso 3 de «Capas de QGIS → GeoDuck», la barra de cada capa lleva el
   logo en su punta. **«Un pato al lago»:** al arrastrar tablas de la barra lateral se ve el pato con cuántas
-  lleva (globito ámbar); la base donde se soltarán capas de QGIS se pinta de azul claro con el pato (la imagen
+  lleva (globito ámbar); la base donde se soltarán capas de QGIS se pinta de turquesa claro con el pato (la imagen
   de las capas que se arrastran desde QGIS la dibuja QGIS).
 
 ## 4. Pestaña de tabla (GD-WSP-003)
@@ -149,23 +148,23 @@ Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hast
 - Se recuerdan entre reinicios de QGIS (propietario, 2026-11-05). Se guardan solo **nombres** (base, esquema, objeto; ruta del `.sql`) en `QgsSettings`, nunca datos. Si un
   objeto ya no existe, se muestra atenuado con su motivo.
 
-## 9. Capas de QGIS → DuckDB (GD-WSP-008; qgis-import-spec)
+## 9. Capas de QGIS → GeoDuck (GD-WSP-008; qgis-import-spec)
 **Una sola ventana de tres pasos para las tres formas** (propietario, 2026-11-06, tras la prueba en Windows:
-F-131; reemplaza el envío directo de E5). Ctrl+K y «+» → «Añadir capas de QGIS a DuckDB…»; en QGIS, clic
-derecho sobre capas → «Añadir a DuckDB…». «Reproyectar a…» sigue siendo global para todas las capas.
+F-131; reemplaza el envío directo de E5). Ctrl+K y «+» → «Añadir capas de QGIS a GeoDuck…»; en QGIS, clic
+derecho sobre capas → GeoDuck › «Enviar a GeoDuck…» (#142). «Reproyectar a…» sigue siendo global para todas las capas.
 
 | Cómo empieza | Paso 1 · Capas | Paso 2 · Dónde |
 |---|---|---|
 | Arrastrar capas a GeoDuck | Las arrastradas, marcadas | La base donde se soltaron (o la actual) |
-| Clic derecho › «Añadir a DuckDB…» | Las seleccionadas en QGIS, marcadas | La base actual |
-| «Añadir capas de QGIS a DuckDB…» | Todas las del proyecto; marcadas las seleccionadas en QGIS | La base actual |
+| Clic derecho › «Enviar a GeoDuck…» | Las seleccionadas en QGIS, marcadas | La base actual |
+| «Añadir capas de QGIS a GeoDuck…» | Todas las del proyecto; marcadas las seleccionadas en QGIS | La base actual |
 
 1. **Capas:** agrupadas en Puntos, Líneas, Polígonos y Tablas sin geometría, con el icono de QGIS, entidades y
    SRC; las que no se pueden (ráster…), en gris con su motivo. Sin capas vectoriales, la ventana lo dice.
    «N capas elegidas» y «Siguiente ›».
 2. **Dónde:** base y esquema, **siempre cambiables** (solo bases escribibles); «Qué pasará» con cada capa
    (siempre a la vista); «Más opciones» («Reproyectar a…», «Vista en vez de copia»); una frase de lo que
-   ocurrirá. «‹ Atrás» y «Añadir N capas a DuckDB».
+   ocurrirá. «‹ Atrás» y «Añadir N capas a GeoDuck».
 3. **Progreso:** una fila por capa (✓ añadida, ⟳ copiándose con su %, ○ en espera, ✕ cancelada o con error).
    «×» quita una capa en espera o detiene la que se copia; «Cancelar todo»; «Seguir en segundo plano». Al
    terminar: qué pasó con cada una, «Deshacer», «Abrir» y «Cerrar».
@@ -173,14 +172,17 @@ derecho sobre capas → «Añadir a DuckDB…». «Reproyectar a…» sigue sien
 - **Cada capa se guarda por separado** (una transacción por capa; reemplaza «todo o nada» de G8, propietario
   2026-11-06): las que terminaron quedan aunque se cancelen o fallen otras; «Deshacer» borra las tablas
   nuevas. Las capas van una tras otra (DuckDB escribe de a una cosa).
-- **En segundo plano:** el pie muestra «⟳ Añadiendo 2 de 4 a DuckDB · redes_bt 62 %»; un clic (o Ctrl+K ›
-  «Ver progreso: capas de QGIS → DuckDB») vuelve al paso 3. Si se intenta añadir más mientras tanto, se
+- **En segundo plano:** el pie muestra «⟳ Añadiendo 2 de 4 a GeoDuck · redes_bt 62 %»; un clic (o Ctrl+K ›
+  «Ver progreso: capas de QGIS → GeoDuck») vuelve al paso 3. Si se intenta añadir más mientras tanto, se
   muestra el paso 3 en curso: «Termina o cancela estas capas para añadir más». Al terminar con la ventana
-  cerrada, un aviso «N capas de QGIS añadidas a DuckDB · prueba · Abrir · Deshacer · ×».
+  cerrada, un aviso «N capas de QGIS añadidas a GeoDuck · prueba · Abrir · Deshacer · ×».
 - **Dónde se suelta, claro:** la base bajo el cursor se resalta con un borde de acento y el pie dice
   «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
-- **Nombres:** «Añadir … a DuckDB» siempre termina en DuckDB (QGIS → DuckDB); «Cargar en QGIS» siempre termina
-  en QGIS (DuckDB → QGIS). **GeoDuck** es el complemento; **DuckDB**, la base donde quedan los datos.
+- **Nombres** (#142, punto 26, reemplaza la regla de G9): en menús, botones y títulos va siempre
+  **«GeoDuck»** («Añadir … a GeoDuck», «Enviar a GeoDuck…»); «Cargar en QGIS» siempre termina en QGIS.
+  **«DuckDB»** se nombra solo como información técnica: la trazabilidad («⚡ leída directamente por DuckDB»),
+  el mensaje original de DuckDB, el formato de archivo («base de datos DuckDB»), la versión del motor y
+  «Acerca de».
 - **Avisos:** todos llevan «×» para cerrarlos sin hacer nada más (F-132).
 
 **Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5).
@@ -195,7 +197,22 @@ derecho sobre capas → «Añadir a DuckDB…». «Reproyectar a…» sigue sien
   a GeoDuck** (ADR-0011: nunca a QGIS).
 - **Componentes:** botón (primario, secundario, peligro, fantasma), campo, desplegable, chip, pestaña, árbol,
   grilla, aviso, insignia, paleta, panel lateral.
-- **Iconos** SVG propios, monocromos, que siguen el color del texto.
+- **Iconos** SVG propios, monocromos, que siguen el color del texto: **sutiles** (#142) — 16 px, trazo fino
+  (1,6), en gris; el texto va en el tooltip.
+- **Identidad visual** (#142; propietario, 2026-11-12, opción 1 «turquesa lago»):
+  - **Turquesa lago `#0E8A87`** (en oscuro `#3FC1BC`; el hondo `#0A5E5C` para el texto de marca y el ojo del
+    pato); el pico sigue en ámbar `#F2A33A`. Para leerse con contraste AA, el texto y el botón principal usan
+    el tono `#0B7C79` en claro (y `#127C78` de fondo en oscuro).
+  - El turquesa marca solo lo de GeoDuck: logo, ▶ y botón principal, pestaña activa (raya arriba), foco y
+    selección. Lo demás, en gris.
+  - **Lo neutro sale del tema de QGIS:** fondo (`Base`), paneles (`Window`) y texto (`Text`) se leen de su
+    paleta —nunca se cambia (ADR-0011)—; bordes, separadores y grises se mezclan de esos tres. Si la paleta no
+    deja leer algo con contraste AA (o es claro y oscuro a la vez), se usan los tokens propios del tema.
+  - Fijos: el ● ámbar de «sin guardar», el rojo de error y el verde de éxito (a lo sumo, más hondos para
+    leerse sobre el fondo de QGIS).
+  - **Logo en los submenús «GeoDuck»:** Base de datos › GeoDuck y el clic derecho en una capa (QGIS crea ese
+    submenú al abrir el menú; GeoDuck solo le pone su logo, sin tocar nada más del menú).
+  - «Acerca de» dice «DuckDB is a trademark of the DuckDB Foundation» y no usa el logo de DuckDB.
 - **Movimiento** breve y medido (≤ 150 ms); nada que distraiga.
 - Contraste AA en los dos temas.
 
@@ -225,7 +242,7 @@ Al cambiar (E6, propietario 2026-11-06: «Tú decide»), lo que la interfaz ante
 - El aviso de carga conserva el origen, el acceso y los avisos (decisión del 2026-11-02).
 - **Entorno incompleto** (sin DuckDB o PyArrow): la pantalla de inicio lo explica, «Iniciar» queda en gris y
   ofrece «Diagnóstico» (AT-BOOT-002).
-- El menú de capa «Enviar a DuckDB…» hace lo mismo que soltar las capas (§9); «+» y Ctrl+K abren el diálogo
+- El menú de capa «Enviar a GeoDuck…» hace lo mismo que soltar las capas (§9); «+» y Ctrl+K abren el diálogo
   para elegir.
 
 Las opciones avanzadas de la ventana «Cargar en QGIS…» de G4 no se pierden (propietario, 2026-11-06): van en
