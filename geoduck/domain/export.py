@@ -144,6 +144,8 @@ def copy_options(columns: list[tuple[str, str]], fmt: ExportFormat) -> tuple[str
         return "FORMAT csv, HEADER", ()
     if fmt is ExportFormat.JSON:
         return "FORMAT json", ()
+    if fmt is ExportFormat.SHP:
+        return _shapefile_options(columns)
     if fmt.driver is not None:
         return f"FORMAT gdal, DRIVER {quote_string_literal(fmt.driver)}", ()
     geometries = [(name, kind.strip()) for name, kind in columns if is_geometry_type(kind)]
@@ -158,6 +160,29 @@ def copy_options(columns: list[tuple[str, str]], fmt: ExportFormat) -> tuple[str
         for name in without_crs
     )
     return options, warnings
+
+
+#: Un nombre de campo de Shapefile (dBASE) cabe en 10 bytes.
+SHP_NAME_BYTES = 10
+
+
+def _shapefile_options(columns: list[tuple[str, str]]) -> tuple[str, tuple[str, ...]]:
+    """Shapefile (#141): el `.cpg` en UTF-8 (las tildes y la ñ se leen igual en cualquier programa) y un
+    aviso con los nombres de campo que GDAL acortará a 10 bytes (dos largos pueden quedar «nombre_m_1»)."""
+    options = "FORMAT gdal, DRIVER 'ESRI Shapefile', LAYER_CREATION_OPTIONS 'ENCODING=UTF-8'"
+    long_names = [
+        name
+        for name, kind in columns
+        if not is_geometry_type(kind) and len(name.encode("utf-8")) > SHP_NAME_BYTES
+    ]
+    if not long_names:
+        return options, ()
+    listed = ", ".join(f"«{n}»" for n in long_names[:5]) + (" …" if len(long_names) > 5 else "")
+    warning = tr(
+        "Shapefile keeps only 10 characters per field name: {0} will be shortened. To choose the names, "
+        "rename them with AS in the query or export to GeoPackage"
+    ).format(listed)
+    return options, (warning,)
 
 
 def gdal_select(body: str, columns: list[tuple[str, str]], fmt: ExportFormat) -> str:

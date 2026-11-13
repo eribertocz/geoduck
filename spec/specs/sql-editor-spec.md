@@ -106,7 +106,10 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   apaga solo durante la exportación (cancelar baja de hasta 3,3 s a < 0,1 s; las filas pueden salir en otro
   orden, que SQL no garantiza sin `ORDER BY`) y se deja como estaba; con `ORDER BY`, el orden se respeta; si el
   usuario lo apagó, no se toca. Todo se escribe en una carpeta temporal junto al destino y se mueve al terminar (un Shapefile son
-  varios archivos; una Geodatabase, una carpeta).
+  varios archivos; una Geodatabase, una carpeta). **Shapefile (#141):** se escribe con su `.cpg` en UTF-8 (las
+  tildes y la ñ se leen igual en cualquier programa) y, si algún nombre de campo pasa de 10 bytes, un aviso los
+  lista: GDAL los acorta (dos largos pueden quedar «nombre_m_1»); para elegirlos, `AS` en la consulta o
+  GeoPackage.
 - **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
   «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
   (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda

@@ -21,7 +21,7 @@ from qgis.core import (
     QgsGeometry,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QByteArray, QDate, QDateTime, QMetaType, Qt
+from qgis.PyQt.QtCore import QByteArray, QDate, QDateTime, QMetaType, Qt, QTime
 
 from geoduck.domain.bridge_types import FieldKind, LoadPlan, unreadable_error
 from geoduck.domain.errors import ErrorCode, GeoDuckError
@@ -39,6 +39,7 @@ _QMETA = {
     FieldKind.DATE: QMetaType.Type.QDate,
     FieldKind.DATETIME: QMetaType.Type.QDateTime,
     FieldKind.DATETIME_TZ: QMetaType.Type.QDateTime,
+    FieldKind.TIME: QMetaType.Type.QTime,
     FieldKind.BINARY: QMetaType.Type.QByteArray,
 }
 
@@ -59,6 +60,7 @@ def make_field(name: str, kind: FieldKind) -> QgsField:
             FieldKind.DATE: QVariant.Date,
             FieldKind.DATETIME: QVariant.DateTime,
             FieldKind.DATETIME_TZ: QVariant.DateTime,
+            FieldKind.TIME: QVariant.Time,
             FieldKind.BINARY: QVariant.ByteArray,
         }
         return QgsField(name, legacy[kind])
@@ -85,6 +87,12 @@ def _datetimes(arr: pa.Array) -> list[Any]:
     return [None if v is None else QDateTime.fromMSecsSinceEpoch(v, _UTC) for v in ms]
 
 
+def _times(arr: pa.Array) -> list[Any]:
+    """Hora del día: microsegundos desde la medianoche → QTime (milisegundos, como guarda QGIS)."""
+    micros = arr.cast(pa.time64("us")).cast(pa.int64()).to_pylist()
+    return [None if v is None else QTime.fromMSecsSinceStartOfDay(v // 1000) for v in micros]
+
+
 def _binary(arr: pa.Array) -> list[Any]:
     return [None if v is None else QByteArray(v) for v in arr.to_pylist()]
 
@@ -94,6 +102,8 @@ def column_converter(kind: FieldKind) -> Callable[[pa.Array], list[Any]]:
         return _dates
     if kind in (FieldKind.DATETIME, FieldKind.DATETIME_TZ):
         return _datetimes
+    if kind is FieldKind.TIME:
+        return _times
     if kind is FieldKind.BINARY:
         return _binary
     return lambda arr: arr.to_pylist()

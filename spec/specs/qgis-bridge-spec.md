@@ -210,7 +210,8 @@ Las expresiones se aplican en DuckDB, antes de Arrow:
 | `DATE` | `DATE` | |
 | `TIMESTAMP`, `TIMESTAMP_S/MS/NS` | `TIMESTAMP` (µs) | `TIMESTAMP_NS` pierde sub-µs: se avisa |
 | `TIMESTAMPTZ` | `TIMESTAMPTZ` en UTC | se documenta la zona |
-| `TIME`, `TIMETZ`, `INTERVAL` | `VARCHAR` ISO | no se inventa fecha (F-47) |
+| `TIME` | `TIME` (hora del día, ms en QGIS) | ida y vuelta sin perder el tipo y editable en la Conectada (#141); en la Instantánea, texto ISO (GeoPackage no tiene hora) |
+| `TIMETZ`, `INTERVAL` | `VARCHAR` ISO | no se inventa fecha (F-47) |
 | `BLOB`, `BIT` | igual / `VARCHAR` | un BLOB no es geometría salvo que el usuario lo marque (spatial-spec §2.2) |
 | `LIST`, `STRUCT`, `MAP`, `UNION`, `ARRAY` | `VARCHAR` JSON | se avisa la pérdida de estructura |
 | Geometría primaria | `geoarrow.wkb` + CRS | ADR-0008 |

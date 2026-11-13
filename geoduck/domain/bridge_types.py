@@ -33,6 +33,7 @@ class FieldKind(str, Enum):
     DATE = "date"
     DATETIME = "datetime"  # TIMESTAMP sin zona (µs)
     DATETIME_TZ = "datetime_tz"  # TIMESTAMPTZ: instante absoluto
+    TIME = "time"  # TIME: hora del día (ms en QGIS), #141
     BINARY = "binary"
 
 
@@ -197,7 +198,9 @@ def plan_field(name: str, source_type: str) -> FieldPlan:  # noqa: PLR0911, PLR0
         )
     if upper == "TIMESTAMP WITH TIME ZONE":
         return same(FieldKind.DATETIME_TZ)
-    if upper in {"TIME", "TIME WITH TIME ZONE", "INTERVAL"} or upper.startswith("TIME"):
+    if upper == "TIME":  # hora del día: QTime, ida y vuelta sin perder el tipo (#141)
+        return same(FieldKind.TIME)
+    if upper in {"TIME WITH TIME ZONE", "INTERVAL"} or upper.startswith("TIME"):
         return cast(FieldKind.TEXT, "VARCHAR", False, tr("converted to ISO text (read only)"))
     if upper == "BLOB":
         return same(FieldKind.BINARY)

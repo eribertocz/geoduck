@@ -160,100 +160,100 @@
             <translation>No se pueden leer columnas en estado {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="353" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="356" />
             <source>No CRS assigned</source>
             <translation>Sin SRC asignado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="215" />
-            <location filename="../../geoduck/domain/bridge_types.py" line="168" />
-            <location filename="../../geoduck/domain/bridge_types.py" line="176" />
-            <location filename="../../geoduck/domain/bridge_types.py" line="205" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="218" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="169" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="177" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="208" />
             <source>converted to text (read only)</source>
             <translation>convertida a texto (solo lectura)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="196" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="197" />
             <source>reduced to microseconds (read only)</source>
             <translation>reducida a microsegundos (solo lectura)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="201" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="204" />
             <source>converted to ISO text (read only)</source>
             <translation>convertida a texto ISO (solo lectura)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="213" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="216" />
             <source>converted to JSON (read only)</source>
             <translation>convertida a JSON (solo lectura)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="258" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="261" />
             <source>The query returns no columns</source>
             <translation>La consulta no devuelve columnas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="327" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="330" />
             <source>The query is empty</source>
             <translation>La consulta está vacía</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="333" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="336" />
             <source>{0} unreadable geometries in «{1}» ({2}): shown without geometry</source>
             <translation>{0} geometrías ilegibles en «{1}» ({2}): se muestran sin geometría</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="268" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="271" />
             <source>The query has several geometry columns; choose which one to load: </source>
             <translation>La consulta tiene varias columnas de geometría; elija cuál cargar: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="341" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="344" />
             <source>Unreadable geometry in column «{0}» ({1}), row {2}: nothing was loaded</source>
             <translation>Geometría ilegible en la columna «{0}» ({1}), fila {2}: no se cargó nada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="352" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="355" />
             <source>CRS «{0}» not recognized by QGIS: no CRS assigned</source>
             <translation>SRC «{0}» no reconocido por QGIS: sin SRC asignado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="222" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="225" />
             <source>Reserved column name: «{0}»</source>
             <translation>Nombre de columna reservado: «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="274" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="277" />
             <source>«{0}» is not a geometry column</source>
             <translation>«{0}» no es una columna de geometría</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="383" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="386" />
             <source>Unknown geometry family: «{0}»</source>
             <translation>Familia de geometría desconocida: «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="229" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="232" />
             <source>«{0}» is not a column of the query</source>
             <translation>«{0}» no es una columna de la consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="233" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="236" />
             <source>«{0}» ({1}) cannot be read as {2}</source>
             <translation>«{0}» ({1}) no se puede leer como {2}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="284" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="287" />
             <source>Repeated column name: «{0}»</source>
             <translation>Nombre de columna repetido: «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="294" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="297" />
             <source>Column «{0}» ({1}) {2}</source>
             <translation>Columna «{0}» ({1}) {2}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/bridge_types.py" line="289" />
+            <location filename="../../geoduck/domain/bridge_types.py" line="292" />
             <source>Column «{0}» skipped (secondary geometry)</source>
             <translation>Columna «{0}» omitida (geometría secundaria)</translation>
         </message>
@@ -398,7 +398,12 @@
             <translation>Una hoja para Excel; la geometría va como WKT</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/export.py" line="154" />
+            <location filename="../../geoduck/domain/export.py" line="181" />
+            <source>Shapefile keeps only 10 characters per field name: {0} will be shortened. To choose the names, rename them with AS in the query or export to GeoPackage</source>
+            <translation>Shapefile guarda solo 10 caracteres por nombre de campo: {0} se acortarán. Para elegir los nombres, renómbralos con AS en la consulta o exporta a GeoPackage</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/domain/export.py" line="156" />
             <source>The geometry «{0}» has no CRS: whoever opens the file will assume degrees (OGC:CRS84). If your data uses another system, set it with ST_SetCRS in the query before exporting</source>
             <translation>La geometría «{0}» no tiene SRC: quien abra el archivo supondrá grados (OGC:CRS84). Si tus datos usan otro sistema, indícalo con ST_SetCRS en la consulta antes de exportar</translation>
         </message>
@@ -947,7 +952,7 @@
         </message>
         <message>
             <location filename="../../geoduck/engine/importing.py" line="191" />
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="534" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="539" />
             <source>Sending cancelled</source>
             <translation>Envío cancelado</translation>
         </message>
@@ -1409,7 +1414,7 @@
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/connected.py" line="127" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="438" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="451" />
             <source>Mixed Z/M dimensions: geometries without them are shown with NaN</source>
             <translation>Dimensiones Z/M mixtas: las geometrías sin ellas se muestran con NaN</translation>
         </message>
@@ -1444,8 +1449,8 @@
             <location filename="../../geoduck/qgis_bridge/memory.py" line="102" />
             <location filename="../../geoduck/qgis_bridge/memory.py" line="114" />
             <location filename="../../geoduck/qgis_bridge/multi.py" line="149" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="299" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="333" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="312" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="346" />
             <source>Loading cancelled</source>
             <translation>Carga cancelada</translation>
         </message>
@@ -1480,73 +1485,73 @@
             <translation>QGIS no pudo crear la capa conectada: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/convert.py" line="173" />
+            <location filename="../../geoduck/qgis_bridge/convert.py" line="183" />
             <source>{0} geometry in a {1} layer: use «Fast copy» or filter by type</source>
             <translation>Geometría {0} en una capa {1}: use «Copia rápida» o filtre por tipo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/convert.py" line="145" />
+            <location filename="../../geoduck/qgis_bridge/convert.py" line="155" />
             <source>Geometries of different types ({0}): a memory layer accepts a single type; use «Fast copy» or filter by type</source>
             <translation>Geometrías de tipos distintos ({0}): una capa en memoria admite un solo tipo; use «Copia rápida» o filtre por tipo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="280" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="282" />
             <source>The session has an open transaction: commit or roll it back before saving the layer</source>
             <translation>La sesión tiene una transacción abierta: confírmela o reviértala antes de guardar la capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="481" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="483" />
             <source>The DuckDB session of this layer is not available</source>
             <translation>La sesión de DuckDB de esta capa no está disponible</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="194" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="196" />
             <source>«{0}» has no sequence: enter the identifier of every new feature</source>
             <translation>«{0}» no tiene secuencia: indique el identificador de cada entidad nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="326" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="328" />
             <source>Incomplete update: some feature no longer exists</source>
             <translation>Actualización incompleta: alguna entidad ya no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="341" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="343" />
             <source>Incomplete deletion: some feature no longer exists</source>
             <translation>Borrado incompleto: alguna entidad ya no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="150" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="152" />
             <source>Geometry incompatible with the layer ({0}) in {1}</source>
             <translation>Geometría incompatible con la capa ({0}) en {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="203" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="205" />
             <source>«{0}» identifies the feature: enter its value in every new feature</source>
             <translation>«{0}» identifica la entidad: indique su valor en cada entidad nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="510" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="512" />
             <source>Saving failed and was rolled back: </source>
             <translation>El guardado falló y se revirtió: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="163" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="165" />
             <source>«{0}» cannot be changed: it identifies the feature (table key)</source>
             <translation>No se puede cambiar «{0}»: identifica la entidad (clave de la tabla)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="166" />
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="183" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="168" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="185" />
             <source>«{0}» is read only in QGIS ({1})</source>
             <translation>«{0}» es de solo lectura en QGIS ({1})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="294" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="296" />
             <source>Conflict: {0} feature(s) changed, moved or no longer exist in DuckDB since QGIS read them (e.g. {1}). Save again to overwrite, or discard your changes.</source>
             <translation>Conflicto: {0} entidad(es) cambiaron, se movieron o ya no existen en DuckDB desde que QGIS las leyó (p. ej. {1}). Guarde de nuevo para sobrescribir, o descarte sus cambios.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/editing.py" line="503" />
+            <location filename="../../geoduck/qgis_bridge/editing.py" line="505" />
             <source>The session is busy; save again when it finishes: </source>
             <translation>La sesión está ocupada; guarde de nuevo al terminar: </translation>
         </message>
@@ -1563,13 +1568,13 @@
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/families.py" line="189" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="440" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="453" />
             <source>Mixed geometry types: {0} layers, one per type</source>
             <translation>Tipos de geometría mixtos: {0} capas, una por tipo</translation>
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/families.py" line="124" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="411" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="424" />
             <source>Geometries of different types ({0}) and the option «Mixed types: one layer per type» is off: nothing was loaded</source>
             <translation>Geometrías de tipos distintos ({0}) y la opción «Tipos mixtos: una capa por tipo» está desactivada: no se cargó nada</translation>
         </message>
@@ -1599,69 +1604,74 @@
             <translation>M añadida con valor NaN a {0} geometrías sin M</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="636" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="652" />
             <source>Connected (GeoDuck)</source>
             <translation>Conectada (GeoDuck)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="638" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="654" />
             <source>Memory</source>
             <translation>Memoria</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="684" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="700" />
             <location filename="../../geoduck/ui/send_dialog.py" line="91" />
             <source>custom</source>
             <translation>personalizado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="306" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="291" />
+            <source>Curves are converted to straight segments: DuckDB has no curves</source>
+            <translation>Las curvas se convierten en segmentos rectos: DuckDB no tiene curvas</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="309" />
             <source>A Connected layer of this session is sent with its CRS: it cannot be reprojected</source>
             <translation>Una capa Conectada de esta sesión se envía con su SRC: no se puede reproyectar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="344" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="347" />
             <source>A view is only possible for a GeoParquet layer without selection or filter</source>
             <translation>Una vista solo es posible para una capa GeoParquet sin selección ni filtro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="496" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="499" />
             <source>GeoDuck: add QGIS layers to DuckDB</source>
             <translation>GeoDuck: añadir capas de QGIS a DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="666" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="682" />
             <source>MEMORY</source>
             <translation>MEMORIA</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="748" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="764" />
             <source>Custom CRS: it is stored with its full definition (PROJJSON)</source>
             <translation>SRC personalizado: se guarda con su definición completa (PROJJSON)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="310" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="313" />
             <source>A view cannot be reprojected: it is sent as a copy</source>
             <translation>Una vista no se puede reproyectar: se envía como copia</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="709" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="725" />
             <source>only vector layers can be sent</source>
             <translation>solo se pueden enviar capas vectoriales</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="726" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="742" />
             <source>the layer is not valid</source>
             <translation>la capa no es válida</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="806" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="822" />
             <location filename="../../geoduck/ui/map_view.py" line="64" />
             <source>The layer is no longer in the project</source>
             <translation>La capa ya no está en el proyecto</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/importer.py" line="282" />
+            <location filename="../../geoduck/qgis_bridge/importer.py" line="283" />
             <source>The CRS of «{0}» cannot be expressed: reproject the layer or send it without CRS</source>
             <translation>El SRC de «{0}» no se puede expresar: reproyecta la capa o envíala sin SRC</translation>
         </message>
@@ -1672,7 +1682,7 @@
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/memory.py" line="187" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="348" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="361" />
             <source>Reading ended without a plan</source>
             <translation>La lectura terminó sin plan</translation>
         </message>
@@ -1688,7 +1698,7 @@
         </message>
         <message>
             <location filename="../../geoduck/qgis_bridge/memory.py" line="116" />
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="335" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="348" />
             <source>Reading failed: {0}</source>
             <translation>La lectura falló: {0}</translation>
         </message>
@@ -1778,62 +1788,62 @@
             <translation>La entidad {0} no se pudo reproyectar de {1} a {2}: no se envió nada ({3})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="68" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="81" />
             <source>The GDAL of this QGIS cannot write GeoPackage from Arrow</source>
             <translation>El GDAL de este QGIS no puede escribir GeoPackage desde Arrow</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="66" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="79" />
             <source>Requires GDAL 3.8 or later (this QGIS comes with GDAL {0})</source>
             <translation>Necesita GDAL 3.8 o posterior (este QGIS trae GDAL {0})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="141" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="154" />
             <source>GDAL could not create the GeoPackage</source>
             <translation>GDAL no pudo crear el GeoPackage</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="154" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="167" />
             <source>GDAL could not create the layer</source>
             <translation>GDAL no pudo crear la capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="162" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="175" />
             <source>GDAL could not start the transaction</source>
             <translation>GDAL no pudo iniciar la transacción</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="173" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="186" />
             <source>GDAL could not write the batch</source>
             <translation>GDAL no pudo escribir el lote</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="188" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="201" />
             <source>GDAL could not commit the GeoPackage</source>
             <translation>GDAL no pudo confirmar el GeoPackage</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="382" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="395" />
             <source>QGIS could not open the created GeoPackage</source>
             <translation>QGIS no pudo abrir el GeoPackage creado</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="113" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="126" />
             <source>CRS not recognized: {0}</source>
             <translation>CRS no reconocido: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="421" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="434" />
             <source>Different counts: read {0}, written {1}, in the layers {2}</source>
             <translation>Conteos distintos: leídas {0}, escritas {1}, en las capas {2}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="160" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="173" />
             <source>GDAL rejected the field «{0}»</source>
             <translation>GDAL rechazó el campo «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="375" />
+            <location filename="../../geoduck/qgis_bridge/snapshot.py" line="388" />
             <source>{0} — no geometry</source>
             <translation>{0} — sin geometría</translation>
         </message>

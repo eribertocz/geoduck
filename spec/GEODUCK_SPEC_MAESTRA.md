@@ -673,7 +673,10 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   apaga solo durante la exportación (cancelar baja de hasta 3,3 s a < 0,1 s; las filas pueden salir en otro
   orden, que SQL no garantiza sin `ORDER BY`) y se deja como estaba; con `ORDER BY`, el orden se respeta; si el
   usuario lo apagó, no se toca. Todo se escribe en una carpeta temporal junto al destino y se mueve al terminar (un Shapefile son
-  varios archivos; una Geodatabase, una carpeta).
+  varios archivos; una Geodatabase, una carpeta). **Shapefile (#141):** se escribe con su `.cpg` en UTF-8 (las
+  tildes y la ñ se leen igual en cualquier programa) y, si algún nombre de campo pasa de 10 bytes, un aviso los
+  lista: GDAL los acorta (dos largos pueden quedar «nombre_m_1»); para elegirlos, `AS` en la consulta o
+  GeoPackage.
 - **Cuadernos en disco (GD-NB-008, ADR-0014; decisión del propietario, 2026-11-03).** «Guardar cuaderno…» y
   «Abrir cuaderno…» (Ctrl+S, Ctrl+O) usan un archivo `.sql`: cada celda empieza con `-- %% cell · database: <base>`
   (también se leen `celda` y `base`); un `.sql` sin marcas se abre como una celda. Un cuaderno con archivo se guarda
@@ -924,7 +927,8 @@ Las expresiones se aplican en DuckDB, antes de Arrow:
 | `DATE` | `DATE` | |
 | `TIMESTAMP`, `TIMESTAMP_S/MS/NS` | `TIMESTAMP` (µs) | `TIMESTAMP_NS` pierde sub-µs: se avisa |
 | `TIMESTAMPTZ` | `TIMESTAMPTZ` en UTC | se documenta la zona |
-| `TIME`, `TIMETZ`, `INTERVAL` | `VARCHAR` ISO | no se inventa fecha (F-47) |
+| `TIME` | `TIME` (hora del día, ms en QGIS) | ida y vuelta sin perder el tipo y editable en la Conectada (#141); en la Instantánea, texto ISO (GeoPackage no tiene hora) |
+| `TIMETZ`, `INTERVAL` | `VARCHAR` ISO | no se inventa fecha (F-47) |
 | `BLOB`, `BIT` | igual / `VARCHAR` | un BLOB no es geometría salvo que el usuario lo marque (spatial-spec §2.2) |
 | `LIST`, `STRUCT`, `MAP`, `UNION`, `ARRAY` | `VARCHAR` JSON | se avisa la pérdida de estructura |
 | Geometría primaria | `geoarrow.wkb` + CRS | ADR-0008 |
@@ -1074,6 +1078,17 @@ El panel detecta `centro` y `poligono` y permite marcar una o ambas. Por cada co
 | AX-4b | CRS desconocido para QGIS (`FOO:123`) | no válido; no se sustituye | x = −68,15, y = −16,5 | el mensaje muestra `FOO:123` |
 | AX-4c | CRS desconocido y el usuario elige `EPSG:4326` | válido, `EPSG:4326` | x = −68,15, y = −16,5 | elegir etiqueta; no transforma |
 | AX-5 | «Reproyectar a EPSG:32719» desde `OGC:CRS84`, Memoria e Instantánea | válido, `EPSG:32719` | `590716.04, 8175564.99` | el origen en DuckDB no cambia; el mensaje indica la reproyección |
+
+### 8.1 Ida y vuelta QGIS → GeoDuck → QGIS (#141)
+`tests/qgis/test_roundtrip.py` envía cada caso por el camino general y lo vuelve a cargar en las tres
+modalidades, en toda la matriz de CI. Debe volver **idéntico**: el mismo SRC (UTM 19S, 20S y 21S, PSAD56
+EPSG:24879, un SRC propio PROJ sin código y uno ESRI: nunca «el más parecido»), el mismo tipo de geometría con
+Z y M, cada geometría (WKB; vacías y nulas como tales; una inválida tal cual, sin reparar), el orden lon/lat y
+cada valor (entero de 64 bits mayor que 2^53, fecha, fecha y hora al milisegundo, hora, lógico, texto con tildes,
+real). Excepciones documentadas: las **curvas** (CircularString, CompoundCurve…) vuelven en **segmentos
+rectos**, porque DuckDB no tiene curvas, y el envío lo avisa («Las curvas se convierten en segmentos rectos»);
+las **listas** vuelven como JSON de solo lectura; en la **Instantánea** la hora vuelve como texto ISO. Con
+100 000 puntos, mismas filas y la misma suma de coordenadas.
 
 ## 9. Validez y reparación (GD-SPA-004; decisión del propietario, 2026-11-02)
 **Estados distintos**, que se cuentan por separado: `NULL`, vacía, **ilegible** (WKB/WKT que no se puede leer, solo posible en columnas marcadas §2.2: DuckDB no admite `GEOMETRY` corrupta), **inválida** (legible pero topológicamente inválida según GEOS) y válida.

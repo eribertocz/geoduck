@@ -81,7 +81,7 @@ def test_every_type_follows_section_7(worker):
     assert row["d38"] == "1234567890123456789012345678.0123456789"
     assert row["en"] == "b"
     assert row["uu"] == "550e8400-e29b-41d4-a716-446655440000"
-    assert row["tm"] == "12:34:56"
+    assert row["tm"] == dt.time(12, 34, 56)  # TIME: hora, no texto (#141)
     assert row["iv"] == "3 days"
     assert table.schema.field("tns").type == pa.timestamp("us")
     assert row["tz"].astimezone(dt.timezone.utc) == dt.datetime(
@@ -97,7 +97,7 @@ def test_every_type_follows_section_7(worker):
     assert row["fecha"] == dt.date(2026, 11, 1)
     assert row["blo"] == b"\xaa\xbb"
     warned = {w.split("«")[1].split("»")[0] for w in plan.warnings}
-    assert warned == {"hi", "ub", "d38", "tm", "iv", "tns", "li", "st", "mp", "bi"}
+    assert warned == {"hi", "ub", "d38", "iv", "tns", "li", "st", "mp", "bi"}  # TIME ya sin aviso (#141)
 
 
 def test_geometry_travels_as_geoarrow_with_crs(worker):

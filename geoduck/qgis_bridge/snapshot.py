@@ -46,6 +46,7 @@ _OGR_TYPE = {
     FieldKind.DATE: (ogr.OFTDate, ogr.OFSTNone),
     FieldKind.DATETIME: (ogr.OFTDateTime, ogr.OFSTNone),
     FieldKind.DATETIME_TZ: (ogr.OFTDateTime, ogr.OFSTNone),
+    FieldKind.TIME: (ogr.OFTString, ogr.OFSTNone),  # GeoPackage no tiene hora: texto ISO (#141)
     FieldKind.BINARY: (ogr.OFTBinary, ogr.OFSTNone),
 }
 
@@ -58,6 +59,18 @@ _WKB_NAMES = {
     6: "MULTIPOLYGON",
     7: "GEOMETRYCOLLECTION",
 }
+
+
+def _times_as_text(batch: pa.RecordBatch, plan: LoadPlan) -> pa.RecordBatch:
+    """GeoPackage no guarda horas: las columnas TIME van como texto ISO («23:59:58.000»)."""
+    times = {f.name for f in plan.fields if f.kind is FieldKind.TIME}
+    if not times:
+        return batch
+    columns = [
+        batch.column(i).cast(pa.time64("us")).cast(pa.string()) if name in times else batch.column(i)
+        for i, name in enumerate(batch.schema.names)
+    ]
+    return pa.RecordBatch.from_arrays(columns, names=batch.schema.names)
 
 
 def unavailable_reason() -> str | None:
@@ -162,7 +175,7 @@ class _Writer:
             raise GeoDuckError(_last_error(tr("GDAL could not start the transaction")))
 
     def write(self, batch: pa.RecordBatch) -> None:
-        batch = strip_unreadable(batch, self.plan, self.rows)
+        batch = _times_as_text(strip_unreadable(batch, self.plan, self.rows), self.plan)
         if self.ds is None:
             self.open(batch.schema)
         geom = self.plan.geometry

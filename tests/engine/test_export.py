@@ -193,6 +193,18 @@ def test_gdal_formats_keep_rows_and_crs_and_leave_the_axis_setting_alone(worker,
 
 
 @pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_a_shapefile_keeps_accents_with_its_cpg(worker, tmp_path):
+    """#141: el Shapefile lleva su `.cpg` en UTF-8: «ñandú» vuelve igual."""
+    target = tmp_path / "pozos.shp"
+    sql = "SELECT 'ñandú áé' AS región, ST_SetCRS(ST_Point(1, 2), 'EPSG:32719') AS geom"
+    request = ExportRequest(sql, str(target), ExportFormat.SHP, None, allow_spatial=True)
+    worker.export_query(request).future.result(TIMEOUT)
+    assert (tmp_path / "pozos.cpg").read_text().strip() == "UTF-8"
+    source = quote_string_literal(str(target))
+    assert run_sql(worker, f"SELECT región FROM ST_Read({source})").rows == (("ñandú áé",),)
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
 def test_an_axis_setting_chosen_by_the_user_is_not_touched(worker, tmp_path):
     run_sql(worker, "LOAD spatial")
     run_sql(worker, "SET geometry_always_xy = true")
