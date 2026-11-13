@@ -162,3 +162,22 @@ def test_blanking_keeps_positions_and_quoted_identifiers():
     code, inside = blank_code(text)
     assert len(code) == len(text) and not inside
     assert ";" not in code and '"q""r"' in code and "FROM t" in code
+
+
+def test_the_name_under_the_cursor_is_a_table_a_column_or_a_function():
+    from geoduck.domain.completion import target_at
+
+    def at(text, word, nth=0):
+        offset = [i for i in range(len(text)) if text.startswith(word, i)][nth] + 1
+        return target_at(text, offset, catalog=CATALOG, columns=COLUMNS, vocabulary=VOCABULARY)
+
+    text = 'SELECT z.Nombre, id, ST_Area(g) FROM zonas z JOIN "mis ventas".sur."Pedidos" p ON true'
+    table = at(text, "zonas")
+    assert (table.kind, table.source, text[table.start : table.end]) == (Kind.TABLE, ZONAS, "zonas")
+    column = at(text, "Nombre")
+    assert column.kind is Kind.COLUMN and column.source == ZONAS and column.column.data_type == "VARCHAR"
+    assert at(text, "id").column.name == "id"
+    assert at(text, "ST_Area").kind is Kind.FUNCTION
+    assert at(text, "Pedidos").source == ("mis ventas", "sur", "Pedidos")
+    assert at("SELECT 'zonas' FROM t", "zonas") is None  # dentro de un texto
+    assert at("SELECT nada FROM zonas", "nada") is None

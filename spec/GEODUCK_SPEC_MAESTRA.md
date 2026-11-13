@@ -1413,12 +1413,12 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
 - **Puntos de entrada:** «+» de la barra lateral › «Importar archivos…»; clic derecho en una base o un esquema
   › «Importar archivos aquí…»; Ctrl+K › «Importar archivos…»; **arrastrar** uno o varios archivos desde el
   escritorio, el Explorador de archivos o el Navegador de QGIS a GeoDuck (con el «pato al lago», §3 de
-  workspace-pro-spec). Soltar uno o varios archivos **en el editor SQL** es llevarlos a DuckDB
-  escribiendo el SQL, sin ejecutarlo: un `CREATE TABLE base.esquema.nombre AS SELECT * FROM read_parquet('…')`
-  (o `read_csv`, `read_json`, `ST_Read`) por archivo, en la misma pestaña y separados por una línea en blanco.
-  La base es la de «Se ejecuta en» (o la primera en escritura) y el esquema `main`; los nombres no chocan con
-  las tablas que ya existen (nunca `OR REPLACE`). Si hace falta `spatial` y no está cargada, la primera línea
-  es `LOAD spatial;` (o `INSTALL spatial; LOAD spatial;`), visible: lo decide el usuario al ejecutar. Arrow y
+  workspace-pro-spec). Soltar uno o varios archivos **en el editor SQL** escribe el SQL que los lee, sin
+  ejecutarlo (#146, punto 14; antes, un `CREATE TABLE` por archivo): `FROM 'ruta';` si DuckDB lo lee por su
+  extensión (Parquet, CSV, JSON), con su función si no, o `FROM ST_Read('ruta');` para los de GDAL, uno por
+  archivo, **en la línea donde se sueltan** y separados por una línea en blanco. Si hace falta `spatial` y no
+  está cargada, la primera línea es `LOAD spatial;` (o `INSTALL spatial; LOAD spatial;`), visible: lo decide el
+  usuario al ejecutar. Arrow y
   los no compatibles siguen a «Importar archivos». **Las capas de QGIS soltadas en el editor abren siempre
   el diálogo** (decisión del propietario, 2026-11-07).
 - **Selector de archivos:** filtro «Todos los compatibles» y uno por formato, con ⚡ en los más rápidos.
@@ -1578,6 +1578,39 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
 ## 5. Pestaña de consulta (GD-WSP-004)
 - Editor SQL de QGIS con resaltado, números de línea y el autocompletado de G6 (bases, tablas, columnas,
   funciones).
+- **Editor moderno** (#146, puntos 17, 29 y 30). Todo en el editor de GeoDuck, sin tocar las opciones de QGIS
+  (ADR-0011); nada de esto ejecuta SQL (la ayuda de parámetros solo lee `duckdb_functions()`):
+  - **Pares y sangría:** `() [] {} '' ""` se cierran solos (no delante de una palabra ni dentro de un texto
+    o un comentario); escribir el cierre lo salta; Retroceso en un par vacío borra los dos; con una selección,
+    la envuelve. Sangría de 4 espacios (nunca tabuladores): Intro la mantiene y la aumenta tras `(`, `CASE` y
+    `WITH … AS (`; Intro entre `(` y `)` deja una línea sangrada y baja el cierre; `)` y `END` al comienzo de
+    una línea bajan un nivel. Tab y Shift+Tab sangran la selección; Retroceso en la sangría quita 4 espacios.
+  - **Desplazamiento:** el ancho de la barra horizontal es el de la línea más larga (se mide tras escribir);
+    Alt+Z ajusta las líneas largas a la ventana (se recuerda); Shift+rueda se desplaza a lo ancho.
+  - **Buscar y reemplazar** (Ctrl+F / Ctrl+H): una barra compacta encima del editor con el contador
+    («3 de 12»), Intro/F3 y Shift+Intro/Shift+F3, mayúsculas, palabra entera, expresión regular y «en la
+    selección» (se activa sola si la selección tiene varias líneas); todas las coincidencias se marcan;
+    «Reemplazar todo» es un solo paso de deshacer. Ctrl+G: «Ir a la línea», en la misma barra.
+  - **Editar:** Ctrl+/ comenta o descomenta las líneas; Alt+↑/↓ mueve líneas; Shift+Alt+↓/↑ las duplica;
+    Ctrl+Shift+K las borra; Ctrl+D elige la palabra y, otra vez, su siguiente aparición (un cursor más);
+    Alt+clic añade un cursor; Shift+Alt+arrastrar, selección rectangular; Ctrl+Shift+U, mayúsculas ↔
+    minúsculas; Shift+Alt+F formatea la selección o todo (cláusulas en su línea, columnas del `SELECT` y
+    `AND`/`OR` sangrados, palabras clave en mayúsculas; nunca cambia textos, nombres entre comillas ni
+    comentarios; un paso de deshacer).
+  - **Ayuda al escribir:** el autocompletado de siempre; al abrir `(` tras una función (o Ctrl+Shift+Espacio),
+    sus firmas de `duckdb_functions()`; al pasar el ratón, qué es el nombre (tabla o vista con su ubicación y
+    columnas, columna con su tipo, función con sus firmas); Ctrl+clic en una tabla o vista la muestra en el
+    explorador; fragmentos con nombre + Tab (`sel`, `selw`, `cnt`, `cte`, `case`, `join`, `gb`, `ob`, `ins`,
+    `ct`, `str`); palabras clave en mayúsculas al escribir, opcional (apagado por defecto).
+  - **Vista:** zoom (Ctrl++ / Ctrl+- / Ctrl+0), plegado, la línea actual con un fondo suave, guías de sangría,
+    el paréntesis pareja resaltado y las apariciones de la palabra seleccionada marcadas.
+  - **Al guardar** (Ctrl+S o «Guardar como…», no el autoguardado, que corre mientras se escribe): sin espacios
+    al final de las líneas y con un salto de línea final.
+  - Los atajos se ven en el **clic derecho del editor** (con «Ajustar líneas largas» y «Palabras clave en
+    mayúsculas al escribir») y en las ayudas de la barra de búsqueda.
+- **Archivos soltados en el editor** (#146, punto 14): `FROM 'ruta';` por archivo (o `FROM ST_Read('ruta');`
+  para los de GDAL, con `LOAD spatial;` visible delante si hace falta) en la línea donde se sueltan, sin
+  ejecutar. «Escribir consulta» (qgis-import-spec §5.4) sigue escribiendo un `CREATE TABLE … AS SELECT *`.
 - **Una sola idea por zona** (#143; propietario, 2026-11-12, maquetas `consulta-maqueta` y
   `consulta-turquesa`):
   - **La pestaña es el archivo.** Clic derecho en la pestaña: Guardar (Ctrl+S), Guardar como…, Abrir

@@ -322,7 +322,7 @@ def test_save_as_autosave_and_reopen(coordinator, tmp_path):
     page = new_query(ws, "SELECT 42;")
     assert page.modified
     assert page.save()
-    assert path.read_text(encoding="utf-8") == "SELECT 42;"
+    assert path.read_text(encoding="utf-8") == "SELECT 42;\n"  # con salto final (#146, punto 30)
     assert ws.tabs.current == Place(QUERY, "consumo.sql", path=str(path))
     assert ws.tabs.bar.tabText(ws.tabs.bar.currentIndex()) == "consumo.sql"
     assert [p.name for p in ws.places.recents] == ["consumo.sql"]
@@ -626,7 +626,7 @@ def test_renaming_a_saved_query_renames_its_file_and_never_overwrites(coordinato
     assert page.save()
     _rename(ws, "ventas")
     assert page.place == Place(QUERY, "ventas.sql", path=str(tmp_path / "ventas.sql"))
-    assert (tmp_path / "ventas.sql").read_text(encoding="utf-8") == "SELECT 42;"
+    assert (tmp_path / "ventas.sql").read_text(encoding="utf-8") == "SELECT 42;\n"
     assert not (tmp_path / "consumo.sql").exists()
     assert [p.name for p in ws.places.recents] == ["ventas.sql"]
     (tmp_path / "otra.sql").write_text("SELECT 0;", encoding="utf-8")

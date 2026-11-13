@@ -210,23 +210,18 @@ def drop_on_editor(page, mime):
     return enter, event
 
 
-def test_files_dropped_on_the_editor_write_create_table_without_running(coordinator, data):
-    """Decisión del propietario (2026-11-07): soltar archivos en el editor es llevarlos a DuckDB: un
-    `CREATE TABLE … AS SELECT *` por archivo, en la misma pestaña, sin ejecutar; los nombres no chocan."""
+def test_files_dropped_on_the_editor_write_from_where_they_are_dropped_without_running(coordinator, data):
+    """#146, punto 14: soltar archivos en el editor escribe `FROM 'ruta';` por archivo en la línea donde se
+    sueltan (no donde estaba el cursor), en la misma pestaña y sin ejecutar."""
     ws = workspace(coordinator)
     ws.new_query()
     page = ws.tabs.page(ws.tabs.bar.currentIndex())
-    page.editor.setText("SELECT 1;")
-    page.editor.setCursorPosition(0, 3)
-    assert wait_for(lambda: coordinator.vocabulary() is not None, TIMEOUT)  # para no citar de más
+    page.editor.setText("SELECT 1;\nSELECT 2;")
+    page.editor.setCursorPosition(1, 3)  # el cursor, en otra línea: manda dónde se suelta
     paths = [data / "lecturas.parquet", data / "clientes.csv"]
-    enter, event = drop_on_editor(page, urls_mime(paths))
+    enter, event = drop_on_editor(page, urls_mime(paths))  # sobre la primera línea
     assert enter.isAccepted() and event.isAccepted()
-    database, schema = page.drop_target()
-    text = page.editor.text()
-    assert text.startswith("SELECT 1;\n\n")
-    assert f"CREATE TABLE {database}.{schema}.lecturas AS\nSELECT * FROM read_parquet('{paths[0]}');" in text
-    assert f"CREATE TABLE {database}.{schema}.clientes AS\nSELECT * FROM read_csv('{paths[1]}');" in text
+    assert page.editor.text() == f"SELECT 1;\n\nFROM '{paths[0]}';\n\nFROM '{paths[1]}';\n\nSELECT 2;"
     assert page.editor.getCursorPosition() == (2, 0)  # en la primera sentencia escrita
     assert ws.to_duckdb.window is None and not page.results  # nada se ejecutó ni se abrió
 

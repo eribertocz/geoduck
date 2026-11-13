@@ -61,7 +61,7 @@ from geoduck.domain.browse import PAGE, Browse, page_label
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
-from geoduck.domain.files import create_sql, editor_readable, format_for, gdal_readable
+from geoduck.domain.files import create_sql, editor_readable, format_for, from_sql, gdal_readable
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, error_token, result_title
 from geoduck.domain.sql_errors import (
@@ -80,6 +80,7 @@ from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
 from geoduck.ui.pro import icons
+from geoduck.ui.pro.editor_tools import SHORTCUTS, EditorTools, FindBar
 from geoduck.ui.pro.error_card import ErrorCardView
 from geoduck.ui.pro.grid import DataGrid
 from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
@@ -140,6 +141,8 @@ class QueryPage(QWidget):
     import_files_requested = pyqtSignal(list)
     #: «Ver SQL» del resultado filtrado (#144): la consulta completa, en una pestaña nueva.
     view_sql_requested = pyqtSignal(str)
+    #: Ctrl+clic en una tabla o vista del SQL (#146): (base, esquema, objeto) en el explorador.
+    reveal_requested = pyqtSignal(tuple)
 
     def __init__(  # noqa: PLR0915 - la pestaña de consulta, en un solo lugar
         self,
@@ -193,7 +196,23 @@ class QueryPage(QWidget):
         )
         self.editor.installEventFilter(self._run_keys)
         self._wire_mark()
-        self.split.addWidget(self.editor)
+        # el editor moderno (#146): buscar/reemplazar encima del texto y las herramientas de escritura
+        self.editor_box = QWidget()
+        editor_column = QVBoxLayout(self.editor_box)
+        editor_column.setContentsMargins(0, 0, 0, 0)
+        editor_column.setSpacing(0)
+        self.find_bar = FindBar(self.editor, colors)
+        editor_column.addWidget(self.find_bar)
+        editor_column.addWidget(self.editor, 1)
+        self.tools = EditorTools(
+            self.editor,
+            colors,
+            find_bar=self.find_bar,
+            lookup=lambda: (coordinator.catalog, coordinator.known_columns(), coordinator.vocabulary()),
+            read_rows=self._read_rows,
+            reveal=lambda target: self.reveal_requested.emit(target.source),
+        )
+        self.split.addWidget(self.editor_box)
         self._head_clicks = _DoubleClicks(self.toggle_result)
         self.result_panel = self._build_results()
         self.split.addWidget(self.result_panel)
@@ -447,30 +466,36 @@ class QueryPage(QWidget):
         schemas = catalog.schemas_of(db.name)
         return db.name, "main" if "main" in schemas or not schemas else schemas[0]
 
-    def drop_files(self, paths: list[str], *, any_format: bool = False) -> bool:
-        """Un `CREATE TABLE … AS SELECT *` por archivo, en el cursor y sin ejecutar; los que no se leen con
-        SQL (Arrow, no compatibles) siguen a «Importar archivos». Con `spatial` sin cargar, la primera línea
-        la carga (visible: lo decide el usuario al ejecutar, ADR-0011)."""
+    def drop_files(self, paths: list[str], *, any_format: bool = False, create: bool = False) -> bool:
+        """Archivos soltados en el editor (#146, punto 14): una sentencia `FROM 'ruta';` por archivo (o
+        `FROM ST_Read('ruta');` para los de GDAL), donde se sueltan y sin ejecutar. `create` («Escribir
+        consulta», qgis-import-spec §5.4): un `CREATE TABLE … AS SELECT *` por archivo. Los que no se leen
+        con SQL (Arrow, no compatibles) siguen a «Importar archivos». Con `spatial` sin cargar, la primera
+        línea la carga (visible: lo decide el usuario al ejecutar, ADR-0011)."""
         readable = [p for p in paths if editor_readable(p) or (any_format and gdal_readable(p))]
         rest = [p for p in paths if p not in readable]
         if rest:
             self.import_files_requested.emit(rest)
-        target = self.drop_target()
-        if not readable or target is None:
-            if readable:
-                self.notice.emit(tr("There is no database in read and write mode to create the tables."))
-            return bool(readable)
-        database, schema = target
+        if not readable:
+            return False
+        target = self.drop_target() if create else None
+        if create and target is None:
+            self.notice.emit(tr("There is no database in read and write mode to create the tables."))
+            return True
         catalog = self._coordinator.catalog
-        taken = [o.name for o in catalog.objects_in(database, schema)] if catalog is not None else []
         vocabulary = self._coordinator.vocabulary()
-        reserved = vocabulary.reserved if vocabulary is not None else None
 
         def write(spatial: str) -> None:
+            if target is None:
+                pro_editor.insert_sql(self.editor, from_sql(readable, spatial=spatial))
+                return
+            database, schema = target
+            taken = [o.name for o in catalog.objects_in(database, schema)] if catalog is not None else []
+            reserved = vocabulary.reserved if vocabulary is not None else None
             text = create_sql(readable, database, schema, taken, spatial=spatial, reserved=reserved)
             pro_editor.insert_sql(self.editor, text)
 
-        if not any(format_for(p).needs_spatial for p in readable):  # fuera de la lista: también GDAL
+        if not any(format_for(p).needs_spatial or gdal_readable(p) for p in readable):
             write("")
             return True
 
@@ -1239,9 +1264,12 @@ class QueryPage(QWidget):
             self._write(self.place.path)
 
     def save(self) -> bool:
-        """Ctrl+S: en su archivo, o «Guardar como…» si aún no tiene."""
+        """Ctrl+S: en su archivo, o «Guardar como…» si aún no tiene. Al guardar a propósito (no en el
+        guardado automático, que correría mientras se escribe) se quitan los espacios del final de las líneas
+        y queda un salto de línea final (#146, punto 30)."""
         if not self.place.path:
             return self.save_as()
+        self.tools.clean_for_save()
         return self._write(self.place.path)
 
     def save_as(self) -> bool:
@@ -1250,6 +1278,7 @@ class QueryPage(QWidget):
             return False
         if not path.lower().endswith(".sql"):
             path += ".sql"
+        self.tools.clean_for_save()
         if not self._write(path):
             return False
         old = self.place
@@ -1409,8 +1438,38 @@ class _EditorMenu(QObject):
         menu.insertAction(first, page.run_all_action)
         if first is not None:
             menu.insertSeparator(first)
+        self._editing(menu, page)
         self.menu = menu
         return menu
+
+    @staticmethod
+    def _editing(menu: QMenu, page: QueryPage) -> None:
+        """Las herramientas del editor con su atajo (#146, punto 30: los atajos se ven en el menú)."""
+        tools = page.tools
+        menu.addSeparator()
+        for text, key, slot in (
+            (tr("Find…"), "find", lambda: page.find_bar.open(replace=False)),
+            (tr("Replace…"), "replace", lambda: page.find_bar.open(replace=True)),
+            (tr("Go to line…"), "line", page.find_bar.open_line),
+            (tr("Comment or uncomment"), "comment", tools.toggle_comment),
+            (tr("Format SQL"), "format", tools.format),
+            (tr("Upper or lower case"), "upper", tools.toggle_case),
+            (tr("Show parameters"), "params", tools.show_parameters),
+        ):
+            action = QAction(text + "\t" + SHORTCUTS[key], menu)
+            action.triggered.connect(lambda _c=False, f=slot: f())
+            menu.addAction(action)
+        menu.addSeparator()
+        wrap = QAction(tr("Wrap long lines") + "\t" + SHORTCUTS["wrap"], menu)
+        wrap.setCheckable(True)
+        wrap.setChecked(tools.wrap)
+        wrap.toggled.connect(tools.set_wrap)
+        menu.addAction(wrap)
+        upper = QAction(tr("Keywords in upper case while typing"), menu)
+        upper.setCheckable(True)
+        upper.setChecked(tools.upper_keywords)
+        upper.toggled.connect(tools.set_upper_keywords)
+        menu.addAction(upper)
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
         if event.type() == QEvent.Type.ContextMenu:
