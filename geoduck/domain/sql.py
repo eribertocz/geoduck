@@ -186,7 +186,7 @@ def error_token(text: str, offset: int | None, message: str) -> str:
         return ""
     first = message.split("\n", 1)[0]
     for quoted in _QUOTED_IN_MESSAGE.findall(first):
-        word = quoted.replace('""', '"')
+        word = str(quoted).replace('""', '"')
         if word and text.startswith(word, offset):
             return word
     match = _TOKEN_AT.match(text, offset)
