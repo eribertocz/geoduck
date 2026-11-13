@@ -71,16 +71,44 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
 - **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con
-  tipo bajo cada columna y número de fila.
-  - **Orden:** clic en el encabezado (ascendente, descendente, sin orden); lo ejecuta DuckDB.
-  - **Filtros en chips:** «+ Filtro» → columna, operador (=, ≠, >, <, contiene, empieza por, es nulo…) y valor;
-    cada chip se quita con ×. Se combinan con Y. **«Ver SQL»** muestra la consulta equivalente y la abre en una
-    pestaña de consulta.
+  tipo bajo cada columna y número de fila. Es **la misma grilla que el resultado de una consulta** (§5; #144,
+  maquetas `resultado` y `filtros`):
+  - **Orden:** el icono ⇅ que aparece al pasar el ratón por el encabezado (ascendente, descendente, sin
+    orden); la columna ordenada lleva su flecha turquesa. Lo ejecuta DuckDB.
+  - **Selección como en una hoja de cálculo:** clic en una celda (borde turquesa), en el nombre de una columna
+    (la columna entera) o en el número de una fila (la fila entera); Mayús/Ctrl para varias y Ctrl+A todo. La
+    selección de columnas enteras es **lógica**: abarca todas las filas filtradas, no solo la página, y no
+    trae los datos a la pantalla.
+  - **Ctrl+C** copia lo elegido separado por tabuladores. Con columnas enteras de un resultado más largo que
+    la página, lo lee DuckDB; por encima de **100 000 valores**, avisa y ofrece Exportar. Sin nada elegido,
+    copia la página con los nombres de las columnas.
+  - **Resumen de la columna elegida** (en el pie): suma, promedio, mínimo, máximo y nulos (en una columna que
+    no es numérica, mínimo, máximo y nulos), calculados por DuckDB sobre todas las filas filtradas.
+  - **Filtros** (se unen con Y; los ejecuta DuckDB por páginas; DuckDB los valida antes de aplicarlos: un
+    error queda en rojo con su motivo y la tabla **sigue con el último filtro válido**):
+    - **Fila de casillas bajo los encabezados** (el embudo la muestra u oculta). Acepta texto (contiene),
+      comparaciones (`>50`, `10..50`, `=Sur`), `vacío` / `no vacío` (también en inglés), expresiones
+      regulares (`/…/`, `/…/i`, con `regexp_matches`) y SQL que empieza con un operador (`> 50 AND < 100`,
+      `IN (1, 5)`, `LIKE 'a%'`, `BETWEEN`, `IS NULL`, `NOT IN`): cada parte unida con AND u OR empieza con su
+      operador y lleva la columna delante.
+    - **Chips** sincronizados con las casillas (uno por columna; quitar el chip vacía su casilla) y el
+      contador «1 234 de 1 000 000 filas».
+    - **Clic derecho en una o varias celdas:** filtrar o excluir esos valores, mayor o menor que el valor
+      (solo números y fechas), solo vacíos o sin vacíos, y copiar. La misma columna se combina con «o» (`IN`),
+      columnas distintas con «y»; excluir es `IS DISTINCT FROM` / `NOT IN` (las filas vacías no se pierden) y,
+      con varias columnas, `NOT (… y …)`. El menú muestra la condición exacta antes de aplicarla; lo de una
+      columna se escribe en su casilla.
+    - **Barra `WHERE`:** una condición SQL libre (columnas, funciones, también espaciales), con
+      autocompletado (Ctrl+Espacio). Una sola condición: sin `;`, sin comentarios y con paréntesis y comillas
+      equilibrados (para que nunca cambie la página, el orden ni el total).
+    - **«Ver SQL»** muestra la consulta completa (con filtros y orden) y la abre en una pestaña de consulta;
+      «Exportar» y «Cargar en QGIS» usan esa misma consulta.
   - **Buscar** en la tabla (texto en las columnas de texto).
   - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «Filas 1–100 de 48 312», ‹ ›; el
     total se cuenta aparte, sin bloquear.
-  - **Detalle de fila** (panel derecho, plegable): cada campo con su tipo y su valor completo; la geometría
-    resumida (tipo, SRC, número de vértices); copiar valor.
+  - **Detalle de fila** (panel derecho): sigue a la celda elegida (clic o ↑ ↓); cada campo con su tipo y su
+    valor completo; la geometría resumida (tipo, SRC, número de vértices); copiar valor. Sin ✕: se muestra u
+    oculta con su icono ◫ (turquesa = abierto).
 - **Estructura:** columnas (nombre, tipo, nulos, clave), filas, tamaño aproximado y la sentencia `CREATE`.
 - **Acciones:** «Cargar en QGIS ▾» (§7), «Ver en el mapa» tras cargar, «Exportar ▾» (CSV, Parquet), «Copiar»
   (Ctrl+C sobre la selección).
@@ -126,6 +154,14 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   subrayado ondulado (al pasar el ratón, el mensaje); la barra dice «✕ Error en la línea N, cerca de
   «palabra»» y lleva al error. Lo que no corrió no se repite en una frase: lo dicen la marca y el resumen
   («1 OK · 1 con error · 1 sin ejecutar»). Al editar, las marcas se van.
+- **Resultado plegable** (#144, punto 10), como la barra lateral: ⌄ a la izquierda de «Resultado», Ctrl+J o
+  doble clic en su barra. Plegado, queda solo la barra (filas, tiempo e iconos a mano) y el editor usa todo
+  el alto; al abrirse vuelve a la altura que tenía. Arrastrar la división hasta abajo lo pliega; al ejecutar se
+  abre solo. Cada pestaña recuerda si está plegado, y la altura se recuerda entre sesiones.
+- **El resultado es la grilla de la pestaña de tabla** (§4, #144): selección, Ctrl+C, ⇅, resumen de la
+  columna, detalle y filtros, que DuckDB aplica sobre la consulta (`SELECT … FROM (consulta)`); el embudo de
+  la barra «Resultado» muestra las casillas y la barra `WHERE`, y la fila de chips solo aparece con filtros.
+  Una escritura con filas (`… RETURNING`) no se repite: sin filtros ni orden.
 - **El resultado se maneja como la pestaña de tabla** (propietario, 2026-11-06, tras la prueba en Windows): el
   mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s» y ‹ › de 100 filas (exportar y cargar, en la barra
   «Resultado»); y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y

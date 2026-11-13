@@ -16,7 +16,7 @@ from qgis.PyQt.QtCore import QCoreApplication, QEvent
 from qgis.PyQt.QtWidgets import QApplication
 
 from geoduck.app.coordinator import SessionCoordinator
-from geoduck.domain.browse import CONTAINS, GT, LT, PAGE, Filter
+from geoduck.domain.browse import GT, LT, PAGE, Filter
 from geoduck.domain.i18n import tr
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope
@@ -127,8 +127,9 @@ def test_a_million_rows_first_page_quickly_then_the_total(consumidores):
 def test_sort_filters_search_and_pages_match_sql(consumidores):
     _ws, page = open_table(consumidores, "consumidores")
     assert wait_for(lambda: loaded(page))
-    page.header.sectionClicked.emit(2)  # kwh ascendente
-    page.header.sectionClicked.emit(2)  # descendente
+    page.header.sort_requested.emit(2)  # ⇅ de kwh (#144): ascendente
+    assert wait_for(lambda: loaded(page) and page.browse.order == ("kwh", True))
+    page.header.sort_requested.emit(2)  # descendente
     assert wait_for(lambda: loaded(page) and page.model.rows[0][2] == 748.5)
     assert page.browse.order == ("kwh", False)
     page.add_filter(Filter("kwh", GT, "700"))
@@ -153,21 +154,20 @@ def test_sort_filters_search_and_pages_match_sql(consumidores):
     assert page.chips.count() == 1 and page.browse.filters == (Filter("id", LT, "200000"),)
 
 
-def test_the_filter_popup_adds_a_chip_and_no_rows_offers_to_clear(consumidores):
+def test_a_filter_box_adds_a_chip_and_no_rows_offers_to_clear(consumidores):
+    """#144: la casilla bajo el encabezado filtra (contiene) con su chip; sin filas, «Quitar filtros»."""
     _ws, page = open_table(consumidores, "consumidores")
     assert wait_for(lambda: loaded(page))
-    page.open_filter_popup()
-    popup = page.popup
-    popup.column.setCurrentText("nombre")
-    popup.operator.setCurrentIndex(popup.operator.findData(CONTAINS))
-    popup.value.setText("no existe")
-    popup.add_button.click()
-    assert page.browse.filters == (Filter("nombre", CONTAINS, "no existe"),)
+    assert page.header.filters_visible and page.header.boxes["nombre"].isVisibleTo(page)
+    page.header.boxes["nombre"].setText("no existe")
+    page.header.boxes["nombre"].returnPressed.emit()
+    assert wait_for(lambda: page.browse.boxes == (("nombre", "no existe"),))
+    assert page.chips.count() == 1
     assert wait_for(lambda: page.message.text() == tr("No rows match these filters."))
     assert page.clear_button.isVisible()
     page.clear_button.click()
     assert wait_for(lambda: loaded(page))
-    assert page.browse.filters == ()
+    assert not page.browse.filtered and page.header.boxes["nombre"].text() == ""
 
 
 def test_view_sql_opens_the_equivalent_query(consumidores):

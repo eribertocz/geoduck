@@ -55,6 +55,8 @@ PATHS: dict[str, str] = {
     '<circle cx="15" cy="11" r="1.5" fill="currentColor"/>',
     "copy": '<rect x="8" y="8" width="12" height="12" rx="2"/>'
     '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    "sort": '<path d="M8 19V5M4.5 8.5L8 5l3.5 3.5M16 5v14M12.5 15.5L16 19l3.5-3.5"/>',
+    "chevron-up": '<path d="M6 15l6-6 6 6"/>',
     "arrow-up": '<path d="M12 19V5M6 11l6-6 6 6"/>',
     "arrow-down": '<path d="M12 5v14M6 13l6 6 6-6"/>',
     "history": '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/><path d="M12 8v4l3 2"/>',
@@ -105,3 +107,11 @@ def file(name: str, color: str, size: int = 12) -> str:
 
 def icon(name: str, color: str, size: int = 16) -> QIcon:
     return QIcon(pixmap(name, color, size))
+
+
+def toggle(name: str, off: str, on: str, size: int = 16) -> QIcon:
+    """Un icono de botón que se marca: gris apagado, turquesa encendido (#144: ◫ turquesa = abierto)."""
+    result = QIcon()
+    result.addPixmap(pixmap(name, off, size), QIcon.Mode.Normal, QIcon.State.Off)
+    result.addPixmap(pixmap(name, on, size), QIcon.Mode.Normal, QIcon.State.On)
+    return result

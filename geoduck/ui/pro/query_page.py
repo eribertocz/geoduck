@@ -23,22 +23,20 @@ from pathlib import Path
 from typing import Any
 
 from qgis.PyQt.QtCore import QEvent, QObject, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QGuiApplication, QKeySequence
+from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
-    QAbstractItemView,
     QAction,
     QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QMenu,
+    QPushButton,
     QScrollArea,
     QShortcut,
     QSplitter,
     QStackedWidget,
     QTabBar,
-    QTableView,
     QVBoxLayout,
     QWidget,
 )
@@ -54,7 +52,7 @@ from geoduck.app.events import (
     StatementFinished,
     VocabularyChanged,
 )
-from geoduck.domain.browse import PAGE, page_label
+from geoduck.domain.browse import PAGE, Browse, page_label
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
@@ -65,9 +63,12 @@ from geoduck.domain.sql_text import load_sql
 from geoduck.domain.statements import current_span, statement_spans
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import editor as pro_editor
+from geoduck.ui.pro import icons
+from geoduck.ui.pro.grid import DataGrid
 from geoduck.ui.pro.load import export_menu, export_query, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
-from geoduck.ui.pro.table_page import DetailPanel, PageModel, TypeHeader, fit_columns, tighten
+from geoduck.ui.pro.style import ui_font
+from geoduck.ui.pro.table_page import tighten
 from geoduck.ui.pro.tokens import METRICS, Colors
 from geoduck.ui.pro.widgets import Lake, Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
@@ -116,8 +117,10 @@ class QueryPage(QWidget):
     notice = pyqtSignal(str)
     #: Archivos soltados en el editor que no se leen con SQL (Arrow, no compatibles): al área de trabajo.
     import_files_requested = pyqtSignal(list)
+    #: «Ver SQL» del resultado filtrado (#144): la consulta completa, en una pestaña nueva.
+    view_sql_requested = pyqtSignal(str)
 
-    def __init__(
+    def __init__(  # noqa: PLR0915 - la pestaña de consulta, en un solo lugar
         self,
         place: Place,
         coordinator: Any,
@@ -140,7 +143,9 @@ class QueryPage(QWidget):
         self.results: list[StatementResult] = []
         self._epochs: dict[int, int] = {}
         #: Página de cada resultado con tabla (por `id`): desplazamiento, filas y total (None: sin contar).
-        self._pages: dict[int, dict[str, Any]] = {}
+        #: Filtros y orden de cada resultado mostrado (por `id`), mientras no se vuelva a ejecutar (#144).
+        self._browses: dict[int, Browse] = {}
+        self._database: str | None = None
         self.detail_open = True
         self.compact = False
         self._started = 0.0  # consulta en curso (#138): cuándo empezó
@@ -168,8 +173,13 @@ class QueryPage(QWidget):
         self.editor.installEventFilter(self._run_keys)
         self._wire_mark()
         self.split.addWidget(self.editor)
-        self.split.addWidget(self._build_results())
-        self.split.setSizes([360, 400])
+        self._head_clicks = _DoubleClicks(self.toggle_result)
+        self.result_panel = self._build_results()
+        self.split.addWidget(self.result_panel)
+        self.result_open = True
+        self._result_height = _saved_result_height()
+        self.split.setSizes([360, self._result_height])
+        self.split.splitterMoved.connect(lambda _pos, _index: self._split_moved())
         box.addWidget(self.split, 1)
         self.completer: Any = None
         with contextlib.suppress(Exception):  # G6: el mismo autocompletado que el editor de G6
@@ -194,6 +204,7 @@ class QueryPage(QWidget):
             ("Ctrl+Shift+Return", lambda: self.execute(RunScope.ALL)),
             ("Ctrl+Shift+Enter", lambda: self.execute(RunScope.ALL)),
             ("Ctrl+S", self.save),
+            ("Ctrl+J", self.toggle_result),
             ("Escape", self.cancel),
         ):  # Ctrl+O es del workspace (abre en una pestaña nueva)
             shortcut = QShortcut(QKeySequence(keys), self)
@@ -249,9 +260,15 @@ class QueryPage(QWidget):
         box.setSpacing(0)
         head = QFrame()
         head.setProperty("pro", "rule-bottom")
+        self.result_head = head
+        head.installEventFilter(self._head_clicks)
         row = QHBoxLayout(head)
         row.setContentsMargins(12, 6, 12, 6)
         row.setSpacing(10)
+        # plegar el resultado (#144, punto 10): ⌄ abierto, ⌃ plegado; también Ctrl+J y doble clic en la barra
+        self.fold_button = icon_button("chevron-down", tr("Hide the result · Ctrl+J"), self.colors)
+        self.fold_button.clicked.connect(self.toggle_result)
+        row.addWidget(self.fold_button)
         self.view = Segmented([tr("Result"), tr("Messages")], accessible_name=tr("Result or messages"))
         self.view.changed.connect(self._show_view)
         row.addWidget(self.view)
@@ -283,7 +300,16 @@ class QueryPage(QWidget):
         row.addWidget(self.running, 1)
         row.addWidget(spacer(), 1)
         # Las filas (#143, punto 3): solo íconos, con la ayuda que dice qué hace y sobre qué
-        self.copy_button = icon_button("copy", tr("Copy the rows of this page"), self.colors)
+        # el embudo (#144): la fila de filtros bajo los encabezados y la barra WHERE
+        self.filter_button = icon_button(
+            "filter", tr("Show or hide the filters (WHERE and each column)"), self.colors
+        )
+        self.filter_button.setIcon(icons.toggle("filter", self.colors.muted, self.colors.accent))
+        self.filter_button.setCheckable(True)
+        row.addWidget(self.filter_button)
+        self.copy_button = icon_button(
+            "copy", tr("Copy the selection (Ctrl+C); without one, the rows of this page"), self.colors
+        )
         self.copy_button.clicked.connect(self.copy_result)
         row.addWidget(self.copy_button)
         self.export_button = icon_button("export", tr("Export the full result ▾"), self.colors)
@@ -295,11 +321,18 @@ class QueryPage(QWidget):
         self.load_button.clicked.connect(lambda: popup_under(self.load_menu, self.load_button))
         row.addWidget(self.load_button)
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
+        self.detail_button.setIcon(icons.toggle("dock", self.colors.muted, self.colors.accent))
         self.detail_button.setCheckable(True)
         self.detail_button.setChecked(True)
         self.detail_button.toggled.connect(self.set_detail_open)
         row.addWidget(self.detail_button)
         box.addWidget(head)
+        self.result_body = QWidget()  # lo que se pliega: pestañas de resultados, grilla o mensajes y pie
+        body = QVBoxLayout(self.result_body)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        box.addWidget(self.result_body, 1)
+        box = body
         self.result_tabs = QTabBar()
         self.result_tabs.setProperty("pro", "tabs")
         self.result_tabs.setDocumentMode(True)
@@ -309,24 +342,22 @@ class QueryPage(QWidget):
         self.result_tabs.currentChanged.connect(lambda _i: self._show_grid())
         box.addWidget(self.result_tabs)
         self.stack = QStackedWidget()
-        self.model = PageModel(self.colors)
-        self.grid = QTableView()
-        self.grid.setProperty("pro", "grid")
-        self.grid.setModel(self.model)
-        self.header = TypeHeader(self.model, self.colors)
-        self.header.setSectionsClickable(False)
-        self.grid.setHorizontalHeader(self.header)
-        self.grid.setShowGrid(False)
-        self.grid.setWordWrap(False)
-        self.grid.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.grid.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.grid.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        vertical = self.grid.verticalHeader()
-        vertical.setDefaultSectionSize(METRICS.row)
-        vertical.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        vertical.setDefaultAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        vertical.setMinimumWidth(40)
-        self.stack.addWidget(self.grid)
+        # la grilla compartida con la pestaña de tabla (#144): filtros, selección, detalle y resumen
+        self.data = DataGrid(
+            self.colors,
+            self._read_rows,
+            notify=self.notice.emit,
+            offer_export=lambda: popup_under(self.export_menu, self.export_button),
+            view_sql=self.view_sql_requested.emit,
+            always_show_bar=False,
+        )
+        self.data.empty_text = tr("The query returned no rows.")
+        self.data.error_text = tr("The result could not be read.")
+        self.data.busy_text = tr("GeoDuck is busy: the result will be read when it finishes.")
+        self.data.funnel_button.hide()  # el embudo está en la barra «Resultado»
+        self.data.changed.connect(self._data_changed)
+        self.filter_button.toggled.connect(self.data.set_filters_open)
+        self.stack.addWidget(self.data)
         self.empty = label("", "muted")
         self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty.setWordWrap(True)
@@ -335,20 +366,7 @@ class QueryPage(QWidget):
         self.messages.setProperty("pro", "plain")
         self.messages.setWidgetResizable(True)
         self.stack.addWidget(self.messages)
-        middle = QWidget()
-        side = QHBoxLayout(middle)
-        side.setContentsMargins(0, 0, 0, 0)
-        side.setSpacing(0)
-        side.addWidget(self.stack, 1)
-        # el detalle de la fila a la derecha, plegable, como en la pestaña de tabla (propietario, 2026-11-06)
-        self.detail = DetailPanel(self.colors)
-        self.detail.closed.connect(lambda: self.detail_button.setChecked(False))
-        self.detail.hide()
-        side.addWidget(self.detail)
-        box.addWidget(middle, 1)
-        self.grid.selectionModel().currentRowChanged.connect(
-            lambda current, _p: self._row_changed(current.row())
-        )
+        box.addWidget(self.stack, 1)
         box.addWidget(self._build_footer())
         return panel
 
@@ -369,7 +387,10 @@ class QueryPage(QWidget):
         self.next_button.clicked.connect(lambda: self.go(self._offset() + PAGE))
         row.addWidget(self.prev_button)
         row.addWidget(self.next_button)
-        row.addStretch(1)
+        # el resumen de la columna elegida (#144, punto 11): suma, promedio, mínimo, máximo y nulos
+        self.column_summary = label("", "muted")
+        self.column_summary.setFont(ui_font(METRICS.font_small, mono=True))
+        row.addWidget(self.column_summary, 1)
         return foot
 
     # -- base de la consulta --------------------------------------------------------------------------
@@ -489,6 +510,7 @@ class QueryPage(QWidget):
             self.notice.emit(exc.message)
             return
         self.run = Run(run_id, text)
+        self.set_result_open(True)  # al ejecutar, el resultado se abre solo (#144, punto 10)
         self.editor.status.clear()  # las marcas son de la ejecución anterior (#139)
         self.error_link.hide()
         self.summary.setText("")
@@ -536,18 +558,51 @@ class QueryPage(QWidget):
         self._started = 0.0
 
     def copy_result(self) -> None:
-        """Copiar (#143, punto 3): la página que se ve, con los nombres de las columnas, separadas por
-        tabuladores (se pegan en una hoja de cálculo). Copiar una selección llega con #144."""
-        model = self.model
-        if not model.columns:
+        """Copiar (#143, #144): lo elegido como en una hoja de cálculo (columnas enteras, las lee DuckDB);
+        sin nada elegido, la página que se ve con los nombres de las columnas."""
+        self.data.copy_selection()
+
+    # -- resultado plegable (#144, punto 10) --------------------------------------------------------------
+
+    def toggle_result(self) -> None:
+        self.set_result_open(not self.result_open)
+
+    def set_result_open(self, open_: bool) -> None:
+        """Plegado, queda solo la barra «Resultado» (filas, tiempo e iconos a mano) y el editor usa todo el
+        alto; al abrirse vuelve a la altura que tenía."""
+        if open_ == self.result_open:
             return
-        rows = range(len(model.rows))
-        names = [column.name for column in model.columns]
-        lines = ["\t".join(names)]
-        lines += ["\t".join("" if v is None else str(v) for v in model.rows[r]) for r in rows]
-        QGuiApplication.clipboard().setText("\n".join(lines))
-        copied = len(lines) - 1
-        self.notice.emit(tr("1 row copied") if copied == 1 else tr("{} rows copied").format(_count(copied)))
+        head = self.result_head.sizeHint().height()
+        sizes = self.split.sizes()
+        total = sum(sizes)
+        if open_:
+            self.result_body.show()
+            self.result_panel.setMaximumHeight(16777215)
+            height = min(max(self._result_height, head + 120), max(head, total - 80))
+            self.split.setSizes([total - height, height])
+        else:
+            if sizes[1] > head + 24:
+                self._result_height = sizes[1]
+            self.result_body.hide()
+            self.result_panel.setMaximumHeight(head)
+            self.split.setSizes([total - head, head])
+        self.result_open = open_
+        self.fold_button.setIcon(icons.icon("chevron-down" if open_ else "chevron-up", self.colors.muted))
+        tip = tr("Hide the result · Ctrl+J") if open_ else tr("Show the result · Ctrl+J")
+        self.fold_button.setToolTip(tip)
+        self.fold_button.setAccessibleName(tip)
+
+    def _split_moved(self) -> None:
+        """Arrastrar la división hasta abajo pliega el resultado; si no, se recuerda su alto (entre
+        sesiones)."""
+        height = self.split.sizes()[1]
+        head = self.result_head.sizeHint().height()
+        floor = max(head + 24, self.result_panel.minimumSizeHint().height() + 4)  # tope de la división
+        if self.result_open and height <= floor:
+            self.set_result_open(False)
+        elif self.result_open:
+            self._result_height = height
+            _save_result_height(height)
 
     def set_compact(self, compact: bool) -> None:
         """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): la base sin «Se ejecuta
@@ -556,6 +611,13 @@ class QueryPage(QWidget):
         self.runs_in_label.setVisible(not compact)
         self.base.setMinimumWidth(80 if compact else 110)
         self.detail_button.setChecked(not compact)
+        self.view.set_compact(compact)
+        for widget in self.result_head.findChildren(QPushButton):  # los iconos de la barra, más juntos
+            if widget.property("pro") == "icon":
+                widget.setProperty("compact", compact)
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
+        self.summary.setVisible(not compact or bool(self.summary.text()))
         self.stop_button.setText("" if compact else tr("Cancel · Esc"))  # compacto: solo ■, con su ayuda
         self.stop_button.setAccessibleName(tr("Cancel · Esc"))
         self.lake.setMinimumWidth(60 if compact else 120)
@@ -735,7 +797,7 @@ class QueryPage(QWidget):
         """Una pestaña por sentencia con tabla (sin pestañas si es una); si ninguna tiene tabla, los
         mensajes."""
         tabular = [r for r in self.results if r.preview is not None]
-        self._pages = {}
+        self._browses = {}
         self.result_tabs.blockSignals(True)
         while self.result_tabs.count():
             self.result_tabs.removeTab(0)
@@ -761,147 +823,124 @@ class QueryPage(QWidget):
             self.result_tabs.hide()
             self.export_button.setEnabled(False)
             self.load_button.setEnabled(False)
-            self.detail.hide()
             self._summarize_messages()
             self._update_range(None)
         else:
             self.result_tabs.setVisible(len(getattr(self, "_tabular", [])) > 1)
             self._show_grid()
+        self._render_state()
 
     def _show_grid(self) -> None:
-        tabular = getattr(self, "_tabular", [])
-        index = self.result_tabs.currentIndex() if len(tabular) > 1 else len(tabular) - 1
-        if not tabular or index < 0:
-            self.model.set_page((), (), 0)
+        """El resultado elegido en la grilla: su primera página llega con la ejecución; filtros, orden y otras
+        páginas los lee DuckDB sobre la consulta (`SELECT … FROM (consulta)`). Cada resultado recuerda sus
+        filtros mientras no se vuelva a ejecutar."""
+        result = self.current_result
+        if result is None:
+            self.data.clear()
             self.empty.setText(tr("Run a query to see its result here."))
             self.stack.setCurrentWidget(self.empty)
             self.summary.setText("")
             self.export_button.setEnabled(False)
             self.load_button.setEnabled(False)
-            self.detail.hide()
             self._update_range(None)
             return
-        result = tabular[index]
         preview = result.preview
         assert preview is not None
-        page = self._page_of(result)
-        columns = tuple(ColumnInfo(n, t, None) for n, t in zip(preview.columns, preview.types, strict=False))
-        self.model.set_page(columns, page["rows"], page["offset"])
-        fit_columns(self.grid, self.model)
+        self.stack.setCurrentWidget(self.data)
         self.summary.setText("")  # el resumen va en el pie, como en la pestaña de tabla
-        self.stack.setCurrentWidget(self.grid if page["rows"] else self.empty)
-        if not page["rows"]:
-            self.empty.setText(tr("The query returned no rows."))
-        else:
-            self.grid.selectRow(0)
-        self._row_changed(0 if page["rows"] else -1)
-        usable = result.statement.replayable and self._coordinator.state is SessionState.READY
+        browse = self._browses.get(id(result))
+        replayable = result.statement.replayable
+        self._database = result.database
+        if browse is None:
+            columns = tuple(
+                ColumnInfo(n, t, None) for n, t in zip(preview.columns, preview.types, strict=False)
+            )
+            browse = Browse("", "", "", columns, has_rowid=False, subquery=load_sql(result.statement.text))
+            self._browses[id(result)] = browse
+        total = None if preview.truncated else len(preview.rows)
+        self.data.set_browse(browse, rows=preview.rows, total=total, replayable=replayable)
+        self.filter_button.setEnabled(replayable)
+        usable = replayable and self._coordinator.state is SessionState.READY
         self.export_button.setEnabled(usable)
         self.load_button.setEnabled(usable and self._loader is not None)
         self._update_range(result)
 
+    def _data_changed(self) -> None:
+        """La grilla cambió de página, total o filtros: el pie, el resumen y lo que recuerda el resultado."""
+        result = self.current_result
+        if result is not None and self.data.browse is not None and id(result) in self._browses:
+            self._browses[id(result)] = self.data.browse
+        self._update_range(result if self.view.current == RESULT else None)
+
+    def _read_rows(self, sql: str, max_rows: int, done: Callable[[Any], None]) -> bool:
+        if self._closed:
+            return False
+        try:
+            self._coordinator.read_rows(sql, max_rows, done, database=getattr(self, "_database", None))
+        except GeoDuckError:
+            return False
+        return True
+
     # -- páginas y total (propietario, 2026-11-06: igual que la pestaña de tabla) ---------------------------
 
-    def _page_of(self, result: StatementResult) -> dict[str, Any]:
-        """La página que se muestra de `result`: la primera llega con la ejecución; el total se cuenta aparte
-        (solo si había más filas que la página y la consulta se puede repetir)."""
-        key = id(result)
-        page = self._pages.get(key)
-        if page is None:
-            preview = result.preview
-            assert preview is not None
-            total = None if preview.truncated else len(preview.rows)
-            page = {"offset": 0, "rows": preview.rows, "total": total}
-            self._pages[key] = page
-            if total is None and result.statement.replayable:
-                self._count(result, page)
-        return page
-
-    def _count(self, result: StatementResult, page: dict[str, Any]) -> None:
-        def counted(outcome: Any) -> None:
-            if self._closed or isinstance(outcome, BaseException):
-                return  # sin total: el pie sigue con «de …»
-            page["total"] = int(outcome.rows[0][0]) if outcome.rows else 0
-            if self.current_result is result:
-                self._update_range(result)
-
-        sql = f"SELECT count(*) FROM ({load_sql(result.statement.text)}) AS geoduck_q"
-        with contextlib.suppress(GeoDuckError):  # DuckDB ocupado: el pie sigue con «de …»
-            self._coordinator.read_rows(sql, 1, counted, database=result.database)
-
     def _offset(self) -> int:
-        result = self.current_result
-        page = self._pages.get(id(result)) if result is not None else None
-        return page["offset"] if page else 0
+        return self.data.offset
 
     def go(self, offset: int) -> None:
         """‹ ›: otra página del resultado elegido. Repite la consulta con `LIMIT`/`OFFSET`."""
         result = self.current_result
-        if result is None or not result.statement.replayable:
-            return
-        page = self._page_of(result)
-        offset = max(0, offset)
-        if page["total"] is not None and offset >= page["total"]:
-            return
-
-        def read(outcome: Any) -> None:
-            if self._closed:
-                return
-            if isinstance(outcome, BaseException):
-                self.notice.emit(getattr(outcome, "message", str(outcome)))
-                return
-            page["offset"], page["rows"] = offset, outcome.rows
-            if self.current_result is result:
-                self._show_grid()
-
-        sql = f"SELECT * FROM ({load_sql(result.statement.text)}) AS geoduck_q LIMIT {PAGE} OFFSET {offset}"
-        try:
-            self._coordinator.read_rows(sql, PAGE, read, database=result.database)
-        except GeoDuckError as exc:
-            self.notice.emit(exc.message)
+        if result is not None and result.statement.replayable:
+            self.data.go(offset)
 
     def _update_range(self, result: StatementResult | None) -> None:
-        """«Filas 1–100 de 1 000 000 · 0,4 s»; ‹ › solo si hay otra página y la consulta se puede repetir."""
-        page = self._pages.get(id(result)) if result is not None else None
-        if result is None or page is None:
+        """«Filas 1–100 de 1 000 000 · 0,4 s»; ‹ › solo si hay otra página y la consulta se puede repetir;
+        a la derecha, el resumen de la columna elegida (#144)."""
+        data = self.data
+        if result is None or data.browse is None or self.stack.currentWidget() is not self.data:
             self.range_label.setText("")
             self.prev_button.setEnabled(False)
             self.next_button.setEnabled(False)
+            self.column_summary.setText("")
             return
-        shown = len(page["rows"])
-        if page["total"] is None and not result.statement.replayable:
+        shown = len(data.model.rows)
+        if data.total is None and not result.statement.replayable:
             # una escritura (`DELETE … RETURNING`) no se repite: ni se cuenta ni se pasa de página
             text = tr("Rows {} of more than {}").format(f"1–{shown}", _count(shown))
         else:
-            text = page_label(page["offset"], shown, page["total"])
+            text = page_label(data.offset, shown, data.total)
         if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
             text += " · " + tr("may be out of date")
         full = f"{text} · {_seconds(result.duration_ms)}"
         self.range_label.setText(text if self.compact else full)
         self.range_label.setToolTip(full)
         ready = result.statement.replayable and self._coordinator.state is SessionState.READY
-        self.prev_button.setEnabled(ready and page["offset"] > 0)
-        more = shown == PAGE and (page["total"] is None or page["offset"] + shown < page["total"])
+        self.prev_button.setEnabled(ready and data.offset > 0)
+        more = shown == PAGE and (data.total is None or data.offset + shown < data.total)
         self.next_button.setEnabled(ready and more)
+        self.column_summary.setText(data.summary)
+        self.column_summary.setToolTip(data.summary)
 
     # -- detalle de la fila -----------------------------------------------------------------------------
 
     def set_detail_open(self, open_: bool) -> None:
         self.detail_open = open_
-        self._row_changed(self.grid.currentIndex().row())
+        self.data.set_detail_open(open_)
 
-    def _row_changed(self, row: int) -> None:
-        visible = (
-            self.detail_open
-            and 0 <= row < self.model.rowCount()
-            and self.stack.currentWidget() is self.grid
-            and self.view.current == RESULT
-        )
-        if not visible:
-            self.detail.hide()
-            return
-        self.detail.show()
-        self.detail.show_row(self.model.offset + row + 1, self.model.columns, self.model.rows[row])
+    @property
+    def grid(self) -> Any:
+        return self.data.grid
+
+    @property
+    def model(self) -> Any:
+        return self.data.model
+
+    @property
+    def header(self) -> Any:
+        return self.data.header
+
+    @property
+    def detail(self) -> Any:
+        return self.data.detail
 
     @property
     def current_result(self) -> StatementResult | None:
@@ -994,13 +1033,13 @@ class QueryPage(QWidget):
     # -- exportar -------------------------------------------------------------------------------------
 
     def export(self, fmt: ExportFormat) -> None:
-        """«Exportar ▾»: la consulta completa del resultado elegido, a CSV o Parquet."""
+        """«Exportar ▾»: la consulta del resultado elegido, con sus filtros y orden, a un archivo."""
         result = self.current_result
         if result is None or not result.statement.replayable:
             return
         export_query(
             self._coordinator,
-            result.statement.text,
+            self._result_sql(result),
             result.database,
             self.place.name,
             fmt,
@@ -1009,13 +1048,21 @@ class QueryPage(QWidget):
         )
         self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
+    def _result_sql(self, result: StatementResult) -> str:
+        """La consulta de «Exportar» y «Cargar en QGIS»: la del resultado; con filtros u orden en la grilla
+        (#144), la consulta completa que los aplica (la de «Ver SQL»)."""
+        browse = self.data.browse if self.current_result is result else None
+        if browse is not None and (browse.filtered or browse.order is not None):
+            return browse.display_sql()
+        return result.statement.text
+
     def load_in_qgis(self, kind: str) -> None:
         """«Cargar en QGIS ▾»: el resultado elegido como «Copia» o «Conectada» (repite la consulta)."""
         result = self.current_result
         if result is None or not result.statement.replayable or self._loader is None:
             return
         name = result_title(self.run_text, result.statement) if self.run_text else self.place.name
-        self._loader(result.statement.text, name, kind, database=result.database)
+        self._loader(self._result_sql(result), name, kind, database=result.database)
         self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
     # -- archivo --------------------------------------------------------------------------------------
@@ -1204,3 +1251,37 @@ def _file_name(title: str) -> str:
     caracteres que no admiten los sistemas de archivos."""
     cleaned = "".join("_" if ch in '<>:"/\\|?*' else ch for ch in title).strip(" .")
     return Path(cleaned or "consulta").stem
+
+
+class _DoubleClicks(QObject):
+    """Doble clic en la barra «Resultado»: pliega o abre el resultado (#144, punto 10)."""
+
+    def __init__(self, toggle: Callable[[], None]) -> None:
+        super().__init__()
+        self._toggle = toggle
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - API de Qt
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            self._toggle()
+            return True
+        return False
+
+
+#: El alto del resultado, recordado entre sesiones (#144, punto 10).
+RESULT_HEIGHT_KEY = "geoduck/pro/result_height"
+
+
+def _saved_result_height() -> int:
+    from qgis.core import QgsSettings  # noqa: PLC0415
+
+    try:
+        value = int(QgsSettings().value(RESULT_HEIGHT_KEY, 400))
+    except (TypeError, ValueError):
+        value = 400
+    return value if 80 <= value <= 4000 else 400
+
+
+def _save_result_height(height: int) -> None:
+    from qgis.core import QgsSettings  # noqa: PLC0415
+
+    QgsSettings().setValue(RESULT_HEIGHT_KEY, int(height))

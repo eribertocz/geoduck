@@ -942,6 +942,7 @@ class ProWorkspace(QWidget):
         page.open_requested.connect(self.open_query_file)
         page.notice.connect(self.notify)
         page.import_files_requested.connect(lambda paths: self.import_files(paths=paths))
+        page.view_sql_requested.connect(self.open_sql)  # «Ver SQL» del resultado filtrado (#144)
         return page
 
     def _query_changed(self, page: QueryPage) -> None:

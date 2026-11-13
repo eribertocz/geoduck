@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, replace
 
 from geoduck.domain.catalog import ColumnInfo
+from geoduck.domain.filters import Condition, box_condition, is_numeric_type, where_condition
 from geoduck.domain.i18n import N_, tr
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 
@@ -97,10 +98,69 @@ class Browse:
     #: Es una tabla (tiene `rowid`). Al ordenar, los empates se deshacen con `rowid` (en una vista, con las
     #: demás columnas): sin eso, las páginas de valores repetidos podrían repetir o saltarse filas.
     has_rowid: bool = True
+    #: La casilla de filtro de cada columna (#144): `(columna, texto)`, solo las que tienen texto.
+    boxes: tuple[tuple[str, str], ...] = ()
+    #: Condiciones aparte: excluir valores de varias columnas a la vez (clic derecho).
+    extra: tuple[Condition, ...] = ()
+    #: La barra `WHERE` (SQL libre, ya validado por DuckDB).
+    where: str = ""
+    #: El resultado de una consulta en vez de una tabla (#144): su SQL, que se envuelve en una subconsulta.
+    subquery: str = ""
 
     @property
     def source(self) -> str:
+        if self.subquery:
+            return f"({self.subquery}) AS geoduck_q"
         return ".".join(quote_identifier(part) for part in (self.database, self.schema, self.name))
+
+    def box(self, column: str) -> str:
+        """El texto de la casilla de `column` (vacío si no tiene)."""
+        return dict(self.boxes).get(column, "")
+
+    def with_box(self, column: str, text: str) -> Browse:
+        """La casilla de `column` con `text` (vacío la quita). Mantiene el orden de las columnas."""
+        boxes = dict(self.boxes)
+        if text.strip():
+            boxes[column] = text.strip()
+        else:
+            boxes.pop(column, None)
+        order = [c.name for c in self.columns]
+        ranked = sorted(boxes.items(), key=lambda kv: order.index(kv[0]) if kv[0] in order else len(order))
+        return replace(self, boxes=tuple(ranked))
+
+    def with_extra(self, condition: Condition) -> Browse:
+        return replace(self, extra=(*self.extra, condition))
+
+    def without_extra(self, index: int) -> Browse:
+        return replace(self, extra=self.extra[:index] + self.extra[index + 1 :])
+
+    def with_where(self, text: str) -> Browse:
+        return replace(self, where=text.strip())
+
+    def cleared(self) -> Browse:
+        """Sin ningún filtro (el orden se queda)."""
+        return replace(self, filters=(), search="", boxes=(), extra=(), where="")
+
+    @property
+    def filtered(self) -> bool:
+        return bool(self.filters or self.search or self.boxes or self.extra or self.where)
+
+    def box_conditions(self) -> list[Condition]:
+        """Las casillas como condiciones (una casilla que ya no se entiende no filtra: la interfaz no la
+        deja entrar)."""
+        columns = {c.name: c for c in self.columns}
+        out = []
+        for name, text in self.boxes:
+            column = columns.get(name)
+            if column is None:
+                continue
+            try:
+                condition = box_condition(column, text)
+            except ValueError:
+                continue
+            if condition is not None:
+                out.append(condition)
+        return out
 
     def with_filter(self, item: Filter) -> Browse:
         return replace(self, filters=(*self.filters, item))
@@ -121,6 +181,12 @@ class Browse:
 
     def conditions(self) -> list[str]:
         found = [f.sql() for f in self.filters]
+        found += [c.sql for c in self.box_conditions()]
+        found += [c.sql for c in self.extra]
+        if self.where:
+            where = where_condition(self.where)
+            if where is not None:
+                found.append(where.sql)
         texts = [c for c in self.columns if is_text(c.data_type)]
         if self.search and texts:
             value = quote_string_literal(self.search)
@@ -181,6 +247,35 @@ class Browse:
 
     def count_sql(self) -> str:
         return f"SELECT count(*) FROM {self.source}{self._where()}"
+
+    def total_sql(self) -> str:
+        """El total sin filtros («1 234 de 1 000 000 filas»)."""
+        return f"SELECT count(*) FROM {self.source}"
+
+    def check_sql(self, condition: str) -> str:
+        """Pregunta a DuckDB si una condición del usuario vale aquí, sin leer filas."""
+        return f"SELECT 1 FROM {self.source} WHERE {condition} LIMIT 0"
+
+    def values_sql(self, columns: tuple[str, ...], limit: int) -> str:
+        """Ctrl+C de columnas enteras (#144, punto 9): las filas filtradas y ordenadas de esas columnas, como
+        texto, hasta `limit` (lo lee DuckDB, no la pantalla)."""
+        chosen = [c for c in self.columns if c.name in columns] or list(self.columns)
+        names = ", ".join(f"CAST({quote_identifier(c.name)} AS VARCHAR)" for c in chosen)
+        rest = f"{self._where()}{self._order_by()} LIMIT {max(0, int(limit))}"
+        return f"SELECT {names} FROM {self.source}{rest}"
+
+    def summary_sql(self, column: ColumnInfo) -> str:
+        """Resumen de una columna (#144, punto 11), sobre todas las filas filtradas: suma, promedio, mínimo,
+        máximo y nulos en una columna numérica; mínimo, máximo y nulos en las demás (la geometría, nulos)."""
+        col = quote_identifier(column.name)
+        nulls = f"count(*) FILTER (WHERE {col} IS NULL)"
+        if column.is_geometry:
+            parts = ["NULL", "NULL", "NULL", "NULL", nulls]
+        elif is_numeric_type(column.data_type):
+            parts = [f"sum({col})", f"avg({col})", f"min({col})", f"max({col})", nulls]
+        else:
+            parts = ["NULL", "NULL", f"CAST(min({col}) AS VARCHAR)", f"CAST(max({col}) AS VARCHAR)", nulls]
+        return f"SELECT {', '.join(parts)} FROM {self.source}{self._where()}"
 
     def display_sql(self) -> str:
         """«Ver SQL»: la consulta equivalente, legible."""

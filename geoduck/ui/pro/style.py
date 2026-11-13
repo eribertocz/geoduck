@@ -128,13 +128,22 @@ def stylesheet(c: Colors) -> str:
     background: transparent; color: {c.muted}; padding: 0 11px; }}
 {r} QPushButton[pro="segment"] {{ border: 0; border-radius: {m.radius_sm}px; background: transparent;
     color: {c.muted}; min-height: {m.control - 6}px; padding: 0 {m.space_md}px; }}
+{r} QPushButton[pro="segment"][compact="true"] {{ padding: 0 {m.space_sm - 2}px; }}
 {r} QPushButton[pro="segment"]:checked {{ background: {c.bg}; color: {c.text}; font-weight: 600; }}
 {r} QPushButton[pro="icon"] {{ border: 1px solid transparent; background: transparent; padding: 0;
     min-width: {m.control - 2}px; max-width: {m.control - 2}px; }}
 {r} QPushButton[pro="icon"]:hover {{ background: {c.segment}; }}
+{r} QPushButton[pro="icon"][compact="true"] {{ min-width: {m.control - 8}px; max-width: {m.control - 8}px; }}
+{r} QPushButton[pro="icon"]:checked {{ background: {c.accent_soft}; }}
 {r} QPushButton[pro="search-button"] {{ text-align: left; color: {c.muted}; padding: 0 {m.space_sm + 1}px; }}
 
 {r} QFrame[pro="segmented"] {{ background: {c.segment}; border-radius: {m.radius}px; }}
+{r} QLineEdit[pro="filter-box"] {{ min-height: 0; padding: 0 6px; font-size: {m.font_small}px;
+    border: 1px solid {c.border}; border-radius: {m.radius_sm}px; background: {c.bg}; }}
+{r} QLineEdit[pro="filter-box"][active="true"] {{ border-color: {c.accent}; }}
+{r} QLineEdit[pro="filter-box"][invalid="true"], {r} QLineEdit[pro="where"][invalid="true"] {{
+    border-color: {c.error}; background: {c.error_soft}; }}
+{r} QLineEdit[pro="where"] {{ font-family: "{mono}"; }}
 {r} QFrame[pro="chip"] {{ background: {c.chip_bg}; border: 1px solid {c.chip_border};
     border-radius: {m.pill}px; }}
 {r} QFrame[pro="field"] {{ background: {c.bg}; border: 1px solid {c.border}; border-radius: {m.radius}px; }}
@@ -203,6 +212,9 @@ def stylesheet(c: Colors) -> str:
     selection-background-color: {c.row_selected}; selection-color: {c.text}; }}
 {r} QTableView[pro="grid"]::item {{ padding: 0 10px; border-bottom: 1px solid {c.line}; }}
 {r} QTableView[pro="grid"]::item:selected {{ background: {c.row_selected}; color: {c.text}; }}
+{r} QTableView[pro="grid"]::item:focus {{ border: 1px solid {c.accent}; }}
+{r} QTableView[pro="grid"] QHeaderView::section:vertical:checked {{ background: {c.accent_soft};
+    color: {c.accent}; }}
 {r} QTableView[pro="grid"] QHeaderView {{ background: {c.head}; }}
 {r} QTableView[pro="grid"] QHeaderView::section:vertical {{ background: {c.bg}; color: {c.faint}; border: 0;
     border-bottom: 1px solid {c.line}; padding: 0 10px 0 0; font-size: {m.font_small}px; }}
