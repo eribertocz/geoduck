@@ -92,15 +92,26 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
 - **El archivo arriba, la ejecución abajo** (propietario, 2026-11-06): «⋯» junto a «+» en la fila de pestañas
   con «Abrir consulta…», «Guardar «nombre»» y «Guardar como…»; la barra de la consulta solo tiene lo de
   ejecutar: ▶ Ejecutar, Cancelar y **«Se ejecuta en [base ▾]»**.
-- **Un solo «▶ Ejecutar»** (Ctrl+Intro; propietario, 2026-11-06, tras la prueba en Windows): corre la
+- **Un solo «▶ Ejecutar»** (Ctrl+Enter; propietario, 2026-11-06, tras la prueba en Windows): corre la
   selección o, sin ella, **la sentencia marcada**. Una barra de acento a la izquierda del texto marca la
   sentencia que correrá y el botón lo dice («Ejecutar · línea 5», «Ejecutar selección»); se ejecuta
   exactamente lo marcado (se calcula en GeoDuck, igual con DuckDB 1.5 y 2.0; en una línea en blanco entre
-  dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Mayús+Intro y el **clic derecho
+  dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Shift+Enter y el **clic derecho
   del editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón «Todo». **Cancelar**. La selección se ve con un azul
   claramente distinto del fondo, en claro y en oscuro.
+- **Ejecutar nunca falla en silencio** (#139): Ctrl+Enter y Ctrl+Shift+Enter los toma el editor antes que
+  cualquier atajo con la misma tecla (de QGIS o de otro complemento) y cierran la lista de autocompletado si
+  está abierta; si no se puede ejecutar (otra consulta en curso —«Cancelar» la detiene—, otra tarea, la sesión iniciándose, la
+  transacción fallida o DuckDB sin iniciar) un aviso lo dice. Tras «Cargar en QGIS» o «Exportar», el teclado
+  vuelve al editor. Los atajos se escriben «Ctrl+Enter» y «Ctrl+Shift+Enter» también en español.
 - **Resultado** debajo (una pestaña por sentencia con tabla; sin pestañas si es una); **Mensajes** con el
-  registro (OK, errores con línea y columna).
+  registro: ✓ por sentencia y, en los errores, «**Línea N · cerca de «palabra»** · mensaje» e «Ir» (sin
+  «columna»; la palabra la nombra DuckDB o es la que empieza en su posición). **Ante cualquier error**, también
+  uno de sintaxis que no dejó correr nada, se abre «Mensajes» solo (#139). El editor marca la ejecución: ✓, ✕
+  o – (no corrió) en un margen junto al texto, la línea del error con fondo rojizo y la palabra con un
+  subrayado ondulado (al pasar el ratón, el mensaje); la barra dice «✕ Error en la línea N, cerca de
+  «palabra»» y lleva al error. Lo que no corrió no se repite en una frase: lo dicen la marca y el resumen
+  («1 OK · 1 con error · 1 sin ejecutar»). Al editar, las marcas se van.
 - **El resultado se maneja como la pestaña de tabla** (propietario, 2026-11-06, tras la prueba en Windows): el
   mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s», ‹ › de 100 filas, «Exportar ▾» y «Cargar en QGIS ▾»;
   y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y
