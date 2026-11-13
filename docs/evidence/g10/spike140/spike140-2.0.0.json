@@ -1,0 +1,51 @@
+{
+  "rows": 1000000,
+  "duckdb": "2.0.0",
+  "q\u2192d bucle": {
+    "s": 3.889,
+    "partes": null
+  },
+  "q\u2192d bucle+": {
+    "s": 2.806,
+    "partes": null
+  },
+  "q\u2192d escritor\u2192parquet": {
+    "s": 2.64,
+    "partes": {
+      "escribir": 2.4292897619998257,
+      "leer": 0.201007932000266
+    }
+  },
+  "q\u2192d escritor\u2192arrow": {
+    "s": 2.246,
+    "partes": {
+      "escribir": 2.2278624350001337,
+      "leer": 0.12352224799997202
+    }
+  },
+  "q\u2192d escritor\u2192fgb": {
+    "s": 4.983,
+    "partes": {
+      "escribir": 3.7616286979996403,
+      "leer": 0.8761982890000581
+    }
+  },
+  "d\u2192q bucle": {
+    "s": 5.351,
+    "partes": null
+  },
+  "d\u2192q parquet\u2192materialize": {
+    "s": 2.595,
+    "partes": {
+      "escribir": 0.4754740660000607,
+      "materialize": 1.8496991869997146
+    }
+  },
+  "d\u2192q fgb\u2192materialize": {
+    "s": 4.807,
+    "partes": {
+      "escribir": 3.016750606000187,
+      "materialize": 1.5042293179999433
+    }
+  }
+}
