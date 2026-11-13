@@ -456,3 +456,38 @@ def test_dragging_tables_shows_the_duck_and_the_target_database_is_the_lake(coor
     lake = QColor(ws.colors.accent_soft)
     assert shot.pixelColor(rect.left() + 4, rect.center().y()) == lake
     tree.drop_item = None
+
+
+def test_a_connected_layer_from_memory_goes_to_a_file_database_inside_duckdb(coordinator):
+    """#140 (E4b): una capa Conectada de la base «memory» enviada a una base en archivo se copia dentro de
+    DuckDB (`CREATE TABLE … AS SELECT`), sin pasar las entidades por QGIS: el puente lo dice."""
+    from geoduck.domain.importing import PATH_CONNECTED
+
+    coordinator.execute_sql(
+        "CREATE TABLE pozos AS SELECT range AS id,"
+        " ('POINT (' || range || ' 1)')::GEOMETRY('OGC:CRS84') AS geom FROM range(1000);",
+        RunScope.ALL,
+    )
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    ws = workspace(coordinator)
+    handler = PlacesDropHandler(lambda: ws)
+    handler.show_menu(ws, [Place(TABLE, "pozos", DB, "main")], QPoint(200, 200))
+    [connected] = [a for a in handler.menu.actions() if a.text() == tr("Connected")]
+    connected.trigger()
+
+    def layer():
+        return next((x for x in QgsProject.instance().mapLayers().values() if x.name() == "pozos"), None)
+
+    assert wait_for(lambda: layer() is not None and coordinator.state is SessionState.READY, TIMEOUT)
+    assert layer().providerType() == "geoduck"
+    ws.send_layers([layer().id()], ("db", "main"))
+    flow = ws.to_duckdb
+    assert flow._candidates[0].path == PATH_CONNECTED
+    to_step_two(ws)
+    add_all(ws, coordinator)
+    assert flow.states[0]["state"] == "done"
+    assert flow.traces[0].bridge
+    rows = []
+    coordinator.read_rows("SELECT count(*) FROM db.main.pozos", 1, rows.append)
+    assert wait_for(lambda: rows, TIMEOUT)
+    assert rows[0].rows[0][0] in (1000, "1000")

@@ -325,17 +325,28 @@ class SendCandidate:
     #: «other»; y su formato corto («GPKG», «SHP», «POSTGIS», «WFS»…).
     source_kind: str = "other"
     source_format: str = ""
+    #: El camino directo (`PATH_GDAL`) lee con GDAL y necesita `spatial`; False: DuckDB lo lee con su lector
+    #: propio (Parquet, Arrow, CSV, JSON; #140).
+    needs_spatial: bool = True
 
     @property
     def can_view(self) -> bool:
         """«Vista en vez de copia»: solo un GeoParquet sin filtro (y sin selección, que decide el envío)."""
         return self.path == PATH_PARQUET and not self.filtered
 
-    def path_for(self, only_selected: bool, reproject: bool = False, duckdb: bool = True) -> str:
+    def path_for(
+        self, only_selected: bool, reproject: bool = False, duckdb: bool = True, direct: bool = True
+    ) -> str:
         """Camino efectivo (§5): reproyectar un GeoParquet o enviar una selección suya obliga a leer con QGIS
-        (sin `spatial`, DuckDB no transforma coordenadas). Una capa Conectada no se reproyecta."""
-        if self.path == PATH_GDAL and (not duckdb or reproject or (only_selected and self.selected)):
-            return PATH_QGIS  # sin `spatial` cargada, con selección o reproyectando: lee QGIS (§5.4)
+        (sin `spatial`, DuckDB no transforma coordenadas). Una capa Conectada no se reproyecta. `duckdb`:
+        `spatial` cargada; `direct`: False tras un intento directo que falló (#140)."""
+        if self.path == PATH_GDAL and (
+            not direct
+            or (self.needs_spatial and not duckdb)
+            or reproject
+            or (only_selected and self.selected)
+        ):
+            return PATH_QGIS  # sin `spatial` (GDAL), con selección, reproyectando o tras fallar: lee QGIS
         if self.path == PATH_PARQUET and reproject and self.geometry is not None:
             return PATH_QGIS
         if self.path == PATH_PARQUET and only_selected and self.selected:
@@ -371,6 +382,9 @@ class SendRequest:
     reproject_to: str | None = None
     #: `spatial` cargada: una capa que viene de un archivo la copia DuckDB con `ST_Read` (§5.4).
     duckdb_reads: bool = False
+    #: DuckDB puede leer el archivo de la capa sin QGIS (Parquet, Arrow, CSV, JSON no necesitan `spatial`);
+    #: False tras un intento directo que falló: entonces lee QGIS (#140).
+    direct: bool = True
 
 
 @dataclass(frozen=True)
