@@ -108,6 +108,9 @@ class StatementResult:
     error_code: ErrorCode | None = None
     #: Posición del error en el texto del editor (caracteres), si DuckDB la da (F-39).
     error_offset: int | None = None
+    #: La clase de error de DuckDB (`BinderException`…) y su mensaje completo, para la tarjeta (#145).
+    error_kind: str = ""
+    error_detail: str = ""
     #: Estado transaccional comprobado después de la sentencia (decisión del 2026-11-01).
     transaction: TransactionState | None = None
     #: Base en uso cuando se ejecutó (G7): «Cargar en QGIS» repite la consulta en esta base, aunque
@@ -123,6 +126,8 @@ class ScriptRun:
     #: Error de sintaxis que impidió ejecutar nada (F-38).
     parse_error: str = ""
     parse_error_offset: int | None = None
+    #: Mensaje completo del error de sintaxis (la tarjeta, #145).
+    parse_error_detail: str = ""
     #: Base en uso al terminar (G7: la de la celda, o la que fije un `USE` escrito en ella); `None` si no
     #: se pudo leer.
     current_database: str | None = None

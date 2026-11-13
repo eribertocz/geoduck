@@ -107,6 +107,7 @@ def run_script(
             (),
             parse_error=_first_line(exc),
             parse_error_offset=None if offset is None else base + offset,
+            parse_error_detail=str(exc).strip(),
         )
     if scope is RunScope.CURRENT:
         chosen = statement_at(statements, cursor)
@@ -195,6 +196,8 @@ def _execute_one(handle: ConnectionHandle, st: SqlStatement, limit: int) -> Stat
             if is_aborted_error(exc)
             else ErrorCode.ENGINE_ERROR,
             error_offset=None if offset is None else st.start + offset,
+            error_kind="" if cancelled else type(exc).__name__,
+            error_detail="" if cancelled else str(exc).strip(),
             transaction=probe_transaction(handle),
         )
     duration = _ms(started)

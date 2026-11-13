@@ -154,6 +154,25 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   subrayado ondulado (al pasar el ratón, el mensaje); la barra dice «✕ Error en la línea N, cerca de
   «palabra»» y lleva al error. Lo que no corrió no se repite en una frase: lo dicen la marca y el resumen
   («1 OK · 1 con error · 1 sin ejecutar»). Al editar, las marcas se van.
+- **Errores de primer nivel** (#145, punto 13; maqueta `errores-tipos`). Cada error es una **tarjeta** en
+  «Mensajes», siempre en el mismo orden: **qué pasó** (título traducido) → **dónde** (línea y palabra, o el
+  archivo, o «toda la sentencia») → **por qué y la sugerencia** → **botón para arreglarlo** (el primero, el
+  principal), «Ir» y «Copiar error» → el **mensaje original de DuckDB**, plegable. Todo sale del manejo nativo
+  de DuckDB: la tarjeta se elige por su clase de error (Parser, Binder, Catalog, Conversion, IO, Out of Memory,
+  Constraint…; las demás, una tarjeta general); el lugar, de su marca `LINE n ^^^^`; las sugerencias y los
+  botones, solo de lo que DuckDB propone:
+  - «Candidate bindings» / «Did you mean» → «Cambiar a «x»»;
+  - «exists in the spatial extension» → «Cargar «spatial»…», que pide permiso (ADR-0011, spatial-spec §10) y
+    no vuelve a ejecutar la consulta; otra extensión → «Escribir LOAD x» en el editor;
+  - un valor que no se convierte → «Usar TRY_CAST» (`CAST(` → `TRY_CAST(`, `x::T` → `TRY_CAST(x AS T)`);
+  - un archivo que no existe → «Elegir archivo…» (cambia la ruta) y «Abrir carpeta»;
+  - sin memoria → cuánto se usó y «Subir memory_limit…» (escribe `SET memory_limit` antes de la sentencia).
+  Los arreglos **solo cambian el texto del editor** (se deshacen con Ctrl+Z) y nunca ejecutan nada; si el texto
+  cambió desde que corrió, lo dicen y no tocan nada. «Más información» enlazará a la guía cuando exista (#150).
+- **Aviso mientras se escribe** (#145): medio segundo después de dejar de escribir, el analizador de DuckDB
+  (`json_serialize_sql`) revisa **solo la sintaxis** —no ejecuta nada ni lee datos— y un error se subraya con su
+  ✕ y su mensaje al pasar el ratón («Analizador de DuckDB · aún no se ejecutó»). Solo con la sesión lista y sin
+  nada en curso; los textos de más de 200 000 caracteres se revisan al ejecutar.
 - **Resultado plegable** (#144, punto 10), como la barra lateral: ⌄ a la izquierda de «Resultado», Ctrl+J o
   doble clic en su barra. Plegado, queda solo la barra (filas, tiempo e iconos a mano) y el editor usa todo
   el alto; al abrirse vuelve a la altura que tenía. Arrastrar la división hasta abajo lo pliega; al ejecutar se
