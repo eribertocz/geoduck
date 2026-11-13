@@ -487,8 +487,8 @@ def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coord
     assert not page.detail.isVisible()
     page.detail_button.setChecked(True)
     assert page.detail.isVisible()
-    page.detail.closed.emit()
-    assert not page.detail_button.isChecked() and not page.detail.isVisible()
+    buttons = page.detail.findChildren(type(page.detail_button))
+    assert not any(b.toolTip() == tr("Hide the row detail") for b in buttons)  # sin ✕: solo el ◫ (#144)
     # «Mensajes» no tiene páginas ni detalle
     page.view.set_current(MESSAGES)
     page._show_view(MESSAGES)

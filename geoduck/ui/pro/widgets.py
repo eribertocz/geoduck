@@ -110,18 +110,26 @@ class Chip(QFrame):
 
     removed = pyqtSignal()
 
-    def __init__(self, column: str, operator: str, value: str, colors: Colors, *, remove_tip: str) -> None:
+    def __init__(
+        self, column: str, operator: str, value: str, colors: Colors, *, remove_tip: str, text: str = ""
+    ) -> None:
+        """Con `text` (#144: las casillas de filtro, la barra `WHERE`), el chip es esa sola condición."""
         super().__init__()
         self.setProperty("pro", "chip")
         self.setFixedHeight(METRICS.control)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName(f"{column} {operator} {value}")
+        self.setAccessibleName(text or f"{column} {operator} {value}")
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 0, 3, 0)
         row.setSpacing(6)
-        row.addWidget(label(column, "muted"))
-        row.addWidget(label(operator))
-        row.addWidget(label(value, "mono"))
+        if text:
+            shown = label(text if len(text) <= 48 else text[:47] + "…", "mono")
+            shown.setToolTip(text)
+            row.addWidget(shown)
+        else:
+            row.addWidget(label(column, "muted"))
+            row.addWidget(label(operator))
+            row.addWidget(label(value, "mono"))
         self.close_button = icon_button("close", remove_tip, colors, size=12)
         self.close_button.setFixedSize(22, 22)
         self.close_button.clicked.connect(self.removed.emit)
@@ -165,6 +173,13 @@ class Segmented(QFrame):
         self.buttons[0].setChecked(True)
         for index, item in enumerate(self.buttons):
             item.clicked.connect(lambda _checked=False, i=index: self.changed.emit(i))
+
+    def set_compact(self, compact: bool) -> None:
+        """Más angosto en el panel acoplado (menos relleno en cada opción)."""
+        for item in self.buttons:
+            item.setProperty("compact", compact)
+            item.style().unpolish(item)
+            item.style().polish(item)
 
     @property
     def current(self) -> int:
