@@ -175,15 +175,15 @@ GEO = (
 
 @pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
 @pytest.mark.parametrize("fmt", [f for f in ExportFormat if f.needs_spatial])
-def test_gdal_formats_keep_rows_and_crs_and_leave_the_axis_setting_alone(worker, tmp_path, fmt):
+def test_gdal_formats_keep_rows_and_crs_and_set_the_axis_order(worker, tmp_path, fmt):
     target = tmp_path / f"pozos{fmt.suffix}"
     request = ExportRequest(GEO, str(target), fmt, None, allow_spatial=True)
     report = worker.export_query(request).future.result(TIMEOUT)
     assert report.rows == 50 and target.exists()
     assert leftovers(tmp_path) == []
-    # el ajuste quedó como estaba: sin fijar
+    # #193: con `spatial`, longitud y latitud
     rows = run_sql(worker, "SELECT value FROM duckdb_settings() WHERE name = 'geometry_always_xy'").rows
-    assert rows == ((None,),)
+    assert rows == (("true",),)
     source = quote_string_literal(str(target))
     back = run_sql(worker, f"SELECT count(*) FROM ST_Read({source})").rows
     assert back == ((50,),)

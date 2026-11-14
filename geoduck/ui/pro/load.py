@@ -676,24 +676,9 @@ def export_menu(parent: QWidget, on_pick: Callable[[Any], None]) -> QMenu:
     return menu
 
 
-def confirm_spatial(label_text: str, installed: bool) -> bool:
-    """Permiso para instalar o cargar `spatial` antes de exportar a un formato de GDAL (spatial-spec §10)."""
-    from qgis.PyQt.QtWidgets import QApplication, QMessageBox  # noqa: PLC0415
-
-    box = QMessageBox(QApplication.activeWindow())
-    box.setWindowTitle(tr("GeoDuck"))
-    text = tr("«{0}» is written with the «spatial» extension (the fastest).").format(label_text)
-    if installed:
-        text += " " + tr("It is installed but not loaded: GeoDuck will load it now, for this session.")
-        go = box.addButton(tr("Load and export"), QMessageBox.ButtonRole.AcceptRole)
-    else:
-        text += " " + tr("It is not installed: GeoDuck will install it now (only once, about 40 MB).")
-        go = box.addButton(tr("Install and export"), QMessageBox.ButtonRole.AcceptRole)
-    box.setText(text)
-    box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
-    box.setDefaultButton(go)
-    box.exec()
-    return box.clickedButton() is go
+def SPATIAL_MISSING() -> str:  # noqa: N802 - un texto fijo, traducido al pedirlo
+    """#193: `spatial` no está cargada (no se pudo instalar al iniciar, p. ej. sin internet)."""
+    return tr("The «spatial» extension is required for spatial analysis. It could not be installed.")
 
 
 def confirm_connected(name: str, message: str) -> bool:
@@ -719,10 +704,6 @@ def confirm_connected(name: str, message: str) -> bool:
 ASK_CONNECTED: Callable[[str, str], bool] = confirm_connected
 
 
-#: Pregunta de `spatial` antes de exportar (las pruebas la reemplazan).
-ASK_SPATIAL: Callable[[str, bool], bool] = confirm_spatial
-
-
 def export_query(  # noqa: PLR0917 - una acción con su contexto completo
     coordinator: Any,
     sql: str,
@@ -733,27 +714,8 @@ def export_query(  # noqa: PLR0917 - una acción con su contexto completo
     notify: Callable[[str], None],
 ) -> None:
     """«Exportar ▾»: la consulta completa (no la vista previa), en el worker, siempre con DuckDB. Un formato
-    de GDAL sin `spatial` cargada pide permiso antes (spatial-spec §10); sin ese sí, no se instala nada."""
-    if not fmt.needs_spatial:
-        _export(coordinator, sql, database, name, fmt, ask_path, notify, allow_spatial=False)
-        return
-
-    def checked(out: Any) -> None:
-        if isinstance(out, BaseException):
-            notify(tr("Cannot export: ") + str(out))
-            return
-        row = out.rows[0] if out.rows else (False, False)
-        installed, loaded = bool(row[0]), bool(row[1])
-        if not loaded and not ASK_SPATIAL(fmt.label, installed):
-            return
-        _export(coordinator, sql, database, name, fmt, ask_path, notify, allow_spatial=not loaded)
-
-    try:
-        coordinator.read_rows(
-            "SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'", 1, checked
-        )
-    except GeoDuckError as exc:
-        notify(tr("Cannot export: ") + exc.message)
+    de GDAL usa `spatial`, cargada al iniciar; si faltara, se intenta otra vez al exportar (#193)."""
+    _export(coordinator, sql, database, name, fmt, ask_path, notify, allow_spatial=fmt.needs_spatial)
 
 
 def _export(  # noqa: PLR0917 - una acción con su contexto completo

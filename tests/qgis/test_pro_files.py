@@ -263,8 +263,8 @@ def test_with_the_click_spatial_loads_and_the_layers_appear(coordinator, tmp_pat
     assert wait_scanned(ws)
     window = ws.to_duckdb.window
     assert window.note.isVisible()
-    assert wait_for(lambda: window.spatial_button.text() == tr("Load and continue"), TIMEOUT)
-    window.spatial_button.click()  # el permiso del usuario
+    assert wait_for(lambda: window.spatial_button.text() == tr("Retry"), TIMEOUT)
+    window.spatial_button.click()  # «Reintentar»
     assert wait_for(lambda: not window.note.isVisible() and "file:0" in window.rows, TIMEOUT)
     assert wait_for(lambda: ws.to_duckdb._candidates[0].problem is None, TIMEOUT)
     assert window.rows["file:0"].name == "pozos"
@@ -318,8 +318,8 @@ def test_a_layer_from_a_file_offers_to_speed_up_and_never_blocks(coordinator, tm
     flow = ws.to_duckdb
     assert flow._candidates[0].path == PATH_GDAL
     window = flow.window
-    assert wait_for(window.note.isVisible, TIMEOUT)  # «Instalar/Cargar y acelerar»
-    assert window.spatial_button.text() == tr("Load and speed up")
+    assert wait_for(window.note.isVisible, TIMEOUT)  # sin `spatial` (#193): el aviso y «Reintentar»
+    assert window.spatial_button.text() == tr("Retry")
     dialog = to_step_two(ws)  # sin el clic: QGIS la copia, como siempre
     assert flow._candidates[0].path_for(False, False, dialog.duckdb_reads) == PATH_QGIS
     window.spatial_button.click()  # en el mismo diálogo (#148)

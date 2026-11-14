@@ -57,6 +57,7 @@ from geoduck.domain.session import SessionState
 from geoduck.domain.sql_errors import explain
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.error_card import ErrorCardView
+from geoduck.ui.pro.load import SPATIAL_MISSING
 from geoduck.ui.pro.timeline import SKIPPED, Step, seconds_text  # los demás estados se escriben igual
 from geoduck.ui.pro.transfer import APPEND, CONFLICT, ERROR, FORM, RENAME, REPLACE, NameRow, TransferWindow
 from geoduck.ui.pro.widgets import button, label, lines_html
@@ -126,7 +127,7 @@ class AddLayersWindow(TransferWindow):
         self.destination.addWidget(self.schema)
         self.database.currentIndexChanged.connect(lambda _i: flow.database_changed())
         self.schema.currentIndexChanged.connect(lambda _i: flow.schema_changed())
-        # `spatial`, solo con el permiso del usuario (spatial-spec §10, ADR-0011)
+        # `spatial` faltante (#193): el aviso y «Reintentar»
         self.note = QFrame()
         self.note.setProperty("pro", "name-note")
         self.note.setProperty("tone", "conflict")
@@ -327,71 +328,44 @@ class AddLayers:
         self.choice_changed()
 
     def _show_speed_note(self, error: str = "") -> None:
-        """Capas de QGIS que vienen de un archivo: con `spatial`, DuckDB las copia mucho más rápido (§5.4).
-        Sin el clic, las copia QGIS como siempre: nunca bloquea."""
-        window = self._window()
-        installed = self._spatial_installed
-        label_text = tr("Load and speed up") if installed else tr("Install and speed up")
-        text = tr(
-            "With the «spatial» extension, layers that come from a file are copied directly by GeoDuck: "
-            "up to 20 times faster."
-        )
-        text += " " + (
-            tr("It is installed but not loaded: GeoDuck will load it when you press «{0}».")
-            if installed
-            else tr(
-                "It is not installed: GeoDuck will install it when you press «{0}» (only once, about 40 MB)."
-            )
-        ).format(label_text)
-        text += " " + tr("Without it, QGIS copies them as usual.")
-        if error:
-            text += "\n" + tr("It could not be activated: ") + error
-        window.note_text.setText(text)
-        window.spatial_button.setText(label_text)
-        window.spatial_button.setEnabled(not self._activating)
-        window.note.setVisible(True)
+        """Capas de QGIS que vienen de un archivo: con `spatial` las copia GeoDuck directo (§5.4). Sin ella
+        (no se pudo instalar al iniciar), las copia QGIS como siempre: nunca bloquea."""
+        self._show_missing(tr("Without it, QGIS copies these layers as usual."), error)
 
     def _show_spatial_note(self, error: str = "") -> None:
         if not self.files:
             self._show_speed_note(error)
             return
-        window = self._window()
         formats = file_formats_needing_spatial(
             [c.file for c in self._candidates if c.problem == NEEDS_SPATIAL]
         )
-        installed = self._spatial_installed
-        if installed:
-            action = tr("It is installed but not loaded: GeoDuck will load it when you press «{0}».")
-            label_text = tr("Load and continue")
-        else:
-            action = tr(
-                "It is not installed: GeoDuck will install it when you press «{0}» (only once, about 40 MB)."
-            )
-            label_text = tr("Install and continue")
-        text = tr("{0} are read with the «spatial» extension (the fastest).").format(formats)
-        text += " " + action.format(label_text)
+        self._show_missing(tr("{0} are read with it.").format(formats), error)
+
+    def _show_missing(self, detail: str, error: str) -> None:
+        """#193: `spatial` se carga al iniciar; si falta (sin internet), el mismo aviso con «Reintentar»."""
+        window = self._window()
+        text = f"{SPATIAL_MISSING()} {detail}"
         if error:
-            text += "\n" + tr("It could not be activated: ") + error
+            text += "\n" + error
         window.note_text.setText(text)
-        window.spatial_button.setText(label_text)
+        window.spatial_button.setText(tr("Retry"))
         window.spatial_button.setEnabled(not self._activating)
         window.note.setVisible(True)
 
     def activate_spatial(self) -> None:
-        """«Instalar y continuar» o «Cargar y continuar»: el único lugar donde GeoDuck instala o carga
-        `spatial`, porque el usuario lo pidió (spatial-spec §10)."""
+        """«Reintentar»: instala (si hace falta) y carga `spatial` (#193)."""
         if self._activating:
             return
         self._activating = True
         try:
-            self._coordinator.activate_spatial(install=not self._spatial_installed)
+            self._coordinator.activate_spatial(install=True)
         except GeoDuckError as exc:
             self._activating = False
             self._show_spatial_note(exc.message)
             return
         window = self._window()
         window.spatial_button.setEnabled(False)
-        window.spatial_button.setText(tr("Installing…") if not self._spatial_installed else tr("Loading…"))
+        window.spatial_button.setText(tr("Installing…"))
 
     def _window(self) -> AddLayersWindow:
         if self.window is None:

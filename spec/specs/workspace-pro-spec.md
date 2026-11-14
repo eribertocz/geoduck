@@ -252,8 +252,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   Constraint…); el lugar, de su marca `LINE n ^^^^`; las sugerencias y los
   botones, solo de lo que DuckDB propone:
   - «Candidate bindings» / «Did you mean» → «Cambiar a «x»»;
-  - «exists in the spatial extension» → «Cargar «spatial»…», que pide permiso (ADR-0011, spatial-spec §10) y
-    no vuelve a ejecutar la consulta; otra extensión → «Escribir LOAD x» en el editor;
+  - «exists in the spatial extension» → «Cargar «spatial»» (normalmente ya cargada, #193; spatial-spec §10),
+    que no vuelve a ejecutar la consulta; otra extensión → «Escribir LOAD x» en el editor;
   - un valor que no se convierte → «Usar TRY_CAST» (`CAST(` → `TRY_CAST(`, `x::T` → `TRY_CAST(x AS T)`);
   - un archivo que no existe → «Elegir archivo…» (cambia la ruta) y «Abrir carpeta»;
   - sin memoria → cuánto se usó y «Subir memory_limit…» (escribe `SET memory_limit` antes de la sentencia).

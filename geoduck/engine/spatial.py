@@ -1,14 +1,17 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Extensión `spatial` en la sesión, solo con consentimiento (spatial-spec §10, ADR-0011, security.md §2).
+"""Extensión `spatial` en la sesión (spatial-spec §10, ADR-0011, #193).
 
-GeoDuck nunca la instala ni la carga por su cuenta: estas operaciones solo se ejecutan cuando el usuario
-lo confirma en «Activar spatial…» (`LOAD` y, aparte, `INSTALL`). El consentimiento vale para la sesión.
+GeoDuck es para análisis espacial: la sesión la carga al iniciar (y la instala si falta, del repositorio
+oficial firmado). Si no se pudo (sin internet), «Reintentar» vuelve a intentarlo con `activate_spatial`.
 """
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import duckdb
 
 from geoduck.engine.sql import axis_order_setting
 
@@ -42,4 +45,6 @@ def activate_spatial(handle: ConnectionHandle, *, install: bool) -> SpatialState
     if install:
         handle.execute("INSTALL spatial", max_rows=1)
     handle.execute("LOAD spatial", max_rows=1)
+    with contextlib.suppress(duckdb.Error):  # longitud, latitud (#193); el ajuste existe desde spatial 2.0
+        handle.execute("SET geometry_always_xy = true", max_rows=1)
     return spatial_state(handle)

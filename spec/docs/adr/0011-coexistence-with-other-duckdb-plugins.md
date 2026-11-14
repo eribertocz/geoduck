@@ -41,6 +41,14 @@ convivencia (R11) con cualquier complemento que incruste o fije su propio DuckDB
    aislamiento del motor en un proceso aparte o un rango de versiones compatible acordado. Se reevaluará
    en G11 (Reliability & Distribution; renumerado el 2026-11-02, el 2026-11-03 y el 2026-11-05).
 
+## Actualización (#193, decisión del propietario, 2026-11-14)
+
+La extensión oficial `spatial` es parte de GeoDuck: cada sesión de GeoDuck la carga al iniciar y, si falta,
+la instala del repositorio oficial firmado de DuckDB (spatial-spec §10). No cambia nada de lo anterior:
+GeoDuck sigue sin tocar paquetes, `sys.path`, carpetas ni configuración de otros complementos, y ninguna otra
+extensión se instala ni se carga por su cuenta. La extensión queda en el directorio de extensiones de DuckDB
+del usuario, como cuando el usuario ejecuta `INSTALL spatial`.
+
 ## Alternativas descartadas por ahora
 
 | Alternativa | Por qué no |

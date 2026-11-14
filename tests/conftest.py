@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+import os
 import sys
 from pathlib import Path
+
+# #193: GeoDuck carga `spatial` al iniciar cada sesión (~250 ms). Las pruebas, sin ella salvo las que la piden
+# (`GEODUCK_SPATIAL=1` o `SessionWorker(spatial=True)`): son miles de sesiones y la mayoría mide el camino
+# del núcleo de DuckDB.
+os.environ.setdefault("GEODUCK_SPATIAL", "0")
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

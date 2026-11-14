@@ -65,6 +65,8 @@ from geoduck.app.events import (
     SessionInvalidated,
     SessionStarted,
     SessionStateChanged,
+    SpatialActivated,
+    SpatialActivationFailed,
     TransactionFailed,
     VocabularyChanged,
 )
@@ -87,7 +89,14 @@ from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import accepts, drop_hint, file_paths, layer_ids, menu_title, place_job
 from geoduck.ui.pro.export_progress import ExportProgress
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_lines, is_temporary, layer_name, load_menu
+from geoduck.ui.pro.load import (
+    SPATIAL_MISSING,
+    QuickLoad,
+    finished_lines,
+    is_temporary,
+    layer_name,
+    load_menu,
+)
 from geoduck.ui.pro.load_window import LoadWindow
 from geoduck.ui.pro.open_files import open_in_qgis
 from geoduck.ui.pro.palette import CommandPalette, Entry
@@ -204,6 +213,7 @@ class ProWorkspace(QWidget):
         self._unavailable: set[str] = set()
         self._bases: dict[str, Any] = {}
         self._detaching: str | None = None
+        self._retrying_spatial = False
         self._resave_project: Callable[[], None] | None = None
         #: #168: el alias de una base nueva en memoria y confirmar cerrar una base en memoria con tablas.
         self._ask_alias = ask_alias
@@ -1138,6 +1148,15 @@ class ProWorkspace(QWidget):
         if lost:
             self.notify(_left_unavailable(sorted(lost)))
 
+    def _spatial_missing(self, message: str) -> None:
+        """#193: GeoDuck carga `spatial` al iniciar; si no pudo (sin internet), lo dice con «Reintentar».
+        Todo lo demás funciona como siempre."""
+        self._bar(f"{SPATIAL_MISSING()} {message}", "warning", [(tr("Retry"), self.retry_spatial)])
+
+    def retry_spatial(self) -> None:
+        self._retrying_spatial = True
+        self._guard(lambda: self._coordinator.activate_spatial(install=True))
+
     def _session_closed(self) -> None:
         """Situación 5 de #183: las capas Conectadas vuelven al iniciar GeoDuck y abrir sus bases."""
         layers = self._coordinator.unavailable_layers()
@@ -1523,6 +1542,14 @@ class ProWorkspace(QWidget):
             if self._closing and self._coordinator.state is SessionState.DISCONNECTED:
                 self._closing = False
                 self._session_closed()
+            if isinstance(event, SessionStarted) and event.info.spatial_error:
+                self._spatial_missing(event.info.spatial_error)
+        elif isinstance(event, SpatialActivated) and self._retrying_spatial:
+            self._retrying_spatial = False
+            self._bar(tr("The «spatial» extension is loaded: spatial analysis is available."), "success")
+        elif isinstance(event, SpatialActivationFailed) and self._retrying_spatial:
+            self._retrying_spatial = False
+            self._spatial_missing(event.message)
         elif isinstance(event, CatalogChanged):
             self.sidebar.render(event.catalog)
             self._render()

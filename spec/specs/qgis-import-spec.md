@@ -72,10 +72,9 @@ acción explica que hay que iniciar una.
    selección, sin «Reproyectar a…» y sin «Añadir filas»: `CREATE TABLE … AS SELECT * FROM ST_Read('ruta',
    layer = '…')` dentro de DuckDB, con el SRC de la capa (`ST_SetCRS`). Medido (2 núcleos, GeoPackage con
    EPSG:32719): 1 millón de puntos en 0,3 s contra 6,9 s por el camino 3 (**23×**); 200 000 polígonos en 0,3 s
-   contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
-   «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
-   ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
-   ese clic, el camino 3. El resumen dice «leído directo por GeoDuck». **El filtro de la capa** va como `WHERE`
+   contra 2,4 s (**8×**). Usa `spatial`, cargada al iniciar (#193); si faltara, el paso 1 muestra el aviso de
+   spatial-spec §10 («… Sin ella, QGIS copia estas capas como siempre.») con «Reintentar». **Nunca bloquea:**
+   sin ella, el camino 3. El resumen dice «leído directo por GeoDuck». **El filtro de la capa** va como `WHERE`
    y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
    esa capa se copia por el camino 3, sin error. **Trazabilidad** (#148: la línea de tiempo vertical de
    workspace-pro-spec §9, también en «Exportar ▾»): origen y filtro → lectura («⚡ Lectura directa con
@@ -162,10 +161,9 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
   | JSON / NDJSON | `.json` `.ndjson` `.jsonl` | `read_json` (incluido) |
   | ⚡ FlatGeobuf, GeoPackage, Shapefile (`.shp` o `.zip`), GeoJSON (`.geojson` `.geojsonl`), KML/KMZ, Geodatabase de ArcGIS (`.gdb`), OpenStreetMap (`.osm.pbf`, solo importar), Excel (`.xlsx`) | | `ST_Read` de `spatial` (GDAL de DuckDB) |
 
-- **`spatial` con consentimiento (ADR-0011):** si hace falta y no está cargada, el paso 1 lo dice en una nota
-  («… se leen con la extensión «spatial» de DuckDB. No está instalada: GeoDuck la instalará al pulsar
-  «Instalar y continuar» (una sola vez, ~40 MB)»). Sin ese clic, GeoDuck no instala ni carga nada; los archivos
-  que no la necesitan se pueden importar igual. No hay lector alternativo.
+- **`spatial` (#193):** cargada al iniciar. Si faltara (sin internet), el paso 1 muestra el aviso de
+  spatial-spec §10 («… GeoPackage se leen con ella.») con «Reintentar»; los archivos que no la necesitan se
+  pueden importar igual. No hay lector alternativo.
 - **Paso 1 (Archivos):** una fila por capa u hoja (un GeoPackage o una Geodatabase muestran sus capas; un Excel,
   sus hojas), agrupadas en puntos, líneas, polígonos y tablas sin geometría, con el formato, el SRC y las
   filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).

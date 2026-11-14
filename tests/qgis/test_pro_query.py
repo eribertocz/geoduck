@@ -426,21 +426,24 @@ def test_export_menu_shows_four_formats_and_the_rest_one_step_back(coordinator):
     assert all(a.toolTip() for a in more.actions() if a.data())
 
 
-def test_a_gdal_format_asks_before_loading_spatial_and_cancel_exports_nothing(
-    coordinator, tmp_path, monkeypatch
-):
-    from geoduck.ui.pro import load as load_module
+def test_a_gdal_format_exports_without_asking_first(coordinator, tmp_path):
+    """#193: `spatial` es parte de GeoDuck: exportar a GeoPackage no pide permiso (si faltara, la carga)."""
+    import duckdb
 
-    asked = []
-    monkeypatch.setattr(load_module, "ASK_SPATIAL", lambda label, installed: asked.append(label) or False)
+    probe = duckdb.connect()
+    try:
+        probe.execute("LOAD spatial")
+    except duckdb.Error:
+        pytest.skip("extensión spatial no instalada aquí")
+    finally:
+        probe.close()
     target = tmp_path / "salida.gpkg"
     ws = workspace(coordinator, paths=[str(target)])
     page = new_query(ws, "SELECT 1 AS n;")
     page.run_button.click()
     assert wait_for(lambda: done(coordinator, page) and page.results)
     next(a for a in page.export_menu.actions() if a.data() == "gpkg").trigger()
-    assert wait_for(lambda: asked, 20)
-    assert asked == ["GeoPackage"] and not target.exists()
+    assert wait_for(lambda: target.exists() and coordinator.state is SessionState.READY, 60)
 
 
 def test_without_duckdb_everything_is_grey_except_start(qgis_app):
@@ -770,9 +773,8 @@ def test_an_error_geoduck_does_not_recognize_shows_duckdbs_message_as_is(coordin
     assert not card.toggle.isVisibleTo(card)
 
 
-def test_a_card_does_not_fix_a_text_that_changed_and_loading_spatial_asks_first(coordinator, monkeypatch):
+def test_a_card_does_not_fix_a_text_that_changed_and_loads_spatial_without_asking(coordinator, monkeypatch):
     from geoduck.domain.sql_errors import LOAD_EXTENSION, Fix
-    from geoduck.ui.pro import query_page as module
 
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT kwhh FROM range(1);")
@@ -784,10 +786,10 @@ def test_a_card_does_not_fix_a_text_that_changed_and_loading_spatial_asks_first(
     page.editor.setText("SELECT kwhh FROM range(1); -- cambiado")
     page.apply_fix(card.card.fixes[0], page.run_text)
     assert page.editor.text().endswith("-- cambiado") and notices
-    asked = []
-    monkeypatch.setattr(module, "ASK_EXTENSION", lambda name: asked.append(name) or False)
+    checked = []
+    monkeypatch.setattr(coordinator, "check_spatial", lambda: checked.append(True))
     page.apply_fix(Fix(LOAD_EXTENSION, "x", value="spatial"), page.run_text)
-    assert asked == ["spatial"]  # sin permiso, nada se instala ni se carga (ADR-0011)
+    assert checked == [True]  # #193: sin preguntar; la respuesta decide INSTALL + LOAD o solo LOAD
 
 
 def test_a_syntax_error_is_underlined_while_typing_without_running(coordinator):

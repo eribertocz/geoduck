@@ -8,7 +8,7 @@
 - El control RO de un catálogo `ATTACH` es específico de esa base y no impide `COPY` a un archivo distinto o cambios en otras bases.
 
 ## 2. Extensiones DuckDB
-- Extensión `spatial` oficial: soportada, con carga explícita y estado visible; cualquier instalación de componentes que necesite red se comunica al usuario.
+- Extensión `spatial` oficial: parte de GeoDuck (#193). Se instala del repositorio oficial firmado de DuckDB y se carga al iniciar la sesión, con su estado visible en «Diagnóstico»; si no se puede (sin red), se avisa con «Reintentar». Ninguna otra extensión se instala ni se carga por cuenta de GeoDuck.
 - No permitir extensiones sin firma por defecto.
 - Preferir permitir extensiones oficiales y restringir comunitarias por configuración, sin bloquear arbitrariamente el editor como si fuera un SQL distinto.
 - Instalación/carga de extensiones externas no controladas: mostrar advertencia/permiso explícito y registrar la decisión local.
