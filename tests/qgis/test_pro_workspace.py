@@ -373,8 +373,14 @@ def test_without_spatial_at_start_a_notice_offers_retry(coordinator, monkeypatch
         "Se requiere la extensión spatial para el análisis espacial. No se pudo instalar. "
         "IO Error: Failed to download extension"
     )
-    assert level == "warning" and [label for label, _ in actions] == ["Reintentar"]
+    assert level == "warning"
+    assert [label for label, _ in actions] == ["Reintentar", "Instalar desde un archivo…"]
     actions[0][1]()
     assert retries == [True]
+    files = []
+    monkeypatch.setattr(coordinator, "install_spatial_from", files.append)
+    ws._ask_spatial_file = lambda: "D:/descargas/spatial.duckdb_extension.gz"
+    actions[1][1]()
+    assert files == ["D:/descargas/spatial.duckdb_extension.gz"]
     ws._on_event(SpatialActivated("1.5", "true"))
     assert bars[-1][0] == "La extensión spatial está cargada: el análisis espacial está disponible."

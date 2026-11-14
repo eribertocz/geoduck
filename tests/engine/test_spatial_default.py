@@ -70,3 +70,33 @@ def test_spatial_can_be_left_out_for_tests():
         assert not info.spatial and info.spatial_error == ""
     finally:
         worker.close().result(TIMEOUT)
+
+
+@pytest.mark.skipif(not _spatial_available(), reason="extensión spatial no instalada aquí")
+def test_spatial_installs_from_a_local_file_without_internet(tmp_path):
+    """Una red sin salida a internet: el archivo descargado en otro equipo (Diagnóstico da el enlace)."""
+    import shutil
+
+    from geoduck.engine.probe import probe_spatial
+    from geoduck.engine.spatial import install_spatial_from
+
+    probe = probe_spatial()
+    assert probe.download_url.startswith("https://extensions.duckdb.org/v")
+    assert probe.download_url.endswith("/spatial.duckdb_extension.gz")
+    found = (
+        duckdb.connect()
+        .execute("SELECT install_path FROM duckdb_extensions() WHERE extension_name = 'spatial'")
+        .fetchone()[0]
+    )
+    copy = tmp_path / "spatial.duckdb_extension"
+    shutil.copy(found, copy)
+    worker = SessionWorker(spatial=False)
+    try:
+        worker.start().result(TIMEOUT)
+        empty = tmp_path / "extensiones"
+        sql(worker, f"SET extension_directory = '{empty}'")
+        state = worker.submit(lambda h, t: install_spatial_from(h, str(copy))).future.result(TIMEOUT)
+        assert state.loaded
+        assert sql(worker, "SELECT ST_Area('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'::GEOMETRY)") == ((4.0,),)
+    finally:
+        worker.close().result(TIMEOUT)

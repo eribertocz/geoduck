@@ -72,7 +72,7 @@ from geoduck.engine.detach import detach_database
 from geoduck.engine.export import export_query
 from geoduck.engine.files import scan_files
 from geoduck.engine.importing import drop_imported, import_batches, import_target
-from geoduck.engine.spatial import activate_spatial, spatial_state
+from geoduck.engine.spatial import activate_spatial, install_spatial_from, spatial_state
 from geoduck.engine.sql import StatementListener, run_in_database, run_script, use_database
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
@@ -377,8 +377,12 @@ class SessionWorker:
         return self.submit(lambda h, t: scan_files(h, paths, t))
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:
-        """`INSTALL` (si `install`) y `LOAD spatial`, con consentimiento del usuario (spatial-spec §10)."""
+        """`INSTALL` (si `install`) y `LOAD spatial` (spatial-spec §10)."""
         return self._submit_future(lambda h, _t: activate_spatial(h, install=install))
+
+    def install_spatial_from(self, path: str) -> Future[Any]:
+        """`INSTALL '<archivo>'` y `LOAD spatial`: sin salida a internet (#193)."""
+        return self._submit_future(lambda h, _t: install_spatial_from(h, path))
 
     def prepare_load(
         self,

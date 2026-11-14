@@ -19,6 +19,11 @@ def _setting(con: duckdb.DuckDBPyConnection, name: str) -> object:
     return row[0] if row else None
 
 
+def spatial_url(version: str, platform: str) -> str:
+    """El archivo de `spatial` del repositorio oficial para esta versión de DuckDB y este sistema (#193)."""
+    return f"https://extensions.duckdb.org/v{version}/{platform}/spatial.duckdb_extension.gz"
+
+
 def probe_spatial() -> SpatialProbe:
     con = duckdb.connect(":memory:")
     try:
@@ -47,7 +52,10 @@ def probe_spatial() -> SpatialProbe:
             ).fetchone()
             if row is not None:
                 always_xy = tr("not set") if row[0] in (None, "") else str(row[0]).lower()
+        found = con.execute("PRAGMA platform").fetchone()
+        platform = str(found[0]) if found else ""
         return SpatialProbe(
+            download_url=spatial_url(duckdb.__version__, platform) if platform else "",
             installed=installed,
             always_xy=always_xy,
             loaded=loaded,

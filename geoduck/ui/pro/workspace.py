@@ -214,6 +214,8 @@ class ProWorkspace(QWidget):
         self._bases: dict[str, Any] = {}
         self._detaching: str | None = None
         self._retrying_spatial = False
+        #: El archivo de `spatial` para «Instalar desde un archivo…» (las pruebas lo reemplazan).
+        self._ask_spatial_file: Callable[[], str] = self._spatial_file_dialog
         self._resave_project: Callable[[], None] | None = None
         #: #168: el alias de una base nueva en memoria y confirmar cerrar una base en memoria con tablas.
         self._ask_alias = ask_alias
@@ -1151,7 +1153,29 @@ class ProWorkspace(QWidget):
     def _spatial_missing(self, message: str) -> None:
         """#193: GeoDuck carga `spatial` al iniciar; si no pudo (sin internet), lo dice con «Reintentar».
         Todo lo demás funciona como siempre."""
-        self._bar(f"{SPATIAL_MISSING()} {message}", "warning", [(tr("Retry"), self.retry_spatial)])
+        self._bar(
+            f"{SPATIAL_MISSING()} {message}",
+            "warning",
+            [(tr("Retry"), self.retry_spatial), (tr("Install from a file…"), self.install_spatial_from_file)],
+        )
+
+    def install_spatial_from_file(self) -> None:
+        """Una red sin salida a internet: el archivo de `spatial` descargado en otro equipo («Diagnóstico»
+        dice cuál)."""
+        path = self._ask_spatial_file()
+        if not path:
+            return
+        self._retrying_spatial = True
+        self._guard(lambda: self._coordinator.install_spatial_from(path))
+
+    def _spatial_file_dialog(self) -> str:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("Install the «spatial» extension"),
+            "",
+            tr("«spatial» extension") + " (*.duckdb_extension *.duckdb_extension.gz)",
+        )
+        return path
 
     def retry_spatial(self) -> None:
         self._retrying_spatial = True

@@ -307,7 +307,12 @@ def _check_spatial(prober: SpatialProber | None) -> Check:
             "Not installed (extension directory: {0}). It is required for spatial analysis: GeoDuck "
             "installs it when it starts."
         ).format(probe.extension_directory or "predeterminado"),
-        tr("Start GeoDuck with internet access, or use «Retry» in the notice."),
+        tr(
+            "Start GeoDuck with internet access. Without it, download {0} on another computer and use "
+            "«Install from a file…» in the notice."
+        ).format(probe.download_url)
+        if probe.download_url
+        else tr("Start GeoDuck with internet access, or use «Retry» in the notice."),
     )
 
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import duckdb
 
+from geoduck.domain.sql_text import quote_string_literal
 from geoduck.engine.sql import axis_order_setting
 
 if TYPE_CHECKING:
@@ -38,6 +39,13 @@ def spatial_state(handle: ConnectionHandle) -> SpatialState:
         return SpatialState(False, False)
     installed, loaded, version = bool(rows[0][0]), bool(rows[0][1]), str(rows[0][2])
     return SpatialState(installed, loaded, version, axis_order_setting(handle) if loaded else None)
+
+
+def install_spatial_from(handle: ConnectionHandle, path: str) -> SpatialState:
+    """«Instalar desde un archivo…» (#193): una red sin salida a internet. El archivo debe ser el de esta
+    versión de DuckDB y este sistema; si no, DuckDB lo dice."""
+    handle.execute(f"INSTALL {quote_string_literal(path)}", max_rows=1)
+    return activate_spatial(handle, install=False)
 
 
 def activate_spatial(handle: ConnectionHandle, *, install: bool) -> SpatialState:
