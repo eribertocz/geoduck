@@ -2066,10 +2066,11 @@ y el total es otra ejecución. Nuevo contrato:
 - **Tabla (GD-PERF-008):** el mismo scroll continuo; páginas por posición (`rowid`) cuando no hay orden ni filtro,
   en vez de `OFFSET`; total estimado al instante (metadatos) y exacto después. Meta: ir a cualquier parte de una
   tabla de 100 millones de filas ≤ 100 ms sin filtro.
-- **Cargar en QGIS (GD-PERF-009):** «Copia» escrita por DuckDB directo a GeoPackage cuando `spatial` está cargada
-  (con el permiso de spatial-spec §10; si no, el camino actual), comprobando filas y SRC. «Conectada»: caché de
-  páginas por extensión y cancelación inmediata de lo que ya no se ve. La selección de QGIS, leída por DuckDB
-  (lista de identificadores) en «→ GeoDuck». Progreso real con porcentaje en importar y exportar.
+- **Cargar en QGIS (GD-PERF-009):** «Conectada»: cancelación inmediata de lo que ya no se ve y conversión por
+  fila mínima (E4b: un caché por extensión no ayuda, el costo es por fila entregada; `docs/evidence/g10/174/`).
+  La «Copia» escrita por DuckDB directo se descartó (2026-11-14): el índice espacial cuesta lo mismo en los dos
+  caminos y no hubo mejora medida. Pendientes de decisión: la selección de QGIS leída por DuckDB en «→ GeoDuck»
+  y el progreso real con porcentaje en importar y exportar.
 - **Catálogo (GD-PERF-010):** columnas y autocompletado cargados por partes; bases con 10 000 tablas sin pausas
   (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla). Hecho en E4b (#174): lo plegado se crea al desplegarlo; Ctrl+K busca
   cada letra entre lo que ya coincidía (`docs/evidence/g10/174/`).

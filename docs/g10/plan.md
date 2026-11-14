@@ -48,4 +48,5 @@ regresiones G0–G9. Tag y release `v0.11.0a1` solo los hace el propietario.
 | Errores de DuckDB tal cual (#189) | Fusionado (#190): lo que GeoDuck no reconoce, con el texto de DuckDB como título; abrir y cerrar bases y los errores del motor, con el mensaje completo | — |
 | E4 Interfaz sin bloqueos (#173) | Fusionado (#191): pausa al abrir una tabla de 121 a 32 ms (sin rehacer el explorador; iconos pintados una vez); transferencias p95 ≤ 9 ms y máx. 66 ms; F-129 resuelto (entorno de pruebas); `tools/pro_bench.py` al día | — |
 | E4b Catálogo por partes (#174, punto 4) | Fusionado (#192): con 10 000 tablas, lo plegado se crea al desplegarlo (≈ 65 ms) y Ctrl+K ≤ 20 ms por tecla. Puntos 1–3 de #174 esperan la decisión de `spatial` | — |
-| `spatial` por defecto (#193) | En revisión: se instala (si falta) y se carga al iniciar, `geometry_always_xy = true`; sin internet, aviso con «Reintentar»; sin permisos de «Instalar y continuar» | — |
+| `spatial` por defecto (#193) | Fusionado (#194): se instala (si falta) y se carga al iniciar, `geometry_always_xy = true`; sin internet, aviso con «Reintentar»; sin permisos de «Instalar y continuar» | — |
+| E4b «Conectada» más rápida (#174, punto 2) | En revisión: 1 millón de puntos de 4,1–4,9 s a 3,3–3,7 s; con zoom y al mover, ~25 % menos. Punto 1 descartado (sin mejora medida) | — |
