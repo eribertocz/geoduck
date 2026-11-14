@@ -15,7 +15,7 @@ import pytest
 from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication, QPushButton, QShortcut
+from qgis.PyQt.QtWidgets import QApplication, QPushButton, QShortcut, QTreeWidgetItem
 
 from geoduck.app.coordinator import SessionCoordinator
 from geoduck.domain.i18n import tr
@@ -145,9 +145,17 @@ def test_the_sidebar_lists_databases_schemas_tables_views_and_temporaries(coordi
     assert ("table", "main", "consumidores") in places
     assert ("table", "ventas", "facturas") in places
     assert ("table", "main", "temporal") in places
-    views = item_of(ws, "v_consumo")
-    assert views.parent().text(0) == tr("Views") + " (1)"
-    assert not views.parent().isExpanded()  # las vistas, plegadas hasta que se abren
+    tree = ws.sidebar.tree
+    group = next(
+        item
+        for item in tree.findItems(
+            tr("Views") + " (1)", Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive
+        )
+    )
+    assert not group.isExpanded()  # las vistas, plegadas hasta que se abren
+    assert group.childCount() == 0  # #174: lo plegado se crea al desplegarlo
+    group.setExpanded(True)
+    assert item_of(ws, "v_consumo").parent() is group
 
 
 def test_double_click_opens_a_tab_once_and_ctrl_w_closes_it(coordinator):
@@ -300,3 +308,47 @@ def test_the_style_stays_inside_geoduck_and_every_icon_button_has_a_name(coordin
     for widget in ws.findChildren(QPushButton):
         if not widget.text():
             assert widget.accessibleName() and widget.toolTip(), widget.objectName()
+
+
+def test_a_folded_database_with_many_tables_is_built_when_unfolded_and_still_searchable(coordinator):
+    """#174: con miles de tablas, el explorador no crea las filas de lo plegado; desplegar, buscar y revelar
+    (Ctrl+clic en el SQL) las crean."""
+    start(coordinator)
+    ws = workspace(coordinator)
+    tables = "; ".join(f"CREATE TABLE t_{i:04d} (x INT)" for i in range(2000))
+    run(coordinator, tables, has("t_1999"))
+    tree = ws.sidebar.tree
+    database = next(
+        tree.topLevelItem(i)
+        for i in range(tree.topLevelItemCount())
+        if tree.topLevelItem(i).text(0) == "memory"
+    )
+    assert database.childCount() == 2000  # desplegada: todas
+    database.setExpanded(False)
+    ws.sidebar.render(coordinator.catalog)
+    database = next(
+        tree.topLevelItem(i)
+        for i in range(tree.topLevelItemCount())
+        if tree.topLevelItem(i).text(0) == "memory"
+    )
+    assert database.childCount() == 0 and not database.isExpanded()
+    assert database.childIndicatorPolicy() == QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator
+    ws.sidebar.search.edit.setText("t_1234")
+    assert [p.name for p in ws.sidebar.visible_places()] == ["t_1234"]
+    ws.sidebar.search.edit.clear()
+    ws.sidebar.render(coordinator.catalog)
+    assert ws.sidebar.reveal("memory", "main", "t_0042")
+    assert tree.currentItem().text(0) == "t_0042"
+
+
+def test_ctrl_k_narrows_each_key_and_finds_the_same_as_a_full_search():
+    """#174: cada letra más busca solo entre lo que ya coincidía, sin perder resultados."""
+    from geoduck.ui.pro import fuzzy
+
+    names = [
+        fuzzy.fold(n) for n in ("consumo_total", "costos", "zona_norte", "contadores", "Año_2024", "cons")
+    ]
+    for query in ("c", "co", "con", "cons", "cnt", "ano"):
+        letters = fuzzy.in_order_pattern(query)
+        pool = [n for n in names if letters.search(n)]
+        assert fuzzy.rank(query, pool, lambda n: n) == fuzzy.rank(query, names, lambda n: n)
