@@ -232,12 +232,39 @@ class Browse:
                 parts.append(name)
         return ", ".join(parts)
 
-    def page_sql(self, offset: int) -> str:
-        """Una página de `PAGE` filas desde `offset`."""
+    @property
+    def plain_table(self) -> bool:
+        """Una tabla sin filtros ni orden: se puede leer por posición con `rowid` (performance-spec §9)."""
+        return self.has_rowid and not self.subquery and not self.filtered and self.order is None
+
+    def page_sql(self, offset: int, *, by_rowid: bool = False) -> str:
+        """Un bloque de `PAGE` filas desde `offset`. Con `by_rowid` (una tabla sin filtros ni orden cuyos
+        `rowid` van seguidos, sin huecos), por posición: no crece con la fila, a diferencia de `OFFSET`."""
+        start = max(0, int(offset))
+        if by_rowid and self.plain_table:
+            return (
+                f"SELECT {self._select_list(preview=True)} FROM {self.source}"
+                f" WHERE rowid >= {start} AND rowid < {start + PAGE} ORDER BY rowid"
+            )
         return (
             f"SELECT {self._select_list(preview=True)} FROM {self.source}{self._where()}{self._order_by()}"
-            f" LIMIT {PAGE} OFFSET {max(0, int(offset))}"
+            f" LIMIT {PAGE} OFFSET {start}"
         )
+
+    def estimate_sql(self) -> str | None:
+        """El total estimado al instante, de los metadatos de DuckDB (sin leer filas); None si no es una
+        tabla sin filtros."""
+        if not self.plain_table:
+            return None
+        return (
+            "SELECT estimated_size FROM duckdb_tables() WHERE database_name = "
+            f"{quote_string_literal(self.database)} AND schema_name = {quote_string_literal(self.schema)}"
+            f" AND table_name = {quote_string_literal(self.name)}"
+        )
+
+    def last_rowid_sql(self) -> str:
+        """El último `rowid`: si es el total menos uno, no hay huecos y se puede leer por posición."""
+        return f"SELECT max(rowid) FROM {self.source}"
 
     def row_sql(self, index: int) -> str:
         """Una fila entera (geometrías completas) para el detalle."""
@@ -317,12 +344,15 @@ def size_sql(database: str, schema: str, name: str) -> str:
     )
 
 
-def page_label(offset: int, shown: int, total: int | None) -> str:
-    """«Filas 1–100 de 48 312»; «Filas 1–100 de …» mientras se cuenta. El mismo texto en la pestaña de tabla
-    y en el resultado de una consulta (propietario, 2026-11-06)."""
+def page_label(offset: int, shown: int, total: int | None, *, estimate: int | None = None) -> str:
+    """«Filas 1–100 de 48 312» según lo visible; «de ≈ 48 300» con el total estimado y «de …» mientras se
+    cuenta. El mismo texto en la pestaña de tabla y en el resultado de una consulta (propietario, 2026-11-06;
+    #170: desplazamiento continuo)."""
     if shown == 0:
         return tr("No rows")
     span = f"{number_text(offset + 1)}–{number_text(offset + shown)}"
+    if total is None and estimate is not None:
+        return tr("Rows {} of {}").format(span, "≈ " + number_text(estimate))
     if total is None:
         return tr("Rows {} of …").format(span)
     return tr("Rows {} of {}").format(span, number_text(total))

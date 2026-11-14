@@ -116,10 +116,11 @@ def test_a_million_rows_first_page_quickly_then_the_total(consumidores):
     assert wait_for(lambda: loaded(page))
     elapsed = time.perf_counter() - begin
     assert elapsed < 2.0, elapsed  # objetivo §13: < 0,5 s en la máquina de referencia (se mide en E7)
-    assert page.model.rowCount() == PAGE
+    shown = page.model.rowCount()  # #170: el modelo tiene solo las filas que se ven
+    assert 0 < shown <= PAGE and shown == min(page.model.visible, PAGE)
     assert wait_for(lambda: counted(page))
     assert page.total == 1_000_000
-    assert page.range_label.text() == tr("Rows {} of {}").format("1–100", "1 000 000")
+    assert page.range_label.text() == tr("Rows {} of {}").format(f"1–{shown}", "1 000 000")
     assert [c.name for c in page.model.columns] == ["id", "nombre", "kwh"]
     assert page.model.headerData(0, 2) == "1"  # número de fila (vertical)
     # el tipo ya no va al lado del nombre: icono de su familia y el tipo completo en la ayuda (2026-11-13)
@@ -148,12 +149,14 @@ def test_sort_filters_search_and_pages_match_sql(consumidores):
         "SELECT count(*) FROM consumidores WHERE kwh > 700 AND id < 200000 AND nombre ILIKE '%cliente 19%'",
     )
     assert wait_for(lambda: page.total == expected and loaded(page))
-    first = page.model.rows[0][0]
-    page.next_button.click()
-    assert wait_for(lambda: page.offset == PAGE and loaded(page) and page.model.rows[0][0] != first)
-    assert page.range_label.text().startswith(tr("Rows {} of {}").split("{}")[0] + "101–200")
-    page.prev_button.click()
-    assert wait_for(lambda: page.offset == 0 and page.model.rows[0][0] == first)
+    first = page.model.row(0)[0]
+    assert page.total > PAGE
+    page.go(PAGE)  # #170: desplazarse hasta la fila 101 (antes, «›»)
+    assert wait_for(lambda: page.offset == PAGE and page.model.row(0) is not None)
+    assert page.model.row(0)[0] != first
+    assert page.range_label.text().startswith(tr("Rows {} of {}").split("{}")[0] + "101–")
+    page.go(0)
+    assert wait_for(lambda: page.offset == 0 and page.model.row(0)[0] == first)
     page.remove_filter(0)
     assert page.chips.count() == 1 and page.browse.filters == (Filter("id", LT, "200000"),)
 
@@ -257,3 +260,35 @@ def test_a_dropped_table_says_so_and_a_closed_tab_stops_listening(coordinator):
     ws.tabs.close_current()
     assert page._closed
     run(coordinator, "CREATE TABLE efimera AS SELECT 1 AS n;")  # nada llega a la pestaña cerrada
+
+
+def test_scrolling_reads_blocks_by_position_and_never_keeps_the_whole_table(consumidores):
+    """#170 (maqueta `scroll`): sin ‹ ›; la rueda, las teclas y la barra llevan a cualquier fila; los
+    bloques que faltan se leen al pararse, por `rowid` si van seguidos; en memoria, solo unos miles."""
+    from qgis.PyQt.QtCore import QPoint, QPointF
+    from qgis.PyQt.QtGui import QWheelEvent
+    from qgis.PyQt.QtWidgets import QApplication
+
+    from geoduck.ui.pro.grid import KEEP_BLOCKS
+
+    _ws, page = open_table(consumidores, "consumidores")
+    assert wait_for(lambda: loaded(page) and counted(page))
+    data = page.data
+    assert wait_for(lambda: data.dense)  # rowid 0..999 999 sin huecos
+    assert not hasattr(page, "next_button") and data.vbar.isVisible()
+    assert data.vbar.maximum() >= 1_000_000 - data.model.visible
+    data.vbar.setValue(999_000)  # arrastrar la barra
+    assert wait_for(lambda: data.model.row(0) is not None and data.model.row(0)[0] == 999_000, 10)
+    assert page.range_label.text().startswith(tr("Rows {} of {}").split("{}")[0] + "999 001–")
+    wheel = QWheelEvent(
+        QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(0, -120),
+        Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False,
+    )  # fmt: skip
+    QApplication.sendEvent(page.grid.viewport(), wheel)
+    assert page.offset == 999_003  # 3 filas por paso de la rueda
+    assert wait_for(lambda: data.model.row(0) is not None and data.model.row(0)[0] == 999_003, 10)
+    data.scroll_to(10**12)  # más allá del final: la última ventana
+    assert page.offset == 1_000_000 - data.model.visible
+    data.scroll_to(0)
+    assert wait_for(lambda: data.model.row(0) is not None and data.model.row(0)[0] == 0, 10)
+    assert len(data.model.blocks) <= KEEP_BLOCKS + 1  # nunca la tabla entera en la interfaz

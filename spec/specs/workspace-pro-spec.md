@@ -145,8 +145,13 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
     - **«Ver SQL»** muestra la consulta completa (con filtros y orden) y la abre en una pestaña de consulta;
       «Exportar» y «Cargar en QGIS» usan esa misma consulta.
   - **Buscar** en la tabla (texto en las columnas de texto).
-  - **Paginación:** 100 filas por página, sin selector (propietario, 2026-11-05): «Filas 1–100 de 48 312», ‹ ›; el
-    total se cuenta aparte, sin bloquear.
+  - **Desplazamiento continuo** (#170, maqueta `scroll` aprobada el 2026-11-13; performance-spec §9): sin ‹ ›.
+    La rueda, las teclas (↑ ↓, Re Pág/Av Pág, Ctrl+Inicio/Fin) y una barra propia llevan a cualquier fila (también
+    con mil millones: cada paso de la barra son varias filas); al arrastrarla, «fila 482 301». La grilla tiene solo
+    las filas visibles; los bloques de 100 que faltan se piden al pararse (por `rowid` si van seguidos, si no con
+    `OFFSET`) y se ven como barras grises claras hasta que llegan; en memoria, nunca más de unos miles de filas.
+    El pie dice lo visible, «Filas 482 301–482 308 de 1 000 000», en una línea; con el total estimado de los
+    metadatos, «de ≈ 1 000 000» hasta contarlo.
   - **Detalle de fila** (panel derecho): sigue a la celda elegida (clic o ↑ ↓); cada campo con su tipo y su
     valor completo; la geometría resumida (tipo, SRC, número de vértices); copiar valor. Sin ✕: se muestra u
     oculta con su icono ◫ (turquesa = abierto).
@@ -261,11 +266,11 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   la barra «Resultado» muestra las casillas y la barra `WHERE`, y la fila de chips solo aparece con filtros.
   Una escritura con filas (`… RETURNING`) no se repite: sin filtros ni orden.
 - **El resultado se maneja como la pestaña de tabla** (propietario, 2026-11-06, tras la prueba en Windows): el
-  mismo pie abajo con «Filas 1–100 de 1 000 000 · 0,4 s» y ‹ › de 100 filas (exportar y cargar, en la barra
+  mismo pie abajo con «Filas 1–8 de 1 000 000 · 0,4 s» y el mismo desplazamiento continuo (#170; exportar y cargar, en la barra
   «Resultado»); y el mismo **detalle de fila** a la derecha, plegable. La primera página llega con la ejecución; las demás y
   el total repiten la lectura (`LIMIT`/`OFFSET`, `count(*)`) en el worker, sin bloquear. Sin `ORDER BY`, el
   orden entre páginas no está garantizado. Una escritura con filas (`… RETURNING`) nunca se repite: muestra su
-  primera página, «Filas 1–100 de más de 100», sin ‹ ›.
+  primera página, «Filas 1–8 de más de 100»: se recorre, pero no trae más.
 - **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación activada por defecto
   (ADR-0014, ahora por consulta; propietario, 2026-11-05). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
   como comentario).

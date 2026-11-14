@@ -17,7 +17,9 @@ from typing import Any
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
     QAbstractTableModel,
+    QEvent,
     QModelIndex,
+    QObject,
     QPoint,
     QRect,
     QSize,
@@ -36,9 +38,13 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMenu,
     QScrollArea,
+    QScrollBar,
     QShortcut,
     QStackedWidget,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTableView,
+    QToolTip,
     QVBoxLayout,
     QWidget,
     QWidgetAction,
@@ -134,6 +140,15 @@ _NUMERIC = re.compile(
 )
 #: Caracteres de una celda en la grilla (el valor completo está en el detalle).
 CELL = 300
+#: Bloques de filas que se guardan cerca de lo visible (#170): en la interfaz nunca más de unos miles.
+KEEP_BLOCKS = 20
+#: Espera entre el desplazamiento y la lectura de los bloques que faltan: al arrastrar rápido, solo se
+#: piden los del lugar donde se para.
+FETCH_MS = 30
+#: Pasos máximos de la barra propia: con más filas, cada paso son varias (un entero de Qt no llega más).
+SCROLL_MAX = 1_000_000_000
+#: Filas por paso de la rueda del ratón.
+WHEEL_ROWS = 3
 #: Filas que se miden para el ancho de las columnas.
 FIT_ROWS = 25
 #: El icono de tipo delante del nombre (maqueta `tipo-columna`): ancho y separación.
@@ -202,31 +217,66 @@ def cell_text(value: object) -> str:
 
 
 class PageModel(QAbstractTableModel):
-    """Una página de filas ya leídas; nunca pide nada a DuckDB."""
+    """Una ventana sobre las filas (#170, desplazamiento continuo): `top` es la primera fila que se ve y
+    `visible` cuántas caben; el modelo tiene solo esas filas (Qt no puede desplazar mil millones de filas: su
+    alto en píxeles no cabe en un entero). Las filas se guardan por bloques de `PAGE` cerca de lo visible
+    (nunca más de `KEEP_BLOCKS`); las que todavía no llegan se ven en gris claro. Nunca pide nada a DuckDB:
+    `DataGrid` le da los bloques."""
 
     def __init__(self, colors: Colors) -> None:
         super().__init__()
         self.colors = colors
         self.columns: tuple[ColumnInfo, ...] = ()
-        self.rows: tuple[tuple[object, ...], ...] = ()
-        self.offset = 0
+        self.blocks: dict[int, tuple[tuple[object, ...], ...]] = {}
+        #: Filas que hay (el total; o, mientras se cuenta, las conocidas y un bloque más si puede haberlas).
+        self.count = 0
+        self.top = 0
+        self.visible = PAGE
         self.mono = ui_font(METRICS.font_small, mono=True)
         self.italic = ui_font()
         self.italic.setItalic(True)
-        # Por columna, calculado una vez por página (data() se llama miles de veces al pintar)
+        # Por columna, calculado una vez (data() se llama miles de veces al pintar)
         self._numeric: tuple[bool, ...] = ()
-        #: La familia de cada columna para su icono; en las de geometría, lo que hay en la página.
+        #: La familia de cada columna para su icono; en las de geometría, lo que hay en el primer bloque.
         self.families: tuple[str, ...] = ()
         self._align: tuple[int, ...] = ()
         self._texts: dict[tuple[int, int], str] = {}
         self._null = QColor(colors.null)
         self._muted = QColor(colors.muted)
 
+    # -- compatibilidad: «la página» es lo que se ve -------------------------------------------------
+
+    @property
+    def offset(self) -> int:
+        return self.top
+
+    @property
+    def rows(self) -> tuple[tuple[object, ...], ...]:
+        """Las filas visibles ya leídas, en orden (las que faltan se omiten)."""
+        out = []
+        for r in range(self.rowCount()):
+            values = self.row(r)
+            if values is not None:
+                out.append(values)
+        return tuple(out)
+
+    # -- datos ---------------------------------------------------------------------------------------
+
     def set_page(
-        self, columns: tuple[ColumnInfo, ...], rows: tuple[tuple[object, ...], ...], offset: int
+        self,
+        columns: tuple[ColumnInfo, ...],
+        rows: tuple[tuple[object, ...], ...],
+        offset: int = 0,
+        count: int | None = None,
     ) -> None:
+        """Empieza de nuevo con un bloque (`offset`, múltiplo de `PAGE`) y `count` filas (si no se sabe, las
+        conocidas y un bloque más si este vino lleno)."""
         self.beginResetModel()
-        self.columns, self.rows, self.offset = columns, rows, offset
+        self.columns = columns
+        self.blocks = {offset // PAGE: rows} if rows or offset else {}
+        self.top = offset
+        known = offset + len(rows)
+        self.count = count if count is not None else known + (PAGE if len(rows) == PAGE else 0)
         self._numeric = tuple(is_numeric(c.data_type) for c in columns)
         self.families = tuple(
             geometry_family([row[i] for row in rows]) if c.is_geometry else type_family(c.data_type)
@@ -238,19 +288,84 @@ class PageModel(QAbstractTableModel):
         self._texts = {}
         self.endResetModel()
 
+    def value_row(self, absolute: int) -> tuple[object, ...] | None:
+        block = self.blocks.get(absolute // PAGE)
+        if block is None:
+            return None
+        index = absolute % PAGE
+        return block[index] if index < len(block) else None
+
+    def row(self, view_row: int) -> tuple[object, ...] | None:
+        return self.value_row(self.top + view_row)
+
+    def missing(self) -> list[int]:
+        """Los bloques visibles que faltan, del primero al último."""
+        if not self.columns or self.count <= 0:
+            return []
+        first = self.top // PAGE
+        last = max(first, (min(self.count, self.top + self.visible) - 1) // PAGE)
+        return [b for b in range(first, last + 1) if b not in self.blocks]
+
+    def put(self, block: int, rows: tuple[tuple[object, ...], ...], *, exact: bool) -> None:
+        """Llega un bloque. Si vino corto, ahí terminan las filas; si no se sabe el total (`exact` falso) y
+        vino lleno, puede haber otro más. Se sueltan los bloques lejos de lo visible."""
+        self.blocks[block] = rows
+        if not exact:
+            end = block * PAGE + len(rows)
+            known = max(end, max((b * PAGE + len(r) for b, r in self.blocks.items()), default=0))
+            grow = PAGE if len(rows) == PAGE and end >= known else 0
+            if len(rows) < PAGE:
+                self.set_count(end)
+            elif known + grow > self.count:
+                self.set_count(known + grow)
+        center = self.top // PAGE
+        for far in [b for b in self.blocks if abs(b - center) > KEEP_BLOCKS // 2]:
+            del self.blocks[far]
+        self._texts = {}
+        self._changed()
+
+    def set_count(self, count: int) -> None:
+        self.set_view(self.top, self.visible, count=max(0, count))
+
+    def set_view(self, top: int, visible: int, *, count: int | None = None) -> None:
+        """Mueve la ventana: `top` es la primera fila absoluta que se ve. Si cambia el número de filas que
+        se ven, el modelo se rehace; si no, solo se repinta."""
+        count = self.count if count is None else count
+        top = max(0, min(top, max(0, count - visible)))
+        before = self.rowCount()
+        self.top, self.visible, self.count = top, max(1, visible), count
+        self._texts = {}
+        if self.rowCount() != before:
+            self.beginResetModel()
+            self.endResetModel()
+        else:
+            self._changed()
+
+    def _changed(self) -> None:
+        rows, cols = self.rowCount(), self.columnCount()
+        if rows and cols:
+            self.dataChanged.emit(self.index(0, 0), self.index(rows - 1, cols - 1))
+        if rows:
+            self.headerDataChanged.emit(Qt.Orientation.Vertical, 0, rows - 1)
+
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802, B008 - API de Qt
-        return 0 if parent.isValid() else len(self.rows)
+        if parent.isValid() or not self.columns:
+            return 0
+        return max(0, min(self.visible, self.count - self.top))
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802, B008
         return 0 if parent.isValid() else len(self.columns)
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         """Texto, alineación (números a la derecha), color (NULL y geometrías en gris) y fuente (NULL en
-        cursiva; números y geometrías en monoespaciada)."""
+        cursiva; números y geometrías en monoespaciada). Una fila que todavía no llegó: gris claro."""
         if not index.isValid():
             return None
         row, col = index.row(), index.column()
-        value = self.rows[row][col]
+        values = self.row(row)
+        if values is None:
+            return "" if role == Qt.ItemDataRole.DisplayRole else None
+        value = values[col]
         column = self.columns[col]
         numeric = self._numeric[col]
         answer: Any = None
@@ -279,7 +394,29 @@ class PageModel(QAbstractTableModel):
             return None
         if orientation == Qt.Orientation.Horizontal:
             return self.columns[section].name if section < len(self.columns) else None
-        return str(self.offset + section + 1)
+        return number_text(self.top + section + 1)
+
+
+class WaitingDelegate(QStyledItemDelegate):
+    """Una fila que todavía no llegó: una barra gris clara en cada celda (maqueta `scroll`, #170)."""
+
+    def __init__(self, model: PageModel, colors: Colors) -> None:
+        super().__init__()
+        self.page_model = model
+        self.color = QColor(colors.line)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        if self.page_model.row(index.row()) is not None:
+            super().paint(painter, option, index)
+            return
+        rect = option.rect.adjusted(8, 0, -8, 0)  # type: ignore[attr-defined]
+        bar = QRect(rect.left(), rect.center().y() - 4, max(8, rect.width()), 9)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self.color)
+        painter.drawRoundedRect(bar, 3, 3)
+        painter.restore()
 
 
 class TypeHeader(QHeaderView):
@@ -490,7 +627,9 @@ class TypeHeader(QHeaderView):
     def _column_selected(self, index: int) -> bool:
         view = self.parent()
         selection = view.selectionModel() if hasattr(view, "selectionModel") else None
-        return bool(selection is not None and self.page_model.rows and selection.isColumnSelected(index))
+        return bool(
+            selection is not None and self.page_model.rowCount() and selection.isColumnSelected(index)
+        )
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(super().sizeHint().width(), METRICS.header + (FILTER_ROW if self.filters_visible else 0))
@@ -714,7 +853,7 @@ class DataGrid(QWidget):
 
     changed = pyqtSignal()
 
-    def __init__(
+    def __init__(  # noqa: PLR0915 - la grilla arma sus partes y temporizadores
         self,
         colors: Colors,
         read: Callable[[str, int, Callable[[Any], None]], bool],
@@ -733,8 +872,13 @@ class DataGrid(QWidget):
         self._view_sql = view_sql
         self.always_show_bar = always_show_bar
         self.browse: Browse | None = None
-        self.offset = 0
         self.total: int | None = None
+        #: El total estimado al instante (metadatos de una tabla sin filtros), mientras se cuenta (#170).
+        self.estimate: int | None = None
+        #: Los `rowid` de la tabla van seguidos: los bloques se leen por posición (performance-spec §9).
+        self.dense = False
+        self._fetching = False
+        self._scale = 1
         self.base_total: int | None = None
         self.replayable = True
         self.detail_open = True
@@ -755,6 +899,11 @@ class DataGrid(QWidget):
         self._summary_timer.setSingleShot(True)
         self._summary_timer.setInterval(SUMMARY_MS)
         self._summary_timer.timeout.connect(self._read_summary)
+        # #170: al desplazarse, los bloques que faltan se piden al pararse (y se reintenta si está ocupado)
+        self._fetch_timer = QTimer(self)
+        self._fetch_timer.setSingleShot(True)
+        self._fetch_timer.setInterval(FETCH_MS)
+        self._fetch_timer.timeout.connect(self._fetch_missing)
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(0)
@@ -860,7 +1009,23 @@ class DataGrid(QWidget):
         copy = QShortcut(QKeySequence(QKeySequence.StandardKey.Copy), self.grid)
         copy.setContext(Qt.ShortcutContext.WidgetShortcut)
         copy.activated.connect(self.copy_selection)
-        return self.grid
+        # #170: desplazamiento continuo con una barra propia (la de Qt no llega a mil millones de filas)
+        self.grid.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._waiting = WaitingDelegate(self.model, self.colors)
+        self.grid.setItemDelegate(self._waiting)
+        self.vbar = QScrollBar(Qt.Orientation.Vertical)
+        self.vbar.setAccessibleName(tr("Scroll the rows"))
+        self.vbar.valueChanged.connect(lambda value: self.scroll_to(value * self._scale, from_bar=True))
+        self.vbar.sliderMoved.connect(self._slider_tip)
+        self.grid.installEventFilter(self)
+        self.grid.viewport().installEventFilter(self)
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        row.addWidget(self.grid, 1)
+        row.addWidget(self.vbar)
+        return holder
 
     def _build_message(self) -> QWidget:
         message = QWidget()
@@ -922,7 +1087,7 @@ class DataGrid(QWidget):
         total: int | None = None,
         replayable: bool = True,
     ) -> None:
-        """Muestra `browse`. Con `rows` (la primera página que trajo la ejecución de una consulta), sin leer
+        """Muestra `browse`. Con `rows` (las primeras filas que trajo la ejecución de una consulta), sin leer
         nada; el total, si no se sabe, lo cuenta DuckDB aparte."""
         self.replayable = replayable
         self.browse = browse
@@ -932,30 +1097,38 @@ class DataGrid(QWidget):
         if rows is None or browse.filtered or browse.order is not None:
             self.reload()
             return
-        self.offset = 0
         self.total = total
         self.base_total = total
+        self.estimate = None
+        self.dense = False
         self._generation += 1
         self._render_filters()
-        self._show_page(browse, rows)
+        count = total if total is not None else (None if replayable else len(rows))
+        self._show_page(browse, rows, 0, count)
         if total is None and replayable:
             self._read(browse.count_sql(), 1, self._counted, fresh=lambda: self.browse is browse, quiet=True)
         self.changed.emit()
 
     def reload(self, *, keep_offset: bool = False) -> None:
-        """Vuelve a leer la página (y el total) con los filtros y el orden actuales."""
+        """Vuelve a leer lo visible (y el total) con los filtros y el orden actuales."""
         browse = self.browse
         if browse is None or self.closed:
             return
-        if not keep_offset:
-            self.offset = 0
+        top = self.offset if keep_offset else 0
         self._generation += 1
         self.total = None
+        self.estimate = None
+        self.dense = False
+        self._fetching = False
         self._render_filters()
         if not self.replayable:
             return
-        if self._read(browse.page_sql(self.offset), PAGE, lambda r: self._page_read(browse, r)):
+        start = top // PAGE * PAGE
+        if self._read(browse.page_sql(start), PAGE, lambda r: self._first_read(browse, start, top, r)):
             fresh = lambda: self.browse is browse  # noqa: E731 - el total vale mientras no cambie el filtro
+            estimate = browse.estimate_sql()
+            if estimate is not None:  # «de ≈ N» al instante, de los metadatos (#170)
+                self._read(estimate, 1, self._estimated, fresh, quiet=True)
             self._read(browse.count_sql(), 1, self._counted, fresh, quiet=True)
             if browse.filtered and self.base_total is None:
                 self._read(browse.total_sql(), 1, self._base_counted, quiet=True, fresh=lambda: True)
@@ -965,26 +1138,30 @@ class DataGrid(QWidget):
             self.show_message(self.busy_text)
         self.changed.emit()
 
-    def go(self, offset: int) -> None:
-        browse = self.browse
-        if browse is None or not self.replayable:
-            return
-        offset = max(0, offset)
-        if self.total is not None and offset >= self.total:
-            return
-        self.offset = offset
-        self._generation += 1
-        self._read(browse.page_sql(offset), PAGE, lambda r: self._page_read(browse, r))
+    @property
+    def offset(self) -> int:
+        """La primera fila que se ve (#170: ya no hay páginas, solo lo visible)."""
+        return self.model.top
 
-    def _page_read(self, browse: Browse, result: Any) -> None:
-        if not result.rows and self.offset > 0:
-            self.go(self.offset - PAGE)  # la última página quedó vacía (filas borradas)
+    def go(self, offset: int) -> None:
+        """Lleva la vista a la fila `offset` (compatibilidad con las páginas de antes)."""
+        self.scroll_to(offset)
+
+    def _first_read(self, browse: Browse, start: int, top: int, result: Any) -> None:
+        if not result.rows and start > 0:
+            self.reload()  # ahí ya no hay filas (se borraron): desde el principio
             return
-        self._show_page(browse, result.rows)
+        self._show_page(browse, result.rows, start, self.total)
+        if top != start:
+            self.scroll_to(top)
         self.changed.emit()
 
-    def _show_page(self, browse: Browse, rows: tuple[tuple[object, ...], ...]) -> None:
-        self.model.set_page(browse.columns, rows, self.offset)
+    def _show_page(
+        self, browse: Browse, rows: tuple[tuple[object, ...], ...], start: int = 0, count: int | None = None
+    ) -> None:
+        self.model.set_page(browse.columns, rows, start, count)
+        self.model.set_view(start, self._visible_rows())
+        self._update_bar_range()
         fit_columns(self.grid, self.model)
         self.header.set_columns(dict(browse.boxes))
         self._place()
@@ -1000,12 +1177,166 @@ class DataGrid(QWidget):
 
     def _counted(self, result: Any) -> None:
         if isinstance(result, BaseException):
-            return  # sin total: el pie sigue con «de …»
+            return  # sin total: el pie sigue con «de …» (o «de ≈ N»)
         self.total = int(result.rows[0][0]) if result.rows else 0
-        if self.browse is not None and not self.browse.filtered:
+        browse = self.browse
+        if browse is not None and not browse.filtered:
             self.base_total = self.total
+        self.model.set_count(self.total)
+        self._update_bar_range()
         self._update_count()
+        if browse is not None and browse.plain_table and self.total > PAGE:
+            # ¿Los `rowid` van seguidos? Entonces cada bloque se lee por posición, sin `OFFSET`
+            total = self.total
+            self._read(
+                browse.last_rowid_sql(),
+                1,
+                lambda r: self._dense_checked(total, r),
+                fresh=lambda: self.browse is browse,
+                quiet=True,
+            )
+        self._fetch_timer.start()
         self.changed.emit()
+
+    def _estimated(self, result: Any) -> None:
+        if isinstance(result, BaseException) or not result.rows or result.rows[0][0] is None:
+            return
+        self.estimate = int(result.rows[0][0])
+        if self.total is None and self.estimate > self.model.count:
+            self.model.set_count(self.estimate)  # se puede ir a cualquier parte ya; el exacto corrige
+            self._update_bar_range()
+        self.changed.emit()
+
+    def _dense_checked(self, total: int, result: Any) -> None:
+        if not isinstance(result, BaseException) and result.rows and result.rows[0][0] is not None:
+            self.dense = int(result.rows[0][0]) == total - 1
+
+    # -- desplazamiento continuo (#170) ---------------------------------------------------------------
+
+    def _visible_rows(self) -> int:
+        height = self.grid.viewport().height()
+        return max(1, (height + METRICS.row - 1) // METRICS.row) if height > 0 else PAGE
+
+    def _update_bar_range(self) -> None:
+        """La barra va de la primera fila a la última que puede quedar arriba; con más de mil millones de
+        filas, cada paso de la barra son varias filas."""
+        last_top = max(0, self.model.count - max(1, self.model.visible - 1))
+        self._scale = max(1, -(-last_top // SCROLL_MAX))
+        self.vbar.blockSignals(True)
+        self.vbar.setRange(0, -(-last_top // self._scale))
+        self.vbar.setPageStep(max(1, self.model.visible // self._scale))
+        self.vbar.setSingleStep(1)
+        self.vbar.setValue(self.model.top // self._scale)
+        self.vbar.blockSignals(False)
+        self.vbar.setVisible(last_top > 0)
+
+    def scroll_to(self, top: int, *, from_bar: bool = False) -> None:
+        """La primera fila visible pasa a ser `top`. La celda elegida sigue en la misma fila de los datos si
+        se sigue viendo; los bloques que faltan se piden al pararse."""
+        if self.browse is None or not self.model.columns:
+            return
+        current = self.grid.currentIndex()
+        absolute = self.model.top + current.row() if current.isValid() else -1
+        column = max(0, current.column())
+        before = self.model.top
+        self.model.set_view(top, self._visible_rows())
+        if self.model.top == before and not from_bar:
+            return
+        if not from_bar:
+            self._update_bar_range()
+        row = absolute - self.model.top
+        if 0 <= row < self.model.rowCount():
+            self.grid.selectionModel().setCurrentIndex(
+                self.model.index(row, column), self.grid.selectionModel().SelectionFlag.NoUpdate
+            )
+        self._fetch_timer.start()
+
+    def _slider_tip(self, value: int) -> None:
+        """Al arrastrar la barra: «fila 482 301» (maqueta `scroll`)."""
+        row = min(value * self._scale, max(0, self.model.count - 1)) + 1
+        QToolTip.showText(
+            self.vbar.mapToGlobal(QPoint(-8, self.vbar.height() // 2)),
+            tr("row {0}").format(number_text(row)),
+            self.vbar,
+        )
+
+    def _fetch_missing(self) -> None:
+        """Pide el primer bloque visible que falta (uno a la vez; al llegar, el siguiente)."""
+        browse = self.browse
+        if browse is None or self.closed or self._fetching or not self.replayable:
+            self.changed.emit()
+            return
+        missing = self.model.missing()
+        if not missing:
+            self.changed.emit()
+            return
+        block = missing[0]
+        generation = self._generation
+        self._fetching = True
+
+        def arrived(result: Any) -> None:
+            self._fetching = False
+            if isinstance(result, BaseException):
+                return
+            self.model.put(block, result.rows, exact=self.total is not None)
+            self._update_bar_range()
+            if self.grid.currentIndex().isValid():
+                self._row_changed(self.grid.currentIndex().row())
+            self._fetch_missing()
+
+        sql = browse.page_sql(block * PAGE, by_rowid=self.dense)
+        if not self._read(sql, PAGE, arrived, fresh=lambda: generation == self._generation, quiet=True):
+            self._fetching = False
+            self._fetch_timer.start(200)  # ocupado: se reintenta
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - API de Qt
+        """Rueda, teclas y tamaño: la grilla se desplaza con la barra propia (#170)."""
+        kind = event.type()
+        if watched is self.grid.viewport():
+            if kind == QEvent.Type.Wheel:
+                steps = event.angleDelta().y() / 120  # type: ignore[attr-defined]
+                if steps:
+                    self.scroll_to(self.model.top - round(steps * WHEEL_ROWS))
+                    return True
+            elif kind == QEvent.Type.Resize and self.model.columns:
+                self.model.set_view(self.model.top, self._visible_rows())
+                self._update_bar_range()
+                self._fetch_timer.start()
+        elif watched is self.grid and kind == QEvent.Type.KeyPress:
+            return self._key(event)
+        return super().eventFilter(watched, event)
+
+    def _key(self, event: Any) -> bool:
+        key = event.key()
+        current = self.grid.currentIndex()
+        row = current.row() if current.isValid() else 0
+        rows = self.model.rowCount()
+        page = max(1, self.model.visible - 1)
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        target = None
+        if key == Qt.Key.Key_Down and row >= rows - 2:
+            target = self.model.top + 1
+        elif key == Qt.Key.Key_Up and row == 0 and self.model.top > 0:
+            target = self.model.top - 1
+        elif key == Qt.Key.Key_PageDown:
+            target = self.model.top + page
+        elif key == Qt.Key.Key_PageUp:
+            target = self.model.top - page
+        elif ctrl and key == Qt.Key.Key_End:
+            target = self.model.count
+        elif ctrl and key == Qt.Key.Key_Home:
+            target = 0
+        if target is None:
+            return False
+        before = self.model.top
+        self.scroll_to(target)
+        if key in (Qt.Key.Key_Down, Qt.Key.Key_Up):
+            # la celda elegida baja (o sube) una fila de los datos, aunque la vista se haya movido
+            moved = self.model.top - before
+            step = 1 if key == Qt.Key.Key_Down else -1
+            new = min(max(0, row - moved + step), self.model.rowCount() - 1)
+            self.grid.setCurrentIndex(self.model.index(new, max(0, current.column())))
+        return True
 
     def _base_counted(self, result: Any) -> None:
         if not isinstance(result, BaseException):
@@ -1023,8 +1354,8 @@ class DataGrid(QWidget):
         """Sin datos (otra sesión, una consulta sin tabla): la grilla vacía y el mensaje."""
         self._generation += 1
         self.browse = None
-        self.total = self.base_total = None
-        self.offset = 0
+        self.total = self.base_total = self.estimate = None
+        self.dense = False
         self.model.set_page((), (), 0)
         self.header.set_columns({})
         self._render_filters()
@@ -1249,13 +1580,18 @@ class DataGrid(QWidget):
     def whole_columns(self) -> list[int]:
         """Columnas elegidas enteras (clic en el nombre, Ctrl+A): una selección lógica de todas las filas."""
         selection = self.grid.selectionModel()
-        if not self.model.rows:
+        if not self.model.rowCount():
             return []
         return [c for c in range(self.model.columnCount()) if selection.isColumnSelected(c, QModelIndex())]
 
     def selected_cells(self) -> list[tuple[ColumnInfo, object]]:
         indexes = sorted(self.grid.selectedIndexes(), key=lambda i: (i.row(), i.column()))
-        return [(self.model.columns[i.column()], self.model.rows[i.row()][i.column()]) for i in indexes]
+        out = []
+        for i in indexes:
+            values = self.model.row(i.row())
+            if values is not None:  # una fila que todavía no llegó no cuenta
+                out.append((self.model.columns[i.column()], values[i.column()]))
+        return out
 
     def copy_selection(self) -> None:
         """Ctrl+C: lo elegido, separado por tabuladores (como una hoja de cálculo). Columnas enteras de un
@@ -1263,7 +1599,7 @@ class DataGrid(QWidget):
         Exportar. Sin nada elegido, la página con los nombres de las columnas."""
         browse = self.browse
         whole = self.whole_columns()
-        longer = self.total is None or self.total > len(self.model.rows) or self.offset > 0
+        longer = self.total is None or self.total > self.model.rowCount() or self.offset > 0
         if browse is not None and whole and self.replayable and longer:
             names = tuple(self.model.columns[c].name for c in whole)
             limit = COPY_LIMIT // len(names)
@@ -1290,7 +1626,9 @@ class DataGrid(QWidget):
             return
         rows: dict[int, list[object]] = {}
         for index in indexes:
-            rows.setdefault(index.row(), []).append(self.model.rows[index.row()][index.column()])
+            values = self.model.row(index.row())
+            if values is not None:
+                rows.setdefault(index.row(), []).append(values[index.column()])
         _clipboard([tuple(values) for values in rows.values()])
 
     def _too_many(self) -> None:
@@ -1336,9 +1674,10 @@ class DataGrid(QWidget):
         if not self.grid.selectionModel().isSelected(index):
             self.grid.setCurrentIndex(index)
             self.grid.selectionModel().select(index, self.grid.selectionModel().SelectionFlag.ClearAndSelect)
-        cells = self.selected_cells() or [
-            (self.model.columns[index.column()], self.model.rows[index.row()][index.column()])
-        ]
+        values = self.model.row(index.row())
+        if values is None:
+            return None  # la fila todavía no llegó
+        cells = self.selected_cells() or [(self.model.columns[index.column()], values[index.column()])]
         names = list(dict.fromkeys(column.name for column, _v in cells))
         menu = QMenu(self)
         menu.setProperty("pro", "load-menu")
@@ -1396,25 +1735,26 @@ class DataGrid(QWidget):
 
     def _row_changed(self, row: int) -> None:
         browse = self.browse
-        if not self.detail_open or row < 0 or row >= len(self.model.rows) or browse is None:
+        values = self.model.row(row) if 0 <= row < self.model.rowCount() else None
+        if not self.detail_open or values is None or browse is None:
+            if values is None and row >= 0 and self.detail_open:
+                return  # la fila todavía no llegó: el detalle sigue con la anterior hasta que llegue
             self.detail.hide()
             return
         if self.body.currentIndex() != GRID:
             self.detail.hide()
             return
         self.detail.show()
-        number = self.offset + row + 1
-        self.detail.show_row(number, self.model.columns, self.model.rows[row])
+        absolute = self.offset + row
+        self.detail.show_row(absolute + 1, self.model.columns, values)
         if self.replayable and any(c.is_geometry for c in self.model.columns):
-            offset = self.offset
 
             def done(result: Any) -> None:  # la geometría completa, para resumirla bien
-                current = self.grid.currentIndex().row() == row
+                current = self.offset + self.grid.currentIndex().row() == absolute
                 if not isinstance(result, BaseException) and result.rows and current:
-                    self.detail.show_row(number, browse.columns, result.rows[0])
+                    self.detail.show_row(absolute + 1, browse.columns, result.rows[0])
 
-            if offset == self.offset:
-                self._read(browse.row_sql(offset + row), 1, done, quiet=True)
+            self._read(browse.row_sql(absolute), 1, done, quiet=True)
 
     # -- modo compacto --------------------------------------------------------------------------------
 
