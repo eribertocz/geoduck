@@ -2,21 +2,26 @@
 
 > **Estado: Alpha (pre-release).** Ninguna versión de GeoDuck es estable. No existe fecha para v1.0.0.
 
-GeoDuck es una extensión de escritorio para **QGIS 3 y QGIS 4**, escrita en Python, que integra
-una sesión **DuckDB** de primera clase dentro de QGIS y entrega resultados como **capas nativas de
-memoria de QGIS**.
+GeoDuck es una extensión de escritorio para **QGIS 3 y QGIS 4**, escrita en Python, que lleva **DuckDB** a
+QGIS: **SQL espacial y capas en los dos sentidos.**
 
-> **DuckDB procesa → GeoDuck transfiere → QGIS administra.**
+- **Consultas SQL** en un editor moderno, con resultados que se recorren aunque tengan millones de filas.
+- **De DuckDB a QGIS:** cada tabla o resultado se carga como **Copia** (los datos pasan a QGIS y ya no dependen
+  de DuckDB) o como **Conectada** (QGIS lee directamente de DuckDB, sin copiar, y las ediciones se guardan en
+  DuckDB).
+- **De QGIS a DuckDB:** capas del proyecto y archivos (GeoPackage, Shapefile, Parquet, CSV…) con un clic o
+  arrastrándolos.
+- **Exportar** a los formatos habituales, siempre con DuckDB.
 
-Una vez entregada, la capa pertenece a QGIS: no mantiene vínculo con GeoDuck ni con DuckDB.
-
-## Estado de la versión objetivo
+## Estado de la versión
 
 | Versión | Alcance | Estado |
 |---|---|---|
-| `0.1.0a1` — Alpha Foundation | Panel en QGIS 3/4, diagnóstico del entorno, sesión DuckDB `:memory:` | En desarrollo; gate G0 abierto |
+| `0.10.0a1` | Workspace profesional, editor SQL, QGIS ↔ DuckDB en los dos sentidos | Publicada (pre-release) |
+| `0.11.0a1` — Rendimiento | Resultados bajo demanda, cancelar todo, memoria acotada, interfaz sin bloqueos | En desarrollo (G10) |
 
-El alcance completo por fases está en [`spec/docs/roadmap.md`](spec/docs/roadmap.md).
+El alcance completo por fases está en [`spec/docs/roadmap.md`](spec/docs/roadmap.md); las versiones publicadas,
+en [Releases](https://github.com/eribertocz/geoduck/releases).
 
 ## Dependencias de ejecución
 
