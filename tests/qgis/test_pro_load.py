@@ -347,7 +347,7 @@ def test_choosing_one_of_two_geometries_loads_one_layer(coordinator):
 
 
 def test_a_copy_sent_back_to_duckdb_keeps_its_columns_and_loads_again(coordinator):
-    """Observación del propietario (2026-11-06): la «Copia» de una tabla con `fid` llevaba `geoduck_fid`
+    """La «Copia» de una tabla con `fid` llevaba `geoduck_fid`
     (el identificador del GeoPackage); al volver a DuckDB se quedaba como columna y la tercera carga fallaba.
     Ahora ese identificador no vuelve: la tabla de ida y vuelta tiene las mismas columnas y carga otra vez."""
     from tests.qgis.test_pro_send import add_all, to_step_two

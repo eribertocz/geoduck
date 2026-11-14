@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Diagnóstico y reparación de geometrías con QGIS/GEOS (spatial-spec §9; D2 del propietario, 2026-11-02).
+"""Diagnóstico y reparación de geometrías con QGIS/GEOS (spatial-spec §9).
 
 - **Diagnosticar** recorre la capa en una `QgsTask` cancelable, desde una copia de su fuente
   (`QgsVectorLayerFeatureSource`, segura en otro hilo). No modifica la capa ni el origen; no usa `spatial`.

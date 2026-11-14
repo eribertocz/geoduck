@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """«Cargar en QGIS ▾» › «Más opciones…» (G9 · E6b; workspace-pro-spec §7).
 
-Lo que la carga de un clic no pregunta, para quien lo necesita (propietario, 2026-11-06): elegir qué
+Lo que la carga de un clic no pregunta, para quien lo necesita: elegir qué
 geometrías cargar, usar una columna WKB o de texto (WKT) como geometría, «Reproyectar a…» en una Copia y
 «Separar por tipo» en una Conectada. Lo demás es igual que la carga de un clic: el SRC que falte se pregunta
 después, una sola vez.

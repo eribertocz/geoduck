@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Archivos → DuckDB: formatos, filtros del selector y el SQL que los lee, siempre con el motor de DuckDB
-(qgis-import-spec §10; decisión del propietario, 2026-11-07). Sin Qt ni DuckDB.
+ (qgis-import-spec §10). Sin Qt ni DuckDB.
 
 - Parquet, CSV y JSON: lectores incluidos en DuckDB (`read_parquet`, `read_csv`, `read_json`).
 - Arrow/Feather: PyArrow (`pyarrow.dataset`) registrado en DuckDB, que lo lee por flujo.
 - GeoPackage, Shapefile, FlatGeobuf, GeoJSON, KML/KMZ, Geodatabase, OSM y Excel: `ST_Read` de la extensión
   `spatial`, con consentimiento (spatial-spec §10).
-- Ningún otro formato: se abre primero en QGIS y se añade como capa (decisión del propietario, 2026-11-07).
+- Ningún otro formato: se abre primero en QGIS y se añade como capa.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ FORMATS: tuple[FileFormat, ...] = (
     FileFormat("osm", "OpenStreetMap", (".osm.pbf",), Reader.GDAL),
     FileFormat("xlsx", "Excel", (".xlsx",), Reader.GDAL),
 )
-#: Cualquier otro archivo: no se acepta (decisión del propietario, 2026-11-07). Solo formatos modernos,
+#: Cualquier otro archivo: no se acepta. Solo formatos modernos,
 #: rápidos o muy usados; otro (p. ej. SpatiaLite) se abre primero en QGIS y se añade como capa de QGIS.
 OTHER = FileFormat("other", "Unsupported format", (), Reader.GDAL)
 
@@ -322,7 +322,7 @@ def file_job(
 
 
 #: Datos vectoriales que el GDAL de DuckDB lee aunque no estén en la lista de GeoDuck: para quien sabe SQL,
-#: «Escribir consulta»; para el resto, «Abrir en QGIS» (decisión del propietario, 2026-11-07).
+#: «Escribir consulta»; para el resto, «Abrir en QGIS».
 GDAL_DATA = (
     ".sqlite",
     ".db",
@@ -354,7 +354,7 @@ def _names(paths: list[str]) -> str:
 
 
 def unsupported_lines(paths: list[str], supported: int) -> list[str]:
-    """El aviso de archivos que GeoDuck no importa, una idea por línea (decisión del propietario, 2026-11-07):
+    """El aviso de archivos que GeoDuck no importa, una idea por línea:
     los que DuckDB lee con SQL (o QGIS abre), los que no son datos, y si los demás sí siguen."""
     readable = [p for p in paths if gdal_readable(p)]
     other = [p for p in paths if p not in readable]

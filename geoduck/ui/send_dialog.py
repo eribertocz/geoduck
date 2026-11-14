@@ -2,7 +2,7 @@
 """Diálogo «Enviar a DuckDB» (G8 · E3; qgis-import-spec §3; maqueta `docs/g8/maqueta/Enviar.dc.html`).
 
 Lo común se hace sin tocar nada: destino, nombres de tabla y caminos vienen bien elegidos y basta con
-«Enviar» (decisión del propietario: «menos es más»). Lo demás aparece solo cuando aplica:
+«Enviar». Lo demás aparece solo cuando aplica:
 
 - «Qué pasará» por fila y en vivo: «Tabla nueva», «Ya existe» (con su elección, por defecto «No enviar»)
   o «No se puede» con el motivo;

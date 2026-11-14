@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Capturas de lo nuevo de G9 · E6 para revisarlas con el propietario.
+"""Capturas de lo nuevo de G9 · E6.
 
     QT_QPA_PLATFORM=offscreen python tools/pro_switch_shots.py <carpeta>
 

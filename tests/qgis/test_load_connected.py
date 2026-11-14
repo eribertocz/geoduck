@@ -460,7 +460,7 @@ def test_query_result_explains_how_to_edit(session):
 
 
 def test_messages_name_the_origin_and_access(session):
-    """Mensajes de carga (decisión del propietario, 2026-11-02): origen y acceso explícitos."""
+    """Mensajes de carga: origen y acceso explícitos."""
     from geoduck.ui.pro.load import finished_text
 
     report, _ = load_table(session)

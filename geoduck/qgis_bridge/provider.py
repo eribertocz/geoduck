@@ -809,8 +809,8 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         return QgsRectangle(*ext) if len(ext) == 4 else QgsRectangle()
 
     def _filtered_extent(self, engine: Any, base: str, count: int) -> QgsRectangle:
-        """Extensión de lo filtrado, para que «Zoom a la capa» se ajuste al filtro (prueba del propietario:
-        se quedaba con la de toda la tabla). Si tarda, la de toda la capa, con un aviso."""
+        """Extensión de lo filtrado, para que «Zoom a la capa» se ajuste al filtro y no a toda la
+        tabla. Si tarda, la de toda la capa, con un aviso."""
         if self.plan.geometry is None or engine is None:
             return self._full_extent()
         if count == 0:

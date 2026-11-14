@@ -100,8 +100,8 @@ _SCI_POSITIONFROMPOINT = 2022
 
 
 class _LayerDrops(QObject):
-    """Capas de QGIS arrastradas al editor: el editor no las toma como texto (las «movía» y QGIS las borraba,
-    observación del propietario, 2026-11-06); siguen a GeoDuck, que las añade a DuckDB como en cualquier otra
+    """Capas de QGIS arrastradas al editor: el editor no las toma como texto (las «movía» y QGIS las
+    borraba); siguen a GeoDuck, que las añade a DuckDB como en cualquier otra
     parte (workspace-pro-spec §9), siempre como copia."""
 
     _KINDS = (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop)
@@ -122,7 +122,7 @@ class _LayerDrops(QObject):
         paths = file_paths(data)
         if not paths:
             return False
-        # Archivos en el editor (decisión del propietario, 2026-11-07): llevarlos a DuckDB con SQL sin
+        # Archivos en el editor: llevarlos a DuckDB con SQL sin
         # ejecutarlo. Si ninguno se lee con SQL (Arrow, no compatibles), siguen al área de trabajo.
         if self.on_files is None or not any(editor_readable(p) for p in paths):
             event.ignore()
@@ -170,7 +170,7 @@ def prepare_mark(editor: Any, colors: Colors) -> None:
     editor.setMarkerForegroundColor(QColor(colors.accent), MARK)
 
 
-#: ▶ en el margen, junto a la sentencia marcada (propietario, 2026-11-12): un clic la ejecuta.
+#: ▶ en el margen, junto a la sentencia marcada: un clic la ejecuta.
 PLAY = 19  # 25–31 son de los pliegues de Scintilla; 20–24, de la marca y de los estados
 _PLAY_MARGIN = 3
 

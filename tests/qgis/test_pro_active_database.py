@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Una sola base activa; cerrar y adjuntar bases en memoria (#168; maqueta `bases`, propietario, 2026-11-13).
+"""Una sola base activa; cerrar y adjuntar bases en memoria (#168; maqueta `bases`).
 PyQGIS real con una sesión real de DuckDB."""
 
 from __future__ import annotations

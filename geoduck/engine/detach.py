@@ -54,7 +54,7 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
     target = catalog.get(alias)
     if target is None:
         raise DetachError(tr("There is no attached database «{0}».").format(alias), detail="not_attached")
-    # #168 (propietario, 2026-11-13): cualquier base se cierra, también la del inicio, salvo la activa y la
+    # #168: cualquier base se cierra, también la del inicio, salvo la activa y la
     # última. Nunca se cambia la activa en silencio para poder cerrarla.
     if catalog_key(target.name) == catalog_key(catalog.default):
         raise DetachError(

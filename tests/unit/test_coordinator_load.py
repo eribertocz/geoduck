@@ -196,7 +196,7 @@ def _statement(kind, text):
 
 
 def test_sql_detach_is_vetoed_only_for_real_detach_statements(env):
-    """§5.5 (decisión del propietario, 2026-11-02): tipo de sentencia del parser, no búsqueda de texto."""
+    """§5.5: tipo de sentencia del parser, no búsqueda de texto."""
     coordinator, dispatcher, engines, _, loader = env
     coordinator.execute_sql("SELECT 1", RunScope.ALL)
     assert engines[-1].scripts[-1]["guard"] is None  # sin cambios sin guardar: sin veto

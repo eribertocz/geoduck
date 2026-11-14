@@ -421,7 +421,7 @@ class WaitingDelegate(QStyledItemDelegate):
 
 class TypeHeader(QHeaderView):
     """Encabezado de la grilla: un icono gris de la familia del tipo y el nombre en negrita; el tipo completo,
-    en la ayuda (maqueta `tipo-columna`, propietario, 2026-11-13; geometrías con los iconos de QGIS). Al pasar
+    en la ayuda (maqueta `tipo-columna`; geometrías con los iconos de QGIS). Al pasar
     el ratón, ⇅ a la derecha ordena (#144: ordenar pasa al icono; el clic en el nombre elige la columna
     entera); la columna ordenada lleva su flecha turquesa. Con `set_filters_visible(True)`, debajo de cada
     nombre su casilla de filtro (#144, punto 36): `box_edited(columna, texto)` al pulsar Intro o al dejar de
@@ -961,7 +961,7 @@ class DataGrid(QWidget):
         self.funnel_button.setCheckable(True)
         self.funnel_button.toggled.connect(self.set_filters_open)
         row.addWidget(self.funnel_button)
-        self.sql_button = icon_button(  # solo icono, también en la ventana (propietario, 2026-11-13)
+        self.sql_button = icon_button(  # solo icono, también en la ventana
             "sql", tr("Opens the full query, with its filters and order, in a new query tab"), self.colors
         )
         self.sql_button.clicked.connect(self.view_sql)

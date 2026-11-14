@@ -214,7 +214,7 @@ def test_an_axis_setting_chosen_by_the_user_is_not_touched(worker, tmp_path):
     assert rows == (("true",),)
 
 
-# -- G10 E2: cancelar una exportación al instante (performance-spec §3; propietario, 2026-11-12) --
+# -- G10 E2: cancelar una exportación al instante (performance-spec §3) --
 
 
 def test_order_by_is_detected_outside_comments_and_strings():

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Archivos → DuckDB (qgis-import-spec §10; decisión del propietario, 2026-11-07), con QGIS, coordinador y
+"""Archivos → DuckDB (qgis-import-spec §10), con QGIS, coordinador y
 worker DuckDB reales. Todo lo lee y lo copia DuckDB, nunca QGIS:
 
 - «Importar archivos…» con el selector → los tres pasos con «Archivos → DuckDB»;
@@ -137,7 +137,7 @@ def test_files_dropped_on_a_database_go_there_and_light_up_the_lake(coordinator,
 
 
 def test_unsupported_files_get_a_clear_notice_and_the_others_go_on(coordinator, data):
-    """Decisión del propietario (2026-11-07): un archivo fuera de la lista no entra al diálogo; el aviso
+    """Un archivo fuera de la lista no entra al diálogo; el aviso
     dice cuáles, qué hacer y que los demás siguen, con «Abrir en QGIS»."""
     ws = workspace(coordinator)
     other = data / "plano.dwg"
@@ -275,7 +275,7 @@ def test_with_the_click_spatial_loads_and_the_layers_appear(coordinator, tmp_pat
 
 def test_write_query_reads_a_file_outside_the_list_with_sql(coordinator, data):
     """«Escribir consulta»: el GDAL de DuckDB lo lee; una pestaña con su `FROM ST_Read(…)`, sin ejecutar
-    (propietario, 2026-11-13: lo mismo que soltarlo en el editor, nunca un CREATE TABLE)."""
+    (lo mismo que soltarlo en el editor, nunca un CREATE TABLE)."""
     ws = workspace(coordinator)
     path = str(data / "vieja.sqlite")
     ws.write_query([path])

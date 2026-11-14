@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """«Capas de QGIS → DuckDB»: una sola ventana de tres pasos para las tres formas de añadir capas
-(observaciones de la prueba en Windows, F-131; propietario, 2026-11-06; workspace-pro-spec §9).
+ (observaciones de la prueba en Windows, F-131; workspace-pro-spec §9).
 
 - Arrastrar capas a GeoDuck → paso 1 con esas capas (y la base donde se soltaron, ya elegida en el paso 2).
 - Clic derecho en QGIS › «Añadir a DuckDB…» → paso 1 con las capas seleccionadas.
@@ -869,7 +869,7 @@ class AddLayers:
         self._refresh()
         text = lines_html(self.done_lines())
         # un solo aviso: el resumen del paso 3 o, con la ventana cerrada, el aviso con «×»; nada en el pie,
-        # que quedaría desactualizado (observación del propietario, 2026-11-06)
+        # que quedaría desactualizado
         self._host.notify("")
         if self.window is None or not self.window.isVisible():
             actions: list[tuple[str, Callable[[], None]]] = []

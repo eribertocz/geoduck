@@ -178,7 +178,7 @@ def test_copy_is_still_one_click(coordinator):
 
 
 def test_a_slow_one_click_load_opens_the_timeline(coordinator, monkeypatch):
-    """La opción intermedia (propietario, 2026-11-13): si el atajo sigue cargando a los 2 s, se abre la línea
+    """La opción intermedia: si el atajo sigue cargando a los 2 s, se abre la línea
     de tiempo con lo que va y sin aviso aparte; si termina antes, solo el aviso (prueba de arriba)."""
     from geoduck.ui.pro import load_window
     from geoduck.ui.pro.load import CONNECTED

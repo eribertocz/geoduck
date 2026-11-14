@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """«Exportar ▾» con la consulta completa, siempre con el motor de DuckDB (G7 · E3, GD-NB-007; G9:
-qgis-import-spec §10, decisión del propietario, 2026-11-07; `geoduck.domain.export`).
+qgis-import-spec §10; `geoduck.domain.export`).
 
 - CSV, JSON y Parquet: `COPY (<consulta>) TO … (FORMAT …)`, incluidos en DuckDB.
 - Arrow/Feather: el lector Arrow de DuckDB escrito por PyArrow, por lotes.
@@ -8,7 +8,7 @@ qgis-import-spec §10, decisión del propietario, 2026-11-07; `geoduck.domain.ex
   la extensión `spatial`. Si no está cargada, solo con el permiso del usuario (`allow_spatial`, spatial-spec
   §10). Con un SRC en la geometría, DuckDB 2.0 exige fijar `geometry_always_xy`: si el usuario no lo fijó,
   GeoDuck lo pone en `true` (orden este-norte, el de DuckDB) **solo durante la exportación** y lo deja como
-  estaba (decisión del propietario, 2026-11-07); si el usuario lo fijó, no se toca.
+  estaba; si el usuario lo fijó, no se toca.
 
 Todo se escribe primero en una carpeta temporal junto al destino y, si termina bien, se mueve al lugar
 elegido (un Shapefile son varios archivos; una Geodatabase, una carpeta): si se cancela o falla, no queda
@@ -147,8 +147,8 @@ def export_query(handle: ConnectionHandle, token: CancelToken, request: ExportRe
     restore_axis = False
     # Cancelar al instante (performance-spec §3; medido: 4 ms–3,3 s con orden, 14–77 ms sin orden): mantener
     # el orden de inserción hace que los hilos de DuckDB se esperen entre sí al cancelar. Sin `ORDER BY`, SQL
-    # no garantiza un orden, así que se apaga **solo durante la exportación** y se deja como estaba (decisión
-    # del propietario, 2026-11-12); con `ORDER BY`, DuckDB lo respeta igual. Si el usuario lo apagó, queda.
+    # no garantiza un orden, así que se apaga **solo durante la exportación** y se deja como estaba; con
+    # `ORDER BY`, DuckDB lo respeta igual. Si el usuario lo apagó, queda.
     restore_order = fmt is not ExportFormat.ARROW and not has_order_by(body) and _insertion_order(handle)
     if restore_order:
         handle.execute("SET preserve_insertion_order = false", max_rows=1)

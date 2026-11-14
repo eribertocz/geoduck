@@ -89,7 +89,7 @@ class TabArea(QObject):
         self.bar.currentChanged.connect(self._show)
         self.bar.tabMoved.connect(lambda _a, _b: self.changed.emit())
         self.bar.installEventFilter(self)
-        # Clic derecho en una pestaña: su archivo (propietario, 2026-11-12); el menú, del área de trabajo
+        # Clic derecho en una pestaña: su archivo; el menú, del área de trabajo
         self.bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.bar.tabBarDoubleClicked.connect(self.start_rename)
         self.stack = QStackedWidget()
@@ -223,7 +223,7 @@ class TabArea(QObject):
             editor.deleteLater()
 
     def close_all(self) -> None:
-        """«Cerrar todas las pestañas» (propietario, 2026-11-12): de la última a la primera; una consulta con
+        """«Cerrar todas las pestañas»: de la última a la primera; una consulta con
         cambios pregunta antes (`can_close`) y, si el usuario la deja abierta, se detiene ahí."""
         for index in range(self.bar.count() - 1, -1, -1):
             count = self.bar.count()

@@ -148,7 +148,7 @@ def crs_text(crs: QgsCoordinateReferenceSystem) -> str | None:
 def copy_fid_fields(layer: Any) -> set[int]:
     """El identificador que el GeoPackage de una «Copia» de GeoDuck añadió (`fid`, `geoduck_fid`…): no es un
     dato de la tabla y no vuelve a DuckDB (si volviera, cada ida y vuelta sumaría una columna y la tercera
-    carga fallaría; observación del propietario, 2026-11-06). Las columnas de la tabla se envían todas."""
+    carga fallaría). Las columnas de la tabla se envían todas."""
     if not is_copy(layer) or layer.providerType() != "ogr":
         return set()
     fields = layer.fields()

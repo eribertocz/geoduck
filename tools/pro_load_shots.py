@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Capturas de «Cargar en QGIS» de Workspace Pro (G9 · E4b) para revisarlas con el propietario.
+"""Capturas de «Cargar en QGIS» de Workspace Pro (G9 · E4b).
 
     QT_QPA_PLATFORM=offscreen python tools/pro_load_shots.py <carpeta>
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""La sentencia que corre «Ejecutar» (workspace-pro-spec §5; propietario, 2026-11-06).
+"""La sentencia que corre «Ejecutar» (workspace-pro-spec §5).
 
 El editor la marca **antes** de ejecutar y se ejecuta exactamente lo marcado. Se calcula aquí, en Python y
 sin DuckDB, por dos motivos: la interfaz la necesita a cada movimiento del cursor (sin pasar por el worker), y

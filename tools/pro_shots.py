@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Capturas de la estructura de Workspace Pro (G9 · E2) para revisarlas con el propietario.
+"""Capturas de la estructura de Workspace Pro (G9 · E2).
 
     QT_QPA_PLATFORM=offscreen python tools/pro_shots.py <carpeta>
 

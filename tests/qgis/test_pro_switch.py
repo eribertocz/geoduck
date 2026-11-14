@@ -494,7 +494,7 @@ def test_about_shows_version_license_links_and_components(plugin):
 
 
 def test_the_brand_logo_says_the_session_state_and_its_menu_shows_only_what_applies(plugin):
-    """Marca (propietario, 2026-11-07): el logo con un puntito dice el estado y abre el menú de la sesión;
+    """Marca: el logo con un puntito dice el estado y abre el menú de la sesión;
     sin sesión, «Iniciar DuckDB» y nunca un «Iniciar» en gris con sesión; el botón de QGIS lleva el puntito;
     «Acerca de» con la raya ámbar y el botón azul."""
     from geoduck.ui.about_dialog import AboutDialog

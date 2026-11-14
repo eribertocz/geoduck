@@ -78,7 +78,7 @@ class ErrorCardView(QFrame):
         self.go_button.clicked.connect(self.go_requested.emit)
         self.go_button.setVisible(card.line is not None)
         row.addWidget(self.go_button)
-        # solo el ícono, en la ventana y en el panel (propietario, 2026-11-13); la ayuda dice qué copia
+        # solo el ícono, en la ventana y en el panel; la ayuda dice qué copia
         self.copy_button = icon_button(
             "copy", tr("Copies the engine's original message (to search for it or report it)"), colors
         )

@@ -3,7 +3,7 @@
 
     QT_QPA_PLATFORM=offscreen python tools/pro_gallery.py <carpeta>
 
-Escribe `galeria-claro-<qt>.png` y `galeria-oscuro-<qt>.png` para revisarlas con el propietario.
+Escribe `galeria-claro-<qt>.png` y `galeria-oscuro-<qt>.png`.
 """
 
 from __future__ import annotations

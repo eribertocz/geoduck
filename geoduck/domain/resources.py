@@ -19,7 +19,7 @@ import tempfile
 
 from geoduck.domain.i18n import decimal
 
-#: Tope de disco de los archivos temporales de DuckDB (propietario, 2026-11-12: 20 GB o el 50 % libre).
+#: Tope de disco de los archivos temporales de DuckDB (20 GB o el 50 % libre).
 DISK_CAP = 20 * 1024**3
 _SESSIONS = itertools.count(1)
 

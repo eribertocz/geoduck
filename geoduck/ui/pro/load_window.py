@@ -28,7 +28,7 @@ from geoduck.ui.pro.transfer import INFO, NameRow, TransferWindow, primary
 from geoduck.ui.pro.widgets import Segmented, button, label
 
 #: Atajos de un clic (Copia o Conectada, #148): si la carga sigue tras este tiempo, se abre la línea de
-#: tiempo; si termina antes, basta el aviso (propietario, 2026-11-13: la opción intermedia).
+#: tiempo; si termina antes, basta el aviso.
 REVEAL_MS = 2000
 
 

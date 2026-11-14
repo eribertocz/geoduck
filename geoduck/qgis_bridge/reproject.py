@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""«Reproyectar a…» en las copias (spatial-spec §4; decisión del propietario D4, 2026-11-02).
+"""«Reproyectar a…» en las copias (spatial-spec §4).
 
 La reproyección es de QGIS/PROJ (`QgsCoordinateTransform` con el contexto de transformación del
 proyecto), nunca de DuckDB: no usa `ST_Transform` ni necesita `spatial`. Solo Memoria e Instantánea; la
