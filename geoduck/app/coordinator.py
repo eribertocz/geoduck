@@ -970,10 +970,6 @@ class SessionCoordinator:
         statement = f"CREATE OR REPLACE TEMP TABLE {quote_identifier(name)} AS {load_sql(sql)}"
 
         def save(handle: Any, _token: Any) -> StatementOutcome:
-            # el avance («64 %») solo existe con el seguimiento de DuckDB encendido; en la sesión propia de
-            # GeoDuck y sin imprimir nada (ADR-0011: nada ajeno se toca)
-            handle.execute("SET enable_progress_bar = true", max_rows=1)
-            handle.execute("SET enable_progress_bar_print = false", max_rows=1)
             outcome: StatementOutcome = handle.execute(statement, max_rows=1)
             return outcome
 

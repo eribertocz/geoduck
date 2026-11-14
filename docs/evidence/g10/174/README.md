@@ -45,3 +45,20 @@ cabecera WKB no es la de la capa; la reproyección solo se llama cuando la petic
 
 **Punto 1 («Copia» escrita por DuckDB), descartado:** Copia actual 2,6 s; DuckDB con índice espacial 2,8–2,9 s;
 sin índice 0,9 s, pero mover el mapa con zoom sería más lento. El índice cuesta lo mismo en los dos caminos.
+
+# Punto 3 · Progreso real (2026-11-14)
+
+Con `enable_progress_bar = true` y `progress_bar_time = 0` en la conexión propia de GeoDuck (desde el inicio de
+la sesión), DuckDB informa el avance (0–100) de cualquier operación larga **con 1.5 y con 2.0** (medido:
+`COPY` a Parquet y CSV, leer un Parquet, `CREATE TEMP TABLE … AS`). Antes, el umbral por defecto de
+`progress_bar_time` (2 s) hacía que 1.5 pareciera no informarlo.
+
+- **Exportar:** «Escribiendo… 42 %» y la barra del paso «GeoDuck escribe el archivo».
+- **Archivos → GeoDuck / capas de un archivo leídas directo:** el paso «Copiando a GeoDuck» y el pie
+  («Añadiendo 1 de 2 · redes 62 %») con el avance de DuckDB (no hay filas que contar en ese camino).
+- **Resultado guardado (#180):** «Preparando… N %» ahora también con 1.5.
+
+**«La selección de QGIS leída por DuckDB», descartada:** enviar solo lo seleccionado ya funciona por QGIS
+(~210 000 filas/s medidas en E1, 1 millón de puntos en 4,6 s). Leer la selección por DuckDB exigiría pasarle la
+lista de identificadores (un `IN` de cientos de miles de valores) y comprobar que coincidan con QGIS; no hay una
+mejora medida que lo justifique.

@@ -643,6 +643,11 @@ class SessionWorker:
             self._temp_dir, self._temp_limit = _own_temp_directory(con)
             if self._want_spatial:
                 self._spatial_error = _own_spatial(con)
+            # el avance de lo largo («64 %», 1.5 y 2.0): seguimiento de DuckDB desde el primer momento, en la
+            # conexión propia de GeoDuck y sin imprimir nada
+            con.execute("SET enable_progress_bar = true")
+            con.execute("SET enable_progress_bar_print = false")
+            con.execute("SET progress_bar_time = 0")
         except BaseException:
             con.close()
             raise

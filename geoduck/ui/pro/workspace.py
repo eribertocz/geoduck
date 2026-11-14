@@ -638,6 +638,7 @@ class ProWorkspace(QWidget):
                 event,
                 cancel=self._coordinator.cancel_current_operation,
                 load=lambda path: self.open_in_qgis([path]),
+                progress=self._coordinator.query_progress,
             )
             return
         progress = self._exports.pop(event.export_id, None)
