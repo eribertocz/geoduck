@@ -337,7 +337,7 @@ class ProWorkspace(QWidget):
         menu = load_menu(
             parent,
             self.colors,
-            lambda kind: self.loader.start_many(
+            lambda kind: self.to_qgis.quick(
                 [dict(jobs[0], name=layer_name(menu, jobs[0]["name"]))] if single else jobs, kind
             ),
             title="" if single else menu_title(len(places)),
@@ -515,6 +515,8 @@ class ProWorkspace(QWidget):
     def _loaded(self, report: Any) -> bool:
         """Capa cargada: un solo aviso, con «Ver en el mapa» (si el complemento sabe mostrarla), el origen, el
         acceso y las advertencias. Devuelve si lo mostró."""
+        if self.to_qgis.showing():  # la línea de tiempo ya lo dice, con su «Ver en el mapa»
+            return True
         if self.on_view_map is None:
             return False
         ids = [layer_id for layer_id, _ in report.layers] or [report.layer_id]
@@ -998,7 +1000,7 @@ class ProWorkspace(QWidget):
                 self._coordinator,
                 self.colors,
                 view_sql=self.open_sql,
-                loader=self.loader.start,
+                loader=self.to_qgis.quick_one,
                 ask_path=self._ask_path,
                 notify=self.notify,
             )
@@ -1013,7 +1015,7 @@ class ProWorkspace(QWidget):
             sql=sql,
             database=database,
             ask_path=self._ask_path,
-            loader=self.loader.start,
+            loader=self.to_qgis.quick_one,
         )
         page.changed.connect(lambda p=page: self._query_changed(p))
         page.renamed.connect(lambda old, p=page: self._query_renamed(p, old))

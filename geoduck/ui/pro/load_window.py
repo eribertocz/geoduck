@@ -22,10 +22,14 @@ from geoduck.domain.load import LoadMode
 from geoduck.domain.sql_errors import explain
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.error_card import ErrorCardView
-from geoduck.ui.pro.load import CONNECTED, COPY
+from geoduck.ui.pro.load import CONNECTED, COPY, OPTIONS
 from geoduck.ui.pro.timeline import DONE, FAILED, RUNNING, SKIPPED, WAITING, Step, count_text, seconds_text
 from geoduck.ui.pro.transfer import INFO, NameRow, TransferWindow, primary
 from geoduck.ui.pro.widgets import Segmented, button, label
+
+#: Atajos de un clic (Copia o Conectada, #148): si la carga sigue tras este tiempo, se abre la línea de
+#: tiempo; si termina antes, basta el aviso (propietario, 2026-11-13: la opción intermedia).
+REVEAL_MS = 2000
 
 
 def origin_text(job: dict[str, Any]) -> str:
@@ -50,6 +54,89 @@ class LoadWindow:
         self.jobs: list[dict[str, Any]] = []
         self.states: list[dict[str, Any]] = []
         self.running = False
+        #: Atajo en marcha sin ventana todavía (se abre a los `REVEAL_MS`).
+        self.quiet = False
+        self._clock: QTimer | None = None
+        self._reveal_timer: QTimer | None = None
+
+    def showing(self) -> bool:
+        """Si la ventana está a la vista (entonces el aviso de «capa cargada» sobra)."""
+        return self.window is not None and self.window.isVisible()
+
+    # -- atajo de un clic ----------------------------------------------------------------------------
+
+    def quick(self, jobs: list[dict[str, Any]], kind: str) -> None:
+        """«Copia» o «Conectada» directo desde el menú o al soltar: carga sin diálogo; si tarda más de
+        `REVEAL_MS`, abre la línea de tiempo con lo que va. «Más opciones…» y una carga ya en curso siguen
+        como siempre."""
+        if kind == OPTIONS or self.running:
+            self._loader.start_many(jobs, kind)
+            return
+        if self.window is not None:
+            self.window.deleteLater()
+            self.window = None
+        self.chosen = [dict(job) for job in jobs]
+        self.states = [{"state": WAITING, "rows": 0, "message": "", "report": None} for _ in jobs]
+        self.timeline_rows = []
+        self.running = True
+        self.quiet = True
+        self.started = time.monotonic()
+        self.connected = kind == CONNECTED
+        self._loader.start_many(self.chosen, kind, watch=self)
+
+    def quick_one(
+        self,
+        sql: str,
+        name: str,
+        kind: str,
+        *,
+        source: tuple[str, str, str] | None = None,
+        source_kind: str | None = None,
+        database: str | None = None,
+    ) -> None:
+        """El atajo para una sola carga, con la firma de `QuickLoad.start` (pestañas de tabla y consulta)."""
+        job = {"sql": sql, "name": name, "source": source, "source_kind": source_kind, "database": database}
+        self.quick([job], kind)
+
+    def _arm_reveal(self) -> None:
+        """El reloj de los `REVEAL_MS` corre desde que empieza la carga (no mientras se pregunta el SRC)."""
+        if not self.quiet or self._reveal_timer is not None:
+            return
+        parent = self._host if isinstance(self._host, QWidget) else None
+        timer = QTimer(parent)
+        timer.setSingleShot(True)
+        timer.timeout.connect(self._reveal)
+        timer.start(REVEAL_MS)
+        self._reveal_timer = timer
+
+    def _stop_reveal(self) -> None:
+        if self._reveal_timer is not None:
+            self._reveal_timer.stop()
+            self._reveal_timer.deleteLater()
+            self._reveal_timer = None
+
+    def _reveal(self) -> None:
+        self._stop_reveal()
+        if not (self.quiet and self.running):
+            return
+        self.quiet = False
+        window = self._new_window(len(self.chosen))
+        self._progress(window)
+        window.fit_screen()
+        window.show()
+        window.raise_()
+
+    def _new_window(self, count: int) -> TransferWindow:
+        window = TransferWindow(self._host if isinstance(self._host, QWidget) else None)
+        if self.window is not None:
+            self.window.deleteLater()
+        self.window = window
+        window.set_route(
+            tr("Load in QGIS"),
+            ("logo", tr("1 GeoDuck table") if count == 1 else tr("{0} GeoDuck tables").format(count)),
+            ("qgis-layers", tr("QGIS")),
+        )
+        return window
 
     # -- destino y nombres ------------------------------------------------------------------------------
 
@@ -59,16 +146,8 @@ class LoadWindow:
             self.window.raise_()
             return
         self.jobs = [dict(job) for job in jobs]
-        window = TransferWindow(self._host if isinstance(self._host, QWidget) else None)
-        if self.window is not None:
-            self.window.deleteLater()
-        self.window = window
-        count = len(jobs)
-        window.set_route(
-            tr("Load in QGIS"),
-            ("logo", tr("1 GeoDuck table") if count == 1 else tr("{0} GeoDuck tables").format(count)),
-            ("qgis-layers", tr("QGIS")),
-        )
+        self.quiet = False
+        window = self._new_window(len(jobs))
         self.mode = Segmented([tr("Copy (mode)"), tr("Connected")], accessible_name=tr("How to load"))
         modes = self._coordinator.load_modes()
         reason = modes.get(LoadMode.CONNECTED)
@@ -136,9 +215,14 @@ class LoadWindow:
         self.running = True
         self.started = time.monotonic()
         self.connected = self.kind == CONNECTED
+        self._progress(window)
+        self._loader.start_many(chosen, self.kind, watch=self)
+
+    def _progress(self, window: TransferWindow) -> None:
+        """El diálogo pasa a la línea de tiempo de `self.chosen`, con «Cancelar · Esc» y su reloj."""
         view = window.timeline
         view.clear()
-        self.timeline_rows = [view.add_row(job["name"]) for job in chosen]
+        self.timeline_rows = [view.add_row(job["name"]) for job in self.chosen]
         window.show_progress()
         stop = button(tr("Cancel") + " · Esc")
         stop.clicked.connect(self.cancel)
@@ -149,7 +233,6 @@ class LoadWindow:
         self._clock.timeout.connect(self._render)
         self._clock.start()
         self._render()
-        self._loader.start_many(chosen, self.kind, watch=self)
 
     def cancel(self) -> None:
         if self.running:
@@ -161,6 +244,7 @@ class LoadWindow:
     def job_started(self, index: int, _request: Any) -> None:
         self.states[index]["state"] = RUNNING
         self.states[index]["started"] = time.monotonic()
+        self._arm_reveal()
         self._render()
 
     def job_progressed(self, index: int, rows: int) -> None:
@@ -194,7 +278,12 @@ class LoadWindow:
     def _check_done(self) -> None:
         if all(s["state"] not in (WAITING, RUNNING) for s in self.states):
             self.running = False
-            self._clock.stop()
+            self._stop_reveal()
+            if self.quiet:  # terminó antes de `REVEAL_MS`: el aviso basta
+                self.quiet = False
+                return
+            if self._clock is not None:
+                self._clock.stop()
             self._final_footer()
         self._render()
 
@@ -254,7 +343,7 @@ class LoadWindow:
 
     def _render(self) -> None:
         window = self.window
-        if window is None or not self.states:
+        if window is None or not self.states or self.quiet:
             return
         view = window.timeline
         current = None
@@ -305,6 +394,8 @@ class LoadWindow:
         window.set_footer([show], [close])
 
     def detach(self) -> None:
+        self._stop_reveal()
+        self.quiet = False
         if self.window is not None:
             self.window.on_close = None
             self.window.hide()

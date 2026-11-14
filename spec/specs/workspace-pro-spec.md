@@ -320,7 +320,8 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
    (o Capa conectada) → Capa en QGIS, con «Ver en el mapa» y «Cerrar».
 4. **Atajos que se saltan el paso 2** con lo propuesto: **arrastrar y soltar** sobre una base (QGIS →
    GeoDuck, con el lago) y **Copia o Conectada directo desde el menú** (GeoDuck → QGIS: un clic, con el aviso
-   «Ver en el mapa»).
+   «Ver en el mapa»). Si ese clic sigue cargando a los **2 s**, se abre la línea de tiempo (paso 3) con lo que
+   va, sin aviso aparte; si termina antes, basta el aviso (propietario, 2026-11-13: la opción intermedia).
 
 - **Cada capa se guarda por separado** (una transacción por capa; reemplaza «todo o nada» de G8, propietario
   2026-11-06): las que terminaron quedan aunque se cancelen o fallen otras; «Deshacer» borra las tablas
