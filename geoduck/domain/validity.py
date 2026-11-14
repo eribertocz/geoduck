@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Validez y reparación de geometrías (spatial-spec §9; decisión del propietario D2, 2026-11-02).
+"""Validez y reparación de geometrías (spatial-spec §9).
 
 Estados distintos, contados por separado: `NULL`, vacía, ilegible (WKB/WKT de una columna marcada que no
 se pudo leer), inválida (legible pero topológicamente inválida según GEOS) y válida. Módulo puro.

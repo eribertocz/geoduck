@@ -389,8 +389,8 @@ def test_dropping_on_empty_space_goes_to_the_current_database(coordinator):
 
 
 def test_a_layer_dropped_on_the_editor_is_copied_never_moved(coordinator):
-    """Observación del propietario (2026-11-06): soltar una capa en el editor la borraba de QGIS (el editor
-    aceptaba «mover»). Ahora el editor no la toma; GeoDuck abre «Añadir» y la acción es siempre «copiar»."""
+    """Soltar una capa en el editor no la borra de QGIS (el editor aceptaba «mover»): el editor no la toma;
+    GeoDuck abre «Añadir» y la acción es siempre «copiar»."""
     from qgis.PyQt.QtGui import QDragEnterEvent
 
     ws = workspace(coordinator)
@@ -463,7 +463,7 @@ def test_the_sidebar_drags_tables_but_not_queries(coordinator):
 
 
 def test_dragging_tables_shows_the_duck_and_the_target_database_is_the_lake(coordinator):
-    """Marca (propietario, 2026-11-07, «como arrastrar un pato al lago»): al arrastrar tablas se ve el pato
+    """Marca: al arrastrar tablas se ve el pato
     con cuántas lleva; la base donde se soltarán capas de QGIS se pinta de azul claro, con el pato."""
     from qgis.PyQt.QtGui import QColor
 

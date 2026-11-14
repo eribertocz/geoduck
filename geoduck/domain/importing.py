@@ -399,7 +399,7 @@ class ImportTarget:
 
 
 class Conflict(str, Enum):
-    """Qué hacer si la tabla ya existe (§3): por defecto, no enviar (decisión del propietario)."""
+    """Qué hacer si la tabla ya existe (§3): por defecto, no enviar."""
 
     SKIP = "skip"
     REPLACE = "replace"

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Capturas de la pestaña de consulta de Workspace Pro (G9 · E4a) para revisarlas con el propietario.
+"""Capturas de la pestaña de consulta de Workspace Pro (G9 · E4a).
 
     QT_QPA_PLATFORM=offscreen python tools/pro_query_shots.py <carpeta>
 

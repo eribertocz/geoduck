@@ -289,7 +289,7 @@ class TablePage(QWidget):
         self.column_summary = label("", "muted")
         self.column_summary.setFont(ui_font(METRICS.font_small, mono=True))
         row.addWidget(self.column_summary, 1)
-        # Solo iconos, en la ventana y en el panel (propietario, 2026-11-13), como la barra «Resultado»
+        # Solo iconos, en la ventana y en el panel, como la barra «Resultado»
         self.export_button = icon_button(
             "export", tr("Exports the table with its filters, search and order"), self.colors
         )
@@ -456,7 +456,7 @@ class TablePage(QWidget):
             self.show_mode(index)
 
     def set_compact(self, compact: bool) -> None:
-        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): las mismas opciones, con
+        """Modo compacto (panel acoplado o ventana angosta): las mismas opciones, con
         ícono y tooltip donde no cabe el texto; «Estructura» pasa a un ícono arriba; el detalle, cerrado.
         «Exportar», «Cargar en QGIS» y «Ver SQL» son siempre solo iconos."""
         self.compact = compact

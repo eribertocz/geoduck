@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Cuaderno como archivo `.sql` (G7, decisión del propietario 2026-11-03; ADR-0014).
+"""Cuaderno como archivo `.sql` (G7; ADR-0014).
 
 Un archivo SQL normal: cada celda empieza con una línea de comentario que marca la celda y su base.
 

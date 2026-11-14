@@ -43,7 +43,7 @@ out = {
     "start": ws.start_button.text(),
     "state": ws.state_title.text(),
     "status": ws.sidebar.status.text(),
-    "dock": ws.dock_button.toolTip(),  # solo su ícono, en la ventana y en el panel (propietario, 2026-11-13)
+    "dock": ws.dock_button.toolTip(),  # solo su ícono, en la ventana y en el panel
     "after": [QgsApplication.locale(), QLocale().name()],
     "before": list(before),
 }

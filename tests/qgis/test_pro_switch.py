@@ -335,7 +335,7 @@ def test_a_narrow_panel_keeps_every_action_within_reach(plugin):
 
 
 def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugin):
-    """Propietario (2026-11-07): el panel baja a 340 px sin que nada se monte; las mismas opciones, con
+    """El panel baja a 340 px sin que nada se monte; las mismas opciones, con
     ícono y tooltip donde no cabe el texto (▶ sin «Ejecutar»); el explorador se abre encima y se cierra al
     elegir una tabla o con Esc."""
     from geoduck.ui.pro.places import TABLE, Place
@@ -394,7 +394,7 @@ def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugi
 
 
 def test_right_click_on_one_or_more_tables_loads_them_with_the_same_menu(plugin):
-    """Propietario (2026-11-06): clic derecho en una o varias tablas (Ctrl/Mayús) › «Cargar en QGIS ▸», el
+    """Clic derecho en una o varias tablas (Ctrl/Mayús) › «Cargar en QGIS ▸», el
     mismo menú que al soltarlas en el mapa; con una sola, también «Más opciones…»."""
     from geoduck.ui.pro.sidebar import PLACE, ROLE
 
@@ -494,7 +494,7 @@ def test_about_shows_version_license_links_and_components(plugin):
 
 
 def test_the_brand_logo_says_the_session_state_and_its_menu_shows_only_what_applies(plugin):
-    """Marca (propietario, 2026-11-07): el logo con un puntito dice el estado y abre el menú de la sesión;
+    """Marca: el logo con un puntito dice el estado y abre el menú de la sesión;
     sin sesión, «Iniciar DuckDB» y nunca un «Iniciar» en gris con sesión; el botón de QGIS lleva el puntito;
     «Acerca de» con la raya ámbar y el botón azul."""
     from geoduck.ui.about_dialog import AboutDialog

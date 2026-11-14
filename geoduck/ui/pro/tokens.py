@@ -36,7 +36,7 @@ class Colors:
     accent_fill: str  # fondo del botón principal (con `on_accent` encima, ≥ 4,5:1)
     accent_hover: str
     accent_soft: str  # elemento elegido en listas
-    selection: str  # texto seleccionado en el editor: se distingue bien (propietario, 2026-11-06)
+    selection: str  # texto seleccionado en el editor: se distingue bien
     on_accent: str  # texto sobre `accent`
     row_selected: str
     chip_bg: str

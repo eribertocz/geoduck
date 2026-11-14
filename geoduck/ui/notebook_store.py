@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Cuadernos en disco (G7, decisión del propietario 2026-11-03; ADR-0014).
+"""Cuadernos en disco (G7; ADR-0014).
 
 - **Archivo `.sql`** que el usuario elige («Guardar cuaderno…» / «Abrir cuaderno…»). Formato:
   `geoduck.domain.notebook_file`. Un cuaderno con archivo se autoguarda en él tras cada cambio.

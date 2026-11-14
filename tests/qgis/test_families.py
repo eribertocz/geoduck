@@ -205,7 +205,7 @@ def test_connected_separate_types_pushes_the_family_filter(session):
 
 
 def test_connected_reads_the_type_of_every_row_not_a_sample(session):
-    # F-93 (decisión del propietario, PR #73): un tipo que solo aparece en la última de 20 000 filas no se
+    # F-93 (PR #73): un tipo que solo aparece en la última de 20 000 filas no se
     # pierde: el tipo se lee de todas las cabeceras WKB, no de una muestra.
     session.sql(
         "CREATE TABLE tardia AS SELECT range::INTEGER AS id, CASE WHEN range = 19999 "

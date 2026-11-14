@@ -124,7 +124,7 @@ PINNED_WIDTH = 240
 PINNED_KEY = "geoduck/pro/explorer_pinned"
 #: Arrastrando algo sobre ☰, cuánto esperar para abrir el explorador (#147).
 HOLD_MS = 500
-#: Un aviso de información del pie se borra solo a los 6 s (#177, propietario, 2026-11-13).
+#: Un aviso de información del pie se borra solo a los 6 s (#177).
 NOTICE_MS = 6000
 #: El nombre en la cabecera de la sesión: la marca, sin la versión del motor (#149).
 NAME = "GeoDuck"
@@ -132,7 +132,7 @@ NAME = "GeoDuck"
 
 def session_parts(coordinator: Any) -> tuple[str, str, str]:
     """Punto de estado (`ok`, `busy`, `error`, `off`), nombre («GeoDuck») y estado («Activo») de la sesión
-    (§3). Sin la base: la base activa se ve en el explorador (propietario, 2026-11-13); la versión de DuckDB
+    (§3). Sin la base: la base activa se ve en el explorador; la versión de DuckDB
     solo va en «Acerca de» (#149)."""
     state: SessionState = coordinator.state
     info = coordinator.engine_info
@@ -318,7 +318,7 @@ class ProWorkspace(QWidget):
         self.new_query_button = icon_button("plus", tr("New query"), self.colors)
         self.new_query_button.clicked.connect(self.new_query)
         row.addWidget(self.new_query_button, 0, Qt.AlignmentFlag.AlignVCenter)
-        # Al final de las pestañas, «Cerrar todas las pestañas» (propietario, 2026-11-12); el archivo de cada
+        # Al final de las pestañas, «Cerrar todas las pestañas»; el archivo de cada
         # pestaña, en su clic derecho
         self.close_all_button = icon_button("close", tr("Close all tabs"), self.colors)
         self.close_all_button.clicked.connect(self.tabs.close_all)
@@ -326,7 +326,7 @@ class ProWorkspace(QWidget):
         self.tabs.bar.customContextMenuRequested.connect(self._tab_menu)
         self.tabs.rename_requested.connect(self._rename_tab)
         row.addStretch(1)
-        # Solo iconos, en la ventana y en el panel (propietario, 2026-11-13); la ayuda dice qué hacen
+        # Solo iconos, en la ventana y en el panel; la ayuda dice qué hacen
         self.search_button = icon_button("search", tr("Go to a table or run an action (Ctrl+K)"), self.colors)
         self.search_button.clicked.connect(self.open_palette)
         row.addWidget(self.search_button, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -569,8 +569,8 @@ class ProWorkspace(QWidget):
             paths = self._ask_files(tr("Import files"), file_filters())
         if not paths:
             return
-        # Un formato que no está en la lista no entra al diálogo: un aviso claro y «Abrir en QGIS»
-        # (decisión del propietario, 2026-11-07); los compatibles siguen a los tres pasos.
+        # Un formato que no está en la lista no entra al diálogo: un aviso claro y «Abrir en QGIS»;
+        # los compatibles siguen a los tres pasos.
         unsupported = [p for p in paths if format_for(p) is OTHER]
         supported = [p for p in paths if p not in unsupported]
         if unsupported:
@@ -594,7 +594,7 @@ class ProWorkspace(QWidget):
 
     def write_query(self, paths: list[str]) -> None:
         """«Escribir consulta»: una pestaña nueva con un `FROM ST_Read('ruta');` por archivo, sin ejecutar
-        (lo mismo que soltarlos en el editor; propietario, 2026-11-13)."""
+        (lo mismo que soltarlos en el editor)."""
         self.new_query()
         page = self.tabs.page(self.tabs.bar.currentIndex())
         if isinstance(page, QueryPage):
@@ -701,7 +701,7 @@ class ProWorkspace(QWidget):
     # -- presentación ---------------------------------------------------------------------------------
 
     def set_presentation(self, *, wide: bool) -> None:
-        """Ventana (`wide`) o panel. En el panel (propietario, 2026-11-07): la sesión y la búsqueda van en su
+        """Ventana (`wide`) o panel. En el panel: la sesión y la búsqueda van en su
         cabecera; el explorador se abre **encima** del contenido con el botón de la barra lateral (Ctrl+B) y
         se cierra al elegir algo, con Esc o con un clic fuera; las páginas pasan al modo compacto."""
         self.wide = wide

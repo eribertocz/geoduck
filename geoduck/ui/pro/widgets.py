@@ -297,7 +297,7 @@ def reduced_motion(widget: QWidget) -> bool:
 
 
 class Lake(QWidget):
-    """«El lago» (propietario, 2026-11-13): el progreso de GeoDuck. Una línea de agua de 3 px y un pato que
+    """«El lago»: el progreso de GeoDuck. Una línea de agua de 3 px y un pato que
     nada en ella. Con avance (`set_progress(0..1)`), el agua se llena de turquesa con un brillo suave y el
     pato va en la punta, meciéndose; sin avance (`None`), el pato nada de un lado a otro con ondas detrás.
     Con «menos animaciones» en el sistema, el pato queda quieto."""

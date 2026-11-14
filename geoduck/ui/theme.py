@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Identidad visual de GeoDuck (docs/g5/maqueta/inventario.md §0; decisión del propietario, 2026-11-02).
+"""Identidad visual de GeoDuck (docs/g5/maqueta/inventario.md §0).
 
 Paleta corporativa medida en la maqueta (tema claro) y su variante para el tema oscuro de QGIS. La hoja de
 estilo se aplica **solo a los widgets de GeoDuck** (al contenido y a sus shells), por nombre de objeto o por

@@ -4,7 +4,7 @@
 Construye una `AttachRequest`; las comprobaciones de archivo las hace el motor en su operación serial. El
 diálogo solo avisa antes (archivo que no existe al abrir, o que ya existe al crear), sin crear ni tocar nada.
 
-Decisiones del propietario (2026-11-02): casilla «Solo lectura», marcada por defecto; etiqueta «Alias»
+Casilla «Solo lectura», marcada por defecto; etiqueta «Alias»
 con el alias por defecto a la vista. «Crear» no muestra acceso: una base nueva siempre es de lectura y
 escritura, y GeoDuck nunca sobrescribe un archivo (el motor lo rechaza igualmente).
 

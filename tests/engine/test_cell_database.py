@@ -52,7 +52,7 @@ def test_each_cell_reads_its_own_base_in_any_order(worker):
 
 
 def test_a_cell_reads_other_bases_by_their_name_like_the_owner_example(worker):
-    # celda en `memory` que lee `db`, y celda en `db` que lee `memory` (capturas del propietario, 2026-11-03)
+    # celda en `memory` que lee `db`, y celda en `db` que lee `memory`
     assert value(cell(worker, "SELECT origen FROM db.main.t", "memory")) == "db"
     run = cell(worker, "SELECT * FROM memory.tabla_memoria", "db")
     assert [r[0] for r in run.results[-1].preview.rows] == [1, 2, 3, 4]

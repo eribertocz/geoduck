@@ -19,7 +19,7 @@ from geoduck.domain.i18n import N_, tr
 from geoduck.domain.i18n import number as number_text
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 
-#: Filas por página (propietario, 2026-11-05: sin selector).
+#: Filas por página (sin selector).
 PAGE = 100
 #: Caracteres de una geometría en la grilla (el detalle de fila la lee entera).
 GEOMETRY_PREVIEW = 2000
@@ -346,8 +346,8 @@ def size_sql(database: str, schema: str, name: str) -> str:
 
 def page_label(offset: int, shown: int, total: int | None, *, estimate: int | None = None) -> str:
     """«Filas 1–100 de 48 312» según lo visible; «de ≈ 48 300» con el total estimado y «de …» mientras se
-    cuenta. El mismo texto en la pestaña de tabla y en el resultado de una consulta (propietario, 2026-11-06;
-    #170: desplazamiento continuo)."""
+    cuenta. El mismo texto en la pestaña de tabla y en el resultado de una consulta (#170:
+    desplazamiento continuo)."""
     if shown == 0:
         return tr("No rows")
     span = f"{number_text(offset + 1)}–{number_text(offset + shown)}"
@@ -374,7 +374,7 @@ def geometry_summary(wkt: str, data_type: str) -> tuple[str, str, int]:
     return kind, crs, vertices
 
 
-# -- icono de tipo en el encabezado (maqueta `tipo-columna`, propietario, 2026-11-13) ------------------------
+# -- icono de tipo en el encabezado (maqueta `tipo-columna`) ------------------------
 
 #: Familias de tipo: el encabezado muestra solo el nombre con un icono de la familia; el tipo completo va
 #: en la ayuda y en el detalle de la fila.

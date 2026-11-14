@@ -14,8 +14,8 @@ from geoduck.domain.errors import ErrorCode
 from geoduck.domain.i18n import tr
 from geoduck.domain.transaction import TransactionState
 
-#: Vista previa: 20 filas fijas, sin selector (decisión del propietario, 2026-11-03: es solo una vista previa;
-#: «Cargar» y «Exportar» usan la consulta completa). El motor admite también los tamaños de `PREVIEW_LIMITS`,
+#: Vista previa: 20 filas fijas, sin selector: es solo una vista previa; «Cargar» y
+#: «Exportar» usan la consulta completa. El motor admite también los tamaños de `PREVIEW_LIMITS`,
 #: que acotan la memoria de quien lo llame (sql-editor-spec §4).
 DEFAULT_PREVIEW_LIMIT = 20
 PREVIEW_LIMITS = (20, 50, 100, 200, 1000)  # 100: la página de la pestaña de consulta (G9)

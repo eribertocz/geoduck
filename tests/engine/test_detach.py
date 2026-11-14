@@ -130,7 +130,7 @@ def test_the_active_database_is_never_detached_nor_switched_in_silence(worker, d
 
 
 def test_the_starting_memory_database_can_be_detached_when_another_is_active(worker, db_file):
-    """#168 (propietario, 2026-11-13): la base del inicio se cierra si no es la activa y queda otra."""
+    """#168: la base del inicio se cierra si no es la activa y queda otra."""
     attach(worker, db_file, RO)
     root = catalog(worker).root
     worker.activate("b").result(TIMEOUT)

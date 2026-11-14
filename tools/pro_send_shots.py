@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Capturas de «Capas de QGIS → DuckDB» (F-131) y del arrastre de Workspace Pro para revisarlas con el
-propietario.
+"""Capturas de «Capas de QGIS → DuckDB» (F-131) y del arrastre de Workspace Pro.
 
     QT_QPA_PLATFORM=offscreen python tools/pro_send_shots.py <carpeta>
 

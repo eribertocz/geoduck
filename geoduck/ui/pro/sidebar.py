@@ -599,7 +599,7 @@ class Sidebar(QFrame):
         titles.addWidget(self.status)
         row.addLayout(titles, 1)
         self.session_button = icon_button("more", tr("Session"), self.colors)
-        # El menú de la sesión: solo lo que aplica (propietario, 2026-11-07): sin sesión, «Iniciar DuckDB»;
+        # El menú de la sesión: solo lo que aplica: sin sesión, «Iniciar GeoDuck»;
         # con sesión, «Cerrar sesión»; nunca un «Iniciar» en gris.
         self.session_menu = QMenu(self)
         self.start_action = self.session_menu.addAction(tr("Start GeoDuck"))
@@ -705,7 +705,7 @@ class Sidebar(QFrame):
         tree.setIndentation(14)
         tree.setUniformRowHeights(True)
         tree.setExpandsOnDoubleClick(False)
-        # varias tablas a la vez (Ctrl o Mayús) para cargarlas juntas en QGIS (propietario, 2026-11-06)
+        # varias tablas a la vez (Ctrl o Mayús) para cargarlas juntas en QGIS
         tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         tree.setAccessibleName(tr("Databases and favorites"))
         tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -764,7 +764,6 @@ class Sidebar(QFrame):
             action.setEnabled(ready or dot == "off")
         self.send_action.setEnabled(ready)
         # Sin DuckDB, todo en gris salvo iniciar, abrir o crear una base, Diagnóstico y Acerca de
-        # (propietario, 2026-11-06)
         started = dot != "off"
         for widget in (self.search, self.tree):
             widget.setEnabled(started)

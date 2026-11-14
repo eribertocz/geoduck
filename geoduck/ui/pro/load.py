@@ -2,7 +2,7 @@
 """«Cargar en QGIS ▾» de Workspace Pro (workspace-pro-spec §7; GD-WSP-006; AT-WSP-007).
 
 Dos opciones, en lenguaje simple: **Copia** (rápida, independiente de DuckDB) y **Conectada** (en vivo,
-editable en DuckDB). Un clic carga; solo se pregunta lo que falta (propietario, 2026-11-06):
+editable en DuckDB). Un clic carga; solo se pregunta lo que falta:
 
 - La «Copia» es la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); si GDAL no la permite, la Copia en
   memoria, sin preguntar. El usuario nunca elige entre las dos.

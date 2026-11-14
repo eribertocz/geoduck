@@ -162,8 +162,7 @@ class PlacesDropHandler(QgsCustomDropHandler):
 
 
 def drag_pixmap(count: int) -> QPixmap:
-    """Lo que se ve al arrastrar tablas hacia el mapa: el pato de GeoDuck, y cuántas lleva si son varias
-    (propietario, 2026-11-07: «como arrastrar un pato al lago»)."""
+    """Lo que se ve al arrastrar tablas hacia el mapa: el pato de GeoDuck, y cuántas lleva si son varias."""
     size = 40
     image = QPixmap(size + 22, size)
     image.fill(Qt.GlobalColor.transparent)

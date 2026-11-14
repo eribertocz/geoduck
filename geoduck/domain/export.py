@@ -4,7 +4,7 @@
 Se exporta la **consulta completa** con `COPY (<consulta>) TO '<archivo>' (FORMAT …)`, nunca la vista previa,
 y solo una consulta de lectura repetible (la misma regla que «Cargar en QGIS», GD-SQL-006).
 
-Geometría en Parquet (verificado con DuckDB 1.5.0 y 2.0.0, decisión del propietario 2026-11-03):
+Geometría en Parquet (verificado con DuckDB 1.5.0 y 2.0.0):
 
 - Sin SRC: todo lector supone `OGC:CRS84` (lo dice GeoParquet). GeoDuck no inventa un SRC: exporta con la
   opción por defecto (GeoParquet 1.0, la que más programas leen) y avisa.
@@ -25,7 +25,7 @@ from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 
 
 class ExportFormat(str, Enum):
-    """Los formatos de «Exportar ▾», siempre con el motor de DuckDB (decisión del propietario, 2026-11-07):
+    """Los formatos de «Exportar ▾», siempre con el motor de DuckDB:
     modernos, rápidos o muy usados; nunca SpatiaLite ni SQLite (GeoPackage los reemplaza)."""
 
     PARQUET = "parquet"

@@ -305,10 +305,10 @@ class QueryPage(QWidget):
         row = QHBoxLayout(bar)
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(6)
-        # Una sola idea por zona (propietario, 2026-11-12): esta barra es «correr el SQL»: ▶ (solo ícono; la
+        # Una sola idea por zona: esta barra es «correr el SQL»: ▶ (solo ícono; la
         # ayuda dice qué corre y su atajo) y la base. El archivo va en la pestaña; las filas, en el resultado.
         self.run_button = button("", "primary", icon="play")
-        # ▶ lleno, cuadrado y compacto (propietario, 2026-11-13, opción 1): 28 × 28, icono de 12
+        # ▶ lleno, cuadrado y compacto: 28 × 28, icono de 12
         self.run_button.setProperty("square", True)
         self.run_button.setFixedSize(RUN_SIZE, RUN_SIZE)
         self.run_button.setIcon(self._icon("play", self.colors.on_accent, 12))
@@ -316,7 +316,7 @@ class QueryPage(QWidget):
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
         row.addSpacing(6)
-        # Una sola base activa para toda la sesión (#168, propietario, 2026-11-13): este desplegable y el
+        # Una sola base activa para toda la sesión (#168): este desplegable y el
         # explorador muestran la misma; cambiarla aquí la cambia en todo
         self.runs_in_label = label(tr("Active database"), "muted")
         row.addWidget(self.runs_in_label)
@@ -328,7 +328,7 @@ class QueryPage(QWidget):
         row.addWidget(self.base)
         row.addWidget(spacer(), 1)
         # «Ejecutar todo»: Ctrl+Shift+Enter y el clic derecho del editor (abrir y guardar están junto a las
-        # pestañas: el archivo arriba, la ejecución aquí; propietario, 2026-11-06)
+        # pestañas: el archivo arriba, la ejecución aquí)
         self.run_all_action = QAction(tr("Run all") + "\tCtrl+Shift+Enter", self)
         self.run_all_action.triggered.connect(lambda: self.execute(RunScope.ALL))
         return bar
@@ -467,7 +467,7 @@ class QueryPage(QWidget):
 
     def _build_footer(self) -> QWidget:
         """El pie del resultado: «Filas 1–100 de N · tiempo» y ‹ ›. Exportar y cargar están en la barra del
-        resultado, junto a las filas (propietario, 2026-11-12)."""
+        resultado, junto a las filas."""
         foot = QFrame()
         foot.setProperty("pro", "rule-top")
         foot.setFixedHeight(METRICS.bar - 4)
@@ -506,10 +506,10 @@ class QueryPage(QWidget):
     def database(self) -> str | None:
         return self.base.currentData()
 
-    # -- archivos soltados en el editor (decisión del propietario, 2026-11-07) -------------------------
+    # -- archivos soltados en el editor -------------------------
 
     def drop_files(self, paths: list[str], *, any_format: bool = False) -> bool:
-        """Archivos soltados en el editor o «Escribir consulta» (#146, punto 14; propietario, 2026-11-13): una
+        """Archivos soltados en el editor o «Escribir consulta» (#146, punto 14): una
         sentencia `FROM 'ruta';` por archivo (o `FROM ST_Read('ruta');` para los de GDAL), lista para ejecutar
         o para añadirle parámetros, sin ejecutarla. Los que no se leen con SQL (Arrow, no compatibles) siguen
         a «Importar archivos». Con `spatial` sin cargar, la primera línea la carga (visible: lo decide el
@@ -696,7 +696,7 @@ class QueryPage(QWidget):
             _save_result_height(height)
 
     def set_compact(self, compact: bool) -> None:
-        """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): la base sin «Se ejecuta
+        """Modo compacto (panel acoplado o ventana angosta): la base sin «Se ejecuta
         en», «12 s» en vez de «Ejecutando… 12 s» y el detalle de la fila cerrado. Todo sigue ahí."""
         self.compact = compact
         self.runs_in_label.setVisible(not compact)
@@ -763,7 +763,7 @@ class QueryPage(QWidget):
             what = tr("Run · line {}").format(lines[0] + 1)
         else:
             what = tr("Run")
-        # solo el ícono ▶ (propietario, 2026-11-12): la ayuda dice qué corre y sus atajos
+        # solo el ícono ▶: la ayuda dice qué corre y sus atajos
         self.run_button.setAccessibleName(what)
         self.run_button.setToolTip(
             "\n".join(
@@ -1060,7 +1060,7 @@ class QueryPage(QWidget):
             return False
         return True
 
-    # -- páginas y total (propietario, 2026-11-06: igual que la pestaña de tabla) ---------------------------
+    # -- páginas y total (igual que la pestaña de tabla) ---------------------------
 
     def _offset(self) -> int:
         return self.data.offset
