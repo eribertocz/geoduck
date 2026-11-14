@@ -127,10 +127,27 @@ def test_a_syntax_error_and_any_other_class_still_get_a_card():
     text = "SELECT * FRM t"
     card = card_for("ParserException", 'Parser Error: syntax error at or near "t"', text)
     assert card.title == tr("Syntax error near «{}»").format("t") or card.title == tr("Syntax error")
-    card = card_for("", 'Constraint Error: Duplicate key "id: 1" violates primary key constraint.', "INSERT")
-    assert card.title == tr("A rule of the table does not allow this change") and card.fixes == ()
+    # #189: lo que GeoDuck no reconoce se muestra con el texto de DuckDB tal cual, sin título propio
+    message = 'Constraint Error: Duplicate key "id: 1" violates primary key constraint.'
+    card = card_for("", message, "INSERT")
+    assert card.raw and card.title == message and card.explanation == "" and card.fixes == ()
     card = card_for("WeirdException", "Something odd", "SELECT 1")
-    assert card.title == tr("This statement could not run") and card.explanation == "Something odd"
+    assert card.raw and card.title == "Something odd"
+
+
+def test_detaching_the_active_database_shows_duckdbs_message_as_is():
+    message = (
+        'Binder Error: Cannot detach database "otra" because it is the default database. Select a different '
+        "database using `USE` to allow detaching this database"
+    )
+    card = card_for("BinderException", message, "DETACH otra")
+    assert card.raw and card.title == message
+
+
+def test_the_line_marker_is_left_to_where():
+    message = "Binder Error: Something new\n\nLINE 1: SELECT x\n               ^"
+    card = card_for("BinderException", message, "SELECT x")
+    assert card.title == "Binder Error: Something new" and card.original == message
 
 
 def test_the_typing_check_reads_only_syntax_errors_and_counts_bytes():

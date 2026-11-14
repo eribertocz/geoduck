@@ -45,46 +45,33 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger("geoduck.engine")
 
-#: Reglas para clasificar los errores de `ATTACH` de DuckDB, en orden. Texto en minúsculas.
-_RULES: tuple[tuple[str, ErrorCode, str], ...] = (
-    (
-        "current transaction is aborted",
-        ErrorCode.TRANSACTION_ABORTED,
-        tr("The transaction is aborted; roll it back."),
-    ),
-    ("conflicting lock is held", ErrorCode.DB_LOCKED, tr("Another process has locked the file.")),
-    ("could not set lock", ErrorCode.DB_LOCKED, tr("Another process has locked the file.")),
-    (
-        "unique file handle conflict",
-        ErrorCode.DB_ALIAS_CONFLICT,
-        tr("The file is already attached in this session."),
-    ),
-    ("already exists", ErrorCode.DB_ALIAS_CONFLICT, tr("There is already a database with that alias.")),
-    ("reserved name", ErrorCode.DB_ALIAS_CONFLICT, tr("That alias is reserved.")),
-    ("database does not exist", ErrorCode.DB_NOT_FOUND, tr("The file does not exist.")),
-    ("no such file or directory", ErrorCode.DB_NOT_FOUND, tr("The file or its folder does not exist.")),
-    ("permission denied", ErrorCode.DB_READ_ONLY, tr("There is no write permission on the file.")),
-    ("read-only file system", ErrorCode.DB_READ_ONLY, tr("The file system is read only.")),
-    (
-        "not a valid duckdb database file",
-        ErrorCode.ENGINE_ERROR,
-        tr("The file is not a valid database."),
-    ),
+#: Código estable de cada error de `ATTACH` de DuckDB, en orden (texto en minúsculas). El mensaje que se
+#: muestra es siempre el de DuckDB, tal cual (#189).
+_RULES: tuple[tuple[str, ErrorCode], ...] = (
+    ("current transaction is aborted", ErrorCode.TRANSACTION_ABORTED),
+    ("conflicting lock is held", ErrorCode.DB_LOCKED),
+    ("could not set lock", ErrorCode.DB_LOCKED),
+    ("unique file handle conflict", ErrorCode.DB_ALIAS_CONFLICT),
+    ("already exists", ErrorCode.DB_ALIAS_CONFLICT),
+    ("reserved name", ErrorCode.DB_ALIAS_CONFLICT),
+    ("database does not exist", ErrorCode.DB_NOT_FOUND),
+    ("no such file or directory", ErrorCode.DB_NOT_FOUND),
+    ("permission denied", ErrorCode.DB_READ_ONLY),
+    ("read-only file system", ErrorCode.DB_READ_ONLY),
 )
 
 
 def classify_attach_error(exc: BaseException) -> AttachError:
-    """Traduce un error de DuckDB al código estable de session-spec §5.
+    """El código estable de session-spec §5 para un error de DuckDB, con su mensaje tal cual.
 
     `detail` solo lleva la clase de excepción y la regla aplicada, nunca la ruta ni datos del usuario.
     """
-    text = str(exc).lower()
-    for needle, code, message in _RULES:
+    message = str(exc).strip() or type(exc).__name__
+    text = message.lower()
+    for needle, code in _RULES:
         if needle in text:
             return AttachError(message, code=code, detail=f"{type(exc).__name__}: {needle}")
-    return AttachError(
-        tr("The file could not be opened."), code=ErrorCode.ENGINE_ERROR, detail=type(exc).__name__
-    )
+    return AttachError(message, code=ErrorCode.ENGINE_ERROR, detail=type(exc).__name__)
 
 
 def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str) -> AttachResult:

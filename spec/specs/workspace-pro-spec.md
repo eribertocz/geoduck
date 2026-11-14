@@ -239,12 +239,17 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   subrayado ondulado (al pasar el ratón, el mensaje); la barra dice «✕ Error en la línea N, cerca de
   «palabra»» y lleva al error. Lo que no corrió no se repite en una frase: lo dicen la marca y el resumen
   («1 OK · 1 con error · 1 sin ejecutar»). Al editar, las marcas se van.
+- **Errores de DuckDB tal cual** (#189; maqueta `189-A`): el texto de DuckDB nunca se pierde ni se reemplaza
+  por uno que diga otra cosa. Un error que GeoDuck **no reconoce** muestra como título el mensaje de DuckDB
+  completo (sin la marca `LINE n`, que da «dónde»), sin pliegue. Fuera del editor (abrir, cerrar, exportar,
+  enviar, iniciar), GeoDuck dice qué acción falló («No se abrió la base.») y sigue el texto de DuckDB
+  completo. Solo las reglas propias de GeoDuck (que DuckDB no conoce) llevan texto de GeoDuck.
 - **Errores de primer nivel** (#145, punto 13; maqueta `errores-tipos`). Cada error es una **tarjeta** en
   «Mensajes», siempre en el mismo orden: **qué pasó** (título traducido) → **dónde** (línea y palabra, o el
   archivo, o «toda la sentencia») → **por qué y la sugerencia** → **botón para arreglarlo** (el primero, el
   principal), «Ir» y «Copiar error» → el **mensaje original de DuckDB**, plegable. Todo sale del manejo nativo
   de DuckDB: la tarjeta se elige por su clase de error (Parser, Binder, Catalog, Conversion, IO, Out of Memory,
-  Constraint…; las demás, una tarjeta general); el lugar, de su marca `LINE n ^^^^`; las sugerencias y los
+  Constraint…); el lugar, de su marca `LINE n ^^^^`; las sugerencias y los
   botones, solo de lo que DuckDB propone:
   - «Candidate bindings» / «Did you mean» → «Cambiar a «x»»;
   - «exists in the spatial extension» → «Cargar «spatial»…», que pide permiso (ADR-0011, spatial-spec §10) y

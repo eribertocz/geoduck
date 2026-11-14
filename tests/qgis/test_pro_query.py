@@ -756,6 +756,20 @@ def test_an_error_card_fixes_only_the_editor_text_and_copies_the_original(coordi
     assert "kwhh" in page.editor.text()
 
 
+def test_an_error_geoduck_does_not_recognize_shows_duckdbs_message_as_is(coordinator):
+    """#189: el título es el texto de DuckDB, completo; sin pliegue, porque ya se ve todo."""
+    ws = workspace(coordinator)
+    page = new_query(ws, "ATTACH ':memory:' AS otra; USE otra; DETACH otra;")
+    page.run_all_action.trigger()
+    assert wait_for(lambda: done(coordinator, page) and page.cards)
+    card = page.cards[-1]
+    assert card.title.text().startswith(
+        'Binder Error: Cannot detach database "otra" because it is the default'
+    )
+    assert card.title.text() == card.card.original.strip()
+    assert not card.toggle.isVisibleTo(card)
+
+
 def test_a_card_does_not_fix_a_text_that_changed_and_loading_spatial_asks_first(coordinator, monkeypatch):
     from geoduck.domain.sql_errors import LOAD_EXTENSION, Fix
     from geoduck.ui.pro import query_page as module

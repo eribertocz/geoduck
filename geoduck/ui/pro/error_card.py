@@ -38,6 +38,9 @@ class ErrorCardView(QFrame):
         self.title = label(card.title, "error")
         self.title.setFont(ui_font(METRICS.font_title - 1, bold=True))
         self.title.setWordWrap(True)
+        if card.raw:
+            self.title.setTextFormat(Qt.TextFormat.PlainText)
+            self.title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         box.addWidget(self.title)
         if card.where:
             self.where = label(card.where)
@@ -60,6 +63,8 @@ class ErrorCardView(QFrame):
         self.original.setTextFormat(Qt.TextFormat.PlainText)
         self.original.hide()
         box.addWidget(self.original)
+        if card.raw:  # el título ya es el mensaje de DuckDB: nada que desplegar
+            self.toggle.hide()
 
     def _buttons(self, box: QVBoxLayout, card: ErrorCard, colors: Colors) -> None:
         """Los arreglos (el primero, el principal), «Ir» y «Copiar error»."""
