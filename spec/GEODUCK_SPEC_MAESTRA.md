@@ -1496,8 +1496,8 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Ventana propia** (por defecto) y **panel acoplado** a QGIS, con la misma sesión y las mismas pestañas
   (ADR-0013 se mantiene). «Acoplar a QGIS» / «Ventana» alterna sin perder nada.
 - **Estado de DuckDB** (propietario, 2026-11-06: sin una barra más): en la ventana, arriba de la barra lateral
-  («GeoDuck» y «● Activo · en memoria», con «⋯»: Actualizar, **Cerrar DuckDB**); en el panel, en su
-  cabecera. La versión de DuckDB no se muestra en las ventanas: solo en «Acerca de» y en el diagnóstico
+  («GeoDuck» y «● Activo», con «⋯»: Actualizar, **Cerrar DuckDB**; sin la base, que se ve en el
+  explorador); en el panel, en su cabecera. La versión de DuckDB no se muestra en las ventanas: solo en «Acerca de» y en el diagnóstico
   (propietario, 2026-11-13, #149). Estados: «Activo», «Ocupado», «Con error» y «Detenido» (sin «Lista»: con
   «GeoDuck» delante sonaba mal; propietario, 2026-11-13). La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
 - **Iniciar y cerrar** (propietario, 2026-11-06; nombre de #142): **«Iniciar GeoDuck»** (botón grande en el
