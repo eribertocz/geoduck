@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""#184 (propietario, 2026-11-14): la interfaz no nombra a DuckDB; solo «Acerca de» y la revisión de
-componentes de «Diagnóstico» (versiones e instalación, como «Acerca de»). Sin Qt."""
+"""La interfaz no nombra al motor fuera de «Acerca de» y de la revisión de componentes de «Diagnóstico»."""
 
 from __future__ import annotations
 
@@ -12,7 +11,7 @@ from geoduck.domain import i18n
 ROOT = Path(__file__).resolve().parents[2]
 NAME = "DuckDB"
 
-#: Textos que sí pueden nombrarlo: la marca («Acerca de») y los componentes de «Diagnóstico».
+#: Textos que pueden nombrarlo: la marca y los componentes de «Diagnóstico».
 ALLOWED_SOURCES = {
     "DuckDB is a trademark of the DuckDB Foundation.",
     "DuckDB {0} is not supported; {1} or later is required",
