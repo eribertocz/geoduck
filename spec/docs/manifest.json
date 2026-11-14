@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 233764,
-      "sha256": "1297f9ba95a63cff21bf9334887e2760a4b25cc679de7b7804027f1e435d4109"
+      "bytes": 233838,
+      "sha256": "2d8e64b60c59cea08cd0570f8da5f4cfbbab9e43cbec78b2e323f0e922499b76"
     },
     {
       "path": "README.md",
@@ -156,8 +156,8 @@
     },
     {
       "path": "specs/performance-spec.md",
-      "bytes": 11401,
-      "sha256": "e2ae89e4611acebc23c235110e961e0d19e0bda533ddc79de25acba5b0c174b0"
+      "bytes": 11475,
+      "sha256": "92e248f1766e565ccacda06f3b336f10e64cabd7f0d2baff80e3437da3584868"
     },
     {
       "path": "specs/qgis-bridge-spec.md",

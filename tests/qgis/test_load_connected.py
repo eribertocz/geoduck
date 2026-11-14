@@ -473,3 +473,24 @@ def test_messages_name_the_origin_and_access(session):
     text = finished_text(report)
     first = f"Capa «capa» añadida a QGIS desde GeoDuck · Conectada · {N:,} entidades".replace(",", " ")
     assert text == first + " · Origen: tabla memory.main.puntos · Acceso: lectura y escritura"
+
+
+def test_points_and_multipoints_in_one_layer_are_all_multipoints_and_reprojected(session):
+    """#174: la cabecera WKB evita preguntar el tipo a cada geometría; lo distinto se sigue ajustando, y la
+    reproyección se aplica solo cuando la petición la pide."""
+    from qgis.core import QgsCoordinateReferenceSystem, QgsFeatureRequest, QgsWkbTypes
+
+    session.sql(
+        "CREATE TABLE mezcla AS SELECT * FROM (VALUES (1, 'POINT(1 2)'::GEOMETRY('OGC:CRS84')),"
+        " (2, 'MULTIPOINT((3 4), (5 6))'::GEOMETRY('OGC:CRS84'))) t(id, g)"
+    )
+    _, layer = session.load("SELECT * FROM mezcla", name="mezcla", source=("memory", "main", "mezcla"))
+    assert QgsWkbTypes.displayString(layer.wkbType()) == "MultiPoint"
+    kinds = [QgsWkbTypes.displayString(f.geometry().wkbType()) for f in layer.getFeatures()]
+    assert kinds == ["MultiPoint", "MultiPoint"]
+    request = QgsFeatureRequest()
+    request.setDestinationCrs(
+        QgsCoordinateReferenceSystem("EPSG:3857"), QgsProject.instance().transformContext()
+    )
+    first = next(layer.getFeatures(request)).geometry().asMultiPoint()[0]
+    assert abs(first.x() - 111319.49) < 1 and first.y() > 200000

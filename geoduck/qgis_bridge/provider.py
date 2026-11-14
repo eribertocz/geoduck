@@ -66,7 +66,7 @@ from geoduck.domain.bridge_types import (
 from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.qgis_bridge import sessions
-from geoduck.qgis_bridge.convert import column_converter, fields_for, geometry_from_wkb
+from geoduck.qgis_bridge.convert import column_converter, fields_for
 from geoduck.qgis_bridge.extent import filtered_extent
 from geoduck.qgis_bridge.families import fit_to
 from geoduck.qgis_bridge.qgis_compat import (
@@ -342,6 +342,14 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
                 self.local.prepare(self.ctx)
         self.select = ", ".join(cols)
         self.where = where
+        # #174: lo que cada fila necesita, resuelto una vez (cada llamada a la capa o a Qt por fila cuesta)
+        self.fields = p.fields_
+        self.layer_wkb = p.wkbType()
+        self.fit_types = p.fit
+        #: La cabecera WKB (little endian, ISO) del tipo de la capa: si la fila la trae, no hace falta
+        #: preguntarle el tipo a la geometría.
+        self.layer_header = b"\x01" + int(self.layer_wkb).to_bytes(4, "little")
+        self.reproject = self.transform.isValid() and not self.transform.isShortCircuited()
 
     def _key_tuple_sql(self, values: tuple[Any, ...]) -> str:
         return self.p.key_tuple_sql(values)
@@ -480,18 +488,24 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
                     self.ties += 1
                 else:
                     self.after, self.ties = fid, 1
-            g: QgsGeometry | None = geometry_from_wkb(self.wkbs[i]) if self.wkbs is not None else None
+            g: QgsGeometry | None = None
+            if self.wkbs is not None:
+                wkb = self.wkbs[i]
+                if wkb is not None:
+                    g = QgsGeometry()
+                    g.fromWkb(wkb)
             if self.exact and (g is None or g.isNull() or not g.intersects(self.rect)):
                 continue
-            f.setFields(self.p.fields_, True)
+            f.setFields(self.fields, True)
             for index, col in self.cols:
                 f.setAttribute(index, col[i])
             f.setId(fid)
             if self.return_geom and g is not None and not g.isNull():
-                if self.p.fit and g.wkbType() != self.p.wkbType():
-                    g = fit_to(g, self.p.wkbType())[0]  # Multi y dimensiones de la capa (NaN si faltan)
+                if self.fit_types and wkb[:5] != self.layer_header and g.wkbType() != self.layer_wkb:
+                    g = fit_to(g, self.layer_wkb)[0]  # Multi y dimensiones de la capa (NaN si faltan)
                 f.setGeometry(g)
-                self.geometryToDestinationCrs(f, self.transform)
+                if self.reproject:
+                    self.geometryToDestinationCrs(f, self.transform)
             else:
                 f.clearGeometry()
             f.setValid(True)
