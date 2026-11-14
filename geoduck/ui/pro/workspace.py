@@ -202,6 +202,7 @@ class ProWorkspace(QWidget):
         self._closing = False
         #: Capas no disponibles tras el último catálogo, y la base que se está cerrando desde el menú.
         self._unavailable: set[str] = set()
+        self._bases: dict[str, Any] = {}
         self._detaching: str | None = None
         self._resave_project: Callable[[], None] | None = None
         #: #168: el alias de una base nueva en memoria y confirmar cerrar una base en memoria con tablas.
@@ -1118,14 +1119,24 @@ class ProWorkspace(QWidget):
         else:
             self._guard(lambda: self._coordinator.attach_database(request))
 
-    def _track_unavailable(self) -> None:
-        """Un `DETACH` escrito en el editor (#183): sin ventanas, el aviso dice qué capas quedaron no
-        disponibles. Cerrar desde el menú avisa en la barra de QGIS."""
+    def _track_unavailable(self, catalog: Any) -> None:
+        """Una base cerrada con `DETACH` en el editor: el mismo aviso que «Cerrar base», con «Abrir de
+        nuevo». Otras capas que quedaron no disponibles se dicen en el pie."""
+        bases = {d.name: d for d in catalog.databases} if catalog is not None else {}
+        closed = [d for name, d in self._bases.items() if name not in bases]
+        self._bases = bases
         now = set(self._coordinator.unavailable_layers())
-        lost = sorted(now - self._unavailable)
+        lost = now - self._unavailable
         self._unavailable = now
-        if lost and self._detaching is None and not self._closing:
-            self.notify(_left_unavailable(lost))
+        if not lost or self._detaching is not None or self._closing:
+            return
+        for database in closed:
+            told = set(self._coordinator.layers_reading(database.name))
+            if told & lost:
+                self._detached(database)
+                lost -= told
+        if lost:
+            self.notify(_left_unavailable(sorted(lost)))
 
     def _session_closed(self) -> None:
         """Situación 5 de #183: las capas Conectadas vuelven al iniciar GeoDuck y abrir sus bases."""
@@ -1516,7 +1527,7 @@ class ProWorkspace(QWidget):
         elif isinstance(event, CatalogChanged):
             self.sidebar.render(event.catalog)
             self._render()
-            self._track_unavailable()
+            self._track_unavailable(event.catalog)
         elif isinstance(event, ColumnsListed):
             self.sidebar.set_columns(event.source, event.columns)
         elif isinstance(event, ColumnsUnavailable):

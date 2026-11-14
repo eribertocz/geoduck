@@ -213,3 +213,31 @@ def test_saving_a_project_with_layers_on_a_memory_database_warns_after_saving(pl
         "«Pozos» usa la base en memoria «memory»" in text and buttons == ["Guardar la base como archivo"]
         for text, buttons in texts
     ), texts
+
+
+def test_a_typed_detach_shows_the_same_notice_as_close_database(plugin, tmp_path):  # noqa: F811
+    path = tmp_path / "catastro.duckdb"
+    con = file_db(path)
+    con.execute("CREATE TABLE predios AS SELECT 1 AS id, 'POINT(0 0)'::GEOMETRY('OGC:CRS84') AS g")
+    con.close()
+    item = plugin()
+    coordinator = start(item)
+    ws = item.content
+    bars, _ = recorder(ws)
+    coordinator.attach_database(AttachRequest(str(path), AccessMode.READ_WRITE, OpenAction.OPEN_EXISTING))
+    assert wait_for(lambda: coordinator.catalog.get("catastro") is not None, TIMEOUT)
+    layer = connected(
+        ws,
+        coordinator,
+        'SELECT * FROM "catastro"."main"."predios"',
+        "Predios",
+        ("catastro", "main", "predios"),
+    )
+    run(coordinator, "DETACH catastro")
+    assert wait_for(lambda: bars and not layer.isValid(), TIMEOUT)
+    text, labels, actions = bars[-1]
+    assert text == "Base «catastro» cerrada. 1 capa quedó no disponible: Predios." and labels == [
+        "Abrir de nuevo"
+    ]
+    actions[0][1]()
+    assert wait_for(lambda: layer.isValid() and coordinator.state is SessionState.READY, TIMEOUT)

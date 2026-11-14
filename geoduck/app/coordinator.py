@@ -279,7 +279,7 @@ class SessionCoordinator:
                 return None
             names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
             return tr(
-                "Nothing was run: DETACH {0} with unsaved {1}. Save or discard those changes first."
+                "Nothing was run: DETACH {0} with unsaved {1}. Save or discard them in QGIS and try again."
             ).format(target or tr("(unknown database)"), names)
 
         return guard
