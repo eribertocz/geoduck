@@ -357,9 +357,10 @@ class SessionWorker:
         """Estado de `spatial` en la sesión (sin instalar ni cargar nada)."""
         return self._submit_future(lambda h, _t: spatial_state(h))
 
-    def scan_files(self, paths: list[str]) -> Future[Any]:
-        """Archivos → DuckDB, paso 1: qué hay en cada archivo, solo con metadatos (`geoduck.engine.files`)."""
-        return self._submit_future(lambda h, _t: scan_files(h, paths))
+    def scan_files(self, paths: list[str]) -> OperationHandle[Any]:
+        """Archivos → DuckDB, paso 1: qué hay en cada archivo, solo con metadatos (`geoduck.engine.files`).
+        Devuelve la operación, para poder cancelarla (#171)."""
+        return self.submit(lambda h, t: scan_files(h, paths, t))
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:
         """`INSTALL` (si `install`) y `LOAD spatial`, con consentimiento del usuario (spatial-spec §10)."""

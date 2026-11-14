@@ -275,13 +275,13 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
     types = dict(provider.plan_types)
     geom = provider.plan.geometry.name if provider.plan.geometry is not None else None
     fmt = provider.plan.geometry.format if provider.plan.geometry is not None else GeometryFormat.GEOMETRY
-    try:
-        handle.execute("BEGIN")
-    except Exception as exc:
+    if _transaction_open(handle):
         raise SaveError(
             tr("The session has an open transaction: commit or roll it back before saving the layer")
-        ) from exc
+        )
     try:
+        # #157: BEGIN dentro, para que una interrupción justo encima no deje la transacción abierta
+        handle.execute("BEGIN")
         located: dict[int, tuple[int, int]] = {}
         if batch.touched:  # 1. cada fila tocada, por su identificador; su huella decide si hay conflicto
             located = _locate(handle, provider, batch)
@@ -382,9 +382,33 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
                 fid_map = {tmp: int(r) for tmp, (r,) in zip(batch.added_tmp, new, strict=True)}
         return fid_map, reload
     except BaseException:
-        with contextlib.suppress(Exception):  # el worker verifica la conexión después de cada operación
-            handle.execute("ROLLBACK")
+        _roll_back_own(handle)  # resiste una interrupción tardía; el worker verifica la conexión después
         raise
+
+
+def _transaction_open(handle: Any) -> bool:
+    """Hay una transacción abierta (también abortada): `txid_current()` no cambia entre dos llamadas, o
+    DuckDB responde que está abortada. Como `engine.transactions.probe_transaction` (ADR-0010: el puente no
+    importa el motor)."""
+    try:
+        first = handle.execute("SELECT txid_current()").rows
+        second = handle.execute("SELECT txid_current()").rows
+    except Exception as exc:
+        if "current transaction is aborted" in str(exc).lower():
+            return True
+        raise
+    return bool(first == second)
+
+
+def _roll_back_own(handle: Any, attempts: int = 3) -> None:
+    """ROLLBACK de la transacción del guardado aunque «Cancelar» caiga encima (#157): se repite hasta que
+    no quede ninguna (como `engine.transactions.roll_back_own`)."""
+    for _ in range(attempts):
+        with contextlib.suppress(Exception):
+            handle.execute("ROLLBACK")
+        with contextlib.suppress(Exception):
+            if not _transaction_open(handle):
+                return
 
 
 def _message(exc: BaseException) -> str:

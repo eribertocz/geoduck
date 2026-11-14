@@ -393,3 +393,27 @@ def test_a_late_interrupt_during_the_rollback_still_leaves_no_transaction(worker
     assert calls["rollback"] >= 2
     assert sql(worker, "SELECT 1") == ((1,),)  # sin transacción abortada
     assert "t" not in {r[0] for r in sql(worker, "SELECT table_name FROM duckdb_tables()")}
+
+
+def test_an_interrupt_that_lands_on_begin_leaves_no_transaction(worker, monkeypatch):
+    """#157: «Cancelar» justo sobre el BEGIN. DuckDB abre la transacción y avisa de la interrupción; antes
+    nadie la revertía y la siguiente consulta fallaba con TRANSACTION_ABORTED. Sin depender de los tiempos."""
+    import duckdb
+
+    from geoduck.engine import worker as worker_module
+
+    original = worker_module.ConnectionHandle.execute
+
+    def execute(self, text, *args, **kwargs):
+        result = original(self, text, *args, **kwargs)
+        if text == "BEGIN":
+            raise duckdb.InterruptException("INTERRUPT Error: Interrupted!")  # después de abrirla
+        return result
+
+    monkeypatch.setattr(worker_module.ConnectionHandle, "execute", execute)
+    result, finished, _ = send(worker, [job("t")], [(0, batch(0, 10))])
+    assert isinstance(result, BaseException) and finished
+    monkeypatch.undo()
+    state = worker.transaction_state().result(TIMEOUT)
+    assert not state.is_open  # nada abierto ni abortado
+    assert sql(worker, "SELECT 1") == ((1,),)

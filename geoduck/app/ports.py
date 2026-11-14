@@ -143,8 +143,9 @@ class SessionEngine(Protocol):
         """Estado de la extensión `spatial` en la sesión (`SpatialState`)."""
         ...
 
-    def scan_files(self, paths: list[str]) -> Future[Any]:
-        """Archivos → DuckDB, paso 1: las capas de cada archivo (`list[FileLayer]`), sin leerlos enteros."""
+    def scan_files(self, paths: list[str]) -> OperationHandle:
+        """Archivos → DuckDB, paso 1: las capas de cada archivo (`list[FileLayer]`), sin leerlos enteros. Se
+        puede cancelar (#171)."""
         ...
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:

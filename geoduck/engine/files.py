@@ -198,12 +198,15 @@ def _replace(item: FileLayer, **changes: Any) -> FileLayer:
     return dataclasses.replace(item, **changes)
 
 
-def scan_files(handle: ConnectionHandle, paths: list[str]) -> list[FileLayer]:
-    """Lo que hay en cada archivo, sin leerlo entero. Un archivo que falla vuelve con su motivo."""
+def scan_files(handle: ConnectionHandle, paths: list[str], token: Any = None) -> list[FileLayer]:
+    """Lo que hay en cada archivo, sin leerlo entero. Un archivo que falla vuelve con su motivo. Con `token`,
+    «Cancelar» se atiende entre un archivo y otro (#171; dentro de uno, lo interrumpe DuckDB)."""
     loaded = spatial_loaded(handle)
     out: list[FileLayer] = []
     seen: set[str] = set()
     for raw in paths:
+        if token is not None:
+            token.raise_if_cancelled()
         path = source_path(raw)
         if path in seen:  # dos archivos de la misma Geodatabase
             continue

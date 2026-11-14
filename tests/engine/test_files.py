@@ -77,7 +77,7 @@ def plain(tmp_path):
 
 def test_plain_files_are_read_by_duckdb_without_spatial(worker, plain):
     names = ["a.parquet", "a.csv", "a.json", "a.arrow"]
-    items = worker.scan_files([str(plain / n) for n in names]).result(TIMEOUT)
+    items = worker.scan_files([str(plain / n) for n in names]).future.result(TIMEOUT)
     assert [(i.format, i.problem) for i in items] == [
         ("parquet", None),
         ("csv", None),
@@ -98,14 +98,14 @@ def test_plain_files_are_read_by_duckdb_without_spatial(worker, plain):
 def test_a_file_that_cannot_be_read_comes_back_with_its_reason(worker, tmp_path):
     bad = tmp_path / "roto.parquet"
     bad.write_text("no es parquet")
-    (item,) = worker.scan_files([str(bad)]).result(TIMEOUT)
+    (item,) = worker.scan_files([str(bad)]).future.result(TIMEOUT)
     assert item.problem
 
 
 def test_gdal_files_need_spatial_and_geoduck_does_not_load_it(worker, tmp_path):
     path = tmp_path / "capa.gpkg"
     path.write_bytes(b"")
-    (item,) = worker.scan_files([str(path)]).result(TIMEOUT)
+    (item,) = worker.scan_files([str(path)]).future.result(TIMEOUT)
     assert item.problem == NEEDS_SPATIAL
     assert sql(worker, "SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'spatial'") in (
         [],
@@ -128,7 +128,7 @@ def test_gdal_files_with_spatial_keep_layers_geometry_and_crs(worker, tmp_path):
             archive.write(tmp_path / f"p.{ext}", f"p.{ext}")
     sql(worker, "LOAD spatial")  # como si el usuario lo hubiera aceptado
     paths = [str(tmp_path / n) for n in ("pozos.fgb", "p.zip", "z.geojson")]
-    items = worker.scan_files(paths).result(TIMEOUT)
+    items = worker.scan_files(paths).future.result(TIMEOUT)
     assert [(i.problem, i.geometry_column is not None) for i in items] == [(None, True)] * 3
     assert [i.geometry_type for i in items] == ["Point", "Point", "Polygon"]
     assert items[1].gdal_source.startswith("/vsizip/")
@@ -139,3 +139,26 @@ def test_gdal_files_with_spatial_keep_layers_geometry_and_crs(worker, tmp_path):
         "SELECT data_type FROM information_schema.columns WHERE table_name = 't2' AND column_name = 'geom'",
     )
     assert kinds[0][0].startswith("GEOMETRY")
+
+
+def test_reading_the_files_can_be_cancelled(worker, tmp_path):
+    """#171: «Archivos → DuckDB» lee los metadatos como una operación que se puede cancelar (al cerrar la
+    ventana); «Cancelar» se atiende entre un archivo y otro."""
+    import threading
+
+    from geoduck.domain.errors import OperationCancelledError
+
+    paths = []
+    for i in range(3):
+        path = tmp_path / f"f{i}.csv"
+        path.write_text("a,b\n1,2\n")
+        paths.append(str(path))
+    gate = threading.Event()
+    blocker = worker.submit(lambda h, t: gate.wait(TIMEOUT))  # la cola, ocupada: la lectura espera
+    handle = worker.scan_files(paths)
+    assert worker.cancel(handle.op_id)
+    gate.set()
+    blocker.future.result(TIMEOUT)
+    with pytest.raises(OperationCancelledError):
+        handle.future.result(TIMEOUT)
+    assert len(worker.scan_files(paths).future.result(TIMEOUT)) == 3  # la sesión sigue lista

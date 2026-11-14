@@ -36,6 +36,10 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
 - **Sin restos:** una tabla a medias se revierte (transacción), un archivo a medias no aparece (carpeta temporal,
   #130), una capa a medias no se publica (GD-BRD-004). Tras cancelar, la sesión vuelve a `READY` o queda en un
   estado explícito con su motivo (session-spec §5); nunca en un estado desconocido.
+- **Medido (#171, `docs/evidence/g10/171/`):** con 1 millón de filas, cada operación se detiene en p95 ≤ 66 ms
+  con DuckDB 1.5 y 2.0, sin restos; también enviar una capa o un archivo a DuckDB y guardar el resultado de una
+  consulta (#170). Leer los metadatos de los archivos se cancela al cerrar la ventana. Un `BEGIN` interrumpido ya
+  no deja una transacción abierta (#157).
 - **Spike G10-A:** medir `interrupt()` y la cancelación cooperativa por tipo de operación (SQL largo, `COPY`,
   `CREATE TABLE AS` con `ST_Read`, lectura por lotes hacia QGIS, PyArrow) en DuckDB 1.5 y 2.0; casos que no
   responden y su arreglo (puntos de control entre lotes, lotes más pequeños, cierre del lector).
