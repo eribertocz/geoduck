@@ -43,6 +43,8 @@ class SpatialProbe:
     version: str = ""
     #: Valor de `geometry_always_xy` con `spatial` cargada: «true», «false», «sin fijar»; "" si no se leyó.
     always_xy: str = ""
+    #: #193: el archivo exacto para este DuckDB y este sistema, para descargarlo en otro equipo.
+    download_url: str = ""
 
 
 @dataclass(frozen=True)

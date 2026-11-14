@@ -1253,12 +1253,9 @@ class QueryPage(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
     def load_extension(self, name: str) -> None:
-        """«Cargar «spatial»…» (#145): pide permiso y, si se da, la instala (si hace falta) y la carga para
-        esta sesión (spatial-spec §10, ADR-0011). Nunca vuelve a ejecutar la consulta: eso lo decide el
-        usuario."""
+        """«Cargar «spatial»» (#145): la instala (si hace falta) y la carga. Normalmente ya está cargada desde
+        el inicio (#193). Nunca vuelve a ejecutar la consulta: eso lo decide el usuario."""
         if name != "spatial":
-            return
-        if not ASK_EXTENSION(name):
             return
         try:
             self._loading_extension = True
@@ -1637,29 +1634,6 @@ class _DoubleClicks(QObject):
             self._toggle()
             return True
         return False
-
-
-def confirm_extension(name: str) -> bool:
-    """Permiso para instalar (si hace falta) y cargar una extensión de DuckDB desde una tarjeta de error."""
-    from qgis.PyQt.QtWidgets import QApplication, QMessageBox  # noqa: PLC0415
-
-    box = QMessageBox(QApplication.activeWindow())
-    box.setWindowTitle(tr("GeoDuck"))
-    box.setText(
-        tr(
-            "This query needs the «{0}» extension. GeoDuck will install it if needed (only once) and "
-            "load it for this session. The query does not run again by itself."
-        ).format(name)
-    )
-    go = box.addButton(tr("Load «{}»").format(name), QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
-    box.setDefaultButton(go)
-    box.exec()
-    return box.clickedButton() is go
-
-
-#: La pregunta antes de cargar una extensión (las pruebas la reemplazan).
-ASK_EXTENSION: Callable[[str], bool] = confirm_extension
 
 
 #: El alto del resultado, recordado entre sesiones (#144, punto 10).

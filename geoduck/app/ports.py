@@ -153,7 +153,11 @@ class SessionEngine(Protocol):
         ...
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:
-        """`INSTALL` (si `install`) y `LOAD spatial` con consentimiento del usuario (spatial-spec §10)."""
+        """`INSTALL` (si `install`) y `LOAD spatial` (spatial-spec §10)."""
+        ...
+
+    def install_spatial_from(self, path: str) -> Future[Any]:
+        """`INSTALL '<archivo>'` y `LOAD spatial`: sin salida a internet (#193)."""
         ...
 
     def export_query(self, request: ExportRequest) -> OperationHandle:

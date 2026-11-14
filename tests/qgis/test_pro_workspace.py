@@ -352,3 +352,35 @@ def test_ctrl_k_narrows_each_key_and_finds_the_same_as_a_full_search():
         letters = fuzzy.in_order_pattern(query)
         pool = [n for n in names if letters.search(n)]
         assert fuzzy.rank(query, pool, lambda n: n) == fuzzy.rank(query, names, lambda n: n)
+
+
+def test_without_spatial_at_start_a_notice_offers_retry(coordinator, monkeypatch):
+    """#193: si no se pudo instalar `spatial` al iniciar, el aviso dice por qué y «Reintentar» la instala."""
+    from geoduck.app.events import SessionStarted, SpatialActivated
+    from geoduck.domain.operations import EngineInfo
+
+    start(coordinator)
+    ws = workspace(coordinator)
+    bars, retries = [], []
+    ws.push_bar = lambda text, level, actions: bars.append((text, level, actions))
+    monkeypatch.setattr(coordinator, "activate_spatial", lambda *, install: retries.append(install))
+    info = EngineInfo(
+        "2.0.0", ":memory:", True, "memory", spatial_error="IO Error: Failed to download extension"
+    )
+    ws._on_event(SessionStarted(info))
+    text, level, actions = bars[-1]
+    assert text == (
+        "Se requiere la extensión spatial para el análisis espacial. No se pudo instalar. "
+        "IO Error: Failed to download extension"
+    )
+    assert level == "warning"
+    assert [label for label, _ in actions] == ["Reintentar", "Instalar desde un archivo…"]
+    actions[0][1]()
+    assert retries == [True]
+    files = []
+    monkeypatch.setattr(coordinator, "install_spatial_from", files.append)
+    ws._ask_spatial_file = lambda: "D:/descargas/spatial.duckdb_extension.gz"
+    actions[1][1]()
+    assert files == ["D:/descargas/spatial.duckdb_extension.gz"]
+    ws._on_event(SpatialActivated("1.5", "true"))
+    assert bars[-1][0] == "La extensión spatial está cargada: el análisis espacial está disponible."

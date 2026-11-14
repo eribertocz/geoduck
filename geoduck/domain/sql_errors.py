@@ -190,7 +190,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
         if extension:
             name, ext = extension.group(1), extension.group(2)
             if ext == "spatial":  # la única que GeoDuck carga, y solo con permiso (spatial-spec §10)
-                fixes.append(Fix(LOAD_EXTENSION, tr("Load «{}»…").format(ext), value=ext))
+                fixes.append(Fix(LOAD_EXTENSION, tr("Load «{}»").format(ext), value=ext))
             else:  # las demás: se escribe en el editor; nunca se cargan solas (ADR-0011)
                 load = f"INSTALL {ext};\nLOAD {ext};\n"
                 fixes.append(

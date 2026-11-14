@@ -19,6 +19,7 @@ Invariantes que este módulo garantiza en DuckDB 1.5.x y 2.x por igual:
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import logging
 import os
@@ -71,7 +72,7 @@ from geoduck.engine.detach import detach_database
 from geoduck.engine.export import export_query
 from geoduck.engine.files import scan_files
 from geoduck.engine.importing import drop_imported, import_batches, import_target
-from geoduck.engine.spatial import activate_spatial, spatial_state
+from geoduck.engine.spatial import activate_spatial, install_spatial_from, spatial_state
 from geoduck.engine.sql import StatementListener, run_in_database, run_script, use_database
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
@@ -268,8 +269,14 @@ class OperationHandle(Generic[T]):
 class SessionWorker:
     """Hilo propietario de una conexión DuckDB con cola serial de operaciones."""
 
-    def __init__(self, database: str = ":memory:", *, name: str = "geoduck-session") -> None:
+    def __init__(
+        self, database: str = ":memory:", *, name: str = "geoduck-session", spatial: bool | None = None
+    ) -> None:
         self._database = database
+        #: #193: `spatial` se instala (si falta) y se carga al iniciar. None: según `GEODUCK_SPATIAL`
+        #: («0» la deja sin cargar; lo usan las pruebas que miden el camino sin ella).
+        self._want_spatial = spatial if spatial is not None else os.environ.get("GEODUCK_SPATIAL", "1") != "0"
+        self._spatial_error = ""
         self._name = name
         #: (nivel, orden de llegada, trabajo). Nivel 0: lecturas del mapa (ADR-0012 §5); 1: el resto;
         #: 2: fin del bucle. Dentro de cada nivel se respeta el orden de llegada.
@@ -370,8 +377,12 @@ class SessionWorker:
         return self.submit(lambda h, t: scan_files(h, paths, t))
 
     def activate_spatial(self, *, install: bool) -> Future[Any]:
-        """`INSTALL` (si `install`) y `LOAD spatial`, con consentimiento del usuario (spatial-spec §10)."""
+        """`INSTALL` (si `install`) y `LOAD spatial` (spatial-spec §10)."""
         return self._submit_future(lambda h, _t: activate_spatial(h, install=install))
+
+    def install_spatial_from(self, path: str) -> Future[Any]:
+        """`INSTALL '<archivo>'` y `LOAD spatial`: sin salida a internet (#193)."""
+        return self._submit_future(lambda h, _t: install_spatial_from(h, path))
 
     def prepare_load(
         self,
@@ -630,6 +641,8 @@ class SessionWorker:
         try:
             root = str(con.execute("SELECT current_database()").fetchall()[0][0])
             self._temp_dir, self._temp_limit = _own_temp_directory(con)
+            if self._want_spatial:
+                self._spatial_error = _own_spatial(con)
         except BaseException:
             con.close()
             raise
@@ -658,6 +671,8 @@ class SessionWorker:
                 root_catalog=root,
                 temp_directory=self._temp_dir,
                 temp_limit=self._temp_limit,
+                spatial=self._want_spatial and not self._spatial_error,
+                spatial_error=self._spatial_error if self._want_spatial else "",
             )
         )
         cause: SessionInvalidatedError | None = None
@@ -800,6 +815,23 @@ class SessionWorker:
             return probe_transaction(handle)
         except Exception:
             return None
+
+
+def _own_spatial(con: Any) -> str:
+    """#193: GeoDuck es para análisis espacial: `spatial` se carga al iniciar y, si falta, se instala del
+    repositorio oficial firmado de DuckDB. Con ella, `geometry_always_xy = true` (longitud, latitud). Devuelve
+    el mensaje de DuckDB si no se pudo (sin internet, por ejemplo); la sesión sigue sin ella."""
+    try:
+        try:
+            con.execute("LOAD spatial")
+        except duckdb.Error:
+            con.execute("INSTALL spatial")
+            con.execute("LOAD spatial")
+    except duckdb.Error as exc:
+        return str(exc).strip() or type(exc).__name__
+    with contextlib.suppress(duckdb.Error):  # el ajuste existe desde spatial 2.0
+        con.execute("SET geometry_always_xy = true")
+    return ""
 
 
 def _own_temp_directory(con: Any) -> tuple[str, int]:

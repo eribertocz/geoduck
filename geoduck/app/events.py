@@ -259,7 +259,7 @@ class SpatialChecked:
 
 @dataclass(frozen=True)
 class SpatialActivated:
-    """`spatial` cargada con consentimiento del usuario: versión y `geometry_always_xy` (sin modificar)."""
+    """`spatial` cargada (#193): versión y `geometry_always_xy`."""
 
     version: str
     always_xy: str | None

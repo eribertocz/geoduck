@@ -304,14 +304,15 @@ def _check_spatial(prober: SpatialProber | None) -> Check:
         title,
         CheckStatus.WARN,
         tr(
-            "Not installed (extension directory: {0}). GeoDuck works without it; "
-            "advanced ST_* functions and EPSG CRSs will not be available."
+            "Not installed (extension directory: {0}). It is required for spatial analysis: GeoDuck "
+            "installs it when it starts."
         ).format(probe.extension_directory or "predeterminado"),
         tr(
-            "Install it explicitly as described in "
-            "docs/certification/spatial.md. GeoDuck does not install it by "
-            "itself."
-        ),
+            "Start GeoDuck with internet access. Without it, download {0} on another computer and use "
+            "«Install from a file…» in the notice."
+        ).format(probe.download_url)
+        if probe.download_url
+        else tr("Start GeoDuck with internet access, or use «Retry» in the notice."),
     )
 
 

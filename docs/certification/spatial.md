@@ -1,6 +1,11 @@
 # Extensión DuckDB `spatial` y prueba manual de G4 en Windows
 
 **Estado:** §1–6 (instalación de `spatial`, G0): no verificada por ejecución en la sesión del implementador
+
+> **Desde #193 (2026-11-14):** GeoDuck instala y carga `spatial` al iniciar cada sesión (repositorio oficial
+> firmado) y fija `geometry_always_xy = true`. Sin salida a internet, el método S2 de abajo sigue sirviendo:
+> instalada a mano, GeoDuck la carga al iniciar. Lo que este documento dice de G0–G4 («GeoDuck no la
+> necesita») queda como registro.
 (sin red hacia `extensions.duckdb.org`, decisión D7); se ejecuta en el equipo Windows de certificación.
 §7 (prueba funcional de G4 Spatial Confidence): guía para el propietario, pendiente de ejecutar.
 

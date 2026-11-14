@@ -53,3 +53,6 @@ class EngineInfo:
     #: #172: la carpeta temporal propia de la sesión (DuckDB usa disco cuando no cabe en memoria) y su tope.
     temp_directory: str = ""
     temp_limit: int = 0
+    #: #193: `spatial` quedó cargada al iniciar; si no, el mensaje de DuckDB (p. ej. sin internet).
+    spatial: bool = False
+    spatial_error: str = ""

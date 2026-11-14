@@ -820,9 +820,16 @@ class SessionCoordinator:
         fut = engine.spatial_state()
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, None)))
 
+    def install_spatial_from(self, path: str) -> None:
+        """«Instalar desde un archivo…» (#193): `INSTALL '<archivo>'` y `LOAD spatial`. Responde con
+        `SpatialActivated` o `SpatialActivationFailed` (con el mensaje de DuckDB)."""
+        engine = self._require_ready(tr("activate the spatial extension"))
+        fut = engine.install_spatial_from(path)
+        fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, True)))
+
     def activate_spatial(self, *, install: bool) -> None:
-        """Solo tras el consentimiento del usuario: `INSTALL` (si `install`) y `LOAD spatial`, para esta
-        sesión. Responde con `SpatialActivated` o `SpatialActivationFailed`."""
+        """`INSTALL` (si `install`) y `LOAD spatial` (#193: también «Reintentar»). Responde con
+        `SpatialActivated` o `SpatialActivationFailed`."""
         engine = self._require_ready(tr("activate the spatial extension"))
         fut = engine.activate_spatial(install=install)
         fut.add_done_callback(lambda f: self._dispatcher.post(lambda: self._on_spatial(engine, f, True)))

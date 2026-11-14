@@ -665,8 +665,8 @@ G6 pasan a ser **cuadernos**; cada cuaderno es una lista de **celdas**. Todo usa
   formatos ▸» trae ⚡ Arrow/Feather (PyArrow), JSON por líneas, Shapefile, GeoJSON, KML, Geodatabase de ArcGIS
   y Excel (la geometría como WKT). Cada opción dice en su ayuda qué pasará. **Siempre con el motor de DuckDB,
   nunca con QGIS**; sin SpatiaLite ni SQLite (GeoPackage los reemplaza; el GDAL de DuckDB no escribe
-  SpatiaLite). Los formatos de GDAL usan `COPY … (FORMAT gdal, DRIVER …)` de `spatial`: si no está cargada,
-  GeoDuck pide permiso («Instalar y exportar» / «Cargar y exportar», spatial-spec §10). Con un SRC en la
+  SpatiaLite). Los formatos de GDAL usan `COPY … (FORMAT gdal, DRIVER …)` de `spatial`, cargada al iniciar
+  (#193); si faltara, se instala y carga al exportar (spatial-spec §10). Con un SRC en la
   geometría, DuckDB 2.0 exige fijar `geometry_always_xy`: si el usuario no lo fijó, GeoDuck lo pone en `true`
   (orden este-norte) **solo durante la exportación** y después lo deja sin fijar; si el usuario lo fijó, no se
   toca. **G10 (propietario, 2026-11-12):** si la consulta no tiene `ORDER BY`, `preserve_insertion_order` se
@@ -1031,7 +1031,7 @@ En G4 la única fuente del punto 1 es el tipo de la columna, que llega como PROJ
 
 `ST_SetCRS` etiqueta un CRS; **no transforma** coordenadas. Una reproyección real requiere `ST_Transform` u operación equivalente y una decisión explícita del usuario. Nunca realizar una transformación oculta.
 
-**Orden de ejes.** GeoDuck entrega a QGIS las coordenadas del WKB tal como las produce DuckDB, sin reordenarlas; QGIS interpreta x como este/longitud también en CRS geográficos como EPSG:4326. GeoDuck no fija el ajuste `geometry_always_xy` de la extensión `spatial` (en DuckDB 2.0 no tiene valor por defecto y `ST_Transform` exige declararlo; en 2.1 pasará a `true`). Cuando `spatial` está cargada, GeoDuck muestra su valor efectivo en el diagnóstico y en los resultados espaciales cuando corresponda. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia llamada. Geometrías producidas en el orden de la autoridad (por ejemplo, latitud-longitud) se entregan tal cual y son responsabilidad del SQL del usuario. GeoDuck no intenta adivinar ejes invertidos a partir de los rangos de coordenadas.
+**Orden de ejes.** GeoDuck entrega a QGIS las coordenadas del WKB tal como las produce DuckDB, sin reordenarlas; QGIS interpreta x como este/longitud también en CRS geográficos como EPSG:4326. Con `spatial` cargada, GeoDuck fija `geometry_always_xy = true` al iniciar la sesión (#193; en DuckDB 2.0 no tiene valor por defecto y `ST_Transform` exige declararlo; en 2.1 pasará a `true`). Si el usuario lo cambia con su SQL, se respeta. Cuando `spatial` está cargada, GeoDuck muestra su valor efectivo en el diagnóstico y en los resultados espaciales cuando corresponda. Toda transformación iniciada por GeoDuck declara el orden de ejes en la propia llamada. Geometrías producidas en el orden de la autoridad (por ejemplo, latitud-longitud) se entregan tal cual y son responsabilidad del SQL del usuario. GeoDuck no intenta adivinar ejes invertidos a partir de los rangos de coordenadas.
 
 **CRS ausente o desconocido.** Si DuckDB no declara CRS, o declara uno que QGIS no reconoce, GeoDuck no lo sustituye por otro (ni EPSG:4326 ni el CRS del proyecto), no publica la capa sin una decisión del usuario (puntos 3 y 4 anteriores), conserva el texto declarado en el mensaje y el registro, y nunca modifica las coordenadas. Elegir un CRS lo etiqueta; no transforma.
 
@@ -1116,9 +1116,7 @@ las **listas** vuelven como JSON de solo lectura; en la **Instantánea** la hora
 ## 10. Extensión `spatial` (ADR-0011, security.md §2)
 Ninguna función de G4 requiere `spatial`: CRS (GeoArrow/PROJJSON), filtro espacial (`ST_Intersects_Extent`), cabecera WKB (`ST_AsWKB`), reproyección (QGIS/PROJ), validez y reparación (QGIS/GEOS) y lectura WKB/WKT (QGIS) funcionan sin ella. Con `spatial` ya cargada, la extensión de una capa Conectada se calcula con `ST_Extent_Agg` (G3).
 
-GeoDuck nunca ejecuta `INSTALL` ni `LOAD` por su cuenta. `LOAD`/`INSTALL` escritos por el usuario en el editor son su SQL y se ejecutan como tal; valen solo para esa sesión. «Diagnóstico del entorno…» muestra si `spatial` está instalada y cargada. (Decisión del propietario, 2026-11-02, en G5: se retira la acción «Activar spatial…» de G4/E2; quien necesita `spatial` escribe SQL con `ST_*` y la carga con su propio SQL.)
-
-**Excepción con consentimiento (G9, decisión del propietario, 2026-11-07):** «Archivos → GeoDuck» (qgis-import-spec §10) y «Exportar ▾» a un formato de GDAL necesitan `spatial`. Si no está cargada, el diálogo lo explica y ofrece «Instalar y continuar» (o «Cargar y continuar» si ya está instalada); solo ese clic ejecuta `INSTALL spatial` (repositorio oficial firmado) y `LOAD spatial`, para esa sesión. Nunca en silencio.
+**`spatial` es parte de GeoDuck (#193, decisión del propietario, 2026-11-14).** GeoDuck es para análisis espacial y sin `spatial` DuckDB no lo tiene (sin ella solo trae `ST_GeomFromWKB`, `ST_AsText`, `ST_AsWKB`, `ST_CRS`, `ST_SetCRS`, `ST_Intersects_Extent` y, en 2.0, GeoJSON). Al iniciar cada sesión, GeoDuck ejecuta `LOAD spatial`; si no está instalada, antes `INSTALL spatial` (repositorio oficial firmado de DuckDB), sin preguntar. Con ella cargada fija `geometry_always_xy = true` (longitud, latitud; recomendado por DuckDB y valor por defecto en 2.1). **Sin internet o si falla**, GeoDuck funciona como sin ella y avisa en la barra de QGIS: «Se requiere la extensión spatial para el análisis espacial. No se pudo instalar.» + el mensaje de DuckDB, con «Reintentar» e «Instalar desde un archivo…» (una red sin salida a internet: `INSTALL '<archivo>'` + `LOAD spatial`; si el archivo no es el de esta versión de DuckDB y este sistema, el mensaje de DuckDB tal cual); en el siguiente inicio lo intenta otra vez. «Diagnóstico» da el enlace exacto del archivo (`https://extensions.duckdb.org/v<versión>/<sistema>/spatial.duckdb_extension.gz`) para descargarlo en otro equipo. «Archivos → GeoDuck», «Exportar ▾» a un formato de GDAL y la tarjeta «Cargar «spatial»» ya no piden permiso: si faltara, la instalan y cargan al usarlos (o muestran el mismo aviso). Ninguna otra extensión se instala ni se carga por cuenta de GeoDuck: `LOAD`/`INSTALL` de otras siguen siendo SQL del usuario.
 
 
 
@@ -1359,10 +1357,9 @@ acción explica que hay que iniciar una.
    selección, sin «Reproyectar a…» y sin «Añadir filas»: `CREATE TABLE … AS SELECT * FROM ST_Read('ruta',
    layer = '…')` dentro de DuckDB, con el SRC de la capa (`ST_SetCRS`). Medido (2 núcleos, GeoPackage con
    EPSG:32719): 1 millón de puntos en 0,3 s contra 6,9 s por el camino 3 (**23×**); 200 000 polígonos en 0,3 s
-   contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
-   «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
-   ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
-   ese clic, el camino 3. El resumen dice «leído directo por GeoDuck». **El filtro de la capa** va como `WHERE`
+   contra 2,4 s (**8×**). Usa `spatial`, cargada al iniciar (#193); si faltara, el paso 1 muestra el aviso de
+   spatial-spec §10 («… Sin ella, QGIS copia estas capas como siempre.») con «Reintentar». **Nunca bloquea:**
+   sin ella, el camino 3. El resumen dice «leído directo por GeoDuck». **El filtro de la capa** va como `WHERE`
    y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
    esa capa se copia por el camino 3, sin error. **Trazabilidad** (#148: la línea de tiempo vertical de
    workspace-pro-spec §9, también en «Exportar ▾»): origen y filtro → lectura («⚡ Lectura directa con
@@ -1449,10 +1446,9 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
   | JSON / NDJSON | `.json` `.ndjson` `.jsonl` | `read_json` (incluido) |
   | ⚡ FlatGeobuf, GeoPackage, Shapefile (`.shp` o `.zip`), GeoJSON (`.geojson` `.geojsonl`), KML/KMZ, Geodatabase de ArcGIS (`.gdb`), OpenStreetMap (`.osm.pbf`, solo importar), Excel (`.xlsx`) | | `ST_Read` de `spatial` (GDAL de DuckDB) |
 
-- **`spatial` con consentimiento (ADR-0011):** si hace falta y no está cargada, el paso 1 lo dice en una nota
-  («… se leen con la extensión «spatial» de DuckDB. No está instalada: GeoDuck la instalará al pulsar
-  «Instalar y continuar» (una sola vez, ~40 MB)»). Sin ese clic, GeoDuck no instala ni carga nada; los archivos
-  que no la necesitan se pueden importar igual. No hay lector alternativo.
+- **`spatial` (#193):** cargada al iniciar. Si faltara (sin internet), el paso 1 muestra el aviso de
+  spatial-spec §10 («… GeoPackage se leen con ella.») con «Reintentar»; los archivos que no la necesitan se
+  pueden importar igual. No hay lector alternativo.
 - **Paso 1 (Archivos):** una fila por capa u hoja (un GeoPackage o una Geodatabase muestran sus capas; un Excel,
   sus hojas), agrupadas en puntos, líneas, polígonos y tablas sin geometría, con el formato, el SRC y las
   filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).
@@ -1731,8 +1727,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   Constraint…); el lugar, de su marca `LINE n ^^^^`; las sugerencias y los
   botones, solo de lo que DuckDB propone:
   - «Candidate bindings» / «Did you mean» → «Cambiar a «x»»;
-  - «exists in the spatial extension» → «Cargar «spatial»…», que pide permiso (ADR-0011, spatial-spec §10) y
-    no vuelve a ejecutar la consulta; otra extensión → «Escribir LOAD x» en el editor;
+  - «exists in the spatial extension» → «Cargar «spatial»» (normalmente ya cargada, #193; spatial-spec §10),
+    que no vuelve a ejecutar la consulta; otra extensión → «Escribir LOAD x» en el editor;
   - un valor que no se convierte → «Usar TRY_CAST» (`CAST(` → `TRY_CAST(`, `x::T` → `TRY_CAST(x AS T)`);
   - un archivo que no existe → «Elegir archivo…» (cambia la ruta) y «Abrir carpeta»;
   - sin memoria → cuánto se usó y «Subir memory_limit…» (escribe `SET memory_limit` antes de la sentencia).
@@ -2116,7 +2112,7 @@ paralelizar QGIS; cambiar el formato de transporte (ADR-0008).
 - El control RO de un catálogo `ATTACH` es específico de esa base y no impide `COPY` a un archivo distinto o cambios en otras bases.
 
 ## 2. Extensiones DuckDB
-- Extensión `spatial` oficial: soportada, con carga explícita y estado visible; cualquier instalación de componentes que necesite red se comunica al usuario.
+- Extensión `spatial` oficial: parte de GeoDuck (#193). Se instala del repositorio oficial firmado de DuckDB y se carga al iniciar la sesión, con su estado visible en «Diagnóstico»; si no se puede (sin red), se avisa con «Reintentar». Ninguna otra extensión se instala ni se carga por cuenta de GeoDuck.
 - No permitir extensiones sin firma por defecto.
 - Preferir permitir extensiones oficiales y restringir comunitarias por configuración, sin bloquear arbitrariamente el editor como si fuera un SQL distinto.
 - Instalación/carga de extensiones externas no controladas: mostrar advertencia/permiso explícito y registrar la decisión local.
