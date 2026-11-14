@@ -40,6 +40,8 @@ from geoduck.app.events import (
 )
 from geoduck.domain.errors import GeoDuckError, SessionStateError
 from geoduck.domain.files import candidate_for, file_formats_needing_spatial, size_label
+from geoduck.domain.i18n import number as number_text
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.importing import (
     PATH_CONNECTED,
     PATH_GDAL,
@@ -79,7 +81,7 @@ DONE_SECONDS = 15
 
 
 def _count(n: int) -> str:
-    return f"{n:,}".replace(",", " ")
+    return number_text(n)
 
 
 def group_of(candidate: SendCandidate) -> int:
@@ -187,9 +189,7 @@ class AddLayersWindow(TransferWindow):
         if c.problem and c.problem != NEEDS_SPATIAL:
             parts.append(c.problem)
         else:
-            parts.append(
-                tr("{0} rows").format(_count(c.features)) if c.features >= 0 else size_label(c.file.size)
-            )
+            parts.append(rows_text(c.features) if c.features >= 0 else size_label(c.file.size))
         return " · ".join(p for p in parts if p)
 
     def chosen(self) -> list[str]:
@@ -1049,13 +1049,13 @@ class AddLayers:
         elif state == DONE:
             read.state = copy.state = dest.state = DONE
             copy.seconds = seconds
-            copy.detail = tr("{0} rows").format(_count(rows))
+            copy.detail = rows_text(rows)
             crs = request.reproject_to or c.crs_label
             dest.detail = " · ".join(
                 p
                 for p in (
                     where,
-                    tr("{0} rows").format(_count(rows)),
+                    rows_text(rows),
                     crs if c.geometry_type and not request.without_crs else "",
                 )
                 if p
@@ -1091,7 +1091,7 @@ class AddLayers:
                 text += " " + tr("{0} of {1}").format(_count(s["rows"]), _count(s["total"]))
             return text, "accent"
         if state == DONE:
-            text = "✓ " + tr("{0} rows").format(_count(s["rows"]))
+            text = "✓ " + rows_text(s["rows"])
             if s.get("seconds") is not None:
                 text += " · " + seconds_text(s["seconds"])
             c = self._candidate(i)
@@ -1158,7 +1158,7 @@ class AddLayers:
                 pill += " · " + tr("{0} through QGIS").format(total - fast)
             view.set_header(
                 title,
-                f"{where} · " + tr("{0} rows").format(_count(rows)) + f" · {seconds_text(spent)}",
+                f"{where} · " + rows_text(rows) + f" · {seconds_text(spent)}",
                 pill=pill,
             )
             view.set_total(None)

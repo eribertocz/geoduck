@@ -60,6 +60,9 @@ from geoduck.domain.filters import (
     preview,
     where_condition,
 )
+from geoduck.domain.i18n import get_language
+from geoduck.domain.i18n import number as number_text
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons
@@ -473,7 +476,7 @@ class DetailPanel(QFrame):
         """Muestra la fila en la siguiente vuelta del bucle de eventos (performance-spec §5): primero se pinta
         la grilla y después el detalle, en dos pausas cortas y no una larga. Si llegan varias filas seguidas,
         solo se construye la última, y la misma fila no se reconstruye."""
-        self.title.setText(tr("Row {}").format(f"{number:,}".replace(",", " ")))
+        self.title.setText(tr("Row {}").format(number_text(number)))
         key = (number, columns, values)
         if key == self._shown:
             return
@@ -523,11 +526,7 @@ class DetailPanel(QFrame):
             shown = label("NULL", "null")
         elif column.is_geometry:
             kind_name, crs, vertices = geometry_summary(text, column.data_type)
-            count = (
-                tr("1 vertex")
-                if vertices == 1
-                else tr("{} vertices").format(f"{vertices:,}".replace(",", " "))
-            )
+            count = tr("1 vertex") if vertices == 1 else tr("{} vertices").format(number_text(vertices))
             summary = " · ".join([kind_name, crs or tr("no CRS"), count])
             shown = label(
                 summary + (f"\n{text}" if len(text) <= 120 else ""), "mono"
@@ -1169,11 +1168,11 @@ class DataGrid(QWidget):
             self.count_label.setText("")
             self.count_label.hide()
             return
-        shown = f"{self.total:,}".replace(",", " ")
+        shown = number_text(self.total)
         if self.base_total is None:
-            text = tr("{} rows").format(shown)
+            text = rows_text(self.total)
         else:
-            text = tr("{0} of {1} rows").format(shown, f"{self.base_total:,}".replace(",", " "))
+            text = tr("{0} of {1} rows").format(shown, number_text(self.base_total))
         self.count_label.setText(text)
         self.count_label.show()
 
@@ -1232,9 +1231,7 @@ class DataGrid(QWidget):
 
     def _too_many(self) -> None:
         self._notify(
-            tr("More than {} values: too many to copy. Export them instead.").format(
-                f"{COPY_LIMIT:,}".replace(",", " ")
-            )
+            tr("More than {} values: too many to copy. Export them instead.").format(number_text(COPY_LIMIT))
         )
         if self._offer_export is not None:
             self._offer_export()
@@ -1374,7 +1371,7 @@ def _clipboard(lines: list[tuple[object, ...]]) -> None:
 
 
 def _copied_text(rows: int) -> str:
-    return tr("1 row copied") if rows == 1 else tr("{} rows copied").format(f"{rows:,}".replace(",", " "))
+    return tr("1 row copied") if rows == 1 else tr("{} rows copied").format(number_text(rows))
 
 
 def _number(value: object) -> str:
@@ -1384,7 +1381,9 @@ def _number(value: object) -> str:
         text = f"{value:,}"
     else:
         text = str(value)
-    return text.replace(",", " ")
+    if get_language() != "es":
+        return text
+    return text.replace(",", " ").replace(".", ",")  # «1 234,5» (#149)
 
 
 def summary_text(column: ColumnInfo, row: tuple[object, ...]) -> str:

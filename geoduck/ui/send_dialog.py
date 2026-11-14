@@ -42,6 +42,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from geoduck.domain.catalog import AccessMode, CatalogSnapshot, catalog_key
+from geoduck.domain.i18n import number as number_text
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.importing import (
     PATH_CONNECTED,
     PATH_QGIS,
@@ -93,7 +95,7 @@ def _geometry_text(geometry: ImportGeometry) -> str:
 
 
 def _count(n: int) -> str:
-    return f"{n:,}".replace(",", " ")
+    return number_text(n)
 
 
 #: Rol con la línea de detalle de una capa («GeoPackage · 1 203 entidades · Point · EPSG:4326»).
@@ -626,7 +628,7 @@ class SendDialog(QDialog):
             parts.append(tr("{0} replaced").format(replaced))
         if added:
             parts.append(tr("{0} with more rows").format(added))
-        lines = [f"<b>{' · '.join(parts)}</b> · " + tr("{0} rows").format(_count(rows))]
+        lines = [f"<b>{' · '.join(parts)}</b> · " + rows_text(rows)]
         reproject = self.reproject_to is not None
         paths = sorted({self._candidates[i].path_for(only, reproject, self.duckdb_reads) for i, _ in sending})
         lines.append(tr("How: {0}").format(", ".join(path_label(p) for p in paths)))

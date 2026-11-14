@@ -45,6 +45,8 @@ from geoduck.domain.browse import PAGE, Browse, Filter, page_label, size_sql, st
 from geoduck.domain.catalog import ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
+from geoduck.domain.i18n import decimal
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.session import SessionState
 from geoduck.ui.i18n import tr
@@ -111,7 +113,7 @@ class StructureView(QWidget):
                 self.table.setItem(i, j, QTableWidgetItem(text))
         parts = [tr("{} columns").format(len(columns))]
         if rows is not None:
-            parts.append(tr("{} rows").format(f"{rows:,}".replace(",", " ")))
+            parts.append(rows_text(rows))
         if size:
             parts.append(tr("about {}").format(_size(size)))
         self.summary.setText(" · ".join(parts))
@@ -122,7 +124,7 @@ def _size(rows_bytes: int) -> str:
     value = float(rows_bytes)
     for unit in ("B", "KB", "MB", "GB"):
         if value < 1024 or unit == "GB":
-            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}".replace(".", ",")
+            return f"{value:.0f} {unit}" if unit == "B" else f"{decimal(value)} {unit}"
         value /= 1024
     return ""
 

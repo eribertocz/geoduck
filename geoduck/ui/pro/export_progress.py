@@ -17,10 +17,21 @@ from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QWidget
 
 from geoduck.app.events import ExportFailed, ExportFinished, ExportStarted
+from geoduck.domain.i18n import decimal
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.sql_errors import explain
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.error_card import ErrorCardView
-from geoduck.ui.pro.timeline import DONE, FAILED, RUNNING, SKIPPED, WAITING, Step, TimelineWindow, count_text
+from geoduck.ui.pro.timeline import (
+    DONE,
+    FAILED,
+    RUNNING,
+    SKIPPED,
+    WAITING,
+    Step,
+    TimelineWindow,
+    seconds_text,
+)
 from geoduck.ui.pro.widgets import button
 
 #: Lo que se ve de la consulta en el primer paso.
@@ -35,7 +46,7 @@ def size_text(path: str) -> str:
         return ""
     for unit in ("B", "KB", "MB", "GB"):
         if size < 1024 or unit == "GB":
-            return f"{size:.0f} {unit}" if unit in ("B", "KB") else f"{size:.1f} {unit}".replace(".", ",")
+            return f"{size:.0f} {unit}" if unit in ("B", "KB") else f"{decimal(size)} {unit}"
         size /= 1024
     return ""
 
@@ -123,11 +134,9 @@ class ExportProgress:
             self.steps[1] = Step("database", tr("DuckDB writes the file"), self._how(), DONE, seconds)
             detail = " · ".join(p for p in (report.path, size_text(report.path)) if p)
             self.steps[2] = Step("file", tr("File"), detail, DONE)
-            lines = [tr("{0} rows").format(count_text(report.rows))]
-            view.set_header(
-                tr("Exported: {0}").format(name), " · ".join([*lines, f"{seconds:.1f} s".replace(".", ",")])
-            )
-            self.row.set_status("✓ " + tr("{0} rows").format(count_text(report.rows)), "ok")
+            lines = [rows_text(report.rows)]
+            view.set_header(tr("Exported: {0}").format(name), " · ".join([*lines, seconds_text(seconds)]))
+            self.row.set_status("✓ " + rows_text(report.rows), "ok")
             if report.warnings:
                 self.steps[2].detail += "\n⚠ " + "; ".join(report.warnings)
             folder = str(Path(report.path).parent)

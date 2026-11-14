@@ -62,6 +62,9 @@ from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.files import editor_readable, format_for, from_sql, gdal_readable
+from geoduck.domain.i18n import decimal
+from geoduck.domain.i18n import number as number_text
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.session import SessionState
 from geoduck.domain.sql import RunScope, StatementResult, StatementStatus, error_token, result_title
 from geoduck.domain.sql_errors import (
@@ -108,7 +111,7 @@ RUN_SIZE = 28
 
 
 def _seconds(ms: float) -> str:
-    return f"{ms:.0f} ms" if ms < 1000 else f"{ms / 1000:.2f} s".replace(".", ",")
+    return f"{ms:.0f} ms" if ms < 1000 else f"{decimal(ms / 1000, 2)} s"
 
 
 def _html(text: str) -> str:
@@ -116,7 +119,7 @@ def _html(text: str) -> str:
 
 
 def _count(n: int) -> str:
-    return f"{n:,}".replace(",", " ")
+    return number_text(n)
 
 
 @dataclass
@@ -642,6 +645,8 @@ class QueryPage(QWidget):
         self.base.setMinimumWidth(80 if compact else 110)
         self.detail_button.setChecked(not compact)
         self.view.set_compact(compact)
+        for card in self.findChildren(ErrorCardView):  # «Copiar error», solo el ícono (#149)
+            card.set_compact(compact)
         for widget in self.result_head.findChildren(QPushButton):  # los iconos de la barra, más juntos
             if widget.property("pro") == "icon":
                 widget.setProperty("compact", compact)
@@ -1016,7 +1021,7 @@ class QueryPage(QWidget):
             if ok:
                 what = result_title(text, result.statement)
                 if result.preview is not None:
-                    what += " · " + tr("{} rows").format(_count(len(result.preview.rows)))
+                    what += " · " + rows_text(len(result.preview.rows))
                 message = f"{what} · {_seconds(result.duration_ms)}"
             elif result.status is StatementStatus.CANCELLED:
                 message = tr("Cancelled")
@@ -1066,6 +1071,7 @@ class QueryPage(QWidget):
 
     def _card(self, card: ErrorCard, text: str) -> ErrorCardView:
         view = ErrorCardView(card, self.colors)
+        view.set_compact(getattr(self, "compact", False))
         view.fix_requested.connect(lambda fix, t=text: self.apply_fix(fix, t))
         if card.line is not None:
             offset = card.offset if card.offset is not None else 0

@@ -33,8 +33,9 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Ventana propia** (por defecto) y **panel acoplado** a QGIS, con la misma sesión y las mismas pestañas
   (ADR-0013 se mantiene). «Acoplar a QGIS» / «Ventana» alterna sin perder nada.
 - **Estado de DuckDB** (propietario, 2026-11-06: sin una barra más): en la ventana, arriba de la barra lateral
-  («DuckDB 2.0.0» y «● Lista · en memoria», con «⋯»: Actualizar, **Cerrar DuckDB**); en el panel, en su
-  cabecera. La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
+  («GeoDuck» y «● Lista · en memoria», con «⋯»: Actualizar, **Cerrar DuckDB**); en el panel, en su
+  cabecera. La versión de DuckDB no se muestra en las ventanas: solo en «Acerca de» y en el diagnóstico
+  (propietario, 2026-11-13, #149). La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
 - **Iniciar y cerrar** (propietario, 2026-11-06; nombre de #142): **«Iniciar GeoDuck»** (botón grande en el
   centro cuando no está iniciado) y **«Cerrar sesión»** (menú «⋯»). Sin iniciar, **todo está en gris** salvo
   «Iniciar GeoDuck», «Abrir base…», «Crear base…», «Diagnóstico» y «Acerca de».
@@ -322,7 +323,8 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
    (o Capa conectada) → Capa en QGIS, con «Ver en el mapa» y «Cerrar».
 4. **Atajos que se saltan el paso 2** con lo propuesto: **arrastrar y soltar** sobre una base (QGIS →
    GeoDuck, con el lago) y **Copia o Conectada directo desde el menú** (GeoDuck → QGIS: un clic, con el aviso
-   «Ver en el mapa»).
+   «Ver en el mapa»). Si ese clic sigue cargando a los **2 s**, se abre la línea de tiempo (paso 3) con lo que
+   va, sin aviso aparte; si termina antes, basta el aviso (propietario, 2026-11-13: la opción intermedia).
 
 - **Cada capa se guarda por separado** (una transacción por capa; reemplaza «todo o nada» de G8, propietario
   2026-11-06): las que terminaron quedan aunque se cancelen o fallen otras; «Deshacer» borra las tablas
@@ -373,7 +375,11 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
 
 ## 11. Accesibilidad, idioma y estados (GD-WSP-010)
 - Todo con teclado (Tab, flechas, atajos); foco visible; nombres accesibles y ayuda en cada acción.
-- Inglés y español según el idioma de QGIS (catálogo `.ts`, como G6).
+- Inglés y español según el idioma de QGIS (catálogo `.ts`, como G6). Los números de la interfaz siguen el
+  idioma: «1 000 000 · 3,4» en español y «1,000,000 · 3.4» en inglés, con singular y plural («1 fila»,
+  «2 filas»). Las celdas de datos de la tabla se muestran tal como las da DuckDB (#149).
+- Ningún texto visible se escribe sin `tr()`: `tools/i18n.py --check` lo comprueba en CI, junto con la ficha
+  del complemento (`metadata.txt`) en inglés y en español (#149).
 - Estados obligatorios en cada vista: DuckDB sin iniciar, cargando, vacío, error (con qué hacer), DuckDB
   ocupado.
 - Pocos pasos y el espacio para lo que importa (propietario, 2026-11-06): una sola barra fina por pestaña,

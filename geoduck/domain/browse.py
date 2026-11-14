@@ -16,6 +16,7 @@ from dataclasses import dataclass, replace
 from geoduck.domain.catalog import ColumnInfo
 from geoduck.domain.filters import Condition, box_condition, is_numeric_type, where_condition
 from geoduck.domain.i18n import N_, tr
+from geoduck.domain.i18n import number as number_text
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 
 #: Filas por página (propietario, 2026-11-05: sin selector).
@@ -321,10 +322,10 @@ def page_label(offset: int, shown: int, total: int | None) -> str:
     y en el resultado de una consulta (propietario, 2026-11-06)."""
     if shown == 0:
         return tr("No rows")
-    span = f"{offset + 1:,}–{offset + shown:,}".replace(",", " ")
+    span = f"{number_text(offset + 1)}–{number_text(offset + shown)}"
     if total is None:
         return tr("Rows {} of …").format(span)
-    return tr("Rows {} of {}").format(span, f"{total:,}".replace(",", " "))
+    return tr("Rows {} of {}").format(span, number_text(total))
 
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")

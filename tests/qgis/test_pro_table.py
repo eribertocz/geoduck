@@ -218,7 +218,7 @@ def test_structure_of_a_table_and_a_view(coordinator):
     assert rows[1][3] == tr("unique")
     assert rows[2][2] == tr("no")
     assert page.structure.create.toPlainText().startswith("CREATE TABLE claves")
-    assert tr("{} rows").format(2) in page.structure.summary.text()
+    assert tr("{0} rows").format(2) in page.structure.summary.text()
     assert not page.search.isVisible()
     _ws2, view = open_table(coordinator, "v_claves", VIEW)
     assert wait_for(lambda: loaded(view))
