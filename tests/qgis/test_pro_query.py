@@ -477,21 +477,23 @@ def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coord
     page = new_query(ws, "SELECT range AS n, 'v' || range AS v FROM range(250);")
     page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.results)
-    assert page.model.rowCount() == 100 and page.model.rows[0] == (0, "v0")
-    assert wait_for(lambda: page.range_label.text().startswith(tr("Rows {} of {}").format("1–100", "250")))
+    shown = page.model.rowCount()  # #170: las filas que se ven; sin ‹ ›
+    assert page.model.row(0) == (0, "v0") and not hasattr(page, "next_button")
+    first = tr("Rows {} of {}").format(f"1–{shown}", "250")
+    assert wait_for(lambda: page.range_label.text().startswith(first))
     assert page.summary.text() == ""  # el resumen está en el pie
-    assert not page.prev_button.isEnabled() and page.next_button.isEnabled()
     # el detalle: la fila elegida, con su número real
     assert page.detail.isVisible() and page.detail.title.text() == tr("Row {}").format("1")
-    page.next_button.click()
-    assert wait_for(lambda: page.model.offset == 100)
-    assert page.model.rows[0] == (100, "v100")
-    assert page.range_label.text().startswith(tr("Rows {} of {}").format("101–200", "250"))
+    page.go(100)  # desplazarse: repite la consulta con ventana para el bloque que falta
+    assert wait_for(lambda: page.model.offset == 100 and page.model.row(0) is not None)
+    assert page.model.row(0) == (100, "v100")
+    assert page.range_label.text().startswith(tr("Rows {} of {}").split("{}")[0] + "101–")
+    page.grid.setCurrentIndex(page.model.index(0, 0))
     assert page.detail.title.text() == tr("Row {}").format("101")
-    page.next_button.click()
-    assert wait_for(lambda: page.model.offset == 200)
-    assert page.model.rowCount() == 50 and not page.next_button.isEnabled()
-    page.prev_button.click()
+    page.go(10_000)  # más allá del final: la última ventana
+    assert wait_for(lambda: page.model.row(page.model.rowCount() - 1) is not None)
+    assert page.model.row(page.model.rowCount() - 1) == (249, "v249")
+    page.go(100)
     assert wait_for(lambda: page.model.offset == 100)
     # plegar y volver a abrir el detalle
     page.detail_button.setChecked(False)
@@ -503,7 +505,7 @@ def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coord
     # «Mensajes» no tiene páginas ni detalle
     page.view.set_current(MESSAGES)
     page._show_view(MESSAGES)
-    assert page.range_label.text() == "" and not page.next_button.isEnabled()
+    assert page.range_label.text() == ""
 
 
 def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinator):
@@ -512,13 +514,16 @@ def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinato
     page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.range_label.text().startswith(tr("Rows {} of {}").format("1–5", "5"))
-    assert not page.prev_button.isEnabled() and not page.next_button.isEnabled()
+    assert not page.data.vbar.isVisible()  # todo cabe: nada que desplazar
     page.editor.setText("CREATE TABLE w AS SELECT range AS n FROM range(300); DELETE FROM w RETURNING n;")
     page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.results)
-    assert page.model.rowCount() == 100  # el DELETE … RETURNING muestra su primera página
-    assert not page.next_button.isEnabled()  # y nunca se repite para pasar de página
-    assert page.range_label.text().startswith(tr("Rows {} of more than {}").format("1–100", "100"))
+    assert page.model.count == 100  # el DELETE … RETURNING muestra solo lo que trajo
+    page.go(10_000)  # se recorre, pero nunca se repite para traer más
+    shown = page.model.rowCount()
+    assert page.model.row(shown - 1) is not None and page.data.model.missing() == []
+    expected = tr("Rows {} of more than {}").format(f"{101 - shown}–100", "100")
+    assert wait_for(lambda: page.range_label.text().startswith(expected))
 
 
 def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):

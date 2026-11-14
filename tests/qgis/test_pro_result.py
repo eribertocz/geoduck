@@ -159,7 +159,7 @@ def test_a_query_result_filters_with_duckdb_and_exports_what_is_shown(lecturas):
     ws = workspace(lecturas)
     page = new_query(ws, "SELECT * FROM lecturas;")
     page.run_button.click()
-    assert wait_for(lambda: done(lecturas, page) and page.model.rowCount() == 100)
+    assert wait_for(lambda: done(lecturas, page) and page.model.rowCount() > 0)  # las que se ven (#170)
     assert wait_for(lambda: page.data.total == 250)
     assert not page.data.filter_bar.isVisibleTo(page)  # sin filtros, la barra no ocupa sitio
     page.filter_button.click()
@@ -168,7 +168,8 @@ def test_a_query_result_filters_with_duckdb_and_exports_what_is_shown(lecturas):
     expected = _count(lecturas, "SELECT count(*) FROM lecturas WHERE zona = 'Norte'")
     assert wait_for(lambda: page.data.total == expected)
     assert all(row[2] == "Norte" for row in page.model.rows)
-    assert page.range_label.text().startswith(tr("Rows {} of {}").format(f"1–{expected}", expected))
+    shown = page.model.rowCount()
+    assert page.range_label.text().startswith(tr("Rows {} of {}").format(f"1–{shown}", expected))
     loads = []
     page._loader = lambda *args, **kwargs: loads.append(args)
     page.load_in_qgis("copy")

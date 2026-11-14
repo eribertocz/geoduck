@@ -41,7 +41,7 @@ from geoduck.app.events import (
     PreviewsInvalidated,
     SessionStateChanged,
 )
-from geoduck.domain.browse import PAGE, Browse, Filter, page_label, size_sql, structure_sql
+from geoduck.domain.browse import Browse, Filter, page_label, size_sql, structure_sql
 from geoduck.domain.catalog import ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.export import ExportFormat
@@ -285,12 +285,7 @@ class TablePage(QWidget):
         row.addWidget(self.mode)
         self.range_label = label("", "muted")
         row.addWidget(self.range_label)
-        self.prev_button = icon_button("chevron-left", tr("Previous page"), self.colors)
-        self.prev_button.clicked.connect(lambda: self.go(self.offset - PAGE))
-        self.next_button = icon_button("chevron-right", tr("Next page"), self.colors)
-        self.next_button.clicked.connect(lambda: self.go(self.offset + PAGE))
-        row.addWidget(self.prev_button)
-        row.addWidget(self.next_button)
+        # #170: sin ‹ ›; las filas se recorren desplazándose (el contador dice cuáles se ven)
         self.column_summary = label("", "muted")
         self.column_summary.setFont(ui_font(METRICS.font_small, mono=True))
         row.addWidget(self.column_summary, 1)
@@ -417,13 +412,10 @@ class TablePage(QWidget):
         browse = self.browse
         if browse is None or self.body.currentIndex() != GRID:
             self.range_label.setText("" if browse is None or not browse.filtered else self.range_label.text())
-            self.prev_button.setEnabled(False)
-            self.next_button.setEnabled(False)
         else:
-            self.range_label.setText(page_label(self.offset, shown, self.total))
-            self.prev_button.setEnabled(self.offset > 0)
-            more = shown == PAGE and (self.total is None or self.offset + shown < self.total)
-            self.next_button.setEnabled(more)
+            text = page_label(self.offset, shown, self.total, estimate=self.data.estimate)
+            self.range_label.setText(text)
+            self.range_label.setToolTip(text)
         self.column_summary.setText(self.data.summary)
         self.column_summary.setToolTip(self.data.summary)
 
@@ -490,7 +482,7 @@ class TablePage(QWidget):
             if item is not None:
                 item.setVisible(data)
         self.data.count_label.setVisible(data and bool(self.data.count_label.text()))
-        for widget in (self.range_label, self.prev_button, self.next_button, self.column_summary):
+        for widget in (self.range_label, self.column_summary):
             widget.setVisible(data)
         if index == 1 and not self._structure_loaded:
             self._load_structure()

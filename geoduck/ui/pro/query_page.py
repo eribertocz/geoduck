@@ -455,12 +455,7 @@ class QueryPage(QWidget):
         row.setSpacing(10)
         self.range_label = label("", "muted")
         row.addWidget(self.range_label)
-        self.prev_button = icon_button("chevron-left", tr("Previous page"), self.colors)
-        self.prev_button.clicked.connect(lambda: self.go(self._offset() - PAGE))
-        self.next_button = icon_button("chevron-right", tr("Next page"), self.colors)
-        self.next_button.clicked.connect(lambda: self.go(self._offset() + PAGE))
-        row.addWidget(self.prev_button)
-        row.addWidget(self.next_button)
+        # #170: sin ‹ ›; las filas se recorren desplazándose (el contador dice cuáles se ven)
         # el resumen de la columna elegida (#144, punto 11): suma, promedio, mínimo, máximo y nulos
         self.column_summary = label("", "muted")
         self.column_summary.setFont(ui_font(METRICS.font_small, mono=True))
@@ -954,9 +949,9 @@ class QueryPage(QWidget):
         return self.data.offset
 
     def go(self, offset: int) -> None:
-        """‹ ›: otra página del resultado elegido. Repite la consulta con `LIMIT`/`OFFSET`."""
-        result = self.current_result
-        if result is not None and result.statement.replayable:
+        """Lleva el resultado a la fila `offset` (#170: desplazamiento continuo; repite la consulta con
+        ventana mientras no se guarde el resultado, E2b)."""
+        if self.current_result is not None:  # sin repetir: solo se recorren las filas que trajo
             self.data.go(offset)
 
     def _update_range(self, result: StatementResult | None) -> None:
@@ -965,14 +960,14 @@ class QueryPage(QWidget):
         data = self.data
         if result is None or data.browse is None or self.stack.currentWidget() is not self.data:
             self.range_label.setText("")
-            self.prev_button.setEnabled(False)
-            self.next_button.setEnabled(False)
             self.column_summary.setText("")
             return
-        shown = len(data.model.rows)
+        shown = data.model.rowCount()
         if data.total is None and not result.statement.replayable:
             # una escritura (`DELETE … RETURNING`) no se repite: ni se cuenta ni se pasa de página
-            text = tr("Rows {} of more than {}").format(f"1–{shown}", _count(shown))
+            # (#170: se recorren solo las filas que trajo la ejecución)
+            span = f"{number_text(data.offset + 1)}–{number_text(data.offset + shown)}"
+            text = tr("Rows {} of more than {}").format(span, _count(data.model.count))
         else:
             text = page_label(data.offset, shown, data.total)
         if self._coordinator.is_stale(self._epochs.get(id(result), 0)):
@@ -980,10 +975,6 @@ class QueryPage(QWidget):
         full = f"{text} · {_seconds(result.duration_ms)}"
         self.range_label.setText(text if self.compact else full)
         self.range_label.setToolTip(full)
-        ready = result.statement.replayable and self._coordinator.state is SessionState.READY
-        self.prev_button.setEnabled(ready and data.offset > 0)
-        more = shown == PAGE and (data.total is None or data.offset + shown < data.total)
-        self.next_button.setEnabled(ready and more)
         self.column_summary.setText(data.summary)
         self.column_summary.setToolTip(data.summary)
 
