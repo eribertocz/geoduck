@@ -24,7 +24,9 @@ def test_a_query_that_does_not_fit_in_memory_uses_the_session_folder_and_it_goes
         setting = sql(worker, "SELECT value FROM duckdb_settings() WHERE name = 'temp_directory'")
         assert setting == ((folder,),)  # nunca el `.tmp` de la carpeta de trabajo de QGIS
         assert 0 < info.temp_limit <= DISK_CAP
-        sql(worker, "SET memory_limit = '64MB'")  # una sesión con poca memoria
+        # una sesión con poca memoria (un hilo: con varios, cada uno necesita su parte y la CI no llega)
+        sql(worker, "SET threads = 1")
+        sql(worker, "SET memory_limit = '128MB'")
         rows = sql(
             worker,
             "SELECT count(*) FROM"
