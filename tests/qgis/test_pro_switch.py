@@ -231,6 +231,47 @@ def test_view_on_map_after_loading_selects_zooms_and_minimizes_the_window(plugin
     assert item.workspace.window.isMinimized()
 
 
+def _big_copy(plugin, monkeypatch, answer):
+    from geoduck.qgis_bridge import snapshot
+    from geoduck.ui.pro import load
+
+    asked = []
+    monkeypatch.setattr(snapshot, "available_memory", lambda: 40 * 1024**2)  # presupuesto: 20 MB
+    monkeypatch.setattr(load, "ASK_CONNECTED", lambda name, message: asked.append((name, message)) or answer)
+    item = plugin()
+    coordinator = start(item)
+    run(
+        coordinator,
+        "CREATE TABLE enorme AS SELECT range AS id, repeat('x', 200) AS texto,"
+        " ('POINT (' || (range % 90) || ' -16)')::GEOMETRY('OGC:CRS84') AS geom FROM range(2000000);",
+    )
+    ws = item.content
+    before = set(QgsProject.instance().mapLayers())
+    source = ("memory", "main", "enorme")
+    ws.loader.start('SELECT * FROM "enorme"', "enorme", COPY, source=source, rows=2_000_000)
+    return ws, coordinator, asked, before
+
+
+def test_a_copy_that_does_not_fit_offers_connected_and_loads_it(plugin, monkeypatch):
+    """#172: la Copia no cabe → «Cancelar» o «Cargar como Conectada»; la segunda la carga Conectada."""
+    from geoduck.domain.load import LoadMode
+
+    ws, coordinator, asked, _before = _big_copy(plugin, monkeypatch, True)
+    assert wait_for(lambda: ws.loader.last_report and coordinator.state is SessionState.READY, 120)
+    assert [name for name, _ in asked] == ["enorme"] and "40 MB" in asked[0][1]
+    report = ws.loader.last_report
+    assert report.mode is LoadMode.CONNECTED
+    layer = QgsProject.instance().mapLayer(report.layer_id)
+    assert layer is not None and layer.featureCount() == 2_000_000
+
+
+def test_cancelling_a_copy_that_does_not_fit_loads_nothing(plugin, monkeypatch):
+    ws, coordinator, asked, before = _big_copy(plugin, monkeypatch, False)
+    assert wait_for(lambda: asked and coordinator.state is SessionState.READY, 120)
+    assert ws.loader.last_report is None
+    assert set(QgsProject.instance().mapLayers()) == before
+
+
 # -- «Enviar a DuckDB» desde QGIS -----------------------------------------------------------------------
 
 

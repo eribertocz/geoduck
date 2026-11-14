@@ -48,11 +48,18 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
 
 - **Canales acotados** en ambos sentidos (ya existen, qgis-bridge-spec §2): se mide su ocupación y la RAM pico de
   QGIS y del worker por operación y tamaño (T1–T5, hasta 10 millones de filas).
-- **Presupuesto por transferencia:** antes de copiar a QGIS un resultado que no cabe en el presupuesto (por defecto,
-  propuesto: la mitad de la RAM libre), GeoDuck lo dice y ofrece «Conectada» o «Exportar». Nunca carga sin límite.
-- **Memoria de DuckDB:** la sesión de GeoDuck es suya (ADR-0011 solo protege lo ajeno). Propuesto: dejar el
-  `memory_limit` por defecto de DuckDB y fijar `temp_directory` en la carpeta temporal de GeoDuck para que DuckDB
-  use disco en vez de fallar por memoria. Se informa en «Diagnóstico».
+- **Presupuesto de la Copia (#172):** la mitad de la memoria libre al empezar (Linux `/proc/meminfo`, Windows
+  `GlobalMemoryStatusEx`, macOS `sysctl`; si no se sabe, sin presupuesto). Con el total de filas que ya muestra la
+  grilla, tras las primeras 10 000 filas se estima el tamaño final (bytes escritos ÷ filas × total); sin total, se
+  mide mientras se copia. Si no cabe, la Copia se detiene en ese momento: no publica nada y libera lo escrito.
+- **Si no cabe:** una ventana de dos botones (principios de interfaz): «Predios» no cabe como Copia / «Ocuparía unos
+  9,2 GB y QGIS tiene 6 GB libres. Como Conectada, QGIS lee los datos directamente de la base, sin copiarlos.»
+  [Cancelar] [**Cargar como Conectada**]. La segunda carga la misma capa como Conectada (la línea de tiempo pasa a
+  «Capa Conectada»). Si «Conectada» no se puede, no se ofrece: queda el error con el motivo.
+- **Memoria de DuckDB:** la sesión de GeoDuck es suya (ADR-0011 solo protege lo ajeno). Se deja el `memory_limit`
+  por defecto y cada sesión usa su propia carpeta `temp_directory` (`<temporal>/geoduck/duckdb-<pid>-<n>`, se borra
+  al cerrar), con `max_temp_directory_size` = el menor entre 20 GB y la mitad del disco libre (al menos 1 GB), para
+  que DuckDB use disco en vez de fallar por memoria sin llenar el disco. «Diagnóstico» muestra la carpeta y el tope.
 
 ## 5. Respuesta de la interfaz (GD-PERF-004)
 
@@ -123,7 +130,7 @@ paralelizar QGIS; cambiar el formato de transporte (ADR-0008).
 |---|---|
 | AT-PERF-001 | El banco produce la línea base reproducible (JSON con equipo, versiones y repeticiones) en QGIS 3.44 y 4.2 × DuckDB 1.5 y 2.0 |
 | AT-PERF-002 | Cancelar cada operación de §2 con 1 millón de filas: se detiene en p95 ≤ 1 s, sin restos, sesión en `READY` |
-| AT-PERF-003 | Un resultado que no cabe en el presupuesto avisa antes y ofrece «Conectada» / «Exportar»; con `temp_directory`, una consulta que excede la memoria termina usando disco |
+| AT-PERF-003 | Una Copia que no cabe en el presupuesto se detiene sin publicar nada y ofrece «Cargar como Conectada»; con `temp_directory`, una consulta que excede la memoria termina usando disco |
 | AT-PERF-004 | Interfaz: p95 ≤ 50 ms y máximo ≤ 200 ms durante las transferencias; primera apertura de tabla ≤ 100 ms |
 | AT-PERF-005 | Estrés de 1 h sin cierres, pérdidas ni capas a medias; RAM de QGIS +10 % como máximo |
 | AT-PERF-006 | `docs/performance.md` publicado con números medidos; regresiones > 20 % detectadas por el trabajo de la CI |

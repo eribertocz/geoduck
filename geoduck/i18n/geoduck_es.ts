@@ -1719,8 +1719,9 @@
             <location filename="../../geoduck/plugin.py" line="87" />
             <location filename="../../geoduck/plugin.py" line="196" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="599" />
-            <location filename="../../geoduck/ui/pro/load.py" line="637" />
-            <location filename="../../geoduck/ui/pro/load.py" line="307" />
+            <location filename="../../geoduck/ui/pro/load.py" line="667" />
+            <location filename="../../geoduck/ui/pro/load.py" line="689" />
+            <location filename="../../geoduck/ui/pro/load.py" line="308" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="68" />
             <location filename="../../geoduck/ui/pro/project_copies.py" line="39" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1647" />
@@ -2283,7 +2284,7 @@
             <location filename="../../geoduck/ui/about_dialog.py" line="121" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1184" />
             <location filename="../../geoduck/ui/pro/export_progress.py" line="130" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="400" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="405" />
             <location filename="../../geoduck/ui/pro/widgets.py" line="523" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="386" />
             <source>Close</source>
@@ -2356,8 +2357,9 @@
             <location filename="../../geoduck/ui/pro/add_layers.py" line="602" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="944" />
             <location filename="../../geoduck/ui/pro/export_progress.py" line="88" />
-            <location filename="../../geoduck/ui/pro/load.py" line="646" />
-            <location filename="../../geoduck/ui/pro/load.py" line="351" />
+            <location filename="../../geoduck/ui/pro/load.py" line="676" />
+            <location filename="../../geoduck/ui/pro/load.py" line="694" />
+            <location filename="../../geoduck/ui/pro/load.py" line="352" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="94" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="181" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="235" />
@@ -2635,13 +2637,13 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1093" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="341" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="346" />
             <source>Copying…</source>
             <translation>Copiando…</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1109" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="350" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="355" />
             <source>Waiting</source>
             <translation>En espera</translation>
         </message>
@@ -2747,7 +2749,7 @@
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1106" />
             <location filename="../../geoduck/ui/pro/export_progress.py" line="165" />
             <location filename="../../geoduck/ui/pro/history.py" line="56" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="349" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="354" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1165" />
             <source>Cancelled</source>
             <translation>Cancelada</translation>
@@ -2757,7 +2759,7 @@
             <location filename="../../geoduck/ui/pro/export_progress.py" line="165" />
             <location filename="../../geoduck/ui/pro/history.py" line="55" />
             <location filename="../../geoduck/ui/pro/history.py" line="119" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="347" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="352" />
             <source>Error</source>
             <translation>Error</translation>
         </message>
@@ -2829,7 +2831,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1018" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="302" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="307" />
             <source>Source</source>
             <translation>Origen</translation>
         </message>
@@ -2963,7 +2965,7 @@
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1095" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1144" />
             <location filename="../../geoduck/ui/pro/editor_tools.py" line="1045" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="371" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="376" />
             <source>{0} of {1}</source>
             <translation>{0} de {1}</translation>
         </message>
@@ -2989,7 +2991,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1076" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="328" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="333" />
             <source>Unknown error</source>
             <translation>Error desconocido</translation>
         </message>
@@ -3180,7 +3182,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/export_progress.py" line="78" />
-            <location filename="../../geoduck/ui/pro/load.py" line="706" />
+            <location filename="../../geoduck/ui/pro/load.py" line="759" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1470" />
             <source>Export</source>
             <translation>Exportar</translation>
@@ -3517,204 +3519,224 @@ de {2}</translation>
             <translation>{0} con error</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="222" />
+            <location filename="../../geoduck/ui/pro/load.py" line="223" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="167" />
             <source>Copies the data into QGIS memory; it no longer depends on DuckDB</source>
             <translation>Copia los datos a la memoria de QGIS; ya no depende de DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="223" />
+            <location filename="../../geoduck/ui/pro/load.py" line="224" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="171" />
             <source>Reads straight from DuckDB without copying; edits are saved in DuckDB</source>
             <translation>Lee directamente de DuckDB, sin copiar; lo que edites se guarda en DuckDB</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="117" />
-            <location filename="../../geoduck/ui/pro/load.py" line="226" />
+            <location filename="../../geoduck/ui/pro/load.py" line="118" />
+            <location filename="../../geoduck/ui/pro/load.py" line="227" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="226" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="73" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="367" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="372" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="159" />
             <source>Connected</source>
             <translation>Conectada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="117" />
-            <location filename="../../geoduck/ui/pro/load.py" line="225" />
+            <location filename="../../geoduck/ui/pro/load.py" line="118" />
+            <location filename="../../geoduck/ui/pro/load.py" line="226" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="226" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="73" />
-            <location filename="../../geoduck/ui/pro/load_window.py" line="367" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="372" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="159" />
             <source>Copy (mode)</source>
             <translation>Copia</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="134" />
+            <location filename="../../geoduck/ui/pro/load.py" line="135" />
             <source>{} features</source>
             <translation>{} entidades</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="259" />
-            <location filename="../../geoduck/ui/pro/load.py" line="257" />
+            <location filename="../../geoduck/ui/pro/load.py" line="260" />
+            <location filename="../../geoduck/ui/pro/load.py" line="258" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="80" />
             <source>Layer name in QGIS</source>
             <translation>Nombre de la capa en QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="262" />
+            <location filename="../../geoduck/ui/pro/load.py" line="263" />
             <source>Proposed: the name of the tab (or of the table). Edit it or leave it.</source>
             <translation>Propuesto: nombre de la pestaña (o de la tabla). Edítalo o déjalo.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="286" />
+            <location filename="../../geoduck/ui/pro/load.py" line="287" />
             <source>Change names…</source>
             <translation>Cambiar nombres…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="619" />
+            <location filename="../../geoduck/ui/pro/load.py" line="649" />
             <source>More formats</source>
             <translation>Más formatos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="125" />
+            <location filename="../../geoduck/ui/pro/load.py" line="695" />
+            <source>Load as Connected</source>
+            <translation>Cargar como Conectada</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/load.py" line="126" />
             <source>Layer «{}» added to QGIS from GeoDuck</source>
             <translation>Capa «{}» añadida a QGIS desde GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="132" />
+            <location filename="../../geoduck/ui/pro/load.py" line="133" />
             <source>{} features each</source>
             <translation>{} entidades cada una</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="132" />
+            <location filename="../../geoduck/ui/pro/load.py" line="133" />
             <source>{} features in total</source>
             <translation>{} entidades en total</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="238" />
+            <location filename="../../geoduck/ui/pro/load.py" line="239" />
             <source>More options…</source>
             <translation>Más opciones…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="240" />
+            <location filename="../../geoduck/ui/pro/load.py" line="241" />
             <source>Choose geometries, use a WKB/WKT column, reproject or separate by type</source>
             <translation>Elegir geometrías, usar una columna WKB/WKT, reproyectar o separar por tipo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="260" />
+            <location filename="../../geoduck/ui/pro/load.py" line="261" />
             <source>name</source>
             <translation>nombre</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="285" />
+            <location filename="../../geoduck/ui/pro/load.py" line="286" />
             <source>Names: those of the tables</source>
             <translation>Nombres: los de las tablas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="313" />
+            <location filename="../../geoduck/ui/pro/load.py" line="314" />
             <source>1 geometry has no CRS</source>
             <translation>1 geometría no tiene SRC</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="319" />
+            <location filename="../../geoduck/ui/pro/load.py" line="320" />
             <source>Choose one so that QGIS places them on the map. Without a CRS they load anyway.</source>
             <translation>Elige uno para que QGIS las ubique en el mapa. Sin SRC se cargan igual.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="353" />
+            <location filename="../../geoduck/ui/pro/load.py" line="354" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="96" />
             <source>Load</source>
             <translation>Cargar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="638" />
+            <location filename="../../geoduck/ui/pro/load.py" line="668" />
             <source>«{0}» is written with DuckDB's «spatial» extension (the fastest).</source>
             <translation>«{0}» se escribe con la extensión «spatial» de DuckDB (la más rápida).</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="640" />
+            <location filename="../../geoduck/ui/pro/load.py" line="670" />
             <source>It is installed but not loaded: GeoDuck will load it now, for this session.</source>
             <translation>Está instalada pero no cargada: GeoDuck la cargará ahora, para esta sesión.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="641" />
+            <location filename="../../geoduck/ui/pro/load.py" line="671" />
             <source>Load and export</source>
             <translation>Cargar y exportar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="643" />
+            <location filename="../../geoduck/ui/pro/load.py" line="673" />
             <source>It is not installed: GeoDuck will install it now (only once, about 40 MB).</source>
             <translation>No está instalada: GeoDuck la instalará ahora (una sola vez, ~40 MB).</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="644" />
+            <location filename="../../geoduck/ui/pro/load.py" line="674" />
             <source>Install and export</source>
             <translation>Instalar y exportar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="124" />
+            <location filename="../../geoduck/ui/pro/load.py" line="125" />
             <source>Layers {} added to QGIS from GeoDuck</source>
             <translation>Capas {} añadidas a QGIS desde GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="260" />
+            <location filename="../../geoduck/ui/pro/load.py" line="261" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="82" />
             <source>With several geometries, the name is the prefix: «{0} · geom»</source>
             <translation>Con varias geometrías, el nombre es el prefijo: «{0} · geom»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="334" />
+            <location filename="../../geoduck/ui/pro/load.py" line="335" />
             <source>Choose one per geometry…</source>
             <translation>Elegir uno por geometría…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="716" />
+            <location filename="../../geoduck/ui/pro/load.py" line="690" />
+            <source>«{0}» does not fit as a Copy</source>
+            <translation>«{0}» no cabe como Copia</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/load.py" line="692" />
+            <source>As Connected, QGIS reads the data straight from the database, without copying it.</source>
+            <translation>Como Conectada, QGIS lee los datos directamente de la base, sin copiarlos.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/load.py" line="769" />
             <source>Exporting the full query to {0}…</source>
             <translation>Exportando la consulta completa a {0}…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="147" />
+            <location filename="../../geoduck/ui/pro/load.py" line="148" />
             <source>Source: {}</source>
             <translation>Origen: {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="149" />
+            <location filename="../../geoduck/ui/pro/load.py" line="150" />
             <source>Access: </source>
             <translation>Acceso: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="315" />
+            <location filename="../../geoduck/ui/pro/load.py" line="316" />
             <source>{} geometries have no CRS</source>
             <translation>{} geometrías no tienen SRC</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="456" />
-            <location filename="../../geoduck/ui/pro/load.py" line="504" />
-            <location filename="../../geoduck/ui/pro/load.py" line="552" />
-            <location filename="../../geoduck/ui/pro/load.py" line="572" />
-            <location filename="../../geoduck/ui/pro/load.py" line="473" />
+            <location filename="../../geoduck/ui/pro/load.py" line="459" />
+            <location filename="../../geoduck/ui/pro/load.py" line="507" />
+            <location filename="../../geoduck/ui/pro/load.py" line="555" />
+            <location filename="../../geoduck/ui/pro/load.py" line="575" />
+            <location filename="../../geoduck/ui/pro/load.py" line="476" />
             <source>Cannot load: </source>
             <translation>No se puede cargar: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="673" />
-            <location filename="../../geoduck/ui/pro/load.py" line="686" />
-            <location filename="../../geoduck/ui/pro/load.py" line="714" />
+            <location filename="../../geoduck/ui/pro/load.py" line="633" />
+            <source>Loading «{}» as Connected…</source>
+            <translation>Cargando «{}» como Conectada…</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/load.py" line="726" />
+            <location filename="../../geoduck/ui/pro/load.py" line="739" />
+            <location filename="../../geoduck/ui/pro/load.py" line="767" />
             <source>Cannot export: </source>
             <translation>No se puede exportar: </translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="582" />
+            <location filename="../../geoduck/ui/pro/load.py" line="586" />
             <source>Loading «{}»…</source>
             <translation>Cargando «{}»…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="603" />
+            <location filename="../../geoduck/ui/pro/load.py" line="615" />
             <source>Loading cancelled.</source>
             <translation>Carga cancelada.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load.py" line="603" />
+            <location filename="../../geoduck/ui/pro/load.py" line="615" />
             <source>Loading error: </source>
             <translation>Error al cargar: </translation>
         </message>
@@ -3832,12 +3854,12 @@ de {2}</translation>
             <translation>resultado de una consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="307" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="312" />
             <source>Layer in QGIS</source>
             <translation>Capa en QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="397" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="402" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="539" />
             <source>View on map</source>
             <translation>Ver en el mapa</translation>
@@ -3858,32 +3880,32 @@ de {2}</translation>
             <translation>Cargar 1 capa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="304" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="309" />
             <source>Connected layer</source>
             <translation>Capa conectada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="304" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="309" />
             <source>Reads straight from DuckDB without copying</source>
             <translation>Lee directo de DuckDB sin copiar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="306" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="311" />
             <source>Copy to QGIS</source>
             <translation>Copia a QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="341" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="346" />
             <source>Connecting…</source>
             <translation>Conectando…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="370" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="375" />
             <source>GeoDuck → QGIS</source>
             <translation>GeoDuck → QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="379" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="384" />
             <source>Done: 1 layer in QGIS</source>
             <translation>Listo: 1 capa en QGIS</translation>
         </message>
@@ -3908,12 +3930,12 @@ de {2}</translation>
             <translation>Cargar {0} capas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="379" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="384" />
             <source>Done: {0} layers in QGIS</source>
             <translation>Listo: {0} capas en QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/load_window.py" line="382" />
+            <location filename="../../geoduck/ui/pro/load_window.py" line="387" />
             <source>{0} of {1} layers in QGIS</source>
             <translation>{0} de {1} capas en QGIS</translation>
         </message>

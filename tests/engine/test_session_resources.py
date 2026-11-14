@@ -27,7 +27,8 @@ def test_a_query_that_does_not_fit_in_memory_uses_the_session_folder_and_it_goes
         sql(worker, "SET memory_limit = '64MB'")  # una sesión con poca memoria
         rows = sql(
             worker,
-            "SELECT count(*) FROM (SELECT range AS n, md5(range::VARCHAR) AS k FROM range(3000000) ORDER BY k)",
+            "SELECT count(*) FROM"
+            " (SELECT range AS n, md5(range::VARCHAR) AS k FROM range(3000000) ORDER BY k)",
         )
         assert rows == ((3_000_000,),)  # terminó usando disco en vez de fallar
     finally:

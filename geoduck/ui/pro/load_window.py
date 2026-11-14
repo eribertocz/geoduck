@@ -249,7 +249,11 @@ class LoadWindow:
         if self.window is not None:
             self.window.close()
 
-    def job_started(self, index: int, _request: Any) -> None:
+    def job_started(self, index: int, request: Any) -> None:
+        # #172: una Copia que no cabía puede volver a empezar como Conectada
+        mode = getattr(request, "mode", None)
+        if mode is not None:
+            self.states[index]["connected"] = mode is LoadMode.CONNECTED
         self.states[index]["state"] = RUNNING
         self.states[index]["started"] = time.monotonic()
         self._arm_reveal()
@@ -299,8 +303,9 @@ class LoadWindow:
         job = self.chosen[index]
         s = self.states[index]
         state = s["state"]
+        connected = s.get("connected", self.connected)
         origin = Step("database", tr("Source"), origin_text(job), DONE if state != WAITING else WAITING)
-        if self.connected:
+        if connected:
             move = Step("database", tr("Connected layer"), tr("Reads straight from DuckDB without copying"))
         else:
             move = Step("layers", tr("Copy to QGIS"))
@@ -308,13 +313,13 @@ class LoadWindow:
         if state == RUNNING:
             move.state = RUNNING
             move.seconds = time.monotonic() - s["started"]
-            if s["rows"] and not self.connected:
+            if s["rows"] and not connected:
                 move.detail = rows_text(s["rows"])
         elif state == DONE:
             move.state = layer.state = DONE
             move.seconds = s.get("seconds")
             report = s["report"]
-            if not self.connected:
+            if not connected:
                 move.detail = rows_text(s["rows"])
             names = [name for _id, name in getattr(report, "layers", ())] or [report.layer_name]
             layer.detail = " · ".join(f"«{n}»" for n in names)
