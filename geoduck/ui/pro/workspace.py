@@ -122,6 +122,8 @@ PINNED_WIDTH = 240
 PINNED_KEY = "geoduck/pro/explorer_pinned"
 #: Arrastrando algo sobre ☰, cuánto esperar para abrir el explorador (#147).
 HOLD_MS = 500
+#: Un aviso de información del pie se borra solo a los 6 s (#177, propietario, 2026-11-13).
+NOTICE_MS = 6000
 #: El nombre en la cabecera de la sesión: la marca, sin la versión del motor (#149).
 NAME = "GeoDuck"
 
@@ -472,6 +474,14 @@ class ProWorkspace(QWidget):
         self.notice.setFont(style.ui_font(METRICS.font_small))
         self.notice.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         row.addWidget(self.notice, 1)
+        # #177: ✕ cierra un error del pie; los avisos de información se borran solos a los `NOTICE_MS`
+        self.notice_close = icon_button("close", tr("Close the message"), self.colors, size=12)
+        self.notice_close.clicked.connect(lambda: self.notify(""))
+        self.notice_close.hide()
+        row.addWidget(self.notice_close)
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.timeout.connect(lambda: self.notify(""))
         # E5: progreso del envío en el pie, con «Cancelar»; sin otra ventana
         self.progress = QProgressBar()
         self.progress.setProperty("pro", "thin")
@@ -861,10 +871,18 @@ class ProWorkspace(QWidget):
         """Punto y texto de la sesión, para la cabecera del panel."""
         return session_text(self._coordinator)
 
-    def notify(self, text: str) -> None:
-        """Aviso en el pie (§3: el último aviso)."""
+    def notify(self, text: str, *, error: bool = False) -> None:
+        """Aviso de la aplicación en el pie (§3; #177): la información se borra sola a los `NOTICE_MS`; un
+        error se queda hasta el siguiente aviso o hasta cerrarlo con ✕. Lo de una consulta va a su pestaña."""
         self.notice.setText(text)
         self.notice.setToolTip(text)
+        self.notice.setProperty("pro", "error" if error and text else "muted")
+        self.notice.style().unpolish(self.notice)
+        self.notice.style().polish(self.notice)
+        self.notice_close.setVisible(error and bool(text))
+        self._notice_timer.stop()
+        if text and not error:
+            self._notice_timer.start(NOTICE_MS)
 
     def _render(self) -> None:
         state = self._coordinator.state
@@ -1037,7 +1055,7 @@ class ProWorkspace(QWidget):
         try:
             action()
         except GeoDuckError as exc:
-            self.notify(exc.message)
+            self.notify(exc.message, error=True)
 
     def open_place(self, place: Place) -> None:
         """Doble clic, Intro o Ctrl+K: abre la tabla, vista o consulta en su pestaña (o trae la abierta)."""
@@ -1349,11 +1367,11 @@ class ProWorkspace(QWidget):
         elif isinstance(event, DatabaseDetached):
             self.notify(tr("Database «{}» closed").format(event.database.name))
         elif isinstance(event, AttachFailed):
-            self.notify(tr("The database was not attached.") + f" {event.message}")
+            self.notify(tr("The database was not attached.") + f" {event.message}", error=True)
         elif isinstance(event, DetachFailed):
-            self.notify(tr("The database was not detached.") + f" {event.message}")
+            self.notify(tr("The database was not detached.") + f" {event.message}", error=True)
         elif isinstance(event, ActivationFailed):
-            self.notify(tr("The active database did not change.") + f" {event.message}")
+            self.notify(tr("The active database did not change.") + f" {event.message}", error=True)
         elif isinstance(event, CloseConfirmationRequired):
             ask = self._ask_close
             if ask is None:

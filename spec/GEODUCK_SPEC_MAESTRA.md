@@ -1527,6 +1527,9 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Área de pestañas:** pestañas de tabla y de consulta (§4, §5), con «+» (nueva consulta), cerrar (×,
   Ctrl+W), reordenar y recordar las abiertas.
 - **Pie:** el último aviso (p. ej. «Capa «consumidores» añadida a QGIS desde GeoDuck · Conectada · Ver en el mapa»).
+  Solo avisos de la aplicación (sesión, bases, cargas, envíos): la información se borra sola a los 6 s y un error
+  queda hasta el siguiente aviso o hasta cerrarlo con ✕. Lo de una consulta va a su pestaña (barra del resultado o
+  «Mensajes»), nunca al pie (#177, propietario, 2026-11-13).
 - **Panel acoplado** (propietario, 2026-11-07, tras la prueba en Windows; antes no bajaba de 690 px; #147,
   punto 28): **modo compacto, mínimo 320 px** con cualquier pestaña (tabla, vista, estructura, consulta con
   resultado o con una tarjeta de error, historial) y sin que nada se monte; una prueba lo comprueba con cada

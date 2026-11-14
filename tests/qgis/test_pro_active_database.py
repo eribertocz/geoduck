@@ -139,3 +139,28 @@ def test_a_saved_query_with_another_database_offers_it_without_changing_it(coord
     assert page.saved_database == "censo" and page.database == "memory"  # no se cambió sola
     texts = [b.text() for b in ws.last_toast.findChildren(QAbstractButton)]
     assert tr("Activate «{0}»").format("censo") in texts
+
+
+def test_query_notices_stay_in_their_tab_and_app_notices_clear_themselves(coordinator, monkeypatch):
+    """#177: lo de una consulta, en su pestaña; el pie, solo la aplicación (información 6 s; error con ✕)."""
+    from geoduck.ui.pro import workspace as module
+
+    monkeypatch.setattr(module, "NOTICE_MS", 50)
+    start(coordinator)
+    ws = workspace(coordinator)
+    ws.new_query()
+    page = ws.tabs.page(ws.tabs.bar.currentIndex())
+    ws.notify("")
+    from geoduck.domain.sql import RunScope
+
+    page.execute(RunScope.ALL)  # sin SQL
+    assert page.hint.text() == tr("There is no SQL to run") and ws.notice.text() == ""
+    ws.notify("Base «x» abierta")
+    assert wait_for(lambda: ws.notice.text() == "")  # la información se borra sola
+    ws.notify("Falló", error=True)
+    QApplication.processEvents()
+    assert ws.notice_close.isVisibleTo(ws)
+    wait_for(lambda: False, 0.2)
+    assert ws.notice.text() == "Falló"  # el error se queda
+    ws.notice_close.click()
+    assert ws.notice.text() == "" and not ws.notice_close.isVisibleTo(ws)
