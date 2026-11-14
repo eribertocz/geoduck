@@ -81,7 +81,7 @@ def _write_from_sql(handle: ConnectionHandle, job: ImportJob) -> int:
         if job.expected_rows is not None and count != job.expected_rows:
             # El filtro de QGIS leído por DuckDB da otras filas: nada se escribe (§5.4)
             raise GeoDuckError(
-                tr("The layer filter gives {0} rows in DuckDB and {1} in QGIS").format(
+                tr("The layer filter gives {0} rows in GeoDuck and {1} in QGIS").format(
                     count, job.expected_rows
                 ),
                 code=ErrorCode.FILTER_MISMATCH,

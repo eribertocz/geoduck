@@ -38,7 +38,7 @@ READ_WRITE_HELP = N_("Only GeoDuck can open the file while it is attached.")
 
 
 def _file_filter() -> str:
-    return "DuckDB (*.duckdb *.ddb *.db);;" + tr("All files") + " (*)"
+    return tr("Database") + " (*.duckdb *.ddb *.db);;" + tr("All files") + " (*)"
 
 
 def default_alias(path: str) -> str:
@@ -54,7 +54,7 @@ class AttachDialog(QDialog):
         self._action = action
         self.request: AttachRequest | None = None
         self.creating = action is OpenAction.CREATE_NEW
-        self.setWindowTitle(tr("Create DuckDB database") if self.creating else tr("Open DuckDB database"))
+        self.setWindowTitle(tr("Create database") if self.creating else tr("Open database"))
         self.setMinimumWidth(480)
 
         form = self._build_fields()
@@ -158,13 +158,13 @@ class AttachDialog(QDialog):
         if self.creating:
             path, _ = QFileDialog.getSaveFileName(
                 self,
-                tr("Create DuckDB database"),
+                tr("Create database"),
                 "",
                 _file_filter(),
                 options=QFileDialog.Option.DontConfirmOverwrite,
             )
         else:
-            path, _ = QFileDialog.getOpenFileName(self, tr("Open DuckDB database"), "", _file_filter())
+            path, _ = QFileDialog.getOpenFileName(self, tr("Open database"), "", _file_filter())
         if path:
             self.path_edit.setText(path)
 

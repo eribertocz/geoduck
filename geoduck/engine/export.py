@@ -134,9 +134,7 @@ def export_query(handle: ConnectionHandle, token: CancelToken, request: ExportRe
         if not state.loaded:
             if not request.allow_spatial:
                 raise InvalidArgumentError(
-                    tr("{0} is written with DuckDB's «spatial» extension, which is not loaded").format(
-                        fmt.label
-                    )
+                    tr("{0} is written with the «spatial» extension, which is not loaded").format(fmt.label)
                 )
             activate_spatial(handle, install=not state.installed)  # el usuario lo aceptó (spatial-spec §10)
     columns = describe_query(handle, body)

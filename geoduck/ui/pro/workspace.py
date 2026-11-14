@@ -442,7 +442,7 @@ class ProWorkspace(QWidget):
         self.start_button = button(
             tr("Start GeoDuck"),
             "primary",
-            tooltip=tr("Starts the DuckDB engine in memory, in its own thread"),
+            tooltip=tr("Starts GeoDuck with a database in memory, in its own thread"),
         )
         self.start_button.clicked.connect(self.start)
         self.open_button = button(tr("Open database…"), tooltip=tr("Opens a .duckdb file"))
@@ -925,7 +925,7 @@ class ProWorkspace(QWidget):
         if aborted and self.aborted_toast is None:
             toast = Toast(
                 self,
-                tr("The transaction failed. «Roll back» discards its changes and DuckDB is ready again."),
+                tr("The transaction failed. «Roll back» discards its changes and GeoDuck is ready again."),
                 kind="error",
                 seconds=0,
             )
@@ -1252,7 +1252,7 @@ class ProWorkspace(QWidget):
         info = self._coordinator.engine_info
         if info is not None and info.temp_directory:  # #172: dónde usa disco DuckDB y hasta cuánto
             facts = dict(report.facts)
-            facts[tr("DuckDB temporary files")] = tr("{0} · up to {1}").format(
+            facts[tr("Session temporary files")] = tr("{0} · up to {1}").format(
                 info.temp_directory, size_text(info.temp_limit)
             )
             report = dataclasses.replace(report, facts=facts)

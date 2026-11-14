@@ -215,7 +215,7 @@ def test_dropping_on_a_database_opens_the_three_steps_with_that_database(coordin
     assert [s["state"] for s in ws.to_duckdb.states] == ["done", "done"]
     assert has_tables(coordinator, {"medidores", "zonas"})
     assert window.isVisible() and window.stack.currentIndex() == 1  # la línea de tiempo, en el mismo diálogo
-    assert window.timeline.title.text() == tr("Done: {0} layers in DuckDB").format(2)
+    assert window.timeline.title.text() == tr("Done: {0} layers in GeoDuck").format(2)
     assert window.timeline.pill.text().startswith("⚡ ")
     assert all(row.status.text().startswith("✓ ") for row in window.timeline.rows)
     assert not ws.progress.isVisible()
@@ -520,7 +520,7 @@ def test_a_connected_layer_from_memory_goes_to_a_file_database_inside_duckdb(coo
     assert flow.states[0]["state"] == "done"
     assert flow._route(0)[0]  # dentro de DuckDB: el paso de lectura es ⚡
     read = flow._steps(0)[1]
-    assert read.icon == "bolt" and read.detail == tr("Copied inside DuckDB (Connected layer)")
+    assert read.icon == "bolt" and read.detail == tr("Copied inside the database (Connected layer)")
     rows = []
     coordinator.read_rows("SELECT count(*) FROM db.main.pozos", 1, rows.append)
     assert wait_for(lambda: rows, TIMEOUT)

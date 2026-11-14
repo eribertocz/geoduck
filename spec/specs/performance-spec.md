@@ -115,7 +115,7 @@ y el total es otra ejecución. Nuevo contrato:
 - **Cargar en QGIS (GD-PERF-009):** «Copia» escrita por DuckDB directo a GeoPackage cuando `spatial` está cargada
   (con el permiso de spatial-spec §10; si no, el camino actual), comprobando filas y SRC. «Conectada»: caché de
   páginas por extensión y cancelación inmediata de lo que ya no se ve. La selección de QGIS, leída por DuckDB
-  (lista de identificadores) en «→ DuckDB». Progreso real con porcentaje en importar y exportar.
+  (lista de identificadores) en «→ GeoDuck». Progreso real con porcentaje en importar y exportar.
 - **Catálogo (GD-PERF-010):** columnas y autocompletado cargados por partes; bases con 10 000 tablas sin pausas
   (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla).
 

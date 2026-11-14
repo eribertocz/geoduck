@@ -333,8 +333,8 @@ class AddLayers:
         installed = self._spatial_installed
         label_text = tr("Load and speed up") if installed else tr("Install and speed up")
         text = tr(
-            "With DuckDB's «spatial» extension, layers that come from a file are copied by DuckDB: up "
-            "to 20 times faster."
+            "With the «spatial» extension, layers that come from a file are copied directly by GeoDuck: "
+            "up to 20 times faster."
         )
         text += " " + (
             tr("It is installed but not loaded: GeoDuck will load it when you press «{0}».")
@@ -368,7 +368,7 @@ class AddLayers:
                 "It is not installed: GeoDuck will install it when you press «{0}» (only once, about 40 MB)."
             )
             label_text = tr("Install and continue")
-        text = tr("{0} are read with DuckDB's «spatial» extension (the fastest).").format(formats)
+        text = tr("{0} are read with the «spatial» extension (the fastest).").format(formats)
         text += " " + action.format(label_text)
         if error:
             text += "\n" + tr("It could not be activated: ") + error
@@ -696,7 +696,7 @@ class AddLayers:
             if attempt < 50:  # la sesión aún relee el catálogo de la capa anterior
                 QTimer.singleShot(100, lambda: self._next(attempt + 1))
                 return
-            self._mark(index, FAILED, tr("DuckDB is busy"))
+            self._mark(index, FAILED, tr("GeoDuck is busy"))
             QTimer.singleShot(0, self._next)
         except GeoDuckError as exc:
             self._mine = False
@@ -752,7 +752,9 @@ class AddLayers:
                 if self.window.send_dialog is not None:  # desde ya, las capas de archivo las copia DuckDB
                     self.window.send_dialog.duckdb_reads = True
                     self.sync()
-            self._host.notify(tr("«spatial» is loaded: DuckDB copies the layers that come from a file."))
+            self._host.notify(
+                tr("«spatial» is loaded: GeoDuck copies the layers that come from a file directly.")
+            )
             return True
         if not self.files and isinstance(event, SpatialActivationFailed) and self._activating:
             self._activating = False
@@ -969,16 +971,16 @@ class AddLayers:
             request.only_selected, reproject, request.duckdb_reads and not fallback, not fallback
         )
         if path == PATH_CONNECTED:
-            return True, tr("Copied inside DuckDB (Connected layer)")
+            return True, tr("Copied inside the database (Connected layer)")
         if path != PATH_QGIS:
-            why = tr("QGIS is skipped: DuckDB read the file")
+            why = tr("QGIS is skipped: GeoDuck read the file")
             if c.filtered:
                 why += " " + tr("with the same filter")
             return True, why
         if fallback and c.filtered:
-            reason = tr("DuckDB does not understand its filter, so QGIS applies it")
+            reason = tr("GeoDuck does not understand its filter, so QGIS applies it")
         elif fallback:
-            reason = tr("DuckDB reads the file differently from QGIS")
+            reason = tr("GeoDuck reads the file differently from QGIS")
         elif reproject and c.geometry is not None:
             reason = tr("it is reprojected")
         elif request.only_selected and c.selected:
@@ -1026,19 +1028,19 @@ class AddLayers:
         if direct:
             read = Step(
                 "bolt",
-                tr("Direct read with DuckDB"),
+                tr("Direct read with GeoDuck"),
                 why + (" · " + tr("same rows as in QGIS") if s.get("checked") else ""),
             )
         else:
             read = Step("qgis-layers", tr("Read with QGIS"), why[:1].upper() + why[1:])
-        copy = Step("database", tr("Copy to DuckDB"))
+        copy = Step("database", tr("Copy to GeoDuck"))
         where = ("temp" if request.temporary else request.database) + f".{request.schema}.{item.table}"
         dest = Step("table", tr("Destination"), where)
         if state == RUNNING:
             if direct or rows > 0:
                 read.state = DONE
                 copy.state = RUNNING
-                copy.title = tr("Copying to DuckDB")
+                copy.title = tr("Copying to GeoDuck")
                 if total > 0:
                     copy.progress = min(rows, total) / total
                     copy.detail = tr("{0} of {1} rows").format(_count(rows), _count(total))
@@ -1046,7 +1048,7 @@ class AddLayers:
                     if rate > 0 and rows < total:
                         copy.detail += " · ≈ " + tr("{0} left").format(seconds_text((total - rows) / rate))
                 elif direct:
-                    copy.detail = tr("DuckDB copies it with SQL")
+                    copy.detail = tr("GeoDuck copies it with SQL")
                 copy.seconds = elapsed
             else:
                 read.state = RUNNING
@@ -1133,7 +1135,7 @@ class AddLayers:
         request = self.request
         where = ("temp" if request.temporary else request.database) + f" · {request.schema}"
         seconds = time.monotonic() - getattr(self, "started", time.monotonic())
-        head = tr("Files → DuckDB") if self.files else tr("QGIS layers → DuckDB")
+        head = tr("Files → GeoDuck") if self.files else tr("QGIS layers → GeoDuck")
         if self.running:
             fraction = finished
             if self._current is not None:
@@ -1150,14 +1152,14 @@ class AddLayers:
             added = sum(1 for s in self.states if s["state"] == DONE)
             rows = sum(s["rows"] for s in self.states if s["state"] == DONE)
             title = (
-                tr("Done: 1 layer in DuckDB")
+                tr("Done: 1 layer in GeoDuck")
                 if added == 1
-                else tr("Done: {0} layers in DuckDB").format(added)
+                else tr("Done: {0} layers in GeoDuck").format(added)
             )
             if added < total:
-                title = tr("{0} of {1} layers in DuckDB").format(added, total)
+                title = tr("{0} of {1} layers in GeoDuck").format(added, total)
             spent = getattr(self, "seconds", seconds)
-            pill = "⚡ " + tr("{0} directly by DuckDB").format(fast)
+            pill = "⚡ " + tr("{0} directly by GeoDuck").format(fast)
             if not self.files:
                 pill += " · " + tr("{0} through QGIS").format(total - fast)
             view.set_header(

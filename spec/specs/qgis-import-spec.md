@@ -13,7 +13,7 @@ La capa de QGIS nunca cambia.
   capas seleccionadas, las envía todas).
 - Workspace de GeoDuck: «+» de la barra lateral → «Importar capas de QGIS…».
 - Con la interfaz de G9 (Workspace Pro): arrastrar capas del panel de capas a una base de la barra lateral
-  y Ctrl+K → «Enviar capa de QGIS a DuckDB…».
+  y Ctrl+K → «Enviar capa de QGIS a GeoDuck…».
 
 Las capas ráster, de malla o de nube de puntos aparecen desactivadas con el motivo. Sin sesión lista, la
 acción explica que hay que iniciar una.
@@ -75,7 +75,7 @@ acción explica que hay que iniciar una.
    contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
    «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
    ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
-   ese clic, el camino 3. El resumen dice «leído directo por DuckDB». **El filtro de la capa** va como `WHERE`
+   ese clic, el camino 3. El resumen dice «leído directo por GeoDuck». **El filtro de la capa** va como `WHERE`
    y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
    esa capa se copia por el camino 3, sin error. **Trazabilidad** (#148: la línea de tiempo vertical de
    workspace-pro-spec §9, también en «Exportar ▾»): origen y filtro → lectura («⚡ Lectura directa con
@@ -85,7 +85,7 @@ acción explica que hay que iniciar una.
    con el filtro como `WHERE`. La geometría y el SRC salen de la capa de QGIS (sin `pyarrow.parquet`, que en
    algunos QGIS de Windows no carga: F-130). CSV y JSON solo sin geometría (QGIS la arma de columnas de texto
    que DuckDB no ve como geometría) y siempre con la comprobación de filas. Si la lectura directa falla o da
-   otras filas, esa capa se copia por el camino 3 («DuckDB lee el archivo distinto que QGIS»). Una unidad
+   otras filas, esa capa se copia por el camino 3 («GeoDuck lee el archivo distinto que QGIS»). Una unidad
    montada (Google Drive, OneDrive) es una ruta más.
 
 ## 6. Columnas y tipos (GD-IMP-005)
@@ -171,7 +171,7 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
   filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).
   Las que no se pueden leer, en gris con el motivo.
 - **Pasos 2 y 3:** los de §3 y §4 (destino, «si ya existe», progreso, «Deshacer»), con el título
-  «Archivos → DuckDB». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
+  «Archivos → GeoDuck». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
   transacción, con el conteo de §4.
 - **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
   archivo (p. ej. SpatiaLite) no entra al diálogo: un aviso claro dice cuáles, qué hacer y si los demás siguen. Si el GDAL de

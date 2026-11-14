@@ -444,7 +444,7 @@ def test_attach_dialog_builds_requests(qgis_app, tmp_path):
     from geoduck.ui.attach_dialog import READ_ONLY_HELP, READ_WRITE_HELP, AttachDialog
 
     dialog = AttachDialog(OpenAction.CREATE_NEW)
-    assert dialog.windowTitle() == "Crear base DuckDB"
+    assert dialog.windowTitle() == "Crear base"
     assert not dialog.readonly_check.isVisibleTo(dialog)  # «Crear»: sin acceso que elegir, siempre RW
     assert not dialog.ok_button.isEnabled()  # sin archivo no se puede crear
     dialog.path_edit.setText(str(tmp_path / "nueva.duckdb"))
@@ -457,7 +457,7 @@ def test_attach_dialog_builds_requests(qgis_app, tmp_path):
     assert not dialog.ok_button.isEnabled() and "no lo sobrescribe" in dialog.path_hint.text()
 
     dialog = AttachDialog(OpenAction.OPEN_EXISTING)
-    assert dialog.windowTitle() == "Abrir base DuckDB"
+    assert dialog.windowTitle() == "Abrir base"
     assert dialog.readonly_check.isChecked() and dialog.access is RO  # por defecto, solo lectura
     assert dialog.access_help.text() == tr(READ_ONLY_HELP)
     dialog.readonly_check.setChecked(False)

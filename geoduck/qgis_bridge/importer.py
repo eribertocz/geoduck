@@ -288,7 +288,7 @@ def plan_layer(  # noqa: PLR0912, PLR0915 - un camino por rama (§5)
     skipped = copy_fid_fields(layer)
     fields = [(i, f) for i, f in enumerate(layer.fields()) if i not in skipped]
     if geometry is not None and QgsWkbTypes.isCurvedType(layer.wkbType()):
-        warnings.append(tr("Curves are converted to straight segments: DuckDB has no curves"))
+        warnings.append(tr("Curves are converted to straight segments: the database has no curves"))
     taken = [geometry.name] if geometry is not None else []
     names, renamed = column_names([*taken, *(f.name() for _i, f in fields)])
     warnings += renamed

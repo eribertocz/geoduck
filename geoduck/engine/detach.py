@@ -77,9 +77,7 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
     # si se cerró la base del inicio, la referencia pasa a la activa (que sigue adjunta)
     after = read_catalog(handle, catalog.default if catalog.is_root(target.name) else root)
     if after.get(target.name) is not None:
-        raise DetachError(
-            tr("DuckDB reported success but the database is still attached."), detail="still_attached"
-        )
+        raise DetachError(tr("The database is still open after closing it."), detail="still_attached")
     return DetachResult(target, after)
 
 
@@ -105,7 +103,7 @@ def _classify(exc: duckdb.Error) -> DetachError:
             code=ErrorCode.ACTIVE_RESULT,
             detail=type(exc).__name__,
         )
-    return DetachError(tr("DuckDB could not detach the database."), detail=type(exc).__name__)
+    return DetachError(tr("The database could not be closed."), detail=type(exc).__name__)
 
 
 def _execute(handle: ConnectionHandle, sql: str) -> None:

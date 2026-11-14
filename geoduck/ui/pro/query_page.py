@@ -1200,7 +1200,7 @@ class QueryPage(QWidget):
             word = error_token(text, offset, message)
             end = offset + max(1, len(word))
             line = text.count("\n", 0, offset)
-            note = message + "\n" + tr("DuckDB parser · not run yet")
+            note = message + "\n" + tr("SQL check · not run yet")
             self.editor.status.show([(line, pro_editor.ERROR_MARK)], [(offset, end, note)])
             self._live_error = True
 
@@ -1647,7 +1647,7 @@ def confirm_extension(name: str) -> bool:
     box.setWindowTitle(tr("GeoDuck"))
     box.setText(
         tr(
-            "This query needs DuckDB's «{0}» extension. GeoDuck will install it if needed (only once) and "
+            "This query needs the «{0}» extension. GeoDuck will install it if needed (only once) and "
             "load it for this session. The query does not run again by itself."
         ).format(name)
     )

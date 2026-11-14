@@ -295,7 +295,7 @@ def apply(  # noqa: PLR0912, PLR0915 - los cuatro pasos de §5.4 en una sola tra
                 raise SaveError(
                     tr(
                         "Conflict: {0} feature(s) changed, moved or no longer exist in "
-                        "DuckDB since QGIS read them (e.g. {1}). Save again to overwrite, or "
+                        "the database since QGIS read them (e.g. {1}). Save again to overwrite, or "
                         "discard your changes."
                     ).format(len(conflicts), sample),
                     conflicts,
@@ -504,7 +504,7 @@ class EditSession:
         p = self.provider
         engine = p.engine()
         if engine is None:
-            return Verdict(False, tr("The DuckDB session of this layer is not available"))
+            return Verdict(False, tr("The session of this layer is not available"))
         if self._pending:
             self._flush()
         for fut in self._captures:  # huellas pendientes de las últimas ediciones

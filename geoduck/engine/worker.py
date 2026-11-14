@@ -118,7 +118,7 @@ class ConnectionHandle:
 
     def _guard(self) -> None:
         if threading.get_ident() != self._owner:
-            raise WrongThreadError(tr("The DuckDB connection can only be used from its owner thread"))
+            raise WrongThreadError(tr("The session can only be used from its owner thread"))
         if self._closed:
             raise SessionClosedError(tr("The session is closed"))
         if self._reader_open:
@@ -732,7 +732,7 @@ class SessionWorker:
             if fatal_cause is None:
                 return None, _classify(exc, job.token), None, interrupted
             fatal = SessionInvalidatedError(
-                tr("DuckDB reported a fatal error; the session was invalidated"),
+                tr("The session had a fatal error and was invalidated"),
                 detail=_first_line(fatal_cause),
             )
             return None, fatal.fresh(), fatal, interrupted
@@ -747,10 +747,7 @@ class SessionWorker:
         if state is None:
             if interrupted:
                 return SessionInvalidatedError(
-                    tr(
-                        "The DuckDB connection does not respond after an interruption; the "
-                        "session was invalidated"
-                    ),
+                    tr("The session does not respond after an interruption and was invalidated"),
                     detail="unresponsive_after_interrupt",
                 )
             return SessionInvalidatedError(
@@ -861,7 +858,7 @@ def _wrap_start_error(exc: BaseException) -> BaseException:
         return exc
     if isinstance(exc, duckdb.Error):
         return EngineError(
-            tr("DuckDB could not start: {0}").format(_first_line(exc)), detail=type(exc).__name__
+            tr("The session could not start: {0}").format(_first_line(exc)), detail=type(exc).__name__
         )
     return exc
 

@@ -200,9 +200,9 @@ def column_names(names: Iterable[str]) -> tuple[list[str], list[str]]:
         fixed = unique_name(name, out)
         if fixed != name:
             warnings.append(
-                tr("Field «{0}» renamed to «{1}»: DuckDB does not tell upper and lower case apart").format(
-                    name, fixed
-                )
+                tr(
+                    "Field «{0}» renamed to «{1}»: the database does not tell upper and lower case apart"
+                ).format(name, fixed)
             )
         out.append(fixed)
     return out, warnings
@@ -282,11 +282,11 @@ PATH_GDAL = "gdal"
 
 def path_label(path: str) -> str:
     if path == PATH_CONNECTED:
-        return tr("inside DuckDB (Connected layer)")
+        return tr("inside the database (Connected layer)")
     if path == PATH_PARQUET:
-        return tr("read directly by DuckDB (GeoParquet)")
+        return tr("read directly by GeoDuck (GeoParquet)")
     if path in (PATH_FILE, PATH_GDAL):
-        return tr("read directly by DuckDB")
+        return tr("read directly by GeoDuck")
     return tr("read by QGIS in the background")
 
 

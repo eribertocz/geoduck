@@ -81,7 +81,7 @@ class ExportProgress:
         self.row.user_set = True
         self.steps = [
             Step("code", tr("Query"), sql_preview(self.request.sql), DONE),
-            Step("database", tr("DuckDB writes the file"), self._how(), RUNNING),
+            Step("database", tr("GeoDuck writes the file"), self._how(), RUNNING),
             Step("file", tr("File"), str(path), WAITING),
         ]
         self.window.on_escape = self.cancel
@@ -131,7 +131,7 @@ class ExportProgress:
         close.clicked.connect(self.window.close)
         if isinstance(event, ExportFinished):
             report = event.report
-            self.steps[1] = Step("database", tr("DuckDB writes the file"), self._how(), DONE, seconds)
+            self.steps[1] = Step("database", tr("GeoDuck writes the file"), self._how(), DONE, seconds)
             detail = " · ".join(p for p in (report.path, size_text(report.path)) if p)
             self.steps[2] = Step("file", tr("File"), detail, DONE)
             lines = [rows_text(report.rows)]
@@ -152,7 +152,7 @@ class ExportProgress:
                 card.go_button.hide()
             self.steps[1] = Step(
                 "database",
-                tr("DuckDB writes the file"),
+                tr("GeoDuck writes the file"),
                 self._how(),
                 SKIPPED if event.cancelled else FAILED,
                 seconds,
