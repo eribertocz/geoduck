@@ -75,6 +75,7 @@ PATHS: dict[str, str] = {
     "type-number": '<path d="M9.5 4l-2 16M16.5 4l-2 16M4.5 9h15M4 15h15"/>',
     "type-date": '<rect x="4" y="5.5" width="16" height="14" rx="2"/>'
     '<path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+    "type-time": '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
     "type-bool": '<rect x="3.5" y="7.5" width="17" height="9" rx="4.5"/><circle cx="16" cy="12" r="2.5"/>',
     "type-other": '<path d="M9 5H7.5a2 2 0 0 0-2 2v3l-1.5 2 1.5 2v3a2 2 0 0 0 2 2H9M15 5h1.5a2 2 0 0 1 2 2v3'
     'l1.5 2-1.5 2v3a2 2 0 0 1-2 2H15"/>',

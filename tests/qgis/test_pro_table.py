@@ -12,7 +12,7 @@ import gc
 import time
 
 import pytest
-from qgis.PyQt.QtCore import QCoreApplication, QEvent
+from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
 from qgis.PyQt.QtWidgets import QApplication
 
 from geoduck.app.coordinator import SessionCoordinator
@@ -122,6 +122,10 @@ def test_a_million_rows_first_page_quickly_then_the_total(consumidores):
     assert page.range_label.text() == tr("Rows {} of {}").format("1–100", "1 000 000")
     assert [c.name for c in page.model.columns] == ["id", "nombre", "kwh"]
     assert page.model.headerData(0, 2) == "1"  # número de fila (vertical)
+    # el tipo ya no va al lado del nombre: icono de su familia y el tipo completo en la ayuda (2026-11-13)
+    assert page.model.families == ("integer", "text", "decimal")
+    tip = page.model.headerData(2, Qt.Orientation.Horizontal, Qt.ItemDataRole.ToolTipRole)
+    assert tip.startswith("kwh · decimal(")  # (15,1) o (21,1) según la versión de DuckDB
 
 
 def test_sort_filters_search_and_pages_match_sql(consumidores):

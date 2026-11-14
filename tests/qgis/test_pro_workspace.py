@@ -123,13 +123,13 @@ def test_without_session_it_offers_to_start_and_then_welcomes(coordinator):
     ws = workspace(coordinator)
     assert ws.body.currentIndex() == STATE
     assert ws.start_button.isVisible() and ws.start_button.isEnabled()
-    assert ws.sidebar.status.text() == tr("Not started")
+    assert ws.sidebar.status.text() == tr("Stopped")
     ws.start_button.click()
     assert wait_for(lambda: ready(coordinator))
     assert wait_for(lambda: ws.body.currentIndex() == WELCOME)
     assert ws.sidebar.title.text() == "GeoDuck"  # sin la versión de DuckDB (#149)
-    assert ws.sidebar.status.text() == tr("Ready") + " · " + tr("in memory")
-    assert ws.status()[1] == tr("Ready") + " · " + tr("in memory")
+    assert ws.sidebar.status.text() == tr("Active")  # sin la base: se ve en el explorador (2026-11-13)
+    assert ws.status()[1] == tr("Active")
 
 
 def test_the_sidebar_lists_databases_schemas_tables_views_and_temporaries(coordinator):

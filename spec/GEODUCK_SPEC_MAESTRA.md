@@ -1496,9 +1496,10 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Ventana propia** (por defecto) y **panel acoplado** a QGIS, con la misma sesión y las mismas pestañas
   (ADR-0013 se mantiene). «Acoplar a QGIS» / «Ventana» alterna sin perder nada.
 - **Estado de DuckDB** (propietario, 2026-11-06: sin una barra más): en la ventana, arriba de la barra lateral
-  («GeoDuck» y «● Lista · en memoria», con «⋯»: Actualizar, **Cerrar DuckDB**); en el panel, en su
-  cabecera. La versión de DuckDB no se muestra en las ventanas: solo en «Acerca de» y en el diagnóstico
-  (propietario, 2026-11-13, #149). La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
+  («GeoDuck» y «● Activo», con «⋯»: Actualizar, **Cerrar DuckDB**; sin la base, que se ve en el
+  explorador); en el panel, en su cabecera. La versión de DuckDB no se muestra en las ventanas: solo en «Acerca de» y en el diagnóstico
+  (propietario, 2026-11-13, #149). Estados: «Activo», «Ocupado», «Con error» y «Detenido» (sin «Lista»: con
+  «GeoDuck» delante sonaba mal; propietario, 2026-11-13). La fila de pestañas lleva «Buscar · Ctrl K» y «Acoplar a QGIS».
 - **Iniciar y cerrar** (propietario, 2026-11-06; nombre de #142): **«Iniciar GeoDuck»** (botón grande en el
   centro cuando no está iniciado) y **«Cerrar sesión»** (menú «⋯»). Sin iniciar, **todo está en gris** salvo
   «Iniciar GeoDuck», «Abrir base…», «Crear base…», «Diagnóstico» y «Acerca de».
@@ -1556,8 +1557,14 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
 - **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con
-  tipo bajo cada columna y número de fila. Es **la misma grilla que el resultado de una consulta** (§5; #144,
-  maquetas `resultado` y `filtros`):
+  número de fila. Es **la misma grilla que el resultado de una consulta** (§5; #144, maquetas `resultado` y
+  `filtros`):
+  - **Encabezado: icono de tipo y nombre** (maqueta `tipo-columna`, propietario, 2026-11-13): delante del
+    nombre, un icono gris de 16 px de la familia del tipo («123» enteros, «1,2» decimales, «Aa» texto,
+    calendario fecha, reloj fecha y hora, «✓» lógico, «{}» listas, estructuras y JSON, «01» binario, «?»
+    otros). Las geometrías llevan los iconos de QGIS (puntos, líneas, polígonos; mixta si las filas de la
+    página se mezclan o no hay). El tipo completo va en la ayuda del encabezado, en el detalle de la fila y en
+    «Estructura»: la columna mide lo que necesitan su nombre y sus datos.
   - **Orden:** el icono ⇅ que aparece al pasar el ratón por el encabezado (ascendente, descendente, sin
     orden); la columna ordenada lleva su flecha turquesa. Lo ejecuta DuckDB.
   - **Selección como en una hoja de cálculo:** clic en una celda (borde turquesa), en el nombre de una columna

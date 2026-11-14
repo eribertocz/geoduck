@@ -83,7 +83,7 @@ def test_qgis_in_english_shows_geoduck_in_english(tmp_path):
     assert (out["start"], out["state"], out["status"]) == (
         "Start GeoDuck",
         "GeoDuck is not started",
-        "Not started",
+        "Stopped",
     )
     assert out["dock"] == "Shows GeoDuck as a QGIS panel, with the same session"
     assert "cannot be empty" in out["error"]  # también los mensajes del motor
@@ -95,7 +95,7 @@ def test_qgis_in_spanish_shows_geoduck_in_spanish(tmp_path):
     assert (out["start"], out["state"], out["status"]) == (
         "Iniciar GeoDuck",
         "GeoDuck no está iniciado",
-        "No iniciado",
+        "Detenido",
     )
     assert out["dock"] == "Muestra GeoDuck como un panel de QGIS, con la misma sesión"
     assert "no puede estar vacío" in out["error"]
