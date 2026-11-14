@@ -14,6 +14,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
     QAbstractTableModel,
     QModelIndex,
@@ -43,7 +44,8 @@ from qgis.PyQt.QtWidgets import (
     QWidgetAction,
 )
 
-from geoduck.domain.browse import PAGE, Browse, Filter, geometry_summary
+from geoduck.domain import browse as kinds
+from geoduck.domain.browse import PAGE, Browse, Filter, geometry_family, geometry_summary, type_family
 from geoduck.domain.catalog import ColumnInfo
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.filters import (
@@ -60,6 +62,7 @@ from geoduck.domain.filters import (
     preview,
     where_condition,
 )
+from geoduck.domain.i18n import decimal as decimal_text
 from geoduck.domain.i18n import get_language
 from geoduck.domain.i18n import number as number_text
 from geoduck.domain.i18n import rows as rows_text
@@ -133,6 +136,31 @@ _NUMERIC = re.compile(
 CELL = 300
 #: Filas que se miden para el ancho de las columnas.
 FIT_ROWS = 25
+#: El icono de tipo delante del nombre (maqueta `tipo-columna`): ancho y separación.
+ICON_SIZE = 16
+ICON_AREA = ICON_SIZE + 6
+#: Iconos de geometría de QGIS (solo se leen de su tema; ADR-0011).
+QGIS_GEOMETRY_ICONS = {
+    kinds.POINT: "/mIconPointLayer.svg",
+    kinds.LINE: "/mIconLineLayer.svg",
+    kinds.POLYGON: "/mIconPolygonLayer.svg",
+    kinds.MIXED: "/mIconGeometryCollectionLayer.svg",
+}
+
+
+def type_glyph(family: str) -> str:
+    """El texto del icono para las familias que se dibujan con letras («123», «1,2» según el idioma, «Aa»…);
+    vacío para las que llevan dibujo (fechas y geometrías)."""
+    glyphs = {
+        kinds.INTEGER: "123",
+        kinds.DECIMAL: decimal_text(1.2),
+        kinds.TEXT: "Aa",
+        kinds.BOOLEAN: "✓",
+        kinds.NESTED: "{}",
+        kinds.BINARY: "01",
+        kinds.OTHER: "?",
+    }
+    return glyphs.get(family, "")
 
 
 def is_numeric(data_type: str) -> bool:
@@ -155,7 +183,7 @@ def fit_columns(grid: QTableView, model: PageModel) -> None:
     grid.resizeColumnsToContents()
     metrics = grid.horizontalHeader().fontMetrics()
     for i, column in enumerate(model.columns):
-        title = metrics.horizontalAdvance(column.name + short_type(column.data_type)) + 48
+        title = metrics.horizontalAdvance(column.name) + 48 + ICON_AREA  # el tipo ya no ensancha (icono)
         grid.setColumnWidth(i, min(max(grid.columnWidth(i), title, 90), 360))
 
 
@@ -187,6 +215,8 @@ class PageModel(QAbstractTableModel):
         self.italic.setItalic(True)
         # Por columna, calculado una vez por página (data() se llama miles de veces al pintar)
         self._numeric: tuple[bool, ...] = ()
+        #: La familia de cada columna para su icono; en las de geometría, lo que hay en la página.
+        self.families: tuple[str, ...] = ()
         self._align: tuple[int, ...] = ()
         self._texts: dict[tuple[int, int], str] = {}
         self._null = QColor(colors.null)
@@ -198,6 +228,10 @@ class PageModel(QAbstractTableModel):
         self.beginResetModel()
         self.columns, self.rows, self.offset = columns, rows, offset
         self._numeric = tuple(is_numeric(c.data_type) for c in columns)
+        self.families = tuple(
+            geometry_family([row[i] for row in rows]) if c.is_geometry else type_family(c.data_type)
+            for i, c in enumerate(columns)
+        )
         right = int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         left = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._align = tuple(right if n else left for n in self._numeric)
@@ -236,6 +270,11 @@ class PageModel(QAbstractTableModel):
     def headerData(  # noqa: N802
         self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
     ) -> Any:
+        if role == Qt.ItemDataRole.ToolTipRole and orientation == Qt.Orientation.Horizontal:
+            if section >= len(self.columns):
+                return None
+            column = self.columns[section]  # el tipo completo, que ya no va al lado del nombre
+            return f"{column.name} · {column.data_type.lower()}"
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Horizontal:
@@ -244,10 +283,12 @@ class PageModel(QAbstractTableModel):
 
 
 class TypeHeader(QHeaderView):
-    """Encabezado de la grilla: nombre en negrita y tipo en gris. Al pasar el ratón, ⇅ a la derecha ordena
-    (#144: ordenar pasa al icono; el clic en el nombre elige la columna entera); la columna ordenada lleva su
-    flecha turquesa. Con `set_filters_visible(True)`, debajo de cada nombre su casilla de filtro (#144,
-    punto 36): `box_edited(columna, texto)` al pulsar Intro o al dejar de escribir."""
+    """Encabezado de la grilla: un icono gris de la familia del tipo y el nombre en negrita; el tipo completo,
+    en la ayuda (maqueta `tipo-columna`, propietario, 2026-11-13; geometrías con los iconos de QGIS). Al pasar
+    el ratón, ⇅ a la derecha ordena (#144: ordenar pasa al icono; el clic en el nombre elige la columna
+    entera); la columna ordenada lleva su flecha turquesa. Con `set_filters_visible(True)`, debajo de cada
+    nombre su casilla de filtro (#144, punto 36): `box_edited(columna, texto)` al pulsar Intro o al dejar de
+    escribir."""
 
     sort_requested = pyqtSignal(int)
     box_edited = pyqtSignal(str, str)
@@ -274,6 +315,17 @@ class TypeHeader(QHeaderView):
             False: icons.pixmap("arrow-down", colors.accent, 12),
         }
         self._sort_icon = icons.pixmap("sort", colors.faint, 13)
+        self._drawn = {
+            kinds.DATE: icons.pixmap("type-date", colors.faint, 14),
+            kinds.DATETIME: icons.pixmap("type-time", colors.faint, 14),
+        }
+        for family, name in QGIS_GEOMETRY_ICONS.items():
+            theme = QgsApplication.getThemeIcon(name)
+            self._drawn[family] = (
+                icons.pixmap("geometry", colors.faint, 14)
+                if theme.isNull()
+                else theme.pixmap(ICON_SIZE, ICON_SIZE)
+            )
         self._typing = QTimer(self)
         self._typing.setSingleShot(True)
         self._typing.setInterval(TYPING_MS)
@@ -404,24 +456,36 @@ class TypeHeader(QHeaderView):
         elif self.sortable and index == self._hover:
             painter.drawPixmap(inner.right() - 13, inner.center().y() - 6, self._sort_icon)
             inner.setRight(inner.right() - 16)
+        families = self.page_model.families
+        family = families[index] if index < len(families) else kinds.OTHER
+        inner.setLeft(inner.left() + self._paint_type(painter, inner, family))
         painter.setFont(self.bold)
         painter.setPen(QColor(c.accent if chosen else c.text))
         metrics = painter.fontMetrics()
         name = metrics.elidedText(column.name, Qt.TextElideMode.ElideRight, inner.width())
         painter.drawText(inner, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), name)
-        used = metrics.horizontalAdvance(name) + 6
-        if used < inner.width():
-            painter.setFont(self.mono)
-            painter.setPen(QColor(c.faint))
-            kind = painter.fontMetrics().elidedText(
-                short_type(column.data_type), Qt.TextElideMode.ElideRight, inner.width() - used
-            )
-            painter.drawText(
-                inner.adjusted(used, 1, 0, 0),
-                int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
-                kind,
-            )
         painter.restore()
+
+    def _paint_type(self, painter: QPainter, inner: QRect, family: str) -> int:
+        """El icono de la familia a la izquierda de `inner`; devuelve cuánto ocupa (con su separación)."""
+        drawn = self._drawn.get(family)
+        if drawn is not None:
+            ratio = drawn.devicePixelRatio() or 1.0
+            width, height = round(drawn.width() / ratio), round(drawn.height() / ratio)
+            painter.drawPixmap(
+                inner.left() + (ICON_SIZE - width) // 2, inner.center().y() - height // 2, drawn
+            )
+            return ICON_AREA
+        painter.setFont(self.mono)
+        painter.setPen(QColor(self.colors.faint))
+        glyph = type_glyph(family)
+        width = max(ICON_SIZE, painter.fontMetrics().horizontalAdvance(glyph))
+        painter.drawText(
+            QRect(inner.left(), inner.top() + 1, width, inner.height()),
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            glyph,
+        )
+        return width + 6
 
     def _column_selected(self, index: int) -> bool:
         view = self.parent()

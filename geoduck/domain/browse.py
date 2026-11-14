@@ -342,3 +342,65 @@ def geometry_summary(wkt: str, data_type: str) -> tuple[str, str, int]:
     found = re.search(r"\((.*)\)\s*$", data_type.strip())
     crs = found.group(1).strip().strip("'\"") if found else ""
     return kind, crs, vertices
+
+
+# -- icono de tipo en el encabezado (maqueta `tipo-columna`, propietario, 2026-11-13) ------------------------
+
+#: Familias de tipo: el encabezado muestra solo el nombre con un icono de la familia; el tipo completo va
+#: en la ayuda y en el detalle de la fila.
+INTEGER, DECIMAL, TEXT, DATE, DATETIME, BOOLEAN, NESTED, BINARY, OTHER = (
+    "integer", "decimal", "text", "date", "datetime", "boolean", "nested", "binary", "other",
+)  # fmt: skip
+#: Geometrías, por lo que hay en la página: puntos, líneas, polígonos o mixta (también sin filas).
+POINT, LINE, POLYGON, MIXED = "point", "line", "polygon", "mixed"
+
+_INTEGER_TYPE = re.compile(r"^U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?\b|^(INT\d+|UINTEGER|UBIGINT|UHUGEINT)\b")
+_DECIMAL_TYPE = re.compile(r"^(DOUBLE|FLOAT\d*|REAL|DECIMAL|NUMERIC)\b")
+_TEXT_TYPE = re.compile(r"^(VARCHAR|CHAR|BPCHAR|TEXT|STRING|UUID|ENUM)\b")
+_DATETIME_TYPE = re.compile(r"^(TIMESTAMP|DATETIME|TIME|INTERVAL)\b")
+_NESTED_TYPE = re.compile(r"^(STRUCT|MAP|UNION|JSON|LIST|ARRAY)\b")
+_BINARY_TYPE = re.compile(r"^(BLOB|BYTEA|BINARY|VARBINARY|BIT|BITSTRING)\b")
+_GEOMETRY_FAMILY = {
+    "POINT": POINT,
+    "MULTIPOINT": POINT,
+    "LINESTRING": LINE,
+    "MULTILINESTRING": LINE,
+    "POLYGON": POLYGON,
+    "MULTIPOLYGON": POLYGON,
+}
+
+
+def type_family(data_type: str) -> str:  # noqa: PLR0911 - una familia por grupo de tipos
+    """La familia de un tipo de DuckDB, para su icono: `INTEGER[]` o `STRUCT(…)` son `NESTED`."""
+    kind = data_type.strip().upper()
+    if kind.endswith("]") or _NESTED_TYPE.match(kind):
+        return NESTED
+    if _INTEGER_TYPE.match(kind):
+        return INTEGER
+    if _DECIMAL_TYPE.match(kind):
+        return DECIMAL
+    if _TEXT_TYPE.match(kind):
+        return TEXT
+    if _DATETIME_TYPE.match(kind):
+        return DATETIME
+    if kind.startswith("DATE"):
+        return DATE
+    if kind.startswith("BOOL"):
+        return BOOLEAN
+    if _BINARY_TYPE.match(kind):
+        return BINARY
+    return OTHER
+
+
+def geometry_family(wkts: list[str | None]) -> str:
+    """Puntos, líneas o polígonos si todas las geometrías de la página son de ese tipo (en WKT; los nulos no
+    cuentan); si se mezclan o no hay ninguna, `MIXED`. DuckDB solo dice «GEOMETRY», sin el subtipo."""
+    found = set()
+    for wkt in wkts:
+        if not wkt:
+            continue
+        head = wkt.lstrip().split("(", 1)[0].split()
+        found.add(_GEOMETRY_FAMILY.get(head[0].upper(), MIXED) if head else MIXED)
+        if len(found) > 1:
+            return MIXED
+    return found.pop() if found else MIXED

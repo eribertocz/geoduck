@@ -2411,7 +2411,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/diagnostics_dialog.py" line="41" />
-            <location filename="../../geoduck/ui/pro/grid.py" line="1308" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1372" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="89" />
             <source>Copy</source>
             <translation>Copiar</translation>
@@ -2905,7 +2905,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="1040" />
-            <location filename="../../geoduck/ui/pro/grid.py" line="1175" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1239" />
             <source>{0} of {1} rows</source>
             <translation>{0} de {1} filas</translation>
         </message>
@@ -3190,194 +3190,194 @@ de {2}</translation>
             <translation>No se pudo exportar: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="123" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="126" />
             <source>Text: contains · &gt;50, 10..50, =Sur · empty / not empty · /regex/ or /regex/i · SQL that starts with an operator: &gt; 50 AND &lt; 100, IN (1, 5), LIKE 'a%', BETWEEN, IS NULL</source>
             <translation>Texto: contiene · &gt;50, 10..50, =Sur · vacío / no vacío · /regex/ o /regex/i · SQL que empieza con un operador: &gt; 50 AND &lt; 100, IN (1, 5), LIKE 'a%', BETWEEN, IS NULL</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="682" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="746" />
             <source>This table has no rows.</source>
             <translation>Esta tabla no tiene filas.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="683" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="747" />
             <location filename="../../geoduck/ui/pro/table_page.py" line="549" />
             <source>The table could not be read.</source>
             <translation>No se pudo leer la tabla.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="684" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="748" />
             <source>The session is busy; the table will load when it finishes.</source>
             <translation>La sesión está ocupada; la tabla se cargará cuando termine.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1122" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1186" />
             <source>Remove this filter</source>
             <translation>Quitar este filtro</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1374" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1438" />
             <source>1 row copied</source>
             <translation>1 fila copiada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="519" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="583" />
             <source>Copy value</source>
             <translation>Copiar valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="583" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="647" />
             <source>SQL condition… (Ctrl+Space: columns and functions)</source>
             <translation>condición SQL… (Ctrl+Espacio: columnas y funciones)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="584" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="648" />
             <source>WHERE condition</source>
             <translation>Condición WHERE</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="745" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="809" />
             <source>Show or hide the filters under each column</source>
             <translation>Mostrar u ocultar los filtros bajo cada columna</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="752" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="816" />
             <source>Opens the full query, with its filters and order, in a new query tab</source>
             <translation>Abre la consulta completa, con sus filtros y orden, en una pestaña de consulta nueva</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="812" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="876" />
             <source>Try again</source>
             <translation>Reintentar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="814" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="878" />
             <source>Clear filters</source>
             <translation>Quitar filtros</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1281" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1345" />
             <source>1 cell</source>
             <translation>1 celda</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1045" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1109" />
             <source>the rows keep the last valid filter</source>
             <translation>la tabla sigue mostrando el último filtro válido</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1063" />
-            <location filename="../../geoduck/ui/pro/grid.py" line="1219" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1127" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1283" />
             <source>GeoDuck is busy: try again when it finishes</source>
             <translation>GeoDuck está ocupado: inténtalo cuando termine</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1294" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1358" />
             <source>Greater than this value</source>
             <translation>Mayor que este valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1295" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1359" />
             <source>Less than this value</source>
             <translation>Menor que este valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1296" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1360" />
             <source>Only empty</source>
             <translation>Solo vacíos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1297" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1361" />
             <source>Without empty</source>
             <translation>Sin vacíos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1374" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1438" />
             <source>{} rows copied</source>
             <translation>{} filas copiadas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1401" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1465" />
             <source>nulls {}</source>
             <translation>nulos {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="303" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="355" />
             <source>filter…</source>
             <translation>filtrar…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="479" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="543" />
             <source>Row {}</source>
             <translation>Fila {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="529" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="593" />
             <source>1 vertex</source>
             <translation>1 vértice</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="932" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="996" />
             <source>No rows match these filters.</source>
             <translation>Ninguna fila cumple estos filtros.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1234" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1298" />
             <source>More than {} values: too many to copy. Export them instead.</source>
             <translation>Más de {} valores: demasiados para copiar. Mejor expórtalos.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1281" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1345" />
             <source>{} cells</source>
             <translation>{} celdas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1291" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1355" />
             <source>Filter by these values</source>
             <translation>Filtrar por estos valores</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1291" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1355" />
             <source>Filter by this value</source>
             <translation>Filtrar por este valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1292" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1356" />
             <source>Exclude these values</source>
             <translation>Excluir estos valores</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1292" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1356" />
             <source>Exclude this value</source>
             <translation>Excluir este valor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1398" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1462" />
             <source>min {}</source>
             <translation>mín {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="1400" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="1464" />
             <source>max {}</source>
             <translation>máx {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="786" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="850" />
             <source>Rows of {}</source>
             <translation>Filas de {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="304" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="356" />
             <source>Filter of {}</source>
             <translation>Filtro de {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="529" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="593" />
             <source>{} vertices</source>
             <translation>{} vértices</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/grid.py" line="530" />
+            <location filename="../../geoduck/ui/pro/grid.py" line="594" />
             <location filename="../../geoduck/ui/pro/load_options.py" line="118" />
             <location filename="../../geoduck/ui/send_dialog.py" line="353" />
             <source>no CRS</source>

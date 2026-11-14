@@ -94,8 +94,14 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 ## 4. Pestaña de tabla (GD-WSP-003)
 Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). Solo lectura en G9.
 - **Datos:** grilla rápida por páginas (las filas se piden a DuckDB bajo demanda; nunca la tabla entera), con
-  tipo bajo cada columna y número de fila. Es **la misma grilla que el resultado de una consulta** (§5; #144,
-  maquetas `resultado` y `filtros`):
+  número de fila. Es **la misma grilla que el resultado de una consulta** (§5; #144, maquetas `resultado` y
+  `filtros`):
+  - **Encabezado: icono de tipo y nombre** (maqueta `tipo-columna`, propietario, 2026-11-13): delante del
+    nombre, un icono gris de 16 px de la familia del tipo («123» enteros, «1,2» decimales, «Aa» texto,
+    calendario fecha, reloj fecha y hora, «✓» lógico, «{}» listas, estructuras y JSON, «01» binario, «?»
+    otros). Las geometrías llevan los iconos de QGIS (puntos, líneas, polígonos; mixta si las filas de la
+    página se mezclan o no hay). El tipo completo va en la ayuda del encabezado, en el detalle de la fila y en
+    «Estructura»: la columna mide lo que necesitan su nombre y sus datos.
   - **Orden:** el icono ⇅ que aparece al pasar el ratón por el encabezado (ascendente, descendente, sin
     orden); la columna ordenada lleva su flecha turquesa. Lo ejecuta DuckDB.
   - **Selección como en una hoja de cálculo:** clic en una celda (borde turquesa), en el nombre de una columna

@@ -195,3 +195,41 @@ def test_size_on_disk_of_a_saved_table(tmp_path):
     assert con.execute(size_sql("db", "main", "Raro t")).fetchone()[0] >= 262144
     con.execute("CREATE TABLE memoria AS SELECT 1 AS a")
     assert not con.execute(size_sql("memory", "main", "memoria")).fetchone()[0]
+
+
+@pytest.mark.parametrize(
+    ("data_type", "family"),
+    [
+        ("BIGINT", "integer"),
+        ("UTINYINT", "integer"),
+        ("HUGEINT", "integer"),
+        ("DECIMAL(21,1)", "decimal"),
+        ("DOUBLE", "decimal"),
+        ("VARCHAR", "text"),
+        ("UUID", "text"),
+        ("DATE", "date"),
+        ("TIMESTAMP WITH TIME ZONE", "datetime"),
+        ("INTERVAL", "datetime"),
+        ("BOOLEAN", "boolean"),
+        ("INTEGER[]", "nested"),
+        ("STRUCT(a INTEGER)", "nested"),
+        ("JSON", "nested"),
+        ("BLOB", "binary"),
+        ("GEOMETRY", "other"),  # las geometrías se miran por sus filas
+    ],
+)
+def test_each_type_has_a_family_for_its_header_icon(data_type, family):
+    from geoduck.domain.browse import type_family
+
+    assert type_family(data_type) == family
+
+
+def test_the_geometry_icon_follows_the_rows_of_the_page():
+    """DuckDB solo dice «GEOMETRY»: puntos, líneas o polígonos si todas las filas lo son; si no, mixta."""
+    from geoduck.domain.browse import geometry_family
+
+    assert geometry_family(["POINT (0 0)", "MULTIPOINT ((1 1))", None]) == "point"
+    assert geometry_family(["LINESTRING (0 0, 1 1)"]) == "line"
+    assert geometry_family(["POLYGON Z ((0 0 0, 1 0 0, 0 0 0))", "MULTIPOLYGON (((0 0)))"]) == "polygon"
+    assert geometry_family(["POINT (0 0)", "POLYGON ((0 0))"]) == "mixed"
+    assert geometry_family([None]) == "mixed" and geometry_family([]) == "mixed"
