@@ -116,8 +116,9 @@ y el total es otra ejecución. Nuevo contrato:
 - **Cargar en QGIS (GD-PERF-009):** «Conectada»: cancelación inmediata de lo que ya no se ve y conversión por
   fila mínima (E4b: un caché por extensión no ayuda, el costo es por fila entregada; `docs/evidence/g10/174/`).
   La «Copia» escrita por DuckDB directo se descartó (2026-11-14): el índice espacial cuesta lo mismo en los dos
-  caminos y no hubo mejora medida. Pendientes de decisión: la selección de QGIS leída por DuckDB en «→ GeoDuck»
-  y el progreso real con porcentaje en importar y exportar.
+  caminos y no hubo mejora medida. Progreso real (E4b, #174): el avance que informa DuckDB (1.5 y 2.0, con
+  `progress_bar_time = 0` desde el inicio de la sesión) en exportar, en las capas y archivos que lee DuckDB y en
+  el resultado guardado. La selección de QGIS leída por DuckDB se descartó: el camino de QGIS ya es rápido.
 - **Catálogo (GD-PERF-010):** columnas y autocompletado cargados por partes; bases con 10 000 tablas sin pausas
   (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla). Hecho en E4b (#174): lo plegado se crea al desplegarlo; Ctrl+K busca
   cada letra entre lo que ya coincidía (`docs/evidence/g10/174/`).

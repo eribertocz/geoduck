@@ -996,7 +996,7 @@ class QueryPage(QWidget):
             return
         progress = self._coordinator.query_progress()
         text = "⟳ " + tr("Preparing…")
-        if progress:  # DuckDB 1.5 dice siempre 0: entonces solo «Preparando…»
+        if progress:  # al empezar DuckDB todavía no lo sabe: entonces solo «Preparando…»
             text += f" {round(progress)} %"
         self.save_status.setText(text)
         self.save_status.setToolTip(SAVE_HELP())

@@ -889,7 +889,11 @@ class AddLayers:
         if index is not None:
             s = self.states[index]
             text += f" · {s['name']}"
-            if s["total"] > 0:
+            direct, _why = self._route(index)
+            percent = self._coordinator.query_progress() if direct else None
+            if percent:
+                text += f" {round(min(percent, 100.0))} %"
+            elif not direct and s["total"] > 0:
                 text += f" {min(100, s['rows'] * 100 // s['total'])} %"
         return text
 
@@ -1015,14 +1019,18 @@ class AddLayers:
                 read.state = DONE
                 copy.state = RUNNING
                 copy.title = tr("Copying to GeoDuck")
-                if total > 0:
+                percent = self._coordinator.query_progress() if direct else None
+                if direct:  # DuckDB lee el archivo: su propio avance (1.5 y 2.0), sin filas que contar
+                    copy.detail = tr("GeoDuck copies it with SQL")
+                    if percent:
+                        copy.progress = min(percent, 100.0) / 100
+                        copy.detail += f" · {round(percent)} %"
+                elif total > 0:
                     copy.progress = min(rows, total) / total
                     copy.detail = tr("{0} of {1} rows").format(_count(rows), _count(total))
                     rate = rows / elapsed if elapsed else 0
                     if rate > 0 and rows < total:
                         copy.detail += " · ≈ " + tr("{0} left").format(seconds_text((total - rows) / rate))
-                elif direct:
-                    copy.detail = tr("GeoDuck copies it with SQL")
                 copy.seconds = elapsed
             else:
                 read.state = RUNNING

@@ -68,8 +68,11 @@ class ExportProgress:
         *,
         cancel: Callable[[], None],
         load: Callable[[str], None],
+        progress: Callable[[], float | None] | None = None,
     ) -> None:
         self.request = event.request
+        #: El avance que informa DuckDB mientras escribe (0–100; 1.5 y 2.0).
+        self._progress = progress
         self.started = time.monotonic()
         self._cancel = cancel
         self._load = load
@@ -111,7 +114,12 @@ class ExportProgress:
             self.steps[1].seconds = seconds
             view.set_header(tr("Exporting: {0}").format(name), self.request.format.label, seconds)
             view.set_total(None)
-            self.row.set_status(tr("Writing…"), "accent")
+            percent = self._progress() if self._progress is not None else None
+            status = tr("Writing…")
+            if percent:
+                status += f" {round(min(percent, 100.0))} %"
+                self.steps[1].progress = min(percent, 100.0) / 100
+            self.row.set_status(status, "accent")
         self.row.set_steps(self.steps)
 
     def cancel(self) -> None:

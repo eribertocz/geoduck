@@ -384,3 +384,22 @@ def test_without_spatial_at_start_a_notice_offers_retry(coordinator, monkeypatch
     assert files == ["D:/descargas/spatial.duckdb_extension.gz"]
     ws._on_event(SpatialActivated("1.5", "true"))
     assert bars[-1][0] == "La extensión spatial está cargada: el análisis espacial está disponible."
+
+
+def test_the_export_window_shows_duckdbs_progress(qgis_app, tmp_path):
+    """#174, punto 3: «Escribiendo… 42 %» con el avance que informa DuckDB (1.5 y 2.0)."""
+    from geoduck.app.events import ExportStarted
+    from geoduck.domain.export import ExportFormat, ExportRequest
+    from geoduck.ui.pro.export_progress import ExportProgress
+
+    request = ExportRequest("SELECT 1", str(tmp_path / "salida.csv"), ExportFormat.CSV)
+    values: list[float | None] = [None]
+    trace = ExportProgress(
+        None, ExportStarted(1, request), cancel=lambda: None, load=lambda _p: None, progress=lambda: values[0]
+    )
+    assert trace.row.status.text() == "Escribiendo…"
+    values[0] = 42.4
+    trace._render()
+    assert trace.row.status.text() == "Escribiendo… 42 %"
+    assert trace.steps[1].progress == 0.424
+    trace.window.close()
