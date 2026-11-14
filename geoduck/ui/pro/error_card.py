@@ -84,6 +84,12 @@ class ErrorCardView(QFrame):
         row.addWidget(self.copy_button)
         row.addStretch(1)
 
+    def set_compact(self, compact: bool) -> None:
+        """Modo compacto (panel de 320 px, #149): «Copiar error» queda solo con su ícono (su ayuda lo dice),
+        para que la tarjeta no se salga por la derecha."""
+        self.copy_button.setText("" if compact else tr("Copy error"))
+        self.copy_button.setAccessibleName(tr("Copy error"))
+
     def _toggled(self, open_: bool) -> None:
         self.original.setVisible(open_)
         self.toggle.setText(("▾ " if open_ else "▸ ") + tr("Original DuckDB message"))

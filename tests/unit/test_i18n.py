@@ -72,3 +72,45 @@ def test_the_zip_contains_the_compiled_translation(tmp_path):
     (archive,) = tmp_path.glob("geoduck-*.zip")
     with zipfile.ZipFile(archive) as zf:
         assert "geoduck/i18n/geoduck_es.ts" in zf.namelist()
+
+
+def test_no_interface_text_is_written_without_tr(tmp_path, monkeypatch):
+    """#149: la CI falla si un texto de la interfaz no pasa por `tr()` (los registros y los nombres propios,
+    como «GeoDuck» o «Ctrl+K», no cuentan)."""
+    assert catalog.untranslated() == []
+    package = tmp_path / "geoduck"
+    package.mkdir()
+    (package / "vista.py").write_text(
+        "label('Guardar todo')\nbutton(tr('Save'))\nlog.warning('No se pudo cerrar')\n"
+        "icon_button('close', 'Cerrar la ventana', colors)\nsetText('GeoDuck · Ctrl+K')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(catalog, "PKG", package)
+    monkeypatch.setattr(catalog, "ROOT", tmp_path)
+    found = catalog.untranslated()
+    assert [line.split(" (")[0] for line in found] == [
+        "Texto sin tr(): 'Guardar todo'",
+        "Texto sin tr(): 'Cerrar la ventana'",
+    ]
+
+
+def test_the_plugin_card_is_in_english_and_in_spanish():
+    """#149: la ficha del complemento (descripción y «Acerca de») en los dos idiomas: QGIS muestra la de su
+    idioma (`description[es]`)."""
+    assert catalog.metadata_problems() == []
+
+
+def test_numbers_follow_the_language(monkeypatch):
+    """#149: «1 000 000 filas · 3,4 s» en español y «1,000,000 rows · 3.4 s» en inglés."""
+    monkeypatch.setattr(i18n, "_language", "es")
+    assert (i18n.number(1_000_000), i18n.decimal(3.42), i18n.decimal(1234.5)) == (
+        "1 000 000",
+        "3,4",
+        "1 234,5",
+    )
+    monkeypatch.setattr(i18n, "_language", "en")
+    assert (i18n.number(1_000_000), i18n.decimal(3.42), i18n.decimal(1234.5)) == (
+        "1,000,000",
+        "3.4",
+        "1,234.5",
+    )

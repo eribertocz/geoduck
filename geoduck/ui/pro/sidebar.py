@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Barra lateral de Workspace Pro (workspace-pro-spec §3, §8; GD-WSP-002, 007).
 
-De arriba abajo: la sesión (punto de estado, «DuckDB 2.0.0» y «Lista · en memoria»), el filtro y «+» (abrir
+De arriba abajo: la sesión (punto de estado, «GeoDuck» y «Lista · en memoria»), el filtro y «+» (abrir
 o crear base, añadir capas de QGIS), **★ Favoritos** y **Bases** (bases, esquemas, tablas,
 vistas y temporales), y al pie «Diagnóstico», «Acerca de» y la versión. Doble clic o Intro abre una tabla o
 vista; el menú contextual marca favoritos y cierra bases. No ejecuta nada: emite señales que atiende el
@@ -522,7 +522,7 @@ class Sidebar(QFrame):
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(0)
-        #: La sesión arriba («DuckDB 2.0.0», «Lista · en memoria», «⋯»); en el panel la lleva su cabecera.
+        #: La sesión arriba («GeoDuck», «Lista · en memoria», «⋯»); en el panel la lleva su cabecera.
         self.session_head = self._build_header()
         box.addWidget(self.session_head)
         self.dock_head = self._build_dock_head()
@@ -710,7 +710,7 @@ class Sidebar(QFrame):
     # -- estado ---------------------------------------------------------------------------------------
 
     def set_session(self, dot: str, engine: str, text: str, *, ready: bool) -> None:
-        """Punto de estado, motor («DuckDB 2.0.0») y estado («Lista · en memoria»)."""
+        """Punto de estado, motor («GeoDuck») y estado («Lista · en memoria»)."""
         self.dot.set_state(dot)
         self.title.setText(engine)
         self.status.setText(text)

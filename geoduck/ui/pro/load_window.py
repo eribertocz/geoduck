@@ -17,6 +17,7 @@ from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QTimer
 from qgis.PyQt.QtWidgets import QWidget
 
+from geoduck.domain.i18n import rows as rows_text
 from geoduck.domain.load import LoadMode
 from geoduck.domain.sql_errors import explain
 from geoduck.ui.i18n import tr
@@ -300,13 +301,13 @@ class LoadWindow:
             move.state = RUNNING
             move.seconds = time.monotonic() - s["started"]
             if s["rows"] and not self.connected:
-                move.detail = tr("{0} rows").format(count_text(s["rows"]))
+                move.detail = rows_text(s["rows"])
         elif state == DONE:
             move.state = layer.state = DONE
             move.seconds = s.get("seconds")
             report = s["report"]
             if not self.connected:
-                move.detail = tr("{0} rows").format(count_text(s["rows"]))
+                move.detail = rows_text(s["rows"])
             names = [name for _id, name in getattr(report, "layers", ())] or [report.layer_name]
             layer.detail = " · ".join(f"«{n}»" for n in names)
             if report.warnings:
@@ -332,7 +333,7 @@ class LoadWindow:
             text = tr("Copying…") if not self.connected else tr("Connecting…")
             return text + (f" {count_text(s['rows'])}" if s["rows"] else ""), "accent"
         if s["state"] == DONE:
-            text = "✓ " + tr("{0} rows").format(count_text(s["rows"]))
+            text = "✓ " + rows_text(s["rows"])
             return text + " · " + seconds_text(s.get("seconds")), "ok"
         if s["state"] == "failed":
             return tr("Error"), "error"
@@ -371,9 +372,7 @@ class LoadWindow:
             )
             if added < total:
                 title = tr("{0} of {1} layers in QGIS").format(added, total)
-            view.set_header(
-                title, f"{how} · " + tr("{0} rows").format(count_text(rows)) + f" · {seconds_text(seconds)}"
-            )
+            view.set_header(title, f"{how} · " + rows_text(rows) + f" · {seconds_text(seconds)}")
             view.set_total(None)
         view.follow(current)
 
