@@ -6,7 +6,7 @@
 Con un `ProWorkspace` real, su sesión DuckDB real (en memoria) y un `ProController` con un `iface` de prueba:
 
 1. abrir una tabla de 1 millón de filas: tiempo hasta ver la primera página;
-2. ordenar, filtrar con dos chips, buscar y pasar de página: tiempo hasta ver el resultado y la pausa más
+2. ordenar, filtrar con dos chips, buscar y desplazar a la mitad: tiempo hasta ver el resultado y la pausa más
    larga de la interfaz mientras tanto (un temporizador de 5 ms mide si el hilo principal se bloquea);
 3. Ctrl+K con 1 000 objetos: tiempo de cada tecla (filtrar y pintar la lista);
 4. alternar ventana ↔ panel.
@@ -125,13 +125,16 @@ def main() -> None:  # noqa: PLR0915 - todas las medidas, en orden
                 ms = until(lambda: page.model.rowCount() > 0)
             record(name, ms, stall.worst)
 
-        measured("Ordenar por una columna", lambda p=page: p._sort(2))
+        measured("Ordenar por una columna", lambda p=page: p.data.sort_by(2))
         measured("Filtro: primer chip", lambda p=page: p.add_filter(Filter("kwh", GT, "100")))
         measured("Filtro: segundo chip", lambda p=page: p.add_filter(Filter("zona", LT, "10")))
         page.search.edit.setText("MEDIDOR 9")
         measured("Buscar", page._search_changed)
         until(lambda p=page: p.total is not None)
-        measured("Página siguiente", lambda p=page: p.go(p.offset + 100))
+        with Stall() as stall:  # desplazamiento continuo (#170): hasta ver las filas de esa posición
+            page.data.scroll_to(ROWS // 2)
+            ms = until(lambda p=page: p.model.rowCount() > 0 and not p.model.missing())
+        record("Desplazar a la mitad", ms, stall.worst)
         ws.tabs.close_tab(ws.tabs.bar.currentIndex())
 
         # 3. Ctrl+K con 1 000 objetos, tecla a tecla

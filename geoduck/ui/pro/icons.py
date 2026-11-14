@@ -94,7 +94,20 @@ def svg(name: str, color: str) -> bytes:
 
 
 def pixmap(name: str, color: str, size: int = 16, scale: float = 2.0) -> QPixmap:
-    """El icono pintado a `size` px lógicos (nítido en pantallas de alta densidad)."""
+    """El icono pintado a `size` px lógicos (nítido en pantallas de alta densidad). Se pinta una vez por
+    nombre, color y tamaño: el explorador pide el mismo icono para cada uno de sus objetos."""
+    key = (name, color, size, scale)
+    cached = _PIXMAPS.get(key)
+    if cached is None:
+        cached = _PIXMAPS[key] = _paint(name, color, size, scale)
+    return cached
+
+
+#: Iconos ya pintados (QPixmap se comparte implícitamente: copiarlo es barato y seguro).
+_PIXMAPS: dict[tuple[str, str, int, float], QPixmap] = {}
+
+
+def _paint(name: str, color: str, size: int, scale: float) -> QPixmap:
     renderer = QSvgRenderer(QByteArray(svg(name, color)))
     pix = QPixmap(QSize(round(size * scale), round(size * scale)))
     pix.fill(Qt.GlobalColor.transparent)

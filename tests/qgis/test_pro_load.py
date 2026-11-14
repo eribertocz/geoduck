@@ -393,3 +393,17 @@ def test_action_buttons_are_icons_only_in_the_window_too(coordinator):
     buttons = (page.export_button, page.load_button, page.data.sql_button, ws.search_button, ws.dock_button)
     for widget in buttons:
         assert widget.text() == "" and widget.toolTip() and widget.accessibleName() == widget.toolTip()
+
+
+def test_opening_a_table_does_not_rebuild_the_explorer_and_icons_are_painted_once(coordinator, monkeypatch):
+    """#173: abrir una tabla no rehace el explorador (con 1 000 objetos pausaba la interfaz ~120 ms) y cada
+    icono se pinta una vez por nombre, color y tamaño."""
+    from geoduck.ui.pro import icons
+
+    ws = workspace(coordinator)
+    rendered = []
+    monkeypatch.setattr(ws.sidebar, "render", rendered.append)
+    open_table(ws, "puntos")
+    assert rendered == []
+    first, again = icons.pixmap("table", "#123456", 14), icons.pixmap("table", "#123456", 14)
+    assert first.cacheKey() == again.cacheKey()

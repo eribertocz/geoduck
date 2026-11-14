@@ -1229,8 +1229,7 @@ class ProWorkspace(QWidget):
             self.notify(f"{place.name}: {reason}")
             return
         self.tabs.open_place(place)
-        self.places.touch(place)
-        self.sidebar.render(self._coordinator.catalog)
+        self.places.touch(place)  # el explorador no muestra recientes: no hace falta rehacerlo
         self._render()
 
     def _make_page(self, place: Place) -> QWidget:

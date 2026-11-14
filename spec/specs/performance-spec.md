@@ -67,7 +67,8 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
   operación de §2; medido con un temporizador de eventos (benchmarks §4.6).
 - **Abrir una tabla la primera vez:** ≤ 100 ms (hoy 140–220 ms, hallazgo de G9).
 - **Escribir en el editor** y desplazar la grilla no se ven afectados por una transferencia en curso.
-- F-129 (dos pruebas de `test_pro_load` en QGIS 3.34 corridas solas) se resuelve aquí.
+- F-129 (dos pruebas de `test_pro_load` en QGIS 3.34 corridas solas): resuelto en E4 (#173), era del entorno
+  de pruebas. Medidas de E4: `docs/evidence/g10/173/`.
 
 ## 6. Estrés (GD-PERF-005)
 
