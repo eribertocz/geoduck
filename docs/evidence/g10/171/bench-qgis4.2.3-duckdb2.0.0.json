@@ -1,0 +1,105 @@
+{
+ "entorno": {
+  "qgis": "4.2.3",
+  "qt": "6.11.2",
+  "duckdb": "2.0.0",
+  "python": "3.12.16",
+  "sistema": "Linux-6.18.44-fc-v470-x86_64-with-glibc2.39",
+  "cpus": 2,
+  "filas": 1000000,
+  "repeticiones": 3,
+  "ram_pico_mb": 1430.1
+ },
+ "medidas": {
+  "Consulta: primera página (10 columnas)": {
+   "mediana_ms": 39.3,
+   "max_ms": 45.5,
+   "pausa_max_ms": 10.0,
+   "pausa_p95_ms": 10.0
+  },
+  "Consulta: agregado por zona": {
+   "mediana_ms": 9.4,
+   "max_ms": 11.0,
+   "pausa_max_ms": 6.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Cargar en QGIS · Copia (puntos)": {
+   "mediana_ms": 2242.9,
+   "max_ms": 2567.3,
+   "pausa_max_ms": 16.0,
+   "pausa_p95_ms": 5.0
+  },
+  "Cargar en QGIS · Conectada (puntos)": {
+   "mediana_ms": 104.4,
+   "max_ms": 125.5,
+   "pausa_max_ms": 6.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Capa de QGIS → DuckDB (por QGIS, puntos)": {
+   "mediana_ms": 4634.6,
+   "max_ms": 4744.1,
+   "pausa_max_ms": 53.0,
+   "pausa_p95_ms": 5.0
+  },
+  "Archivo Parquet → DuckDB (por DuckDB)": {
+   "mediana_ms": 49.7,
+   "max_ms": 49.9,
+   "pausa_max_ms": 6.0,
+   "pausa_p95_ms": 6.0
+  },
+  "Exportar ▾ · parquet": {
+   "mediana_ms": 246.0,
+   "max_ms": 246.6,
+   "pausa_max_ms": 12.0,
+   "pausa_p95_ms": 9.0
+  },
+  "Exportar ▾ · csv": {
+   "mediana_ms": 339.2,
+   "max_ms": 380.8,
+   "pausa_max_ms": 17.0,
+   "pausa_p95_ms": 7.0
+  },
+  "Cancelar · consulta pesada": {
+   "mediana_ms": 5.9,
+   "max_ms": 7.0,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · exportar": {
+   "mediana_ms": 31.6,
+   "max_ms": 39.5,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · cargar en QGIS (Copia)": {
+   "mediana_ms": 65.3,
+   "max_ms": 65.5,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · capa de QGIS → DuckDB": {
+   "mediana_ms": 51.3,
+   "max_ms": 52.1,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · archivo → DuckDB": {
+   "mediana_ms": 29.0,
+   "max_ms": 29.2,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  },
+  "Cancelar · guardar el resultado de una consulta": {
+   "mediana_ms": 6.3,
+   "max_ms": 7.7,
+   "pausa_max_ms": 5.0,
+   "pausa_p95_ms": 5.0,
+   "seguia_en_curso": true
+  }
+ }
+}

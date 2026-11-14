@@ -292,7 +292,7 @@ class AddLayers:
     def _scan(self) -> None:
         self._scanning = True
         try:
-            self._coordinator.scan_files(self._paths, self._scanned)
+            self._scan_op = self._coordinator.scan_files(self._paths, self._scanned)
         except GeoDuckError as exc:
             self._scanning = False
             self._host.notify(exc.message)
@@ -406,7 +406,11 @@ class AddLayers:
             self.window.activateWindow()
 
     def window_closed(self) -> None:
-        """Cerrar con la X: en curso, sigue en segundo plano (el pie la trae de vuelta)."""
+        """Cerrar con la X: un envío en curso sigue en segundo plano (el pie lo trae de vuelta); la lectura
+        de los archivos, que nadie verá, se cancela (#171)."""
+        if getattr(self, "_scanning", False) and getattr(self, "_scan_op", None) is not None:
+            self._coordinator.cancel_operation(self._scan_op)
+            self._scan_op = None  # una sola vez (la ventana avisa al cerrarse y al ocultarse)
 
     # -- destino y nombres (#148, puntos 15 y 16) ----------------------------------------------------------
 

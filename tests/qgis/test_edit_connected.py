@@ -368,3 +368,37 @@ def test_a_time_column_is_edited_as_a_time(session):
     assert layer.changeAttributeValue(feature.id(), index, QTime(17, 45, 0, 500))
     assert layer.commitChanges(), layer.commitErrors()
     assert str(rows(session, "SELECT entrada FROM turnos WHERE id = 1")[0][0]) == "17:45:00.500000"
+
+
+def test_an_interrupt_on_begin_or_rollback_never_leaves_a_transaction(session, monkeypatch):
+    """#157: «Cancelar» justo sobre el BEGIN del guardado abría la transacción y nadie la revertía; y un solo
+    ROLLBACK interrumpido la dejaba abortada. Ahora se revierte siempre, sin depender de los tiempos."""
+    import duckdb
+
+    from geoduck.engine import worker as worker_module
+
+    layer = load(session)
+    before = checksum(session)
+    assert layer.startEditing()
+    read_all(layer, [60])
+    layer.changeAttributeValue(60, layer.fields().indexOf("nombre"), "interrumpido")
+    original = worker_module.ConnectionHandle.execute
+    calls = {"rollback": 0}
+
+    def execute(self, text, *args, **kwargs):
+        if text == "ROLLBACK":
+            calls["rollback"] += 1
+            if calls["rollback"] == 1:  # el primer ROLLBACK también cae bajo la interrupción
+                raise duckdb.InterruptException("INTERRUPT Error: Interrupted!")
+        result = original(self, text, *args, **kwargs)
+        if text == "BEGIN":
+            raise duckdb.InterruptException("INTERRUPT Error: Interrupted!")  # después de abrirla
+        return result
+
+    monkeypatch.setattr(worker_module.ConnectionHandle, "execute", execute)
+    assert not layer.commitChanges()
+    monkeypatch.undo()
+    assert calls["rollback"] >= 2
+    assert not session.engine.transaction_state().result(TIMEOUT).is_open
+    assert checksum(session) == before
+    layer.rollBack()

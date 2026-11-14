@@ -404,3 +404,21 @@ def test_a_filtered_geoparquet_layer_is_copied_by_duckdb_without_spatial(coordin
     assert flow.states[0]["state"] == "done" and not flow.states[0].get("fallback")
     assert flow._route(0)[0] and flow.states[0]["checked"]
     assert read_one(coordinator, "SELECT count(*) FROM memory.main.rios")[0] == 3
+
+
+def test_closing_the_window_while_reading_the_files_cancels_the_reading(coordinator, data, monkeypatch):
+    """#171: si se cierra la ventana mientras DuckDB lee los archivos, la lectura (que nadie verá) se
+    cancela; la sesión sigue lista."""
+    cancelled = []
+    original = coordinator.cancel_operation
+    monkeypatch.setattr(coordinator, "cancel_operation", lambda op: cancelled.append(op) or original(op))
+    paths = [data / "lecturas.parquet", data / "clientes.csv", data / "medidas.arrow"]
+    ws = workspace(coordinator, [str(p) for p in paths])
+    ws.import_files()
+    flow = ws.to_duckdb
+    op = flow._scan_op
+    assert flow._scanning and op
+    flow.window.close()
+    assert cancelled == [op]
+    assert wait_for(lambda: not flow._scanning, TIMEOUT)
+    assert wait_for(lambda: coordinator.state.value == "READY", TIMEOUT)

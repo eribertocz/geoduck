@@ -17,6 +17,7 @@ Hechos verificados con DuckDB 1.5.0, 1.5.6 y 2.0.0 (`docs/evidence/g1/README.md`
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 import duckdb
@@ -83,3 +84,17 @@ def _expect_none(handle: ConnectionHandle, statement: str) -> TransactionState:
 
 def _execute(handle: ConnectionHandle, sql: str) -> None:
     handle.execute(sql)
+
+
+def roll_back_own(handle: ConnectionHandle, attempts: int = 3) -> None:
+    """Revierte la transacción que abrió GeoDuck (un envío, el guardado de una capa) aunque «Cancelar»
+    caiga encima. `cancel()` marca el token y después interrumpe DuckDB: si la interrupción cae sobre el
+    ROLLBACK, lo hace fallar y la transacción quedaba abierta y abortada (#118, #157). Se repite hasta que
+    no quede ninguna; si aun así queda, el worker lo detecta al verificar la conexión después. Solo para
+    transacciones propias: nunca se llama si el usuario tenía una abierta."""
+    for _ in range(attempts):
+        with contextlib.suppress(Exception):
+            handle.execute("ROLLBACK")
+        with contextlib.suppress(Exception):
+            if not probe_transaction(handle).is_open:
+                return

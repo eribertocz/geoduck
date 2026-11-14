@@ -18,7 +18,6 @@ si no tiene entidades), para que su tabla se cree con sus columnas.
 
 from __future__ import annotations
 
-import contextlib
 import queue
 import re
 from typing import TYPE_CHECKING, Any
@@ -48,7 +47,7 @@ from geoduck.domain.importing import (
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.engine.files import arrow_dataset
 from geoduck.engine.sql import run_in_database
-from geoduck.engine.transactions import probe_transaction
+from geoduck.engine.transactions import probe_transaction, roll_back_own
 
 if TYPE_CHECKING:
     from geoduck.domain.channel import BatchChannel
@@ -128,8 +127,11 @@ def import_batches(  # noqa: PLR0912, PLR0915 - una transacción, paso a paso (d
                     "geometry: send the layer without CRS or choose another database"
                 ).format(job.database)
             )
-    handle.execute("BEGIN")
     try:
+        # #157: BEGIN va dentro: si «Cancelar» cae justo sobre él, DuckDB puede abrir la transacción y
+        # después avisar de la interrupción; sin esto nadie la revertía y la sesión quedaba con una
+        # transacción abierta (abortada) que el usuario no abrió. Ya se comprobó arriba que no había una suya.
+        handle.execute("BEGIN")
         before = {i: _count(handle, job) for i, job in enumerate(jobs) if job.mode is ImportMode.APPEND}
         sent = dict.fromkeys(range(len(jobs)), 0)
         started: set[int] = set()
@@ -185,25 +187,12 @@ def import_batches(  # noqa: PLR0912, PLR0915 - una transacción, paso a paso (d
         handle.execute("COMMIT")
     except BaseException as exc:
         channel.abandon()  # el productor deja de leer la capa
-        _roll_back(handle)
+        roll_back_own(handle)
         if token.cancelled and not isinstance(exc, OperationCancelledError):
             # Cancelado a mitad de una sentencia: la interrupción llega como un error de DuckDB
             raise OperationCancelledError(tr("Sending cancelled")) from exc
         raise
     return ImportReport(tuple(tables), tuple(crs_lost))
-
-
-def _roll_back(handle: ConnectionHandle, attempts: int = 3) -> None:
-    """ROLLBACK que resiste una interrupción tardía. Al cancelar, `cancel()` marca el token y después
-    interrumpe DuckDB: si el worker ya vio el token y está revirtiendo, la interrupción cae sobre el ROLLBACK
-    y lo hace fallar, y la transacción quedaba abierta y abortada. Se repite hasta que no quede transacción.
-    Si aun así queda, el worker lo detecta al verificar la conexión después de la operación."""
-    for _ in range(attempts):
-        with contextlib.suppress(Exception):
-            handle.execute("ROLLBACK")
-        with contextlib.suppress(Exception):
-            if not probe_transaction(handle).is_open:
-                return
 
 
 def _geometry_without_crs(handle: ConnectionHandle, jobs: list[ImportJob]) -> list[str]:

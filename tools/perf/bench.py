@@ -262,6 +262,42 @@ def main() -> None:  # noqa: PLR0915 - todas las medidas, en orden
         )
         big = LoadRequest("SELECT a.* FROM t3 a, range(10)", LoadMode.SNAPSHOT, f"cancelada_{n}", "geom")
         cancel("Cancelar · cargar en QGIS (Copia)", lambda r=big: co.load(r))
+        # #171: también el envío de una capa y de un archivo a DuckDB, y guardar el resultado de una consulta
+        layer_send = SendRequest(
+            (SendItem(copia.id(), f"cancelado_qgis_{n}", ImportMode.CREATE),), "memory", "main", False
+        )
+        cancel("Cancelar · capa de QGIS → DuckDB", lambda r=layer_send: co.send_layers(r), wait_ms=150)
+        file_send = SendRequest(
+            (SendItem("file:0", f"cancelado_archivo_{n}", ImportMode.CREATE, file=scanned[0][0]),),
+            "memory",
+            "main",
+            False,
+        )
+        cancel("Cancelar · archivo → DuckDB", lambda r=file_send: co.send_layers(r), wait_ms=20)
+        saved: list[Any] = []  # guardar el resultado no pasa por BUSY: se mide hasta que termina de verdad
+        co.save_result(f"cancelado_{n}", "SELECT a.* FROM t2 a, range(20)", saved.append)
+        begin = time.perf_counter()
+        while time.perf_counter() - begin < 0.3:  # que el guardado esté en marcha
+            QCoreApplication.processEvents()
+        with Stall() as stall:
+            begin = time.perf_counter()
+            co.cancel_current_operation()
+            until(lambda found=saved: bool(found), 120)
+            ms = (time.perf_counter() - begin) * 1000
+        results.setdefault("Cancelar · guardar el resultado de una consulta", []).append(
+            {
+                "ms": ms,
+                "pausa_max_ms": stall.worst,
+                "pausa_p95_ms": stall.p95,
+                "habia_que_cancelar": float(isinstance(saved[0], BaseException)),
+            }
+        )
+        left: list[Any] = []
+        co.read_rows(
+            "SELECT table_name FROM duckdb_tables() WHERE table_name LIKE 'cancelad%'", 100, left.append
+        )
+        until(lambda found=left: bool(found))
+        assert not left[0].rows, left[0].rows  # nada a medias
         leftovers = [p.name for p in work.iterdir() if p.name.startswith("c_") or p.name.startswith(".")]
         assert not leftovers, leftovers
         for layer in list(QgsProject.instance().mapLayers().values()):
