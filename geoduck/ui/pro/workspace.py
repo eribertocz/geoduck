@@ -312,18 +312,12 @@ class ProWorkspace(QWidget):
         self.tabs.bar.customContextMenuRequested.connect(self._tab_menu)
         self.tabs.rename_requested.connect(self._rename_tab)
         row.addStretch(1)
-        self.search_button = button(tr("Search"), "ghost", icon="search", colors=self.colors)
-        self.search_button.setToolTip(tr("Go to a table or run an action (Ctrl+K)"))
+        # Solo iconos, en la ventana y en el panel (propietario, 2026-11-13); la ayuda dice qué hacen
+        self.search_button = icon_button("search", tr("Go to a table or run an action (Ctrl+K)"), self.colors)
         self.search_button.clicked.connect(self.open_palette)
         row.addWidget(self.search_button, 0, Qt.AlignmentFlag.AlignVCenter)
-        self.search_kbd = label("Ctrl K", "kbd")
-        row.addWidget(self.search_kbd, 0, Qt.AlignmentFlag.AlignVCenter)
-        row.addSpacing(8)
-        self.dock_button = button(
-            tr("Dock to QGIS"),
-            icon="dock",
-            tooltip=tr("Shows GeoDuck as a QGIS panel, with the same session"),
-            colors=self.colors,
+        self.dock_button = icon_button(
+            "dock", tr("Shows GeoDuck as a QGIS panel, with the same session"), self.colors
         )
         self.dock_button.clicked.connect(lambda: self.presentation_requested.emit(False))
         row.addWidget(self.dock_button, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -704,7 +698,6 @@ class ProWorkspace(QWidget):
             self.sidebar.setGraphicsEffect(shadow)
         for widget in (self.dock_button, self.search_button):
             widget.setVisible(wide)  # en el panel, la búsqueda está en su cabecera
-        self.search_kbd.setVisible(wide and not self.compact)
         self.overlay_open = False
         self._apply_sidebar()
         self._wide_need = 0
@@ -750,10 +743,6 @@ class ProWorkspace(QWidget):
             actions.invalidate()
         for index in range(len(self.tabs)):
             self._with_mode(self.tabs.page(index))
-        # la cabecera, compacta: «Buscar» y «Acoplar a QGIS» solo con su ícono (su ayuda dice qué hacen)
-        self.search_button.setText("" if compact else tr("Search"))
-        self.dock_button.setText("" if compact else tr("Dock to QGIS"))
-        self.search_kbd.setVisible(self.wide and not compact)
         relayout(self)
 
     def _with_mode(self, page: QWidget) -> QWidget:

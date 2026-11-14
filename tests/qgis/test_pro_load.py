@@ -380,3 +380,16 @@ def test_a_copy_sent_back_to_duckdb_keeps_its_columns_and_loads_again(coordinato
         ws.to_duckdb.window.close()
         coordinator.refresh_catalog()
         assert wait_for(lambda n=f"t{trip + 1}": any(o.name == n for o in coordinator.catalog.objects))
+
+
+def test_action_buttons_are_icons_only_in_the_window_too(coordinator):
+    """Propietario, 2026-11-13: «Exportar», «Cargar en QGIS», «Ver SQL», «Buscar» y «Acoplar a QGIS» son solo
+    iconos, en la ventana ancha y en el panel; su ayuda (y su nombre accesible) dice qué hacen."""
+    ws = workspace(coordinator)
+    ws.set_presentation(wide=True)
+    ws.resize(1200, 700)
+    page = open_table(ws, "puntos")
+    assert not page.compact
+    buttons = (page.export_button, page.load_button, page.data.sql_button, ws.search_button, ws.dock_button)
+    for widget in buttons:
+        assert widget.text() == "" and widget.toolTip() and widget.accessibleName() == widget.toolTip()

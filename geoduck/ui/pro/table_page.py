@@ -294,13 +294,16 @@ class TablePage(QWidget):
         self.column_summary = label("", "muted")
         self.column_summary.setFont(ui_font(METRICS.font_small, mono=True))
         row.addWidget(self.column_summary, 1)
-        self.export_button = button(tr("Export"), "ghost", icon="export", colors=self.colors)
-        self.export_button.setToolTip(tr("Exports the table with its filters, search and order"))
+        # Solo iconos, en la ventana y en el panel (propietario, 2026-11-13), como la barra «Resultado»
+        self.export_button = icon_button(
+            "export", tr("Exports the table with its filters, search and order"), self.colors
+        )
         self.export_menu = export_menu(self, self.export)
         self.export_button.clicked.connect(lambda: popup_under(self.export_menu, self.export_button))
         row.addWidget(self.export_button)
-        self.load_button = button(tr("Load in QGIS"), "primary", icon="layers", colors=self.colors)
-        self.load_button.setToolTip(tr("Loads the table into QGIS (with its filters and search, if any)"))
+        self.load_button = icon_button(
+            "layers", tr("Loads the table into QGIS (with its filters and search, if any)"), self.colors
+        )
         self.load_menu = load_menu(
             self, self.colors, self.load_in_qgis, more=True, name=lambda: self.place.name
         )
@@ -461,13 +464,11 @@ class TablePage(QWidget):
 
     def set_compact(self, compact: bool) -> None:
         """Modo compacto (panel acoplado o ventana angosta; propietario, 2026-11-07): las mismas opciones, con
-        ícono y tooltip donde no cabe el texto; «Estructura» pasa a un ícono arriba; el detalle, cerrado."""
+        ícono y tooltip donde no cabe el texto; «Estructura» pasa a un ícono arriba; el detalle, cerrado.
+        «Exportar», «Cargar en QGIS» y «Ver SQL» son siempre solo iconos."""
         self.compact = compact
         self.data.set_compact(compact)
         self.search.setFixedWidth(110 if compact else 240)
-        for widget, text in ((self.export_button, tr("Export")), (self.load_button, tr("Load in QGIS"))):
-            widget.setText("" if compact else text)
-            widget.setAccessibleName(text)
         self.mode.setVisible(not compact)
         self.structure_button.setVisible(compact)
         self.structure_button.setChecked(self.mode.current == 1)

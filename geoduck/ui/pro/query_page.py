@@ -645,8 +645,6 @@ class QueryPage(QWidget):
         self.base.setMinimumWidth(80 if compact else 110)
         self.detail_button.setChecked(not compact)
         self.view.set_compact(compact)
-        for card in self.findChildren(ErrorCardView):  # «Copiar error», solo el ícono (#149)
-            card.set_compact(compact)
         for widget in self.result_head.findChildren(QPushButton):  # los iconos de la barra, más juntos
             if widget.property("pro") == "icon":
                 widget.setProperty("compact", compact)
@@ -1071,7 +1069,6 @@ class QueryPage(QWidget):
 
     def _card(self, card: ErrorCard, text: str) -> ErrorCardView:
         view = ErrorCardView(card, self.colors)
-        view.set_compact(getattr(self, "compact", False))
         view.fix_requested.connect(lambda fix, t=text: self.apply_fix(fix, t))
         if card.line is not None:
             offset = card.offset if card.offset is not None else 0

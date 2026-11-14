@@ -17,7 +17,7 @@ from geoduck.domain.sql_errors import ErrorCard, Fix
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
-from geoduck.ui.pro.widgets import button, label
+from geoduck.ui.pro.widgets import button, icon_button, label
 
 
 class ErrorCardView(QFrame):
@@ -78,17 +78,13 @@ class ErrorCardView(QFrame):
         self.go_button.clicked.connect(self.go_requested.emit)
         self.go_button.setVisible(card.line is not None)
         row.addWidget(self.go_button)
-        self.copy_button = button(tr("Copy error"), "ghost", icon="copy", colors=colors)
-        self.copy_button.setToolTip(tr("Copies DuckDB's original message (to search for it or report it)"))
+        # solo el ícono, en la ventana y en el panel (propietario, 2026-11-13); la ayuda dice qué copia
+        self.copy_button = icon_button(
+            "copy", tr("Copies DuckDB's original message (to search for it or report it)"), colors
+        )
         self.copy_button.clicked.connect(lambda: QGuiApplication.clipboard().setText(card.original))
         row.addWidget(self.copy_button)
         row.addStretch(1)
-
-    def set_compact(self, compact: bool) -> None:
-        """Modo compacto (panel de 320 px, #149): «Copiar error» queda solo con su ícono (su ayuda lo dice),
-        para que la tarjeta no se salga por la derecha."""
-        self.copy_button.setText("" if compact else tr("Copy error"))
-        self.copy_button.setAccessibleName(tr("Copy error"))
 
     def _toggled(self, open_: bool) -> None:
         self.original.setVisible(open_)
