@@ -16,9 +16,10 @@ _APP = None
 
 
 @pytest.fixture(autouse=True)
-def recovery_folder(tmp_path, monkeypatch):
+def recovery_folder(qgis_app, tmp_path, monkeypatch):
     """Cada prueba, su carpeta de copias de recuperación de cuadernos (ADR-0014): nunca la del perfil, y
-    ninguna copia de otra prueba aparece como «QGIS se cerró mal»."""
+    ninguna copia de otra prueba aparece como «QGIS se cerró mal». Con `qgis_app` primero (F-129): un
+    `QgsSettings` creado antes que la aplicación deja a QGIS 3.34 sin la autoridad de los SRC."""
     folder = tmp_path / "recuperacion"
     monkeypatch.setenv("GEODUCK_RECOVERY_DIR", str(folder))
     settings = qgis_core.QgsSettings()
