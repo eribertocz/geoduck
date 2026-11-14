@@ -222,6 +222,7 @@ class GeoDuckPlugin:
         self.validity: GeometryValidity | None = None
         self.send_action: SendToDuckDB | None = None
         self.drop_handler: PlacesDropHandler | None = None
+        self.link: Any = None
 
     def initGui(self) -> None:  # noqa: N802 - nombre exigido por QGIS
         self.dispatcher = QtDispatcher()
@@ -239,6 +240,9 @@ class GeoDuckPlugin:
         self.workspace = ProController(self.iface, self.content)
         self._map_view = MapView(self.iface)
         self.content.on_view_map = self._view_map  # «Ver en el mapa» en el aviso de cada carga
+        from geoduck.connected_link import ConnectedLink  # noqa: PLC0415 - importa qgis
+
+        self.link = ConnectedLink(self.iface, self.coordinator, self.loader, self.content)
 
         self.action = QAction(QIcon(ICON), tr("GeoDuck"), self.iface.mainWindow())
         self.action.setObjectName("geoduckToggleDock")  # nombre de G0–G4: conserva atajos del usuario
@@ -306,6 +310,9 @@ class GeoDuckPlugin:
             self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 
     def unload(self) -> None:
+        if self.link is not None:
+            self.link.unload()
+            self.link = None
         if self.drop_handler is not None:
             if hasattr(self.iface, "unregisterCustomDropHandler"):
                 self.iface.unregisterCustomDropHandler(self.drop_handler)

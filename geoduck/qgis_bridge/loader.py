@@ -11,7 +11,7 @@ import contextlib
 from collections.abc import Callable
 from typing import Any
 
-from qgis.core import QgsProject
+from qgis.core import QgsDataProvider, QgsProject
 
 from geoduck.domain.errors import ErrorCode, GeoDuckError
 from geoduck.domain.i18n import tr
@@ -21,7 +21,7 @@ from geoduck.qgis_bridge.connected import ConnectedLoad
 from geoduck.qgis_bridge.editing import EditSession, is_editable_layer
 from geoduck.qgis_bridge.memory import MemoryLoad
 from geoduck.qgis_bridge.multi import MultiLoad
-from geoduck.qgis_bridge.provider import KEY, register_provider
+from geoduck.qgis_bridge.provider import IN_MEMORY, KEY, decode_uri, encode_uri, register_provider
 from geoduck.qgis_bridge.snapshot import SnapshotLoad, unavailable_reason
 from geoduck.qgis_bridge.vsimem import VsimemRegistry
 
@@ -63,6 +63,7 @@ class BridgeLoader:
             edit.detach()
         self.edits.clear()
         sessions.clear()
+        self.refresh_availability()
 
     def unsaved_layers(self, database: str | None = None) -> list[str]:
         """Capas Conectadas editables con cambios sin guardar, de `database` o de cualquier base."""
@@ -106,7 +107,109 @@ class BridgeLoader:
         if previous is not None and previous is not engine:
             sessions.forget(previous)
         sessions.set_current(engine)
+        if engine is not None:
+            sessions.set_databases(engine, {})  # hasta que llegue su catálogo
+        self.refresh_availability()
         self.repaint_connected()
+
+    def database_saved(self, alias: str, path: str) -> None:
+        """La base en memoria `alias` ahora es el archivo `path`: sus capas lo recuerdan y, como cualquier
+        capa de un archivo, sobreviven a la sesión."""
+        wanted = alias.lower()
+        for layer_id in list(self.connected):
+            layer = self._project_ref.mapLayer(layer_id)
+            provider = layer.dataProvider() if layer is not None else None
+            if provider is None or not hasattr(provider, "bases"):
+                continue
+            if wanted not in {b.lower() for b in provider.bases()}:
+                continue
+            params = decode_uri(layer.source())
+            params["file"] = path
+            if params.get("source"):
+                params["scope"] = "attached"
+            edit = self.edits.pop(layer.id(), None)
+            if edit is not None:
+                edit.detach()
+            with sessions.without_resolving():
+                layer.setDataSource(encode_uri(params), layer.name(), KEY, QgsDataProvider.ProviderOptions())
+            if layer.isValid() and is_editable_layer(layer):
+                self.edits[layer.id()] = EditSession(layer, self._saved)
+
+    def catalog_changed(self, bases: dict[str, str | None] | None) -> None:
+        """Las bases abiertas en la sesión activa (alias → ruta o None): cada capa Conectada queda
+        disponible o no disponible según pueda leer su base (#183)."""
+        engine = sessions.current()
+        if engine is not None and bases is not None:
+            sessions.set_databases(engine, bases)
+        self.refresh_availability()
+
+    def refresh_availability(self) -> tuple[list[str], list[str]]:
+        """Recarga las capas Conectadas cuyo estado cambió. Devuelve (las que quedaron no disponibles,
+        las que volvieron), por nombre."""
+        lost: list[str] = []
+        back: list[str] = []
+        for layer_id in list(self.connected):
+            layer = self._project_ref.mapLayer(layer_id)
+            provider = layer.dataProvider() if layer is not None else None
+            if provider is None or not hasattr(provider, "unavailable_reason"):
+                continue
+            readable = provider.unavailable_reason() is None
+            if readable == layer.isValid():
+                continue
+            self._reload(layer)
+            (back if layer.isValid() else lost).append(layer.name())
+        return lost, back
+
+    def _reload(self, layer: Any) -> None:
+        """Vuelve a crear el proveedor con la misma URI: QGIS marca la capa válida o no disponible."""
+        edit = self.edits.pop(layer.id(), None)
+        if edit is not None:
+            edit.detach()
+        with sessions.without_resolving():
+            layer.setDataSource(layer.source(), layer.name(), KEY, QgsDataProvider.ProviderOptions())
+        if layer.isValid() and is_editable_layer(layer):
+            self.edits[layer.id()] = EditSession(layer, self._saved)
+        layer.triggerRepaint()
+
+    def in_memory(self) -> dict[str, list[str]]:
+        """Capas Conectadas que leen una base en memoria, por base: un proyecto guardado no podrá
+        reabrirlas (#183)."""
+        out: dict[str, list[str]] = {}
+        for layer_id in self.connected:
+            layer = self._project_ref.mapLayer(layer_id)
+            provider = layer.dataProvider() if layer is not None else None
+            if layer is None or provider is None or not layer.isValid():
+                continue
+            if getattr(provider, "file", None) != IN_MEMORY:
+                continue
+            for base in provider.bases():
+                out.setdefault(base, []).append(layer.name())
+        return out
+
+    def to_reopen(self) -> dict[tuple[str, str], list[Any]]:
+        """Capas no disponibles cuya base es un archivo: (alias, ruta) → capas (para «Abrir la base…»)."""
+        out: dict[tuple[str, str], list[Any]] = {}
+        for layer_id in self.connected:
+            layer = self._project_ref.mapLayer(layer_id)
+            provider = layer.dataProvider() if layer is not None else None
+            if layer is None or layer.isValid() or provider is None:
+                continue
+            file = getattr(provider, "file", None)
+            if file and file != IN_MEMORY and provider.database:
+                out.setdefault((provider.database, file), []).append(layer)
+        return out
+
+    def unavailable(self) -> dict[str, list[str]]:
+        """Capas Conectadas no disponibles, agrupadas por la base que leen."""
+        out: dict[str, list[str]] = {}
+        for layer_id in self.connected:
+            layer = self._project_ref.mapLayer(layer_id)
+            provider = layer.dataProvider() if layer is not None else None
+            if layer is None or layer.isValid() or provider is None or not hasattr(provider, "bases"):
+                continue
+            for base in provider.bases() or [""]:
+                out.setdefault(base, []).append(layer.name())
+        return out
 
     def repaint_connected(self) -> None:
         """Algo pudo cambiar los datos de la sesión: las capas Conectadas se vuelven a dibujar."""

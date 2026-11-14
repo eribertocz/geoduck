@@ -9,6 +9,7 @@ Vive en el hilo principal. Toda finalización del motor se reenvía al hilo prin
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future
@@ -27,6 +28,7 @@ from geoduck.app.events import (
     ColumnsUnavailable,
     DatabaseAttached,
     DatabaseDetached,
+    DatabaseSaved,
     DetachFailed,
     ExportFailed,
     ExportFinished,
@@ -38,6 +40,7 @@ from geoduck.app.events import (
     LoadProgressed,
     LoadStarted,
     PreviewsInvalidated,
+    SaveDatabaseFailed,
     ScriptFinished,
     ScriptRejected,
     SendFailed,
@@ -60,11 +63,13 @@ from geoduck.app.events import (
 )
 from geoduck.app.ports import Dispatcher, EngineFactory, LayerLoader, LayerSender, LoadTask, SessionEngine
 from geoduck.domain.catalog import (
+    AccessMode,
     AttachRequest,
     AttachResult,
     CatalogSnapshot,
     ColumnInfo,
     DetachResult,
+    OpenAction,
     catalog_key,
 )
 from geoduck.domain.completion import Vocabulary
@@ -247,13 +252,25 @@ class SessionCoordinator:
         """Veto de un `DETACH` real (tipo del parser de DuckDB) de una base con capas Conectadas sin
         guardar (§5.5). Las bases y capas se leen aquí, en el hilo principal; el veto corre en el motor."""
         blocked = self._loader.unsaved_by_database() if self._loader is not None else {}
-        if not blocked:
+        in_memory = (
+            {k.lower(): v for k, v in self._loader.in_memory().items()} if self._loader is not None else {}
+        )
+        if not blocked and not in_memory:
             return None
 
         def guard(statement: SqlStatement) -> str | None:
             target = detach_target(statement)
             if target is None:
                 return None
+            memory_layers = in_memory.get(target.lower(), []) if target else []
+            if memory_layers:  # #183: sus capas Conectadas perderían sus datos para siempre
+                names = ", ".join(f"«{n}»" for n in memory_layers[:3]) + (
+                    "…" if len(memory_layers) > 3 else ""
+                )
+                return tr(
+                    "Nothing was run: «{0}» is in memory and {1} reads it. Close it with «Close database» "
+                    "to save it as a file."
+                ).format(target, names)
             if not target:  # nombre ilegible: se protege todo
                 layers = [n for v in blocked.values() for n in v]
             else:
@@ -262,7 +279,7 @@ class SessionCoordinator:
                 return None
             names = ", ".join(f"«{n}»" for n in layers[:3]) + ("…" if len(layers) > 3 else "")
             return tr(
-                "Nothing was run: DETACH {0} with unsaved {1}. Save or discard those changes first."
+                "Nothing was run: DETACH {0} with unsaved {1}. Save or discard them in QGIS and try again."
             ).format(target or tr("(unknown database)"), names)
 
         return guard
@@ -286,6 +303,74 @@ class SessionCoordinator:
         detaching = engine.detach(alias)
         detaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_detached(engine, fut)))
 
+    def open_for_project(self, path: str, alias: str, timeout: float = 30.0) -> bool:
+        """Abre `path` como `alias` ahora mismo (#183): QGIS está leyendo un proyecto y sus capas Conectadas
+        necesitan la base antes de que termine. Inicia GeoDuck si hace falta. True si quedó abierta."""
+        if self.can_start:
+            self._sm.transition(SessionState.CONNECTING)
+            try:
+                engine = self._factory()
+                started = engine.start()
+                started.result(timeout)
+            except Exception as exc:
+                self._engine = None
+                self._fail(exc)
+                return False
+            self._engine = engine
+            self._on_started(engine, started)
+        current = self._engine
+        if self._sm.state is not SessionState.READY or current is None:
+            return False
+        self._sm.transition(SessionState.BUSY)
+        attaching = current.attach(
+            AttachRequest(
+                path, AccessMode.READ_WRITE, OpenAction.OPEN_EXISTING, alias=alias, replace_empty_memory=True
+            )
+        )
+        with contextlib.suppress(Exception):  # `_on_attached` informa el motivo con `AttachFailed`
+            attaching.result(timeout)
+        if not attaching.done():  # tarda más de lo razonable: termina como cualquier otra apertura
+            attaching.add_done_callback(
+                lambda fut: self._dispatcher.post(lambda: self._on_attached(current, fut))
+            )
+            return False
+        self._on_attached(current, attaching)
+        return attaching.exception() is None
+
+    def save_database_as(self, alias: str, path: str) -> None:
+        """«Guardar como archivo y cerrar…» (#183): la base en memoria `alias` pasa a un archivo nuevo, con
+        el mismo alias, y las capas Conectadas que la leen siguen funcionando."""
+        if self._sm.state is not SessionState.READY or self._engine is None:
+            raise SessionStateError(tr("GeoDuck is busy: wait until it finishes."))
+        self._guard_unsaved(tr("save «{0}»").format(alias), alias)
+        engine = self._engine
+        self._sm.transition(SessionState.BUSY)
+        saving = engine.save_database_as(alias, path)
+        saving.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_saved(engine, fut)))
+
+    def _on_saved(self, engine: SessionEngine, fut: Future[AttachResult]) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return
+        if exc is None:
+            self._sm.transition(SessionState.READY)
+            result = fut.result()
+            if self._loader is not None:
+                self._loader.database_saved(result.database.name, result.database.path or "")
+            self._catalog_generation += 1
+            self._catalog = result.catalog
+            self._emit(CatalogChanged(result.catalog))
+            self._emit(DatabaseSaved(result.database))
+            self._bump_epoch()
+            return
+        code, message = _describe(exc)
+        usable = self._end_failed_operation(exc)
+        self._emit(SaveDatabaseFailed(code, message))
+        if usable:
+            self.refresh_catalog()
+
     def close_reason(self, name: str) -> str | None:
         """Por qué no se puede cerrar la base `name` ahora (#168), o None si se puede. La interfaz deja
         «Cerrar base» en gris con este motivo; `detach_database` lo vuelve a comprobar."""
@@ -303,6 +388,16 @@ class SessionCoordinator:
         # Las capas Conectadas no bloquean (G3, qgis-bridge-spec §5.5): quedan «no disponibles» y vuelven al
         # reabrir la base; solo bloquean los cambios sin guardar (`_guard_unsaved`).
         return None
+
+    def unsaved_layers(self, name: str | None = None) -> list[str]:
+        """Capas Conectadas con cambios sin guardar (de la base `name`, o de todas)."""
+        return self._loader.unsaved_layers(name) if self._loader is not None else []
+
+    def unavailable_layers(self) -> list[str]:
+        """Capas Conectadas que ahora no están disponibles en QGIS (#183)."""
+        if self._loader is None:
+            return []
+        return sorted({name for names in self._loader.unavailable().values() for name in names})
 
     def layers_reading(self, name: str) -> list[str]:
         """Capas Conectadas de QGIS que leen la base `name` (para avisar al cerrar una base en memoria)."""
@@ -1170,6 +1265,11 @@ class SessionCoordinator:
         self._emit(SessionFailed(code, message))
 
     def _emit(self, event: AppEvent) -> None:
+        if isinstance(event, CatalogChanged) and self._loader is not None:
+            catalog = event.catalog
+            self._loader.catalog_changed(
+                {d.name: d.path for d in catalog.databases} if catalog is not None else None
+            )
         for listener in list(self._listeners):
             listener(event)
 

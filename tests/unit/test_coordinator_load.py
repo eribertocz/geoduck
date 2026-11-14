@@ -58,6 +58,18 @@ class FakeLoader:
     def session_changed(self, engine):
         self.__dict__.setdefault("sessions", []).append(engine)
 
+    def unavailable(self):
+        return {}
+
+    def in_memory(self):
+        return {}
+
+    def database_saved(self, alias, path):
+        self.__dict__.setdefault("saved", []).append((alias, path))
+
+    def catalog_changed(self, bases):
+        self.__dict__.setdefault("catalogs", []).append(bases)
+
     def start(self, engine, request, *, on_progress, on_done):
         if self.fail_start:
             raise GeoDuckError("no se pudo")

@@ -54,10 +54,12 @@ from geoduck.app.events import (
     ColumnsUnavailable,
     DatabaseAttached,
     DatabaseDetached,
+    DatabaseSaved,
     DetachFailed,
     ExportFailed,
     ExportFinished,
     ExportStarted,
+    SaveDatabaseFailed,
     SendFinished,
     SessionFailed,
     SessionInvalidated,
@@ -85,7 +87,7 @@ from geoduck.ui.pro.add_layers import AddLayers
 from geoduck.ui.pro.drag import accepts, drop_hint, file_paths, layer_ids, menu_title, place_job
 from geoduck.ui.pro.export_progress import ExportProgress
 from geoduck.ui.pro.history import History, HistoryPage
-from geoduck.ui.pro.load import QuickLoad, finished_lines, layer_name, load_menu
+from geoduck.ui.pro.load import QuickLoad, finished_lines, is_temporary, layer_name, load_menu
 from geoduck.ui.pro.load_window import LoadWindow
 from geoduck.ui.pro.open_files import open_in_qgis
 from geoduck.ui.pro.palette import CommandPalette, Entry
@@ -187,8 +189,22 @@ class ProWorkspace(QWidget):
         ask_files: Callable[[str, list[str]], list[str]] | None = None,
         ask_alias: Callable[[str], str | None] | None = None,
         ask_lose: Callable[[str, int], bool] | None = None,
+        ask_save_memory: Callable[[str, list[str], int, bool], str | None] | None = None,
+        tell_blocked: Callable[[str, str], None] | None = None,
     ) -> None:
         super().__init__()
+        #: #183: guardar una base en memoria que leen capas Conectadas, y «No se puede cerrar…».
+        self._ask_save_memory = ask_save_memory or self._save_memory_dialog
+        self._tell_blocked = tell_blocked or self._blocked_dialog
+        #: Barra de mensajes de QGIS (texto, nivel, [(botón, acción)]); la pone el complemento.
+        self.push_bar: Callable[[str, str, list[tuple[str, Callable[[], None]]]], None] | None = None
+        self._close_after_save = False
+        self._closing = False
+        #: Capas no disponibles tras el último catálogo, y la base que se está cerrando desde el menú.
+        self._unavailable: set[str] = set()
+        self._bases: dict[str, Any] = {}
+        self._detaching: str | None = None
+        self._resave_project: Callable[[], None] | None = None
         #: #168: el alias de una base nueva en memoria y confirmar cerrar una base en memoria con tablas.
         self._ask_alias = ask_alias
         self._ask_lose = ask_lose
@@ -352,6 +368,7 @@ class ProWorkspace(QWidget):
             more=single,
             name=(lambda: jobs[0]["name"]) if single else None,
             rename=None if single else lambda: self.to_qgis.open(jobs),
+            temporary=is_temporary([place.database for place in places]),
         )
         return menu
 
@@ -987,19 +1004,160 @@ class ProWorkspace(QWidget):
             self._guard(lambda: self._coordinator.attach_database(request))
 
     def detach(self, name: str) -> None:
-        """«Cerrar base» (#168). Una base en memoria con tablas pide confirmar: se pierden."""
+        """«Cerrar base» (#168, #183). Con cambios sin guardar, no se cierra. Una base en memoria que leen
+        capas Conectadas se guarda como archivo; con tablas y sin capas, pide confirmar: se pierden."""
+        unsaved = self._coordinator.unsaved_layers(name)
+        if unsaved:
+            self._tell_blocked(tr("The database «{0}» cannot be closed").format(name), _unsaved_text(unsaved))
+            return
         catalog = self._coordinator.catalog
         db = catalog.get(name) if catalog is not None else None
         if db is not None and db.in_memory and catalog is not None:
-            count = sum(1 for o in catalog.objects if not o.temporary and catalog_key(o.database) == db.key)
-            layers = len(self._coordinator.layers_reading(db.name)) if count else 0
-            if count and not self._confirm_lose(db.name, count, layers):
+            layers = self._coordinator.layers_reading(db.name)
+            if layers:
+                self.save_memory(db.name)
                 return
+            count = self._table_count(db.name)
+            if count and not self._confirm_lose(db.name, count):
+                return
+        self._detaching = name
         self._guard(lambda: self._coordinator.detach_database(name))
+        if self._coordinator.state is not SessionState.DETACHING:
+            self._detaching = None  # no empezó: el motivo ya se avisó
 
-    def _confirm_lose(self, name: str, count: int, layers: int = 0) -> bool:
-        """«¿Cerrar la base «memory»?»: sus tablas solo existen en memoria (maqueta `bases`); las capas
-        Conectadas que la leen se quedan sin datos para siempre."""
+    def _table_count(self, name: str) -> int:
+        catalog = self._coordinator.catalog
+        if catalog is None:
+            return 0
+        key = catalog_key(name)
+        return sum(1 for o in catalog.objects if not o.temporary and catalog_key(o.database) == key)
+
+    def save_memory(
+        self,
+        name: str,
+        *,
+        confirm: bool = True,
+        then_close: bool = False,
+        then: Callable[[], None] | None = None,
+    ) -> None:
+        """Ventana 3 de #183: la base en memoria `name` se guarda como archivo, con el mismo alias, y sus
+        capas siguen funcionando. `confirm=False` va directo a elegir el archivo; `then_close`: después
+        sigue «Cerrar sesión»; `then`: otra acción al terminar."""
+        layers = self._coordinator.layers_reading(name)
+        path = self._ask_save_memory(name, layers, self._table_count(name), confirm)
+        if not path:
+            self._close_after_save = False
+            return
+        self._close_after_save = then_close
+        self._resave_project = then
+        self._guard(lambda: self._coordinator.save_database_as(name, path))
+
+    def _save_memory_dialog(self, name: str, layers: list[str], tables: int, confirm: bool) -> str | None:
+        if confirm and not self._confirm_save_memory(name, layers, tables):
+            return None
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            tr("Save the database «{0}» as").format(name),
+            f"{name}.duckdb",
+            tr("Database") + " (*.duckdb)",
+            options=QFileDialog.Option.DontConfirmOverwrite,
+        )
+        if path and not path.lower().endswith((".duckdb", ".ddb", ".db")):
+            path += ".duckdb"
+        return path or None
+
+    def _confirm_save_memory(self, name: str, layers: list[str], tables: int) -> bool:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("GeoDuck"))
+        box.setText(tr("Save the database «{0}» before closing it").format(name))
+        box.setInformativeText(_save_memory_text(layers, tables))
+        box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        go = box.addButton(tr("Save as file and close…"), QMessageBox.ButtonRole.AcceptRole)
+        box.setDefaultButton(go)
+        box.exec()
+        return box.clickedButton() is go
+
+    def _blocked_dialog(self, title: str, text: str) -> None:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("GeoDuck"))
+        box.setText(title)
+        box.setInformativeText(text)
+        box.addButton(tr("Understood"), QMessageBox.ButtonRole.AcceptRole)
+        box.exec()
+
+    def _bar(
+        self, text: str, level: str = "info", actions: list[tuple[str, Callable[[], None]]] | None = None
+    ) -> None:
+        """Aviso en la barra de mensajes de QGIS (no bloquea); sin ella, en el pie."""
+        if self.push_bar is not None:
+            self.push_bar(text, level, actions or [])
+        else:
+            self.notify(text)
+
+    def _detached(self, database: Any) -> None:
+        """Situación 1 de #183: la base se cerró; si la leían capas Conectadas, quedaron no disponibles y
+        «Abrir de nuevo» la vuelve a abrir igual (ruta, alias y acceso)."""
+        layers = self._coordinator.layers_reading(database.name)
+        if not layers:
+            self.notify(tr("Database «{}» closed").format(database.name))
+            return
+        text = tr("Database «{0}» closed. {1}").format(database.name, _left_unavailable(layers))
+        actions: list[tuple[str, Callable[[], None]]] = []
+        if database.path:
+            request = AttachRequest(
+                database.path, database.access, OpenAction.OPEN_EXISTING, alias=database.name
+            )
+            actions.append((tr("Open again"), lambda: self.reopen(request)))
+        self._bar(text, "info", actions)
+
+    def reopen(self, request: AttachRequest) -> None:
+        """Vuelve a abrir una base (o inicia GeoDuck con ella)."""
+        if self._coordinator.can_start:
+            self._guard(lambda: self._coordinator.start_file_session(request))
+        else:
+            self._guard(lambda: self._coordinator.attach_database(request))
+
+    def _track_unavailable(self, catalog: Any) -> None:
+        """Una base cerrada con `DETACH` en el editor: el mismo aviso que «Cerrar base», con «Abrir de
+        nuevo». Otras capas que quedaron no disponibles se dicen en el pie."""
+        bases = {d.name: d for d in catalog.databases} if catalog is not None else {}
+        closed = [d for name, d in self._bases.items() if name not in bases]
+        self._bases = bases
+        now = set(self._coordinator.unavailable_layers())
+        lost = now - self._unavailable
+        self._unavailable = now
+        if not lost or self._detaching is not None or self._closing:
+            return
+        for database in closed:
+            told = set(self._coordinator.layers_reading(database.name))
+            if told & lost:
+                self._detached(database)
+                lost -= told
+        if lost:
+            self.notify(_left_unavailable(sorted(lost)))
+
+    def _session_closed(self) -> None:
+        """Situación 5 de #183: las capas Conectadas vuelven al iniciar GeoDuck y abrir sus bases."""
+        layers = self._coordinator.unavailable_layers()
+        if layers:
+            count = len(layers)
+            text = (
+                tr(
+                    "GeoDuck session closed. 1 layer is now unavailable; it comes back when you start "
+                    "GeoDuck and open its database."
+                )
+                if count == 1
+                else tr(
+                    "GeoDuck session closed. {0} layers are now unavailable; they come back when you "
+                    "start GeoDuck and open their databases."
+                ).format(count)
+            )
+            self._bar(text)
+
+    def _confirm_lose(self, name: str, count: int) -> bool:
+        """«¿Cerrar la base «memory»?»: sus tablas solo existen en memoria (maqueta `bases`)."""
         if self._ask_lose is not None:
             return self._ask_lose(name, count)
         box = QMessageBox(self)
@@ -1007,14 +1165,7 @@ class ProWorkspace(QWidget):
         box.setWindowTitle(tr("GeoDuck"))
         box.setText(tr("Close the database «{0}»?").format(name))
         tables = tr("1 table") if count == 1 else tr("{0} tables").format(count)
-        text = tr("It has {0} that only exist in memory: they will be lost.").format(tables)
-        if layers:
-            text += "\n" + (
-                tr("1 Connected QGIS layer reads it and will be left without data.")
-                if layers == 1
-                else tr("{0} Connected QGIS layers read it and will be left without data.").format(layers)
-            )
-        box.setInformativeText(text)
+        box.setInformativeText(tr("It has {0} that only exist in memory: they will be lost.").format(tables))
         lose = box.addButton(tr("Close and lose {0}").format(tables), QMessageBox.ButtonRole.DestructiveRole)
         box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
@@ -1051,6 +1202,18 @@ class ProWorkspace(QWidget):
         self._guard(self._coordinator.refresh_catalog)
 
     def close_session(self) -> None:
+        """«Cerrar sesión» (#183): todo o nada. Con cambios sin guardar no se cierra; cada base en memoria
+        que leen capas Conectadas se guarda antes como archivo (cancelar no cierra nada)."""
+        unsaved = self._coordinator.unsaved_layers()
+        if unsaved:
+            self._tell_blocked(tr("The session cannot be closed"), _unsaved_text(unsaved))
+            return
+        catalog = self._coordinator.catalog
+        for db in catalog.databases if catalog is not None else ():
+            if db.in_memory and self._coordinator.layers_reading(db.name):
+                self.save_memory(db.name, then_close=True)
+                return
+        self._closing = True
         self._guard(self._coordinator.request_close)
 
     def _guard(self, action: Callable[[], object]) -> None:
@@ -1355,12 +1518,16 @@ class ProWorkspace(QWidget):
 
     # -- eventos del coordinador ----------------------------------------------------------------------
 
-    def _on_event(self, event: AppEvent) -> None:  # noqa: PLR0912 - un caso por evento
+    def _on_event(self, event: AppEvent) -> None:  # noqa: PLR0912, PLR0915 - un caso por evento
         if isinstance(event, (SessionStateChanged, SessionStarted)):
             self._render()
+            if self._closing and self._coordinator.state is SessionState.DISCONNECTED:
+                self._closing = False
+                self._session_closed()
         elif isinstance(event, CatalogChanged):
             self.sidebar.render(event.catalog)
             self._render()
+            self._track_unavailable(event.catalog)
         elif isinstance(event, ColumnsListed):
             self.sidebar.set_columns(event.source, event.columns)
         elif isinstance(event, ColumnsUnavailable):
@@ -1375,10 +1542,24 @@ class ProWorkspace(QWidget):
         elif isinstance(event, DatabaseAttached):
             self.notify(tr("Database «{}» open").format(event.database.name))
         elif isinstance(event, DatabaseDetached):
-            self.notify(tr("Database «{}» closed").format(event.database.name))
+            self._detaching = None
+            self._detached(event.database)
+        elif isinstance(event, DatabaseSaved):
+            self.notify(tr("Database «{0}» saved as {1}").format(event.database.name, event.database.path))
+            again, self._resave_project = self._resave_project, None
+            if again is not None:
+                again()
+            if self._close_after_save:
+                self._close_after_save = False
+                self.close_session()
+        elif isinstance(event, SaveDatabaseFailed):
+            self._close_after_save = False
+            self._resave_project = None
+            self.notify(tr("The database was not saved.") + f" {event.message}", error=True)
         elif isinstance(event, AttachFailed):
             self.notify(tr("The database was not attached.") + f" {event.message}", error=True)
         elif isinstance(event, DetachFailed):
+            self._detaching = None
             self.notify(tr("The database was not detached.") + f" {event.message}", error=True)
         elif isinstance(event, ActivationFailed):
             self.notify(tr("The active database did not change.") + f" {event.message}", error=True)
@@ -1501,3 +1682,38 @@ class HoldToOpen(QObject):
             self._dropped(event)
             return True
         return False
+
+
+def _names(layers: list[str], limit: int = 5) -> str:
+    shown = ", ".join(layers[:limit])
+    return shown + (tr(" and {0} more").format(len(layers) - limit) if len(layers) > limit else "")
+
+
+def _left_unavailable(layers: list[str]) -> str:
+    if len(layers) == 1:
+        return tr("1 layer is now unavailable: {0}.").format(layers[0])
+    return tr("{0} layers are now unavailable: {1}.").format(len(layers), _names(layers))
+
+
+def _unsaved_text(layers: list[str]) -> str:
+    if len(layers) == 1:
+        return tr("The layer {0} has unsaved changes. Save or discard them in QGIS and try again.").format(
+            layers[0]
+        )
+    return tr("The layers {0} have unsaved changes. Save or discard them in QGIS and try again.").format(
+        _names(layers)
+    )
+
+
+def _save_memory_text(layers: list[str], tables: int) -> str:
+    used = (
+        tr("It only exists in memory and the layer {0} uses it.").format(layers[0])
+        if len(layers) == 1
+        else tr("It only exists in memory and the layers {0} use it.").format(_names(layers))
+    )
+    kept = tr("the layer keeps working") if len(layers) == 1 else tr("the layers keep working")
+    if tables == 1:
+        saved = tr("It will be saved as a file, with its table, and {0}.").format(kept)
+    else:
+        saved = tr("It will be saved as a file, with its {0} tables, and {1}.").format(tables, kept)
+    return f"{used} {saved}"

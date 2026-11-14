@@ -25,7 +25,7 @@ from qgis.PyQt.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
 
 from geoduck.domain.sql_text import quote_identifier
 from geoduck.ui.i18n import tr
-from geoduck.ui.pro.load import layer_name, load_menu
+from geoduck.ui.pro.load import is_temporary, layer_name, load_menu
 from geoduck.ui.pro.places import QUERY, VIEW, Place
 from geoduck.ui.pro.widgets import LOGO
 
@@ -156,6 +156,7 @@ class PlacesDropHandler(QgsCustomDropHandler):
             title=menu_title(len(places)),
             name=(lambda: jobs[0]["name"]) if single else None,
             rename=None if single else lambda: workspace.to_qgis.open(jobs),
+            temporary=is_temporary([place.database for place in places]),
         )
         self.menu = menu
         self.menu.popup(at)  # Esc o un clic fuera cierran el menú sin cargar nada

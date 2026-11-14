@@ -70,6 +70,10 @@ class SessionEngine(Protocol):
         """DetachDatabase real. Devuelve la base desadjuntada y el catálogo resultante."""
         ...
 
+    def save_database_as(self, alias: str, path: str) -> Future[AttachResult]:
+        """Copia la base `alias` a un archivo nuevo y la reemplaza por él, con el mismo alias (#183)."""
+        ...
+
     def activate(self, name: str) -> Future[CatalogSnapshot]:
         """«Usar como base activa» (#168): `USE name` y el catálogo resultante."""
         ...
@@ -212,6 +216,23 @@ class LayerLoader(Protocol):
     def layers_reading(self, database: str) -> list[str]:
         """Capas Conectadas del proyecto que leen de `database` (su base o la base donde se ejecutó su
         consulta). Bloquean cerrar esa base (#168)."""
+        ...
+
+    def in_memory(self) -> dict[str, list[str]]:
+        """Capas Conectadas que leen una base en memoria, por base (#183)."""
+        ...
+
+    def unavailable(self) -> dict[str, list[str]]:
+        """Capas Conectadas no disponibles, por la base que leen (#183)."""
+        ...
+
+    def database_saved(self, alias: str, path: str) -> None:
+        """La base en memoria `alias` ahora es el archivo `path`: sus capas Conectadas lo recuerdan."""
+        ...
+
+    def catalog_changed(self, bases: dict[str, str | None] | None) -> None:
+        """Bases abiertas en la sesión activa (alias → ruta, None en memoria): las capas Conectadas quedan
+        disponibles o no disponibles (#183)."""
         ...
 
     def session_changed(self, engine: SessionEngine | None) -> None:

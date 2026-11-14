@@ -43,9 +43,10 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   Todas las pestañas ejecutan en ella y lo nuevo va ahí («Enviar a GeoDuck», «Importar archivos»); otra
   base, con el nombre completo en el SQL. Una consulta guardada con otra base no la cambia: se ofrece
   «Activar «base»». **Cerrar base**: cualquiera, también la `memory` del inicio, salvo la activa y la
-  última (en gris, con el motivo); en memoria con tablas, pide confirmar. **«+» › Nueva base en memoria…**,
-  con alias («memory» o el siguiente libre). Las capas Conectadas no impiden cerrar (G3: quedan «no
-  disponibles» y vuelven al reabrir); sí los cambios sin guardar.
+  última (en gris, con el motivo); en memoria con tablas y sin capas, pide confirmar. **«+» › Nueva base en
+  memoria…**, con alias («memory» o el siguiente libre). Con capas Conectadas, ver qgis-bridge-spec §5.5
+  (#183): una base de archivo se cierra y sus capas quedan no disponibles; una en memoria se guarda antes
+  como archivo; los cambios sin guardar lo impiden.
 - **Iniciar y cerrar** (propietario, 2026-11-06; nombre de #142): **«Iniciar GeoDuck»** (botón grande en el
   centro cuando no está iniciado) y **«Cerrar sesión»** (menú «⋯»). Sin iniciar, **todo está en gris** salvo
   «Iniciar GeoDuck», «Abrir base…», «Crear base…», «Diagnóstico» y «Acerca de».
