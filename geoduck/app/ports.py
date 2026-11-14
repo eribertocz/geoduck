@@ -124,6 +124,14 @@ class SessionEngine(Protocol):
 
     def cancel(self, op_id: int) -> bool: ...
 
+    def progress(self) -> float | None:
+        """Avance de la operación en curso (0–100) según DuckDB, o None."""
+        ...
+
+    def submit(self, fn: Any, *, priority: bool = ..., database: str | None = None) -> OperationHandle:
+        """Encola una operación del motor (aquí: guardar el resultado de una consulta cara, #170)."""
+        ...
+
     def query(
         self, sql: str, *, max_rows: int = ..., priority: bool = ..., database: str | None = None
     ) -> OperationHandle:

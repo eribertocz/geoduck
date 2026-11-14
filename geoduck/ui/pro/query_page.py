@@ -16,6 +16,8 @@ Guardar escribe el SQL tal cual en un `.sql`; una consulta con archivo se autogu
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import itertools
 import json
 import time
 from collections.abc import Callable
@@ -59,7 +61,7 @@ from geoduck.app.events import (
 )
 from geoduck.domain.browse import PAGE, Browse, page_label
 from geoduck.domain.catalog import CatalogSnapshot, ColumnInfo
-from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.errors import GeoDuckError, OperationCancelledError
 from geoduck.domain.export import ExportFormat
 from geoduck.domain.files import editor_readable, format_for, from_sql, gdal_readable
 from geoduck.domain.i18n import decimal
@@ -86,7 +88,7 @@ from geoduck.ui.pro import icons
 from geoduck.ui.pro.editor_tools import SHORTCUTS, EditorTools, FindBar
 from geoduck.ui.pro.error_card import ErrorCardView
 from geoduck.ui.pro.grid import DataGrid
-from geoduck.ui.pro.load import export_menu, export_query, layer_name, load_menu, popup_under
+from geoduck.ui.pro.load import CONNECTED, export_menu, export_query, layer_name, load_menu, popup_under
 from geoduck.ui.pro.places import QUERY, Place
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.table_page import tighten
@@ -94,6 +96,20 @@ from geoduck.ui.pro.tokens import METRICS, Colors
 from geoduck.ui.pro.widgets import Lake, Segmented, button, icon_button, label, spacer
 from geoduck.ui.widgets import line_index_from, offset_from
 
+#: Una consulta que tardó más que esto es cara: su resultado se guarda una vez (#170, performance-spec §8:
+#: «el total se cuenta en ≤ 300 ms» separa barata de cara).
+SAVE_MS = 300
+
+
+def SAVE_HELP() -> str:  # noqa: N802 - texto fijo, traducido al pedirlo
+    """La ayuda de «Preparando…» (#170)."""
+    return tr("The result is saved once: scrolling, sorting, exporting and loading do not repeat the query")
+
+
+#: Cada cuánto se actualiza «Preparando… 64 %».
+SAVE_TICK_MS = 300
+#: Nombres únicos de los resultados guardados en la sesión (`temp.geoduck_result_<n>`).
+_SAVED = itertools.count(1)
 #: Pausa tras dejar de escribir antes del aviso de sintaxis de DuckDB (#145).
 SYNTAX_MS = 500
 #: Más caracteres que esto no se analizan mientras se escribe (se verá al ejecutar).
@@ -178,6 +194,11 @@ class QueryPage(QWidget):
         #: Página de cada resultado con tabla (por `id`): desplazamiento, filas y total (None: sin contar).
         #: Filtros y orden de cada resultado mostrado (por `id`), mientras no se vuelva a ejecutar (#144).
         self._browses: dict[int, Browse] = {}
+        #: #170: los resultados guardados de esta pestaña: id del resultado → nombre, operación y si sigue.
+        self._saves: dict[int, dict[str, Any]] = {}
+        self._save_clock = QTimer(self)
+        self._save_clock.setInterval(SAVE_TICK_MS)
+        self._save_clock.timeout.connect(self._show_save)
         self._database: str | None = None
         self.detail_open = True
         self.compact = False
@@ -455,7 +476,16 @@ class QueryPage(QWidget):
         row.setSpacing(10)
         self.range_label = label("", "muted")
         row.addWidget(self.range_label)
-        # #170: sin ‹ ›; las filas se recorren desplazándose (el contador dice cuáles se ven)
+        # #170: sin ‹ ›; las filas se recorren desplazándose (el contador dice cuáles se ven). Mientras se
+        # guarda el resultado de una consulta cara: «⟳ Preparando… 64 % · Cancelar» (el detalle, en la ayuda)
+        self.save_status = label("", "accent")
+        self.save_status.hide()
+        row.addWidget(self.save_status)
+        self.save_cancel = label(f"<a href='#'>{tr('Cancel')}</a>", "link")
+        self.save_cancel.setTextFormat(Qt.TextFormat.RichText)
+        self.save_cancel.linkActivated.connect(lambda _l: self.cancel_save())
+        self.save_cancel.hide()
+        row.addWidget(self.save_cancel)
         # el resumen de la columna elegida (#144, punto 11): suma, promedio, mínimo, máximo y nulos
         self.column_summary = label("", "muted")
         self.column_summary.setFont(ui_font(METRICS.font_small, mono=True))
@@ -569,6 +599,7 @@ class QueryPage(QWidget):
             self.say(exc.message)
             return
         self.say("")  # la acción siguiente borra el aviso anterior (#177)
+        self.forget_saved()  # #170: el resultado guardado de la ejecución anterior se borra
         self.run = Run(run_id, text)
         self.set_result_open(True)  # al ejecutar, el resultado se abre solo (#144, punto 10)
         self.editor.status.clear()  # las marcas son de la ejecución anterior (#139)
@@ -920,12 +951,98 @@ class QueryPage(QWidget):
             browse = Browse("", "", "", columns, has_rowid=False, subquery=load_sql(result.statement.text))
             self._browses[id(result)] = browse
         total = None if preview.truncated else len(preview.rows)
-        self.data.set_browse(browse, rows=preview.rows, total=total, replayable=replayable)
+        # #170: una consulta cara (tardó más de `SAVE_MS`) se guarda una vez y no se cuenta repitiéndola
+        expensive = replayable and total is None and bool(browse.subquery) and result.duration_ms > SAVE_MS
+        # (ya guardado, `browse` lee de `temp` y el total se cuenta al instante)
+        self.data.set_browse(
+            browse, rows=preview.rows, total=total, replayable=replayable, count=not expensive
+        )
+        if expensive and id(result) not in self._saves:
+            self._start_save(result, browse)
         self.filter_button.setEnabled(replayable)
         usable = replayable and self._coordinator.state is SessionState.READY
         self.export_button.setEnabled(usable)
         self.load_button.setEnabled(usable and self._loader is not None)
         self._update_range(result)
+
+    # -- resultado guardado (#170, performance-spec §8) -------------------------------------------------
+
+    def _start_save(self, result: StatementResult, browse: Browse) -> None:
+        """Guarda el resultado una vez en `temp.geoduck_result_<n>`, en segundo plano y con «Cancelar»."""
+        name = f"geoduck_result_{next(_SAVED)}"
+        try:
+            op_id = self._coordinator.save_result(
+                name,
+                browse.subquery,
+                lambda outcome: self._saved(result, name, outcome),
+                database=result.database,
+            )
+        except GeoDuckError:
+            self.data.count_total()  # sin guardar: se cuenta como una consulta barata
+            return
+        self._saves[id(result)] = {"name": name, "op": op_id, "saving": True}
+        self._save_clock.start()
+        self._show_save()
+
+    def _show_save(self) -> None:
+        saving = [s for s in self._saves.values() if s["saving"]]
+        result = self.current_result
+        mine = result is not None and self._saves.get(id(result), {}).get("saving", False)
+        if not saving or not mine:
+            self.save_status.hide()
+            self.save_cancel.hide()
+            if not saving:
+                self._save_clock.stop()
+            return
+        progress = self._coordinator.query_progress()
+        text = "⟳ " + tr("Preparing…")
+        if progress:  # DuckDB 1.5 dice siempre 0: entonces solo «Preparando…»
+            text += f" {round(progress)} %"
+        self.save_status.setText(text)
+        self.save_status.setToolTip(SAVE_HELP())
+        self.save_status.show()
+        self.save_cancel.show()
+
+    def cancel_save(self) -> None:
+        result = self.current_result
+        save = self._saves.get(id(result)) if result is not None else None
+        if save is not None and save["saving"]:
+            self._coordinator.cancel_operation(save["op"])
+
+    def _saved(self, result: StatementResult, name: str, outcome: Any) -> None:
+        save = self._saves.get(id(result))
+        if save is None or save["name"] != name or self._closed:
+            self._coordinator.drop_result(name)  # ya no hace falta (otra ejecución o pestaña cerrada)
+            return
+        save["saving"] = False
+        self._show_save()
+        browse = self._browses.get(id(result))
+        if isinstance(outcome, BaseException) or browse is None:
+            del self._saves[id(result)]
+            if isinstance(outcome, OperationCancelledError):
+                self.say(tr("Saving the result was cancelled: rows are read by running the query again"))
+            elif isinstance(outcome, BaseException):
+                text = outcome.message if isinstance(outcome, GeoDuckError) else str(outcome)
+                self.say(tr("The result could not be saved: {0}").format(text))
+            if result is self.current_result:
+                self.data.count_total()
+            return
+        saved = dataclasses.replace(
+            browse, database="temp", schema="main", name=name, has_rowid=True, subquery=""
+        )
+        self._browses[id(result)] = saved
+        if result is self.current_result:  # desde ahora, todo se lee del resultado guardado
+            self.data.browse = saved
+            self.data.reload(keep_offset=True)
+
+    def forget_saved(self) -> None:
+        """Borra los resultados guardados de esta pestaña (al volver a ejecutar o al cerrarla)."""
+        for save in self._saves.values():
+            if save["saving"]:
+                self._coordinator.cancel_operation(save["op"])
+            self._coordinator.drop_result(save["name"])
+        self._saves = {}
+        self._show_save()
 
     def _data_changed(self) -> None:
         """La grilla cambió de página, total o filtros: el pie, el resumen y lo que recuerda el resultado."""
@@ -1221,12 +1338,25 @@ class QueryPage(QWidget):
         )
         self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
-    def _result_sql(self, result: StatementResult) -> str:
+    def _result_sql(self, result: StatementResult, *, connected: bool = False) -> str:
         """La consulta de «Exportar» y «Cargar en QGIS»: la del resultado; con filtros u orden en la grilla
         (#144), la consulta completa que los aplica (la de «Ver SQL»)."""
         browse = self.data.browse if self.current_result is result else None
-        if browse is not None and (browse.filtered or browse.order is not None):
-            return browse.display_sql()
+        saved = browse is not None and browse.database == "temp" and not browse.subquery
+        if browse is not None and saved and connected:
+            # «Conectada» lee siempre de la consulta original: el resultado guardado se borra al volver a
+            # ejecutar o al cerrar la pestaña, y la capa quedaría sin datos (#170)
+            browse = dataclasses.replace(
+                browse,
+                database="",
+                schema="",
+                name="",
+                has_rowid=False,
+                subquery=load_sql(result.statement.text),
+            )
+            saved = False
+        if browse is not None and (browse.filtered or browse.order is not None or saved):
+            return browse.display_sql()  # #170: el resultado guardado, sin ejecutar la consulta otra vez
         return result.statement.text
 
     def _proposed_layer_name(self) -> str:
@@ -1242,7 +1372,8 @@ class QueryPage(QWidget):
         if result is None or not result.statement.replayable or self._loader is None:
             return
         name = layer_name(self.load_menu, self._proposed_layer_name())
-        self._loader(self._result_sql(result), name, kind, database=result.database)
+        sql = self._result_sql(result, connected=kind == CONNECTED)
+        self._loader(sql, name, kind, database=result.database)
         self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
     # -- archivo --------------------------------------------------------------------------------------
@@ -1416,6 +1547,8 @@ class QueryPage(QWidget):
         """La pestaña se cierra: deja de escuchar; lo pendiente se guarda en su archivo."""
         self._closed = True
         self._autosave.stop()
+        self._save_clock.stop()
+        self.forget_saved()
         self.save_if_saved()
         self._unsubscribe()
 

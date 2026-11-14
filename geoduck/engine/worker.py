@@ -569,6 +569,19 @@ class SessionWorker:
                 self._interrupt_current_locked()
             return True
 
+    def progress(self) -> float | None:
+        """El avance de la operación en curso según DuckDB (0–100), o None si no lo sabe (#170: «Preparando
+        el resultado… 64 %»). `query_progress()` se puede pedir desde otro hilo mientras la consulta corre."""
+        with self._lock:
+            con = self._con if self._current is not None else None
+        if con is None:
+            return None
+        try:
+            value = float(con.query_progress())
+        except Exception:
+            return None
+        return value if value >= 0 else None
+
     def cancel_current(self) -> bool:
         with self._lock:
             job = self._current

@@ -794,3 +794,79 @@ def test_a_syntax_error_is_underlined_while_typing_without_running(coordinator):
     page.check_syntax()
     wait_for(lambda: False, 0.3)
     assert not page.editor.status.shown
+
+
+def test_an_expensive_result_is_saved_once_and_never_run_again(coordinator, monkeypatch):
+    """#170 (E2b, performance-spec §8): una consulta cara se guarda una vez en `temp`; desplazarse, ordenar,
+    contar y exportar leen de ahí sin repetirla; al volver a ejecutar, el guardado anterior se borra."""
+    from geoduck.ui.pro import query_page as module
+
+    monkeypatch.setattr(module, "SAVE_MS", -1)  # «cara» siempre: sin depender del tiempo de la máquina
+    reads = []
+    original = coordinator.read_rows
+
+    def logged(sql, max_rows, done, **kwargs):
+        reads.append(sql)
+        return original(sql, max_rows, done, **kwargs)
+
+    monkeypatch.setattr(coordinator, "read_rows", logged)
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n, 'v' || range AS v FROM range(1000);")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert wait_for(lambda: page.data.browse.database == "temp" and page.data.total == 1000, 10)
+    first = page.data.browse.name
+    assert first.startswith("geoduck_result_")
+    assert wait_for(lambda: page.data.dense)  # se lee por posición (`rowid` seguidos)
+    reads.clear()
+    page.go(900)
+    assert wait_for(lambda: page.model.row(0) == (900, "v900"))
+    page.header.sort_requested.emit(0)  # ordenar: DuckDB sobre el resultado guardado
+    assert wait_for(lambda: page.data.browse.order == ("n", True) and page.model.row(0) is not None)
+    assert reads and not any("range(1000)" in sql for sql in reads)  # nunca la consulta otra vez
+    assert "geoduck_result_" in page._result_sql(page.current_result)  # exportar y «Copia», también
+    connected = page._result_sql(page.current_result, connected=True)  # «Conectada»: la consulta original
+    assert "geoduck_result_" not in connected and "range(1000)" in connected and "ORDER BY" in connected
+    page.execute(RunScope.ALL)  # otra ejecución: el guardado anterior se borra
+    assert wait_for(lambda: done(coordinator, page) and page.data.browse.name not in ("", first), 10)
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    left = []
+    coordinator.read_rows(
+        "SELECT count(*) FROM duckdb_tables() WHERE temporary AND table_name LIKE 'geoduck_result_%'",
+        1,
+        left.append,
+    )
+    assert wait_for(lambda: left) and left[0].rows == ((1,),)  # solo el de la ejecución nueva
+    page.close_page()  # al cerrar la pestaña, también se borra
+    left.clear()
+    assert wait_for(lambda: coordinator.state is SessionState.READY)
+    coordinator.read_rows(
+        "SELECT count(*) FROM duckdb_tables() WHERE temporary AND table_name LIKE 'geoduck_result_%'",
+        1,
+        left.append,
+    )
+    assert wait_for(lambda: left) and left[0].rows == ((0,),)
+
+
+def test_a_cheap_result_is_not_saved_and_cancelling_a_save_counts_instead(coordinator, monkeypatch):
+    from geoduck.ui.pro import query_page as module
+
+    ws = workspace(coordinator)
+    page = new_query(ws, "SELECT range AS n FROM range(1000);")
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and page.data.total == 1000)
+    assert page.data.browse.subquery and not page._saves  # barata: se repite con ventana, sin guardar
+    monkeypatch.setattr(module, "SAVE_MS", -1)
+    started = []
+    monkeypatch.setattr(coordinator, "save_result", lambda *a, **k: started.append(a) or 999_999)
+    page.execute(RunScope.ALL)
+    assert wait_for(lambda: done(coordinator, page) and started)
+    assert page.save_status.isVisibleTo(page) and page.save_cancel.isVisibleTo(page)
+    assert page.save_status.text().startswith("⟳ " + tr("Preparing…"))
+    name = started[0][0]
+    from geoduck.domain.errors import OperationCancelledError
+
+    page._saved(page.current_result, name, OperationCancelledError("x"))  # «Cancelar»
+    assert not page.save_status.isVisibleTo(page) and not page._saves
+    assert page.hint.text() == tr("Saving the result was cancelled: rows are read by running the query again")
+    assert wait_for(lambda: page.data.total == 1000)  # se cuenta repitiendo la consulta
