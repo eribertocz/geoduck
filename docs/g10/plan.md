@@ -43,4 +43,5 @@ regresiones G0–G9. Tag y release `v0.11.0a1` solo los hace el propietario.
 | E2b Resultado guardado de una consulta cara (#170) | Fusionado (#180): se guarda una vez en `temp` (> 300 ms), «Preparando… N % · Cancelar», todo se lee de ahí; el tope de disco va con E3 (#172, `max_temp_directory_size`) | — |
 | E2 (resto) «Cancelar» en todo lo largo (#171, #157) | En revisión: p95 ≤ 66 ms en todo con 1 millón de filas (1.5 y 2.0), sin restos; BEGIN dentro del bloque que revierte; leer archivos se cancela al cerrar | — |
 | E3 Memoria (#172) | Fusionado (#185): presupuesto de la Copia (mitad de la RAM libre, estimado tras 10 000 filas), ventana «no cabe como Copia» con «Cargar como Conectada», `temp_directory` propio por sesión con tope de disco, «Diagnóstico» | — |
-| Interfaz sin «DuckDB» (#184) | En revisión: textos aprobados (2026-11-14); solo «Acerca de» y los componentes de «Diagnóstico»; prueba que lo comprueba | — |
+| Interfaz sin «DuckDB» (#184) | Fusionado (#186): textos aprobados (2026-11-14); solo «Acerca de» y los componentes de «Diagnóstico»; prueba que lo comprueba | — |
+| Capas Conectadas al cerrar su base (#183) | En revisión: nunca huérfanas; no disponibles nativas de QGIS, guardar una base en memoria como archivo, abrir las bases al abrir un proyecto, identidad del archivo, tablas temporales solo Copia | — |

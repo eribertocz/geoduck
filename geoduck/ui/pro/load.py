@@ -52,6 +52,17 @@ from geoduck.ui.pro.tokens import Colors
 from geoduck.ui.pro.widgets import button, label
 
 COPY, CONNECTED = "copy", "connected"
+
+
+def TEMPORARY_TEXT() -> str:  # noqa: N802 - un texto fijo, traducido al pedirlo
+    return tr("Temporary tables disappear when the session closes: they only load as a Copy.")
+
+
+def is_temporary(databases: list[str]) -> bool:
+    """Alguna de las bases es la de las tablas temporales de la sesión."""
+    return any(d.lower() == "temp" for d in databases)
+
+
 #: «Más opciones…» (E6b): la misma carga, con la ventana de opciones antes.
 OPTIONS = "options"
 
@@ -197,6 +208,7 @@ def load_menu(
     more: bool = False,
     name: Callable[[], str] | None = None,
     rename: Callable[[], None] | None = None,
+    temporary: bool = False,
 ) -> QMenu:
     """«Cargar en QGIS ▾»: «Copia» y «Conectada», cada una con su explicación de una línea. Con `title`
     (tablas soltadas en el mapa, E5), una cabecera arriba («3 tablas · ¿cómo cargarlas?»). Con `more` (E6b),
@@ -222,12 +234,17 @@ def load_menu(
         _rename_row(menu, rename)
     copy_text = tr("Copies the data into QGIS memory; it no longer depends on the database")
     connected_text = tr("Reads straight from the database without copying; edits are saved in the database")
+    if temporary:
+        connected_text = TEMPORARY_TEXT()
     for kind, icon, mode, text in (
         (COPY, "layers", tr("Copy (mode)"), copy_text),
         (CONNECTED, "database", tr("Connected"), connected_text),
     ):
         row = _Row(icon, mode, text, colors)
         action = QWidgetAction(menu)
+        if kind == CONNECTED and temporary:  # #183: una tabla temporal desaparece con la sesión
+            row.setEnabled(False)
+            action.setEnabled(False)
         action.setDefaultWidget(row)
         action.setText(mode)
         action.triggered.connect(lambda _c=False, k=kind: pick(k))

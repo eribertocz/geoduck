@@ -84,12 +84,12 @@ def test_detach_makes_the_layer_unavailable_and_attach_brings_it_back(session, d
     assert decode_uri(layer.source())["scope"] == "attached"
     assert count(layer) == 300
     detach(session)
-    assert layer.isValid()
-    assert count(layer) == 0  # vacía, sin excepciones
-    assert layer.dataProvider().unavailable
+    assert not layer.isValid()  # no disponible en QGIS (#183), con su nombre y en el proyecto
+    assert layer.name() == "t" and QgsProject.instance().mapLayer(layer.id()) is layer
+    assert count(layer) == 0
     attach(session, database)
+    assert layer.isValid()
     assert count(layer) == 300
-    assert not layer.dataProvider().unavailable
 
 
 def test_unsaved_edits_block_detach_and_close(session, database):
@@ -114,14 +114,14 @@ def test_close_makes_layers_unavailable_and_a_new_session_reconnects_attached_on
     assert count(in_memory) == 1
     session.coordinator.close_session().result(TIMEOUT)
     assert wait_for(lambda: session.coordinator.state is SessionState.DISCONNECTED, TIMEOUT)
-    assert count(attached) == 0 and count(in_memory) == 0
+    assert not attached.isValid() and not in_memory.isValid()
     session.coordinator.start_memory_session()
     assert wait_for(lambda: session.coordinator.state is SessionState.READY, TIMEOUT)
     session.engine = session.coordinator._engine
     session.sql("CREATE TABLE m AS SELECT 99 AS id, 'POINT(5 5)'::GEOMETRY AS g")
-    assert count(in_memory) == 0  # :memory: no sobrevive: nunca muestra la tabla homónima de otra sesión
+    assert not in_memory.isValid()  # :memory: no sobrevive: nunca muestra la tabla homónima de otra sesión
     attach(session, database)
-    assert count(attached) == 300
+    assert attached.isValid() and count(attached) == 300
 
 
 def test_reopened_project_reconnects_when_the_database_is_attached(session, database, tmp_path):
@@ -135,10 +135,10 @@ def test_reopened_project_reconnects_when_the_database_is_attached(session, data
     detach(session)
     assert project.read(path)
     reopened = project.mapLayer(layer_id)
-    assert reopened is not None and reopened.isValid() and reopened.providerType() == "geoduck"
-    assert count(reopened) == 0  # sin la base adjunta: no disponible
+    assert reopened is not None and reopened.providerType() == "geoduck"
+    assert not reopened.isValid()  # sin la base adjunta: no disponible
     attach(session, database)
-    assert count(reopened) == 300
+    assert reopened.isValid() and count(reopened) == 300
     assert reopened.dataProvider().editable
     assert reopened.startEditing()  # el guardado atómico vuelve a estar conectado
     reopened.changeAttributeValue(2, reopened.fields().indexOf("nombre"), "tras reabrir")
@@ -185,7 +185,7 @@ def test_g3_gate_walkthrough(session, database):
     detach(session)
     assert count(layers[LoadMode.MEMORY]) == 300
     assert count(layers[LoadMode.SNAPSHOT]) == 300
-    assert count(connected) == 0 and connected.dataProvider().unavailable
+    assert not connected.isValid()
     attach(session, database)
     assert count(connected) == 300
     assert next(connected.getFeatures(QgsFeatureRequest(5)))["nombre"] == "editada"

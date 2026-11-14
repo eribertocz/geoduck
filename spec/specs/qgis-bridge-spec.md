@@ -175,14 +175,30 @@ confirmó**, y si no, conserva el búfer entero para corregir o reintentar. Tras
 **Resolución de conflictos:** el usuario puede volver a leer las entidades en conflicto y reintentar, lo
 que sobrescribe a sabiendas, o descartar sus cambios.
 
-### 5.5 Ciclo de vida
+### 5.5 Ciclo de vida (#183)
+
+**Regla:** una capa Conectada **nunca queda huérfana**. O puede leer su base, o QGIS la marca **no
+disponible** (capa inválida: ⚠ de QGIS, sin entidades, con su nombre, estilo, SRC y lugar en el árbol), con
+un camino de vuelta de un clic. La capa nunca se quita al cerrar su base. La URI guarda el alias y el archivo
+de la base (`file`; `:memory:` si está en memoria): otro archivo con el mismo alias no la alimenta.
 
 | Situación | Comportamiento |
 |---|---|
-| DETACH de la base, o cierre de la sesión | Rechazado si una capa conectada de esa base tiene cambios sin guardar. Si no, las capas quedan **no disponibles**: vacías, con aviso y sin errores. El DETACH escrito en el editor se reconoce por el **tipo de sentencia del parser de DuckDB** y su base de destino, nunca por el texto: comentarios, cadenas y otras sentencias no se bloquean. Si se rechaza, no se ejecuta ninguna sentencia del script (decisión del propietario, 2026-11-02) |
-| ATTACH de nuevo con el mismo alias | Las capas vuelven a estar disponibles y se repintan |
-| Reabrir el proyecto | Disponible si la sesión tiene adjunta esa base; si no, no disponible hasta adjuntarla. Las capas sobre `:memory:` o `TEMP` no sobreviven |
-| Cambios sin confirmar del usuario | Visibles en el mapa, porque es la misma conexión. El aviso llega al guardar la capa (paso 1 de §5.4); no hay indicador permanente junto a la capa (decisión del propietario, 2026-11-02) |
+| Cerrar una base de archivo | Sin ventana. Las capas quedan no disponibles. Barra de QGIS: «Base «catastro» cerrada. 2 capas quedaron no disponibles: Predios, Redes.» [Abrir de nuevo] (misma ruta, alias y acceso) |
+| Cerrar una base en memoria con capas | Ventana de dos botones: «Guardar la base «memory» antes de cerrarla» / «Solo existe en memoria y la usa la capa Pozos. Se guardará como archivo, con sus 3 tablas, y la capa seguirá funcionando.» [Cancelar] [Guardar como archivo y cerrar…]. `COPY FROM DATABASE` a un archivo nuevo (nunca sobrescribe) y se reabre con el mismo alias; la URI de sus capas pasa a ese archivo. Para descartarla, primero se quitan sus capas |
+| Cambios sin guardar o transacción abierta | «No se puede cerrar la base «catastro»» / qué capa y qué hacer. [Entendido]. Igual para «Cerrar sesión» |
+| «Cerrar sesión», desactivar GeoDuck o cerrar QGIS | Todo o nada: antes, la ventana anterior por cada base en memoria con capas (cancelar no cierra nada). Barra: «Sesión de GeoDuck cerrada. N capas quedaron no disponibles; vuelven al iniciar GeoDuck y abrir sus bases.» |
+| ATTACH de nuevo con el mismo alias y el mismo archivo | Las capas vuelven a estar disponibles (también con «Abrir la base «…»» en su clic derecho) |
+| Mismo alias, otro archivo | Siguen no disponibles |
+| Abrir un proyecto | Mientras QGIS lo lee, GeoDuck se inicia (solo si hay capas Conectadas) y abre las bases de sus archivos, para que lleguen disponibles; barra «GeoDuck abrió 2 bases para este proyecto: …». Si falta un archivo, QGIS muestra su ventana de capas no disponibles |
+| Guardar el proyecto con capas sobre una base en memoria | QGIS no deja detener el guardado: justo después, barra «La capa «Pozos» usa la base en memoria «memory»: el proyecto no podrá reabrirla.» [Guardar la base como archivo] (la guarda y vuelve a guardar el proyecto) |
+| Tablas temporales | «Conectada» no se ofrece: «Las tablas temporales desaparecen al cerrar la sesión: solo se cargan como Copia.» Una consulta que las lee falla con ese motivo |
+| `DETACH` escrito en el editor | Se reconoce por el **tipo de sentencia del parser de DuckDB** y su base, nunca por el texto. Se rechaza (sin ejecutar nada del script) con cambios sin guardar o sobre una base en memoria con capas; si no, corre y el pie dice qué capas quedaron no disponibles |
+| Cambios sin confirmar del usuario | Visibles en el mapa, porque es la misma conexión. El aviso llega al guardar la capa (paso 1 de §5.4) |
+
+**Límites de QGIS (spike, 3.34–4.2):** la ayuda y el clic del ⚠ son de QGIS («Capa no disponible… haz clic
+para establecer una nueva fuente»); el texto de GeoDuck va en la barra y en el clic derecho. Evidencia:
+`docs/evidence/g10/183/`.
 
 ## 6. Hilos y estabilidad
 

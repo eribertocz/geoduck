@@ -29,7 +29,7 @@ from geoduck.domain.bridge_types import (
     unreadable_warning,
     wkb_family,
 )
-from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.errors import GeoDuckError, InvalidArgumentError
 from geoduck.domain.i18n import tr
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.sql_text import quote_identifier, quote_string_literal
@@ -38,7 +38,7 @@ from geoduck.qgis_bridge.convert import crs_from_field
 from geoduck.qgis_bridge.extent import extent_from_stats, scan_extent
 from geoduck.qgis_bridge.families import family, target_type
 from geoduck.qgis_bridge.memory import LoadCancelledError
-from geoduck.qgis_bridge.provider import KEY, encode_uri
+from geoduck.qgis_bridge.provider import IN_MEMORY, KEY, encode_uri
 
 Done = Callable[[LoadReport | BaseException], None]
 
@@ -128,9 +128,49 @@ def wkb_type_name(headers: list[str]) -> tuple[str, str | None]:
     return Qgis.WkbType(target_type(types)).name, note
 
 
+def _reads_temporary(handle: Any, sql: str, source: tuple[str, str, str] | None) -> bool:
+    """La consulta lee una tabla o vista temporal: desaparece con la sesión (#183)."""
+    if source is not None and source[0].lower() == "temp":
+        return True
+    temporary = {
+        str(r[0]).lower()
+        for r in _rows(
+            handle,
+            "SELECT table_name FROM duckdb_tables() WHERE temporary "
+            "UNION SELECT view_name FROM duckdb_views() WHERE temporary",
+            10_000,
+        )
+    }
+    if not temporary:
+        return False
+    try:
+        tree = json.loads(
+            str(_rows(handle, f"SELECT json_serialize_sql({quote_string_literal(sql)})", 1)[0][0])
+        )
+    except Exception:
+        return False
+    stack: list[Any] = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if node.get("type") == "BASE_TABLE":
+                catalog = str(node.get("catalog_name") or "").lower()
+                name = str(node.get("table_name") or "").lower()
+                if catalog == "temp" or (not catalog and name in temporary):
+                    return True
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return False
+
+
 def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]:  # noqa: PLR0912, PLR0915
     """Operación del worker: todo lo que la URI necesita, sin leer los datos en Python."""
     inner = strip_terminator(request.sql)
+    if _reads_temporary(handle, inner, request.source):
+        raise InvalidArgumentError(
+            tr("Temporary tables disappear when the session closes: they only load as a Copy.")
+        )
     described = _rows(handle, f"DESCRIBE SELECT * FROM (\n{inner}\n) AS __geoduck_q", 10_000)
     columns = [(str(r[0]), str(r[1])) for r in described]
     formats = {k: GeometryFormat(v) for k, v in request.formats}
@@ -138,16 +178,21 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
     token.raise_if_cancelled()
     source_sql = ".".join(quote_identifier(p) for p in request.source) if request.source else None
     is_table, keys = _source_info(handle, request.source) if request.source else (False, None)
-    scope = "session"
-    if request.source is not None:
+    scope, file = "session", None
+    base = request.source[0] if request.source is not None else request.database
+    if base:
         path = _rows(
             handle,
             "SELECT path FROM duckdb_databases() WHERE NOT internal AND path IS NOT NULL "
-            f"AND database_name = {quote_string_literal(request.source[0])}",
+            f"AND database_name = {quote_string_literal(base)}",
             1,
         )
         if path:  # base adjunta desde un archivo: la capa sobrevive a la sesión (§5.5)
-            scope = "attached"
+            file = str(path[0][0])
+            if request.source is not None:
+                scope = "attached"
+        else:
+            file = IN_MEMORY
     if keys and len(keys) == 1 and dict(columns).get(keys[0]) in _INTEGER_KEYS:
         fid, key = "key", keys[0]  # el valor es el FID
     elif keys:
@@ -182,6 +227,7 @@ def _metadata(handle: Any, token: Any, request: LoadRequest) -> dict[str, Any]: 
         "table": is_table,
         "source": source_sql,
         "scope": scope,
+        "file": file,
         "count": count,
         "headers": [],
         "extent": None,
@@ -322,6 +368,7 @@ class ConnectedLoad:
             "session": sessions.register(self._engine),
             "source": meta["source"],
             "scope": meta["scope"],
+            "file": meta["file"],
             "database": self._request.source[0] if self._request.source else None,
             # G7: base donde se ejecutó el resultado de una celda; cada lectura se hace en ella
             "usedb": self._request.database if not self._request.source else None,

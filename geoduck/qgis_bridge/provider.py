@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import os
 import threading
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any
@@ -120,6 +121,20 @@ def keep_thread_state() -> None:
         ctypes.pythonapi.PyGILState_Ensure()
     except (AttributeError, OSError):  # pragma: no cover - Python sin símbolos exportados
         pass
+
+
+#: `file` de una capa cuya base está en memoria: no la reemplaza ningún archivo con el mismo alias.
+IN_MEMORY = ":memory:"
+
+
+def same_file(a: str, b: str) -> bool:
+    """Las dos rutas son el mismo archivo (sin distinguir mayúsculas donde el sistema no lo hace)."""
+    try:
+        if os.path.exists(a) and os.path.exists(b):
+            return os.path.samefile(a, b)
+    except OSError:
+        pass
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
 def encode_uri(params: dict[str, Any]) -> str:
@@ -547,6 +562,8 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self.database = params.get("database") or None
             self.use_database = params.get("usedb") or None
             self.source = params.get("source") or None
+            #: Ruta del archivo de la base que lee la capa: otro archivo con el mismo alias no sirve.
+            self.file: str | None = params.get("file") or None
             self.inner: str = params["sql"]
             self.key: str | None = params.get("key") or None
             self.fid_mode: str = params.get("fid", "content")
@@ -620,6 +637,12 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
             self._wkb = getattr(Qgis.WkbType, wkb, Qgis.WkbType.Unknown)
         #: Ajustar cada geometría al tipo declarado (spatial-spec §6); nunca en `Unknown`.
         self.fit = self._wkb not in (Qgis.WkbType.Unknown, Qgis.WkbType.NoGeometry)
+        self._open_base()
+        problem = self.unavailable_reason()
+        if problem is not None:
+            self.unavailable = True
+            self.last_error = problem
+            return
         self._valid = True
 
     # -- estado de la sesión -------------------------------------------------------------------
@@ -629,6 +652,40 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         if self.scope == "attached":
             return sessions.current()
         return sessions.get(self.session)
+
+    def _open_base(self) -> None:
+        """Al abrir un proyecto (#183): si la base del archivo de la capa no está abierta, GeoDuck la abre
+        antes de que QGIS termine de leer el proyecto."""
+        if self.scope != "attached" or not self.file or self.file == IN_MEMORY or not self.database:
+            return
+        current = sessions.current()
+        known = sessions.databases(current) if current is not None else None
+        if known is None or self.database.lower() not in known:
+            sessions.resolve(self.database, self.file)
+
+    def bases(self) -> list[str]:
+        """Las bases que la capa lee: la de su tabla o la donde corre su consulta."""
+        return [b for b in (self.database, self.use_database) if b]
+
+    def unavailable_reason(self) -> str | None:
+        """Por qué la capa no puede leer ahora (#183), o None. Sin sesión, con su base cerrada o con otro
+        archivo bajo el mismo alias, la capa queda no disponible en QGIS."""
+        engine = self.engine()
+        if engine is None:
+            return tr("GeoDuck is not started")
+        known = sessions.databases(engine)
+        if known is None:
+            return None
+        for base in self.bases():
+            if base.lower() not in known:
+                return tr("The database «{0}» is closed").format(base)
+            path = known[base.lower()]
+            if self.file == IN_MEMORY:
+                if path is not None:
+                    return tr("«{0}» is now another file ({1})").format(base, path)
+            elif self.file and (path is None or not same_file(path, self.file)):
+                return tr("«{0}» is now another file ({1})").format(base, path or tr("in memory"))
+        return None
 
     def unreadable_fids(self, timeout: float = 600.0) -> list[int]:
         """FID de las entidades cuya geometría WKB/WKT no se pudo leer (spatial-spec §9). Bloquea: se usa

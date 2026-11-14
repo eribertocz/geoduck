@@ -213,6 +213,9 @@ class AttachRequest:
     action: OpenAction
     #: Alias del catálogo. Si falta, se usa el nombre del archivo sin extensión, como hace DuckDB.
     alias: str | None = None
+    #: #183: si el alias es una base en memoria vacía (la del inicio de una sesión nueva), el archivo la
+    #: reemplaza. Lo usa la apertura de las bases de un proyecto.
+    replace_empty_memory: bool = False
 
     def __post_init__(self) -> None:
         if self.action is OpenAction.IN_MEMORY:

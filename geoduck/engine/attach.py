@@ -89,12 +89,19 @@ def classify_attach_error(exc: BaseException) -> AttachError:
 
 def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str) -> AttachResult:
     alias = request.effective_alias
-    _check_alias(read_catalog(handle, root), alias)
+    before = read_catalog(handle, root)
+    replace = request.replace_empty_memory and _empty_memory(before, alias)
+    if not replace:
+        _check_alias(before, alias)
     if request.action is OpenAction.IN_MEMORY:  # #168: sin archivo, nada que comprobar en disco
         path, identity = MEMORY_PATH, None
     else:
         path = os.path.abspath(request.path)
         identity = _check_path(path, request.action)
+    held = dropped = False
+    if replace:
+        held = _drop_empty_memory(handle, alias)  # el alias queda libre para el archivo
+        dropped = True
     sql = f"ATTACH {quote_string_literal(path)} AS {quote_identifier(alias)}"
     if request.access is AccessMode.READ_ONLY:
         sql += " (READ_ONLY)"
@@ -103,7 +110,12 @@ def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str)
     except duckdb.FatalException:
         raise  # no es un fallo del ATTACH: el worker invalida la sesión (C13 §4 bis)
     except duckdb.Error as exc:
+        if dropped:
+            _restore_memory(handle, alias, held=held)
         raise classify_attach_error(exc) from exc
+    if held:
+        handle.execute(f"USE {quote_identifier(alias)}")
+        _detach_quietly(handle, _HOLD)
     if identity is not None and _identity(path) != identity:
         _detach_quietly(handle, alias)
         raise AttachError(
@@ -180,3 +192,76 @@ def _detach_quietly(handle: ConnectionHandle, alias: str) -> None:
         raise  # nunca se silencia un error fatal: invalida la sesión
     except duckdb.Error:
         _log.warning("No se pudo desadjuntar una base rechazada", exc_info=True)
+
+
+#: Alias provisional mientras se copia una base a su archivo nuevo.
+_SAVING = "__geoduck_saving"
+#: Base vacía que sostiene la sesión mientras se reemplaza la base activa.
+_HOLD = "__geoduck_hold"
+
+
+def save_database_as(handle: ConnectionHandle, alias: str, path: str, root: str) -> AttachResult:
+    """«Guardar como archivo» (#183): copia toda la base `alias` (tablas, vistas y secuencias) a un archivo
+    nuevo y la reemplaza por ese archivo con el mismo alias. Si algo falla antes del reemplazo, la base
+    original sigue igual y el archivo a medias se borra."""
+    path = os.path.abspath(path)
+    if os.path.exists(path) or os.path.exists(path + ".wal"):
+        raise InvalidArgumentError(tr("That file already exists: choose a new name."))
+    target = quote_identifier(_SAVING)
+    try:
+        # v1.5.0: el primer formato que guarda GEOMETRY con su SRC (DuckDB 1.5 crea v1.0 por defecto)
+        _execute_attach(handle, f"ATTACH {quote_string_literal(path)} AS {target} (STORAGE_VERSION 'v1.5.0')")
+    except duckdb.FatalException:
+        raise
+    except duckdb.Error as exc:
+        raise classify_attach_error(exc) from exc
+    try:
+        handle.execute(f"COPY FROM DATABASE {quote_identifier(alias)} TO {target}")
+        handle.execute(f"DETACH {target}")
+    except BaseException:
+        _detach_quietly(handle, _SAVING)
+        for leftover in (path, path + ".wal"):
+            if os.path.exists(leftover):
+                os.remove(leftover)
+        raise
+    name = quote_identifier(alias)
+    active = handle.execute("SELECT current_database()", max_rows=1).rows[0][0] == alias
+    hold = quote_identifier(_HOLD)
+    if active:  # la base activa no se puede cerrar: otra la reemplaza mientras tanto
+        handle.execute(f"ATTACH ':memory:' AS {hold}")
+        handle.execute(f"USE {hold}")
+    handle.execute(f"DETACH {name}")
+    _execute_attach(handle, f"ATTACH {quote_string_literal(path)} AS {name}")
+    if active:
+        handle.execute(f"USE {name}")
+        handle.execute(f"DETACH {hold}")
+    catalog = read_catalog(handle, root)
+    database = catalog.get(alias)
+    if database is None:
+        raise EngineError(tr("The saved database could not be opened again."))
+    return AttachResult(database, catalog)
+
+
+def _empty_memory(catalog: CatalogSnapshot, alias: str) -> bool:
+    database = catalog.get(alias)
+    if database is None or not database.in_memory:
+        return False
+    return not any(o.database.lower() == alias.lower() for o in catalog.objects)
+
+
+def _drop_empty_memory(handle: ConnectionHandle, alias: str) -> bool:
+    """Cierra la base en memoria vacía `alias`; si es la activa, otra la sostiene mientras tanto. Devuelve
+    True si quedó la base provisional activa."""
+    active = handle.execute("SELECT current_database()", max_rows=1).rows[0][0] == alias
+    if active:
+        handle.execute(f"ATTACH ':memory:' AS {quote_identifier(_HOLD)}")
+        handle.execute(f"USE {quote_identifier(_HOLD)}")
+    handle.execute(f"DETACH {quote_identifier(alias)}")
+    return active
+
+
+def _restore_memory(handle: ConnectionHandle, alias: str, *, held: bool) -> None:
+    handle.execute(f"ATTACH ':memory:' AS {quote_identifier(alias)}")
+    if held:
+        handle.execute(f"USE {quote_identifier(alias)}")
+        _detach_quietly(handle, _HOLD)

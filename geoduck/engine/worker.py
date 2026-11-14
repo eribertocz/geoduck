@@ -63,7 +63,7 @@ from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlSt
 from geoduck.domain.sql_text import quote_string_literal
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.arrow_plain import plain_batch
-from geoduck.engine.attach import attach_database
+from geoduck.engine.attach import attach_database, save_database_as
 from geoduck.engine.bridge_read import DEFAULT_BATCH, LoadOutcome, load_query, prepare_load
 from geoduck.engine.catalog import read_catalog, read_columns, read_vocabulary
 from geoduck.engine.compat import MINIMUM, EngineCapabilities, is_interrupt_error
@@ -469,6 +469,11 @@ class SessionWorker:
         return self.submit(
             lambda h, _t: h.execute(sql, max_rows=max_rows), priority=priority, database=database
         )
+
+    def save_database_as(self, alias: str, path: str) -> Future[AttachResult]:
+        """«Guardar como archivo» (`geoduck.engine.attach.save_database_as`), en una sola operación serial."""
+        root = self._root
+        return self._submit_future(lambda h, _t: save_database_as(h, alias, path, root))
 
     def detach(self, alias: str) -> Future[DetachResult]:
         """DetachDatabase (`geoduck.engine.detach`), en una sola operación serial."""

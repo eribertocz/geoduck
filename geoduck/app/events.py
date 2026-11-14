@@ -99,6 +99,21 @@ class DatabaseDetached:
 
 
 @dataclass(frozen=True)
+class DatabaseSaved:
+    """Una base en memoria se guardó como archivo y sigue abierta con el mismo alias (#183)."""
+
+    database: AttachedDatabase
+
+
+@dataclass(frozen=True)
+class SaveDatabaseFailed:
+    """No se guardó la base; sigue como estaba."""
+
+    code: ErrorCode
+    message: str
+
+
+@dataclass(frozen=True)
 class DetachFailed:
     """No se desadjuntó la base: sigue adjunta y la sesión sigue utilizable."""
 
@@ -311,6 +326,8 @@ AppEvent = (
     | DatabaseAttached
     | AttachFailed
     | DatabaseDetached
+    | DatabaseSaved
+    | SaveDatabaseFailed
     | DetachFailed
     | ActivationFailed
     | TransactionStateChanged
