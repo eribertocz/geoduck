@@ -37,6 +37,8 @@ class ErrorCode(str, Enum):
     INVALID_ARGUMENT = "INVALID_ARGUMENT"
     #: qgis-import-spec §5.4: el filtro de la capa leído por DuckDB no da las filas que muestra QGIS.
     FILTER_MISMATCH = "FILTER_MISMATCH"
+    #: #172 (performance-spec §4): una Copia a QGIS no cabe en el presupuesto de memoria.
+    MEMORY_BUDGET = "MEMORY_BUDGET"
 
 
 class GeoDuckError(Exception):
@@ -122,6 +124,18 @@ class OperationCancelledError(GeoDuckError):
     """La operación se canceló; su resultado nunca debe tratarse como completo."""
 
     code = ErrorCode.CANCELLED
+
+
+class MemoryBudgetError(GeoDuckError):
+    """Una Copia a QGIS no cabe en la memoria libre (#172): se detuvo antes de llenarla. `estimate` y
+    `available` en bytes, para el aviso con «Cargar como Conectada» o «Exportar»."""
+
+    code = ErrorCode.MEMORY_BUDGET
+
+    def __init__(self, message: str, *, estimate: int, available: int) -> None:
+        super().__init__(message)
+        self.estimate = estimate
+        self.available = available
 
 
 class UnsupportedEngineError(GeoDuckError):

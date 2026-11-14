@@ -14,6 +14,7 @@ editable en DuckDB). Un clic carga; solo se pregunta lo que falta (propietario, 
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from typing import Any
 
@@ -41,7 +42,7 @@ from geoduck.app.events import (
     LoadStarted,
 )
 from geoduck.domain.bridge_types import LoadPlan
-from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.errors import ErrorCode, GeoDuckError
 from geoduck.domain.i18n import number as number_text
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.ui.i18n import tr
@@ -86,6 +87,7 @@ def build_request(
     source_kind: str | None = None,
     database: str | None = None,
     options: dict[str, Any] | None = None,
+    expected_rows: int | None = None,
 ) -> LoadRequest:
     """La carga de un clic: todas las geometrías, con el SRC elegido donde faltaba. Con `options` («Más
     opciones…»), las geometrías elegidas, las columnas WKB/WKT, «Reproyectar a…» y «Separar por tipo»."""
@@ -108,6 +110,7 @@ def build_request(
         formats=tuple(options["formats"]) if options else (),
         reproject_to=options["reproject_to"] if options else None,
         separate_types=bool(options and options["separate_types"]),
+        expected_rows=expected_rows,
     )
 
 
@@ -411,6 +414,8 @@ class QuickLoad:
         #: id de carga → (lote, posición): para avisar a quien mira el lote (la línea de tiempo, #148).
         self._jobs: dict[int, tuple[dict[str, Any], int]] = {}
         self._next_job: tuple[dict[str, Any], int] | None = None
+        #: id de carga → su petición: para volver a cargar como Conectada si la Copia no cabe (#172).
+        self._requests: dict[int, LoadRequest] = {}
         self._starting = False
         self.last_report: LoadReport | None = None
         #: Se llama con cada carga terminada (E6: el aviso con «Ver en el mapa»). Si devuelve True, ya avisó
@@ -427,10 +432,18 @@ class QuickLoad:
         source: tuple[str, str, str] | None = None,
         source_kind: str | None = None,
         database: str | None = None,
+        rows: int | None = None,
     ) -> None:
         """«Copia» o «Conectada» de `sql` (una tabla o vista con su `source`, o el resultado de una consulta
-        con su `database`), con el nombre de capa `name`."""
-        job = {"sql": sql, "name": name, "source": source, "source_kind": source_kind, "database": database}
+        con su `database`), con el nombre de capa `name`. `rows`: el total que ya se conoce (#172)."""
+        job = {
+            "sql": sql,
+            "name": name,
+            "source": source,
+            "source_kind": source_kind,
+            "database": database,
+            "rows": rows,
+        }
         self.start_many([job], kind)
 
     def start_many(self, jobs: list[dict[str, Any]], kind: str, *, watch: Any = None) -> None:
@@ -522,6 +535,7 @@ class QuickLoad:
                 source_kind=job.get("source_kind"),
                 database=job.get("database"),
                 options=options,
+                expected_rows=job.get("rows"),
             )
             self._queue.append((request, batch, places[i]))
         self._next()
@@ -566,6 +580,7 @@ class QuickLoad:
             self._loads.add(event.load_id)
             if self._next_job is not None:
                 self._jobs[event.load_id] = self._next_job
+            self._requests[event.load_id] = event.request
             batch, index = self._job(event.load_id)
             self._tell(batch, "job_started", index, event.request)
             self._notify(tr("Loading «{}»…").format(event.request.layer_name))
@@ -575,6 +590,7 @@ class QuickLoad:
         elif isinstance(event, LoadFinished) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
             batch, index = self._jobs.pop(event.load_id, (None, -1))
+            self._requests.pop(event.load_id, None)
             self.last_report = event.report
             self._tell(batch, "job_finished", index, event.report)
             shown = self.on_loaded(event.report) if self.on_loaded is not None else False
@@ -583,6 +599,13 @@ class QuickLoad:
         elif isinstance(event, LoadFailed) and event.load_id in self._loads:
             self._loads.discard(event.load_id)
             batch, index = self._jobs.pop(event.load_id, (None, -1))
+            request = self._requests.pop(event.load_id, None)
+            if (
+                event.code is ErrorCode.MEMORY_BUDGET
+                and request is not None
+                and self._as_connected(request, event.message, batch, index)
+            ):
+                return
             self._tell(batch, "job_failed", index, event.message, event.cancelled)
             if event.cancelled:
                 for _request, other, position in self._queue:  # «Cancelar» detiene todo el lote
@@ -592,6 +615,24 @@ class QuickLoad:
                 tr("Loading cancelled.") if event.cancelled else tr("Loading error: ") + event.message
             )
             QTimer.singleShot(0, self._next)
+
+    def _as_connected(
+        self, request: LoadRequest, message: str, batch: dict[str, Any] | None, index: int
+    ) -> bool:
+        """#172: la Copia no cabe en memoria. Si «Conectada» se puede, se ofrece (dos botones); con «Cargar
+        como Conectada» la misma capa vuelve primera a la cola (True). Si no se puede o se cancela, False."""
+        if request.mode is LoadMode.CONNECTED or self._coordinator.load_modes().get(LoadMode.CONNECTED):
+            return False
+        if not ASK_CONNECTED(request.layer_name, message):
+            return False
+        retry = dataclasses.replace(request, mode=LoadMode.CONNECTED, reproject_to=None, expected_rows=None)
+        if batch is not None:
+            self._queue.insert(0, (retry, batch, index))
+        else:
+            self._queue.insert(0, (retry, {"jobs": [], "watch": None}, index))
+        self._notify(tr("Loading «{}» as Connected…").format(request.layer_name))
+        QTimer.singleShot(0, self._next)
+        return True
 
     def detach(self) -> None:
         self._queue.clear()
@@ -636,6 +677,29 @@ def confirm_spatial(label_text: str, installed: bool) -> bool:
     box.setDefaultButton(go)
     box.exec()
     return box.clickedButton() is go
+
+
+def confirm_connected(name: str, message: str) -> bool:
+    """#172: una Copia que no cabe en memoria. Dos botones (principios de interfaz): «Cancelar» y «Cargar como
+    Conectada», que no copia nada. `message` dice cuánto ocuparía y cuánto hay libre."""
+    from qgis.PyQt.QtWidgets import QApplication, QMessageBox  # noqa: PLC0415
+
+    box = QMessageBox(QApplication.activeWindow())
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setWindowTitle(tr("GeoDuck"))
+    box.setText(tr("«{0}» does not fit as a Copy").format(name))
+    box.setInformativeText(
+        f"{message} {tr('As Connected, QGIS reads the data straight from the database, without copying it.')}"
+    )
+    box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+    go = box.addButton(tr("Load as Connected"), QMessageBox.ButtonRole.AcceptRole)
+    box.setDefaultButton(go)
+    box.exec()
+    return box.clickedButton() is go
+
+
+#: Pregunta de #172 cuando la Copia no cabe (las pruebas la reemplazan).
+ASK_CONNECTED: Callable[[str, str], bool] = confirm_connected
 
 
 #: Pregunta de `spatial` antes de exportar (las pruebas la reemplazan).

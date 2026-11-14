@@ -13,6 +13,7 @@ Ancho («ventana») y compacto («panel»): en el panel no hay barra lateral; la
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -76,6 +77,7 @@ from geoduck.domain.catalog import (
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.files import OTHER, file_filters, format_for, gdal_readable, unsupported_lines
+from geoduck.domain.resources import size_text
 from geoduck.domain.session import ErrorCause, SessionState
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
@@ -1246,7 +1248,15 @@ class ProWorkspace(QWidget):
     def show_diagnostics(self) -> None:
         from geoduck.ui.diagnostics_dialog import DiagnosticsDialog  # noqa: PLC0415
 
-        DiagnosticsDialog(self.refresh_environment(), self).exec()
+        report = self.refresh_environment()
+        info = self._coordinator.engine_info
+        if info is not None and info.temp_directory:  # #172: dónde usa disco DuckDB y hasta cuánto
+            facts = dict(report.facts)
+            facts[tr("DuckDB temporary files")] = tr("{0} · up to {1}").format(
+                info.temp_directory, size_text(info.temp_limit)
+            )
+            report = dataclasses.replace(report, facts=facts)
+        DiagnosticsDialog(report, self).exec()
 
     def show_about(self) -> None:
         from geoduck.ui.about_dialog import AboutDialog  # noqa: PLC0415

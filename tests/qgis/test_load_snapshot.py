@@ -204,3 +204,21 @@ def test_layers_survive_detach_and_close(qgis_app, tmp_path):
 def test_unavailable_with_old_gdal(monkeypatch):
     monkeypatch.setattr(snapshot.gdal, "VersionInfo", lambda *a: "3070300")
     assert "GDAL 3.8" in snapshot.unavailable_reason()
+
+
+def test_a_copy_that_does_not_fit_in_memory_stops_before_filling_it(session, monkeypatch):
+    """#172 (AT-PERF-003): con las filas que se esperan, la Copia se detiene en cuanto se sabe que no cabe en
+    la mitad de la memoria libre; no publica nada, libera lo escrito y la sesión sigue lista."""
+    from geoduck.domain.errors import ErrorCode
+
+    monkeypatch.setattr(snapshot, "available_memory", lambda: 40 * 1024**2)  # presupuesto: 20 MB
+    before_layers, before_files = set(QgsProject.instance().mapLayers()), geoduck_files()
+    ev = session.load(POINTS.format(n=2_000_000), name="enorme", expected_rows=2_000_000)
+    assert isinstance(ev, LoadFailed) and ev.code is ErrorCode.MEMORY_BUDGET and not ev.cancelled
+    assert "40 MB" in ev.message  # «ocuparía unos N y QGIS tiene 40 MB libres»
+    progressed = [e.rows for e in session.events if isinstance(e, LoadProgressed) and e.load_id == ev.load_id]
+    assert max(progressed, default=0) < 2_000_000 // 4  # se detuvo pronto, sin copiarla entera
+    assert set(QgsProject.instance().mapLayers()) == before_layers
+    assert geoduck_files() == before_files
+    assert session.coordinator.state is SessionState.READY
+    assert isinstance(session.load(POINTS.format(n=1_000), name="pequeña"), LoadFinished)  # lo que cabe, sí

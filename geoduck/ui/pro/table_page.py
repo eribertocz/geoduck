@@ -322,6 +322,7 @@ class TablePage(QWidget):
             kind,
             source=self.source if whole else None,
             source_kind=("view" if self.is_view else "table") if whole else None,
+            rows=self.total,  # #172: para saber antes si una Copia cabe en memoria
         )
 
     def export(self, fmt: ExportFormat) -> None:
