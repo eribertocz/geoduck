@@ -84,6 +84,21 @@ class BridgeLoader:
                 out.setdefault((edit.provider.database or "").lower(), []).append(layer.name())
         return out
 
+    def layers_reading(self, database: str) -> list[str]:
+        """Capas Conectadas que leen de `database`: su base de origen o la base donde se ejecutó la consulta
+        (`usedb`). Cerrar esa base las dejaría sin datos (#168)."""
+        wanted = database.lower()
+        out = []
+        for layer_id in self.connected:
+            layer = self._project_ref.mapLayer(layer_id)
+            provider = layer.dataProvider() if layer is not None else None
+            if provider is None:
+                continue
+            bases = {(getattr(provider, attr, None) or "").lower() for attr in ("database", "use_database")}
+            if wanted in bases:
+                out.append(layer.name())
+        return out
+
     def session_changed(self, engine: Any | None) -> None:
         """Sesión nueva o cerrada (§5.5): las capas de bases adjuntas usan la activa; las demás solo la
         suya, que deja de existir al cerrarse."""

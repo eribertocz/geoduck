@@ -70,6 +70,10 @@ class SessionEngine(Protocol):
         """DetachDatabase real. Devuelve la base desadjuntada y el catálogo resultante."""
         ...
 
+    def activate(self, name: str) -> Future[CatalogSnapshot]:
+        """«Usar como base activa» (#168): `USE name` y el catálogo resultante."""
+        ...
+
     def transaction_state(self) -> Future[TransactionState]:
         """Estado transaccional real, comprobado en DuckDB sin modificarlo."""
         ...
@@ -194,6 +198,11 @@ class LayerLoader(Protocol):
 
     def unsaved_by_database(self) -> dict[str, list[str]]:
         """Base (en minúsculas) → capas Conectadas con cambios sin guardar; "" si la base no se conoce."""
+        ...
+
+    def layers_reading(self, database: str) -> list[str]:
+        """Capas Conectadas del proyecto que leen de `database` (su base o la base donde se ejecutó su
+        consulta). Bloquean cerrar esa base (#168)."""
         ...
 
     def session_changed(self, engine: SessionEngine | None) -> None:

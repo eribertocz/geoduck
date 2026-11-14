@@ -142,6 +142,10 @@ class QueryPage(QWidget):
     notice = pyqtSignal(str)
     #: Archivos soltados en el editor que no se leen con SQL (Arrow, no compatibles): al área de trabajo.
     import_files_requested = pyqtSignal(list)
+    #: «Base activa ▾» (#168): el usuario eligió otra base; el workspace la activa para toda la sesión.
+    activate_requested = pyqtSignal(str)
+    #: Una consulta guardada con otra base (#168): el workspace ofrece «Activar «base»» sin cambiarla.
+    other_database = pyqtSignal(str)
     #: «Ver SQL» del resultado filtrado (#144): la consulta completa, en una pestaña nueva.
     view_sql_requested = pyqtSignal(str)
     #: Ctrl+clic en una tabla o vista del SQL (#146): (base, esquema, objeto) en el explorador.
@@ -240,7 +244,14 @@ class QueryPage(QWidget):
         self._syntax.timeout.connect(self.check_syntax)
         self._live_error = False
         self._shortcuts()
-        self.show_databases(coordinator.catalog, database)
+        self.show_databases(coordinator.catalog)
+        catalog = coordinator.catalog
+        #: La base con la que se guardó la consulta, si no es la activa (#168): solo se avisa.
+        self.saved_database = (
+            database
+            if database and catalog is not None and catalog.get(database) and database != catalog.default
+            else None
+        )
         self._unsubscribe = coordinator.subscribe(self._on_event)
         self._render_state()
         self.mark_statement()
@@ -282,13 +293,15 @@ class QueryPage(QWidget):
         self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
         row.addWidget(self.run_button)
         row.addSpacing(6)
-        self.runs_in_label = label(tr("Runs in"), "muted")
+        # Una sola base activa para toda la sesión (#168, propietario, 2026-11-13): este desplegable y el
+        # explorador muestran la misma; cambiarla aquí la cambia en todo
+        self.runs_in_label = label(tr("Active database"), "muted")
         row.addWidget(self.runs_in_label)
         self.base = QComboBox()
-        self.base.setAccessibleName(tr("Database of the query"))
-        self.base.setToolTip(tr("«Run» runs the SQL in this database"))
+        self.base.setAccessibleName(tr("Active database"))
+        self.base.setToolTip(tr("The same active database everywhere: «Run» and everything new go here"))
         self.base.setMinimumWidth(110)
-        self.base.currentIndexChanged.connect(lambda _i: self.changed.emit())
+        self.base.activated.connect(self._base_chosen)
         row.addWidget(self.base)
         row.addWidget(spacer(), 1)
         # «Ejecutar todo»: Ctrl+Shift+Enter y el clic derecho del editor (abrir y guardar están junto a las
@@ -490,19 +503,23 @@ class QueryPage(QWidget):
             write("install")
         return True
 
-    def show_databases(self, catalog: CatalogSnapshot | None, chosen: str | None = None) -> None:
-        """Las bases de la sesión en el desplegable; conserva la elegida si sigue adjunta."""
-        keep = chosen if chosen is not None else self.database
+    def show_databases(self, catalog: CatalogSnapshot | None) -> None:
+        """Las bases de la sesión en el desplegable, con la activa elegida (#168: la única verdad)."""
         self.base.blockSignals(True)
         self.base.clear()
         if catalog is not None:
             for db in catalog.databases:
                 self.base.addItem(db.name, db.name)
-            index = self.base.findData(keep) if keep else -1
-            if index < 0:
-                index = self.base.findData(catalog.default)
-            self.base.setCurrentIndex(max(index, 0))
+            self.base.setCurrentIndex(max(self.base.findData(catalog.default), 0))
         self.base.blockSignals(False)
+
+    def _base_chosen(self, _index: int) -> None:
+        """Otra base en «Base activa ▾»: se pide activarla; el desplegable sigue en la activa hasta que
+        DuckDB la cambie (el catálogo nuevo lo actualiza)."""
+        chosen = self.base.currentData()
+        self.show_databases(self._coordinator.catalog)
+        if chosen and chosen != self.base.currentData():
+            self.activate_requested.emit(chosen)
 
     # -- ejecutar -------------------------------------------------------------------------------------
 

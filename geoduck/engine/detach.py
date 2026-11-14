@@ -2,14 +2,14 @@
 """DetachDatabase: `DETACH` efectivo y liberación del bloqueo (G1 pasos 4 y 5, GD-SES-004, AT-SES-004).
 
 Todo ocurre en una sola operación del worker serial (ADR-0006): ningún lector Arrow puede seguir abierto
-cuando llega el `DETACH`, y ninguna otra sentencia se intercala entre las comprobaciones, el `USE`, el
-`DETACH` y la verificación final.
+cuando llega el `DETACH`, y ninguna otra sentencia se intercala entre las comprobaciones, el `DETACH` y la
+verificación final.
 
 Hechos verificados con DuckDB 1.5.0, 1.5.6 y 2.0.0 (evidencia: `docs/evidence/g1/README.md`):
 
-- DuckDB no desadjunta la base predeterminada (F-25): si lo es, primero se hace `USE` del catálogo raíz
-  real (no se supone que se llame `memory`). Si el `DETACH` falla después, se restaura la predeterminada
-  anterior, para no dejar un cambio oculto.
+- DuckDB no desadjunta la base predeterminada (F-25). Desde #168 la predeterminada es **la base activa**
+  de GeoDuck y no se cierra (tampoco la última): hay que activar otra antes. Cualquier otra base se cierra,
+  también la del inicio (`memory`).
 - En 1.5.x, un `DETACH` con un lector Arrow abierto sobre esa base se acepta y el lector entrega 0 filas
   sin error (F-26). Lo impide el guardia de lector abierto de `ConnectionHandle` (`ACTIVE_RESULT`).
 - `DETACH` hace checkpoint: tras él, el `.wal` desaparece y otro proceso puede abrir el archivo y ve los
@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 
 import duckdb
 
-from geoduck.domain.catalog import DetachResult
+from geoduck.domain.catalog import DetachResult, catalog_key
 from geoduck.domain.errors import DetachError, ErrorCode
 from geoduck.domain.i18n import tr
 from geoduck.domain.sql_text import quote_identifier
@@ -54,25 +54,28 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
     target = catalog.get(alias)
     if target is None:
         raise DetachError(tr("There is no attached database «{0}».").format(alias), detail="not_attached")
-    if catalog.is_root(target.name):
+    # #168 (propietario, 2026-11-13): cualquier base se cierra, también la del inicio, salvo la activa y la
+    # última. Nunca se cambia la activa en silencio para poder cerrarla.
+    if catalog_key(target.name) == catalog_key(catalog.default):
         raise DetachError(
-            tr("The root database of the session cannot be detached."),
+            tr("«{0}» is the active database: make another database active first.").format(target.name),
             code=ErrorCode.DEFAULT_CATALOG,
-            detail="root_catalog",
+            detail="active_catalog",
         )
-    previous_default = catalog.default
-    switched = catalog.default_database.key == target.key
-    if switched:
-        _execute(handle, f"USE {quote_identifier(catalog.root)}")
+    if len(catalog.databases) == 1:
+        raise DetachError(
+            tr("«{0}» is the only database of the session.").format(target.name),
+            code=ErrorCode.DEFAULT_CATALOG,
+            detail="last_catalog",
+        )
     try:
         _execute_detach(handle, f"DETACH {quote_identifier(target.name)}")
     except duckdb.FatalException:
         raise  # invalida la sesión (C13 §4 bis); no se clasifica
     except duckdb.Error as exc:
-        if switched:
-            _restore_default(handle, previous_default)
         raise _classify(exc) from exc
-    after = read_catalog(handle, root)
+    # si se cerró la base del inicio, la referencia pasa a la activa (que sigue adjunta)
+    after = read_catalog(handle, catalog.default if catalog.is_root(target.name) else root)
     if after.get(target.name) is not None:
         raise DetachError(
             tr("DuckDB reported success but the database is still attached."), detail="still_attached"
@@ -103,15 +106,6 @@ def _classify(exc: duckdb.Error) -> DetachError:
             detail=type(exc).__name__,
         )
     return DetachError(tr("DuckDB could not detach the database."), detail=type(exc).__name__)
-
-
-def _restore_default(handle: ConnectionHandle, name: str) -> None:
-    try:
-        _execute(handle, f"USE {quote_identifier(name)}")
-    except duckdb.FatalException:
-        raise
-    except duckdb.Error:
-        _log.warning("No se pudo restaurar la base predeterminada tras un DETACH fallido", exc_info=True)
 
 
 def _execute(handle: ConnectionHandle, sql: str) -> None:

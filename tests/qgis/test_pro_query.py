@@ -571,7 +571,7 @@ def test_file_is_on_the_tab_right_click_and_run_all_is_in_the_editor_menu(coordi
     assert page.run_button.text() == ""  # solo el ícono ▶
     for icon in (page.copy_button, page.export_button, page.load_button):  # junto a las filas, solo íconos
         assert icon.text() == "" and icon.parentWidget() is page.summary.parentWidget()
-    assert any(lab.text() == tr("Runs in") for lab in page.findChildren(type(page.summary)))
+    assert any(lab.text() == tr("Active database") for lab in page.findChildren(type(page.summary)))
     page.editor.setCursorPosition(0, 2)
     page.mark_statement()
     menu = page._context.build()

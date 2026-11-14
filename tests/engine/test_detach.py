@@ -115,21 +115,43 @@ def test_alias_lookup_follows_duckdb_rule(worker, db_file):
     assert worker.detach("VENTAS").result(TIMEOUT).database.name == "Ventas"
 
 
-# -- predeterminada y raíz -------------------------------------------------------------------------
+# -- base activa, la del inicio y la última (#168) -------------------------------------------------------
 
 
-def test_detaching_the_default_switches_to_the_real_root_first(worker, db_file):
+def test_the_active_database_is_never_detached_nor_switched_in_silence(worker, db_file):
+    """#168: la base activa (la predeterminada de DuckDB) no se cierra; hay que activar otra antes."""
+    attach(worker, db_file, RO)
+    run(worker, "USE b")
+    with pytest.raises(DetachError) as info:
+        worker.detach("b").result(TIMEOUT)
+    assert info.value.code is ErrorCode.DEFAULT_CATALOG and info.value.detail == "active_catalog"
+    snap = catalog(worker)
+    assert snap.get("b") is not None and snap.default == "b"  # sin cambio oculto
+
+
+def test_the_starting_memory_database_can_be_detached_when_another_is_active(worker, db_file):
+    """#168 (propietario, 2026-11-13): la base del inicio se cierra si no es la activa y queda otra."""
     attach(worker, db_file, RO)
     root = catalog(worker).root
-    run(worker, "USE b")
-    assert catalog(worker).default == "b"
-    result = worker.detach("b").result(TIMEOUT)
-    assert result.catalog.default == root and catalog(worker).default == root
+    worker.activate("b").result(TIMEOUT)
+    result = worker.detach(root).result(TIMEOUT)
+    assert result.catalog.get(root) is None and [d.name for d in result.catalog.databases] == ["b"]
+    assert catalog(worker).root == "b"  # la referencia pasa a la activa
+    assert run(worker, "SELECT count(*) FROM t").rows == ((1000,),)
 
 
-def test_failed_detach_restores_the_default_and_keeps_the_database(worker, db_file, monkeypatch):
+def test_the_last_database_cannot_be_detached(worker, db_file):
     attach(worker, db_file, RO)
-    run(worker, "USE b")
+    root = catalog(worker).root
+    worker.activate("b").result(TIMEOUT)
+    worker.detach(root).result(TIMEOUT)
+    with pytest.raises(DetachError) as info:
+        worker.detach("b").result(TIMEOUT)
+    assert info.value.code is ErrorCode.DEFAULT_CATALOG  # es la activa y la última
+
+
+def test_a_failed_detach_keeps_the_database(worker, db_file, monkeypatch):
+    attach(worker, db_file, RO)
 
     def fail(handle, sql):
         raise duckdb.BinderException("Binder Error: simulado")
@@ -138,17 +160,16 @@ def test_failed_detach_restores_the_default_and_keeps_the_database(worker, db_fi
     with pytest.raises(DetachError) as info:
         worker.detach("b").result(TIMEOUT)
     assert info.value.code is ErrorCode.DETACH_FAILED
-    snap = catalog(worker)
-    assert snap.get("b") is not None and snap.default == "b"  # sin cambio oculto
-    assert run(worker, "SELECT count(*) FROM t").rows == ((1000,),)
+    assert catalog(worker).get("b") is not None
 
 
-def test_root_cannot_be_detached(worker):
-    root = catalog(worker).root
-    with pytest.raises(DetachError) as info:
-        worker.detach(root.upper()).result(TIMEOUT)
-    assert info.value.code is ErrorCode.DEFAULT_CATALOG
-    assert catalog(worker).root == root
+def test_a_new_database_in_memory_with_its_alias(worker):
+    """#168: «Nueva base en memoria…» con alias (por defecto «memory»; si existe, «memory_2»)."""
+    proposed = catalog(worker).next_alias()
+    assert proposed == "memory_2"  # la del inicio ya se llama «memory»
+    request = AttachRequest(path="", access=RW, action=OpenAction.IN_MEMORY, alias="borrador")
+    result = worker.attach(request).result(TIMEOUT)
+    assert result.database.name == "borrador" and result.database.in_memory
 
 
 def test_detaching_an_unknown_alias_fails_without_touching_duckdb(worker):

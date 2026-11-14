@@ -72,12 +72,21 @@ class AccessMode(str, Enum):
 
 
 class OpenAction(str, Enum):
-    """Las dos únicas formas de llegar a un archivo (session-spec §2). Nunca se crea uno implícitamente."""
+    """Cómo se adjunta una base (session-spec §2): dos formas de llegar a un archivo (nunca se crea uno
+    implícitamente) y una base nueva en memoria (#168)."""
 
     #: El archivo debe existir; si no, `DB_NOT_FOUND` y no se crea nada.
     OPEN_EXISTING = "OPEN_EXISTING"
     #: El archivo no debe existir; nunca se sobrescribe ni se reutiliza uno existente. Solo en RW.
     CREATE_NEW = "CREATE_NEW"
+    #: Una base nueva en memoria (`ATTACH ':memory:' AS alias`), sin archivo. Solo en RW (#168).
+    IN_MEMORY = "IN_MEMORY"
+
+
+#: Ruta de una base en memoria para `ATTACH`.
+MEMORY_PATH = ":memory:"
+#: Alias propuesto para una base nueva en memoria (#168); si ya existe, «memory_2», «memory_3»…
+MEMORY_ALIAS = "memory"
 
 
 @dataclass(frozen=True)
@@ -171,6 +180,13 @@ class CatalogSnapshot:
         """Bases adjuntas por el usuario: todas menos la raíz."""
         return tuple(db for db in self.databases if not self.is_root(db.name))
 
+    def next_alias(self, wanted: str = MEMORY_ALIAS) -> str:
+        """`wanted` si está libre; si no, «wanted_2», «wanted_3»… (#168: una base nueva en memoria)."""
+        alias, n = wanted, 2
+        while self.get(alias) is not None or catalog_key(alias) in RESERVED_CATALOG_NAMES:
+            alias, n = f"{wanted}_{n}", n + 1
+        return alias
+
     def schemas_of(self, database: str) -> tuple[str, ...]:
         key = catalog_key(database)
         return tuple(schema for db, schema in self.schemas if catalog_key(db) == key)
@@ -199,7 +215,12 @@ class AttachRequest:
     alias: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.path.strip() or "\x00" in self.path:
+        if self.action is OpenAction.IN_MEMORY:
+            if self.alias is None:
+                raise InvalidArgumentError(tr("Enter an alias for the database"))
+            if self.access is not AccessMode.READ_WRITE:
+                raise InvalidArgumentError(tr("A database in memory is always read-write"))
+        elif not self.path.strip() or "\x00" in self.path:
             raise InvalidArgumentError(tr("Enter the file path"))
         if self.action is OpenAction.CREATE_NEW and self.access is not AccessMode.READ_WRITE:
             raise InvalidArgumentError(tr("«Create new» only allows read-write"))

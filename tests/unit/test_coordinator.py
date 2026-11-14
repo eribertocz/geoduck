@@ -883,8 +883,8 @@ def test_close_from_error_recoverable_with_aborted_transaction_rolls_back_first(
 
 def test_close_during_an_operation_with_open_transaction_asks_without_commit(env):
     coordinator, _dispatcher, _engines, events = _ready_with_sales(env)
-    coordinator._set_transaction(T.ACTIVE)
     coordinator.detach_database("ventas")
+    coordinator._set_transaction(T.ACTIVE)  # #168: con la transacción ya abierta, el cierre se niega antes
     coordinator.request_close()
     assert asks(events) == [CloseConfirmationRequired(T.ACTIVE, commit_allowed=False)]
     assert coordinator.state is S.DETACHING  # nada se canceló todavía

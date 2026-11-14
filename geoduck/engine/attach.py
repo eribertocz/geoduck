@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 import duckdb
 
 from geoduck.domain.catalog import (
+    MEMORY_PATH,
     RESERVED_CATALOG_NAMES,
     AccessMode,
     AttachRequest,
@@ -87,10 +88,13 @@ def classify_attach_error(exc: BaseException) -> AttachError:
 
 
 def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str) -> AttachResult:
-    path = os.path.abspath(request.path)
     alias = request.effective_alias
     _check_alias(read_catalog(handle, root), alias)
-    identity = _check_path(path, request.action)
+    if request.action is OpenAction.IN_MEMORY:  # #168: sin archivo, nada que comprobar en disco
+        path, identity = MEMORY_PATH, None
+    else:
+        path = os.path.abspath(request.path)
+        identity = _check_path(path, request.action)
     sql = f"ATTACH {quote_string_literal(path)} AS {quote_identifier(alias)}"
     if request.access is AccessMode.READ_ONLY:
         sql += " (READ_ONLY)"

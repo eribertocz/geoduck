@@ -68,7 +68,7 @@ from geoduck.engine.export import export_query
 from geoduck.engine.files import scan_files
 from geoduck.engine.importing import drop_imported, import_batches, import_target
 from geoduck.engine.spatial import activate_spatial, spatial_state
-from geoduck.engine.sql import StatementListener, run_in_database, run_script
+from geoduck.engine.sql import StatementListener, run_in_database, run_script, use_database
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
 _log = logging.getLogger("geoduck.engine")
@@ -465,7 +465,24 @@ class SessionWorker:
     def detach(self, alias: str) -> Future[DetachResult]:
         """DetachDatabase (`geoduck.engine.detach`), en una sola operación serial."""
         root = self._root
-        return self._submit_future(lambda h, _t: detach_database(h, alias, root))
+
+        def detach(handle: ConnectionHandle, _token: Any) -> DetachResult:
+            result = detach_database(handle, alias, root)
+            with self._lock:  # #168: si se cerró la base del inicio, la referencia pasa a la activa
+                self._root = result.catalog.root
+            return result
+
+        return self._submit_future(detach)
+
+    def activate(self, name: str) -> Future[CatalogSnapshot]:
+        """«Usar como base activa» (#168): `USE` de `name` y el catálogo nuevo, en una sola operación."""
+        root = self._root
+
+        def activate(handle: ConnectionHandle, _token: Any) -> CatalogSnapshot:
+            use_database(handle, name)
+            return read_catalog(handle, root)
+
+        return self._submit_future(activate)
 
     def transaction_state(self) -> Future[TransactionState]:
         """Estado transaccional real, comprobado sin modificarlo."""

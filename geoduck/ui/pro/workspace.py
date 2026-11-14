@@ -28,6 +28,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMenu,
     QMessageBox,
@@ -42,6 +43,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from geoduck.app.events import (
+    ActivationFailed,
     AppEvent,
     AttachFailed,
     CatalogChanged,
@@ -63,7 +65,14 @@ from geoduck.app.events import (
     TransactionFailed,
     VocabularyChanged,
 )
-from geoduck.domain.catalog import AttachRequest, ObjectKind, OpenAction
+from geoduck.domain.catalog import (
+    MEMORY_ALIAS,
+    AccessMode,
+    AttachRequest,
+    ObjectKind,
+    OpenAction,
+    catalog_key,
+)
 from geoduck.domain.diagnostics import CheckStatus, DiagnosticReport
 from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.files import OTHER, file_filters, format_for, gdal_readable, unsupported_lines
@@ -172,8 +181,13 @@ class ProWorkspace(QWidget):
         ask_save_copies: Any = None,
         copies_bridge: Any = None,
         ask_files: Callable[[str, list[str]], list[str]] | None = None,
+        ask_alias: Callable[[str], str | None] | None = None,
+        ask_lose: Callable[[str, int], bool] | None = None,
     ) -> None:
         super().__init__()
+        #: #168: el alias de una base nueva en memoria y confirmar cerrar una base en memoria con tablas.
+        self._ask_alias = ask_alias
+        self._ask_lose = ask_lose
         self._ask_files = ask_files or self._files_dialog
         self._pending_query: tuple[str, str | None] | None = None
         self._ask_path = ask_path or self._file_dialog
@@ -652,6 +666,9 @@ class ProWorkspace(QWidget):
         side.close_session_requested.connect(self.close_session)
         side.open_database_requested.connect(lambda: self.attach(OpenAction.OPEN_EXISTING))
         side.create_database_requested.connect(lambda: self.attach(OpenAction.CREATE_NEW))
+        side.memory_database_requested.connect(self.new_memory_database)
+        side.activate_requested.connect(self.activate_database)
+        side.close_reason = self._coordinator.close_reason
         side.send_layers_requested.connect(self.send_layers_requested.emit)
         side.diagnostics_requested.connect(self.show_diagnostics)
         side.about_requested.connect(self.show_about)
@@ -950,7 +967,65 @@ class ProWorkspace(QWidget):
             self._guard(lambda: self._coordinator.attach_database(request))
 
     def detach(self, name: str) -> None:
+        """«Cerrar base» (#168). Una base en memoria con tablas pide confirmar: se pierden."""
+        catalog = self._coordinator.catalog
+        db = catalog.get(name) if catalog is not None else None
+        if db is not None and db.in_memory and catalog is not None:
+            count = sum(1 for o in catalog.objects if not o.temporary and catalog_key(o.database) == db.key)
+            layers = len(self._coordinator.layers_reading(db.name)) if count else 0
+            if count and not self._confirm_lose(db.name, count, layers):
+                return
         self._guard(lambda: self._coordinator.detach_database(name))
+
+    def _confirm_lose(self, name: str, count: int, layers: int = 0) -> bool:
+        """«¿Cerrar la base «memory»?»: sus tablas solo existen en memoria (maqueta `bases`); las capas
+        Conectadas que la leen se quedan sin datos para siempre."""
+        if self._ask_lose is not None:
+            return self._ask_lose(name, count)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("GeoDuck"))
+        box.setText(tr("Close the database «{0}»?").format(name))
+        tables = tr("1 table") if count == 1 else tr("{0} tables").format(count)
+        text = tr("It has {0} that only exist in memory: they will be lost.").format(tables)
+        if layers:
+            text += "\n" + (
+                tr("1 Connected QGIS layer reads it and will be left without data.")
+                if layers == 1
+                else tr("{0} Connected QGIS layers read it and will be left without data.").format(layers)
+            )
+        box.setInformativeText(text)
+        lose = box.addButton(tr("Close and lose {0}").format(tables), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        return box.clickedButton() is lose
+
+    def activate_database(self, name: str) -> None:
+        """«Usar como base activa» (#168): una sola para toda la sesión (explorador, editor y lo nuevo)."""
+        self._guard(lambda: self._coordinator.activate_database(name))
+
+    def new_memory_database(self) -> None:
+        """«Nueva base en memoria…» (#168): con el alias que se elija («memory» o el siguiente libre). Sin
+        sesión, la inicia en memoria."""
+        if self._coordinator.can_start:
+            self.start()
+            return
+        catalog = self._coordinator.catalog
+        proposed = catalog.next_alias() if catalog is not None else MEMORY_ALIAS
+        if self._ask_alias is not None:
+            alias = self._ask_alias(proposed)
+        else:
+            text, ok = QInputDialog.getText(
+                self, tr("New database in memory"), tr("Alias of the database:"), text=proposed
+            )
+            alias = text.strip() if ok else None
+        if not alias:
+            return
+        self._guard(
+            lambda: self._coordinator.attach_database(
+                AttachRequest(path="", access=AccessMode.READ_WRITE, action=OpenAction.IN_MEMORY, alias=alias)
+            )
+        )
 
     def refresh(self) -> None:
         self._guard(self._coordinator.refresh_catalog)
@@ -1006,6 +1081,16 @@ class ProWorkspace(QWidget):
         page.renamed.connect(lambda old, p=page: self._query_renamed(p, old))
         page.open_requested.connect(self.open_query_file)
         page.notice.connect(self.notify)
+        page.activate_requested.connect(self.activate_database)
+        if page.saved_database:  # #168: la consulta se guardó con otra base; se ofrece, no se cambia
+            other = page.saved_database
+            self.toast(
+                tr("This query was saved with «{0}»; the active database is «{1}».").format(
+                    other, self._coordinator.catalog.default if self._coordinator.catalog else ""
+                ),
+                [(tr("Activate «{0}»").format(other), lambda: self.activate_database(other))],
+                12,
+            )
         page.import_files_requested.connect(lambda paths: self.import_files(paths=paths))
         page.view_sql_requested.connect(self.open_sql)  # «Ver SQL» del resultado filtrado (#144)
         page.reveal_requested.connect(self.reveal)  # Ctrl+clic en una tabla del SQL (#146)
@@ -1210,10 +1295,22 @@ class ProWorkspace(QWidget):
                     tr("Open database…"), action, "database", lambda: self.attach(OpenAction.OPEN_EXISTING)
                 ),
                 Entry(tr("Create database…"), action, "database", lambda: self.attach(OpenAction.CREATE_NEW)),
+                Entry(tr("New database in memory…"), action, "memory", self.new_memory_database),
                 Entry(tr("Import files…"), action, "layers", self.import_files),
                 Entry(tr("Add QGIS layers to GeoDuck…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),
             ]
+            catalog = self._coordinator.catalog
+            for db in catalog.databases if catalog is not None else ():
+                if catalog is not None and db.key != catalog_key(catalog.default):  # #168
+                    found.append(
+                        Entry(
+                            tr("Use «{0}» as active database").format(db.name),
+                            action,
+                            "database",
+                            lambda name=db.name: self.activate_database(name),
+                        )
+                    )
         found.append(Entry(tr("Show or hide the sidebar"), action, "sidebar", self.toggle_sidebar))
         if self.wide:
             found.append(
@@ -1255,6 +1352,8 @@ class ProWorkspace(QWidget):
             self.notify(tr("The database was not attached.") + f" {event.message}")
         elif isinstance(event, DetachFailed):
             self.notify(tr("The database was not detached.") + f" {event.message}")
+        elif isinstance(event, ActivationFailed):
+            self.notify(tr("The active database did not change.") + f" {event.message}")
         elif isinstance(event, CloseConfirmationRequired):
             ask = self._ask_close
             if ask is None:
