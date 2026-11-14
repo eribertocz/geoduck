@@ -147,7 +147,7 @@ jobs:
           environment-name: qgis
           create-args: qgis=${{ matrix.qgis }} pip
           cache-environment: true
-      - run: python -m pip install "duckdb==2.0.0" "pyarrow==25.0.1"
+      - run: python -m pip install "pytest>=8" "duckdb==2.0.0" "pyarrow==25.0.1"
       - name: estrés
         env:
           QT_QPA_PLATFORM: offscreen

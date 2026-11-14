@@ -23,6 +23,7 @@ vuelta como mucho 10 % sobre la de la primera. Escribe `stress-<qgis>-<duckdb>.j
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import gc
 import json
 import os
@@ -48,6 +49,7 @@ def until(condition: Any, timeout: float = 600.0) -> None:
     deadline = time.monotonic() + timeout
     while not condition():
         if time.monotonic() > deadline:
+            faulthandler.dump_traceback(all_threads=True)  # dónde quedó cada hilo, para el informe
             raise TimeoutError("la operación no terminó a tiempo")
         QCoreApplication.processEvents()
         time.sleep(0.002)

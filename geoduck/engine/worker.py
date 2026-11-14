@@ -26,6 +26,7 @@ import os
 import queue
 import shutil
 import threading
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import Future
 from contextlib import contextmanager
@@ -108,6 +109,9 @@ class ConnectionHandle:
         self._caps = caps
         self._reader_open = False
         self._closed = False
+        #: El token de la sentencia principal en curso (`execute(..., token=)`); lo lee `cancel()`.
+        self._live: CancelToken | None = None
+        self._live_lock = threading.Lock()
 
     @property
     def capabilities(self) -> EngineCapabilities:
@@ -133,14 +137,42 @@ class ConnectionHandle:
         return list(self._con.extract_statements(text))
 
     def execute(
-        self, sql: str, parameters: Sequence[object] | None = None, *, max_rows: int = 200
+        self,
+        sql: str,
+        parameters: Sequence[object] | None = None,
+        *,
+        max_rows: int = 200,
+        token: CancelToken | None = None,
     ) -> StatementOutcome:
         """Ejecuta una sentencia y devuelve como mucho `max_rows` filas.
 
         Nunca materializa resultados sin límite (NF-02). Si quedan filas sin leer en DuckDB 2.x, el
         resultado se cierra con `complete()` para no dejar la conexión ocupada.
+
+        Con `token`, la sentencia es cancelable: si ya se canceló no empieza, y si se cancela mientras corre
+        se interrumpe hasta que termina (una interrupción que llega antes de que DuckDB empiece se pierde).
         """
         self._guard()
+        if token is None:
+            return self._execute(sql, parameters, max_rows)
+        with self._live_lock:
+            token.raise_if_cancelled()
+            self._live = token
+        try:
+            return self._execute(sql, parameters, max_rows)
+        finally:
+            with self._live_lock:
+                self._live = None
+
+    def interrupt_if_live(self, token: CancelToken) -> bool:
+        """Interrumpe la sentencia de `token` si sigue en curso. Se llama desde otro hilo (ADR-0007)."""
+        with self._live_lock:
+            if self._live is not token:
+                return False
+            self._con.interrupt()
+            return True
+
+    def _execute(self, sql: str, parameters: Sequence[object] | None, max_rows: int) -> StatementOutcome:
         result = self._con.execute(sql) if parameters is None else self._con.execute(sql, parameters)
         description = result.description
         if not description:
@@ -287,6 +319,7 @@ class SessionWorker:
         self._pending: dict[int, _Job[Any]] = {}
         self._current: _Job[Any] | None = None
         self._con: Any = None  # solo se usa en el hilo del worker; interrupt() es la excepción
+        self._handle: ConnectionHandle | None = None
         self._caps: EngineCapabilities | None = None
         self._root = ""
         #: #172: la carpeta temporal propia de la sesión y su tope de disco (bytes).
@@ -624,6 +657,18 @@ class SessionWorker:
         if self._caps.interrupt_verified:
             job.engine_interrupted = True
             self._con.interrupt()
+            if self._handle is not None:
+                threading.Thread(
+                    target=self._keep_interrupting, args=(job, self._handle), daemon=True
+                ).start()
+
+    def _keep_interrupting(self, job: _Job[Any], handle: ConnectionHandle) -> None:
+        """Repite la interrupción mientras siga en curso la sentencia cancelable de `job`."""
+        while True:
+            time.sleep(_REINTERRUPT_S)
+            with self._lock:
+                if self._current is not job or not handle.interrupt_if_live(job.token):
+                    return
 
     # -- hilo del worker --------------------------------------------------------------------------
 
@@ -648,6 +693,7 @@ class SessionWorker:
             con.execute("SET enable_progress_bar = true")
             con.execute("SET enable_progress_bar_print = false")
             con.execute("SET progress_bar_time = 0")
+            _without_async_writes(con)
         except BaseException:
             con.close()
             raise
@@ -663,6 +709,7 @@ class SessionWorker:
             return
 
         handle = ConnectionHandle(con, threading.get_ident(), caps)
+        self._handle = handle
         with self._lock:
             self._con = con
             self._caps = caps
@@ -839,6 +886,15 @@ def _own_spatial(con: Any) -> str:
     return ""
 
 
+def _without_async_writes(con: Any) -> None:
+    """DuckDB 2.0 escribe los archivos de `COPY … TO` con hilos asíncronos, y cancelar una de esas
+    escrituras a veces la deja bloqueada para siempre (#175). Sin hilos asíncronos escribe igual de
+    rápido y la cancelación siempre termina. En versiones sin el ajuste no hay nada que cambiar."""
+    has = con.execute("SELECT count(*) FROM duckdb_settings() WHERE name = 'async_threads'").fetchall()
+    if has[0][0]:
+        con.execute("SET async_threads = 0")
+
+
 def _own_temp_directory(con: Any) -> tuple[str, int]:
     """#172: los archivos temporales de DuckDB, en una carpeta propia de la sesión, con su tope de disco.
     Sin esto, una base en memoria escribe en `.tmp` dentro de la carpeta de trabajo de QGIS (a menudo de
@@ -911,6 +967,8 @@ def _wrap_start_error(exc: BaseException) -> BaseException:
 
 
 _PRIORITY, _NORMAL, _STOP = 0, 1, 2
+#: Cada cuánto se repite la interrupción de una sentencia cancelada que sigue en curso.
+_REINTERRUPT_S = 0.05
 
 _WKB_NAMES = {
     1: "POINT",
