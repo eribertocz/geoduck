@@ -301,7 +301,7 @@ class SessionCoordinator:
         if self._transaction is not None and self._transaction.is_open:
             return tr("There is an open transaction: commit (COMMIT) or roll back (ROLLBACK) first.")
         # Las capas Conectadas no bloquean (G3, qgis-bridge-spec §5.5): quedan «no disponibles» y vuelven al
-        # reabrir la base; solo bloquean los cambios sin guardar (`_guard_unsaved`). Propietario, 2026-11-13.
+        # reabrir la base; solo bloquean los cambios sin guardar (`_guard_unsaved`).
         return None
 
     def layers_reading(self, name: str) -> list[str]:

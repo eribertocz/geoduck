@@ -471,7 +471,7 @@ def test_run_sql_typed_by_the_user_through_execute_too(coordinator):
 
 
 def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coordinator):
-    """Propietario (2026-11-06): el resultado de una consulta se maneja como la pestaña de tabla: «Filas 1–100
+    """El resultado de una consulta se maneja como la pestaña de tabla: «Filas 1–100
     de N · tiempo» abajo, ‹ › de 100 filas, el total contado aparte y el detalle de la fila, plegable."""
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT range AS n, 'v' || range AS v FROM range(250);")
@@ -527,7 +527,7 @@ def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinato
 
 
 def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
-    """Propietario (2026-11-06): un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
+    """Un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
     (la sentencia del cursor, también en una línea en blanco, igual con DuckDB 1.5 y 2.0); con selección,
     «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Shift+Enter."""
     from geoduck.ui.pro.editor import MARK, PLAY
@@ -717,7 +717,7 @@ def test_the_lake_swims_and_rests_with_reduced_motion(qgis_app, monkeypatch):
 
 
 def test_the_run_button_is_a_compact_filled_square(coordinator):
-    """Propietario (2026-11-13, opción 1): ▶ lleno, 28 × 28, a la altura del selector de base."""
+    """▶ lleno, 28 × 28, a la altura del selector de base."""
     from geoduck.ui.pro.query_page import RUN_SIZE
 
     ws = workspace(coordinator)
