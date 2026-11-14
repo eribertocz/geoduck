@@ -107,6 +107,14 @@ class DetachFailed:
 
 
 @dataclass(frozen=True)
+class ActivationFailed:
+    """No se cambió la base activa (#168): sigue la anterior y la sesión sigue utilizable."""
+
+    code: ErrorCode
+    message: str
+
+
+@dataclass(frozen=True)
 class TransactionStateChanged:
     """Estado transaccional comprobado en DuckDB; `None` cuando ya no hay sesión."""
 
@@ -304,6 +312,7 @@ AppEvent = (
     | AttachFailed
     | DatabaseDetached
     | DetachFailed
+    | ActivationFailed
     | TransactionStateChanged
     | TransactionFailed
     | CloseConfirmationRequired

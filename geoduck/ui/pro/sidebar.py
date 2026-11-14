@@ -79,6 +79,8 @@ META = Qt.ItemDataRole.UserRole + 1
 TARGET = Qt.ItemDataRole.UserRole + 2
 #: El texto secundario en turquesa (la geometría) en vez de gris.
 ACCENT_META = Qt.ItemDataRole.UserRole + 3
+#: La base activa (#168): franja y nombre turquesa, con la etiqueta «activa».
+ACTIVE = Qt.ItemDataRole.UserRole + 4
 SECTION, DATABASE, SCHEMA, GROUP, PLACE = "section", "database", "schema", "group", "place"
 #: Una columna de una tabla o vista (#147): (fuente, ColumnInfo).
 COLUMN = "column"
@@ -151,6 +153,14 @@ class _NavDelegate(QStyledItemDelegate):
             bar.setAlphaF(fresh)
             rect = option.rect  # type: ignore[attr-defined]
             painter.fillRect(QRect(0, rect.y(), 3, rect.height()), bar)
+            painter.restore()
+        if index.data(ACTIVE) and not lake:  # la base activa (#168): turquesa claro con su franja
+            painter.save()
+            rect = option.rect  # type: ignore[attr-defined]
+            painter.fillRect(
+                QRect(0, rect.y(), rect.right() + 1, rect.height()), QColor(self.colors.accent_soft)
+            )
+            painter.fillRect(QRect(0, rect.y(), 3, rect.height()), QColor(self.colors.accent))
             painter.restore()
         if lake:  # «el lago» (marca): la base se pinta de turquesa claro, con el pato a la derecha
             painter.save()
@@ -233,7 +243,7 @@ class _NavDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
         rect = option.rect  # type: ignore[attr-defined]
-        width = QFontMetrics(self.small).horizontalAdvance(meta) + 10
+        width = QFontMetrics(self.small).horizontalAdvance(meta) + (20 if index.data(ACTIVE) else 10)
         full = QStyleOptionViewItem(option)
         self.initStyleOption(full, index)
         full.text = ""
@@ -245,6 +255,9 @@ class _NavDelegate(QStyledItemDelegate):
         narrow.rect = QRect(rect.x(), rect.y(), max(0, rect.width() - width), rect.height())
         super().paint(painter, narrow, index)
         if getattr(self, "_lake", False):
+            return
+        if index.data(ACTIVE):  # «activa»: una pastilla turquesa (maqueta `bases`)
+            self._paint_pill(painter, QRect(rect.right() - width, rect.y(), width - 4, rect.height()), meta)
             return
         painter.save()
         painter.setFont(self.small)
@@ -259,6 +272,21 @@ class _NavDelegate(QStyledItemDelegate):
             int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight),
             meta,
         )
+        painter.restore()
+
+    def _paint_pill(self, painter: QPainter, area: QRect, text: str) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        bold = QFont(self.small)
+        bold.setBold(True)
+        painter.setFont(bold)
+        width = QFontMetrics(bold).horizontalAdvance(text) + 12
+        pill = QRectF(area.right() - width, area.center().y() - 8, width, 16)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(self.colors.accent))
+        painter.drawRoundedRect(pill, 8, 8)
+        painter.setPen(QColor(self.colors.on_accent))
+        painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), text)
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:  # noqa: N802
@@ -487,6 +515,10 @@ class Sidebar(QFrame):
     close_session_requested = pyqtSignal()
     open_database_requested = pyqtSignal()
     create_database_requested = pyqtSignal()
+    #: «Nueva base en memoria…» (#168).
+    memory_database_requested = pyqtSignal()
+    #: «Usar como base activa» (#168): el nombre de la base.
+    activate_requested = pyqtSignal(str)
     send_layers_requested = pyqtSignal()
     #: «Importar archivos…» (qgis-import-spec §10): (base, esquema) donde, o None = la base actual.
     import_files_requested = pyqtSignal(object)
@@ -505,6 +537,8 @@ class Sidebar(QFrame):
         self.colors = colors
         self.places = places
         self.catalog: CatalogSnapshot | None = None
+        #: Por qué no se puede cerrar una base (#168), o None; lo pone el workspace (`close_reason`).
+        self.close_reason: Callable[[str], str | None] | None = None
         #: Columnas conocidas por objeto (del catálogo que se muestra) y los objetos abiertos en el árbol.
         self.columns: dict[tuple[str, str, str], tuple[ColumnInfo, ...]] = {}
         self._tables_open: set[tuple[str, str, str]] = set()
@@ -574,6 +608,8 @@ class Sidebar(QFrame):
         self.session_open_db.triggered.connect(self.open_database_requested.emit)
         self.session_create_db = self.session_menu.addAction(tr("Create database…"))
         self.session_create_db.triggered.connect(self.create_database_requested.emit)
+        self.session_memory_db = self.session_menu.addAction(tr("New database in memory…"))
+        self.session_memory_db.triggered.connect(self.memory_database_requested.emit)
         self.refresh_action = self.session_menu.addAction(tr("Refresh"))
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
         self.session_menu.addSeparator()
@@ -646,6 +682,8 @@ class Sidebar(QFrame):
         self.open_db_action.triggered.connect(self.open_database_requested.emit)
         self.create_db_action = self.add_menu.addAction(tr("Create database…"))
         self.create_db_action.triggered.connect(self.create_database_requested.emit)
+        self.memory_db_action = self.add_menu.addAction(tr("New database in memory…"))
+        self.memory_db_action.triggered.connect(self.memory_database_requested.emit)
         self.add_menu.addSeparator()
         self.import_action = self.add_menu.addAction(tr("Import files…"))
         self.import_action.triggered.connect(lambda: self.import_files_requested.emit(None))
@@ -718,9 +756,9 @@ class Sidebar(QFrame):
         self.refresh_action.setVisible(dot != "off")
         self.close_action.setVisible(dot != "off")
         self.start_action.setVisible(dot == "off")
-        for action in (self.session_open_db, self.session_create_db):
+        for action in (self.session_open_db, self.session_create_db, self.session_memory_db):
             action.setEnabled(ready or dot == "off")
-        for action in (self.open_db_action, self.create_db_action):
+        for action in (self.open_db_action, self.create_db_action, self.memory_db_action):
             action.setEnabled(ready or dot == "off")
         self.send_action.setEnabled(ready)
         # Sin DuckDB, todo en gris salvo iniciar, abrir o crear una base, Diagnóstico y Acerca de
@@ -730,12 +768,13 @@ class Sidebar(QFrame):
             widget.setEnabled(started)
 
     def current_target(self) -> tuple[str, str] | None:
-        """La base actual para capas soltadas fuera de una base: la de la fila elegida, si es escribible."""
-        item = self.tree.currentItem()
-        while item is not None:
-            if item.data(0, TARGET):
-                return tuple(item.data(0, TARGET))
-            item = item.parent()
+        """El destino de lo nuevo sin una base elegida a mano (#168: una sola verdad): la base activa, en
+        `main` o su único esquema, si es escribible. Soltar sobre una base sigue eligiendo esa."""
+        for index in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(index)
+            if item is not None and item.data(0, ACTIVE):
+                target = item.data(0, TARGET)
+                return tuple(target) if target else None
         return None
 
     def render(self, catalog: CatalogSnapshot | None) -> None:
@@ -760,6 +799,8 @@ class Sidebar(QFrame):
             for db in catalog.databases:
                 writable = db.in_memory or db.access is not AccessMode.READ_ONLY
                 self._add_database(catalog, db.name, _access_text(db.access, db.in_memory), writable)
+                if catalog_key(db.name) == catalog_key(catalog.default):
+                    self._mark_active(tree.topLevelItem(tree.topLevelItemCount() - 1), db.name)
             if catalog.temporaries:
                 temp = self._node(None, tr("Temporary"), (GROUP, "temp"), GROUP, bold=True)
                 for obj in sorted(catalog.temporaries, key=lambda o: o.name.casefold()):
@@ -820,6 +861,15 @@ class Sidebar(QFrame):
         item.setExpanded(self._is_open(key))
         self._quiet = False
         return item
+
+    def _mark_active(self, item: QTreeWidgetItem, name: str) -> None:
+        """La base activa (#168): una sola en la sesión; el editor muestra la misma."""
+        access = item.data(0, META)
+        item.setData(0, ACTIVE, True)
+        item.setData(0, META, tr("active"))
+        item.setForeground(0, QColor(self.colors.accent))
+        item.setIcon(0, icons.icon("database", self.colors.accent, 14))
+        item.setToolTip(0, f"{name} · {access}\n" + tr("Active database: «Run» and everything new go here"))
 
     def _add_database(self, catalog: CatalogSnapshot, name: str, access: str, writable: bool = True) -> None:
         db = self._node(None, name, (DATABASE, catalog_key(name)), DATABASE, bold=True)
@@ -1179,12 +1229,21 @@ class Sidebar(QFrame):
                 )
                 menu.addAction(text, lambda: self.favorite_requested.emit(place))
         elif data[0] in (DATABASE, SCHEMA) and self.catalog is not None:
+            db = self.catalog.get(item.text(0)) if data[0] == DATABASE else None
+            if db is not None and catalog_key(db.name) != catalog_key(self.catalog.default):
+                # #168: una sola base activa; también desde el desplegable del editor y Ctrl+K
+                menu.addAction(tr("Use as active database"), lambda: self.activate_requested.emit(db.name))
             if target:  # una base o un esquema en escritura (qgis-import-spec §10)
                 where = tuple(target)
                 menu.addAction(tr("Import files here…"), lambda: self.import_files_requested.emit(where))
-            db = self.catalog.get(item.text(0)) if data[0] == DATABASE else None
-            if db is not None and not self.catalog.is_root(db.name):
-                menu.addAction(tr("Close database"), lambda: self.detach_requested.emit(db.name))
+            if db is not None:
+                menu.addSeparator()
+                close = menu.addAction(tr("Close database"), lambda: self.detach_requested.emit(db.name))
+                reason = self.close_reason(db.name) if self.close_reason is not None else None
+                if reason:  # en gris, con el motivo (la activa, la última, una base en uso)
+                    close.setEnabled(False)
+                    close.setToolTip(tr("Cannot be closed. {0}").format(reason))
+                    menu.setToolTipsVisible(True)
             if menu.isEmpty():
                 return
         else:

@@ -17,6 +17,7 @@ from dataclasses import replace
 from typing import Any
 
 from geoduck.app.events import (
+    ActivationFailed,
     AppEvent,
     AttachFailed,
     CatalogChanged,
@@ -277,10 +278,68 @@ class SessionCoordinator:
                 tr("A database cannot be detached in state {0}").format(self._sm.state.value)
             )
         self._guard_unsaved(tr("detach «{0}»").format(alias), alias)
+        reason = self.close_reason(alias)
+        if reason is not None:  # #168: la activa, la última o una base en uso no se cierran
+            raise SessionStateError(reason)
         engine = self._engine
         self._sm.transition(SessionState.DETACHING)
         detaching = engine.detach(alias)
         detaching.add_done_callback(lambda fut: self._dispatcher.post(lambda: self._on_detached(engine, fut)))
+
+    def close_reason(self, name: str) -> str | None:
+        """Por qué no se puede cerrar la base `name` ahora (#168), o None si se puede. La interfaz deja
+        «Cerrar base» en gris con este motivo; `detach_database` lo vuelve a comprobar."""
+        catalog = self._catalog
+        if catalog is None or catalog.get(name) is None:
+            return None  # el motor responde «no está adjunta» con lo que hay en DuckDB, no con lo supuesto
+        if catalog_key(name) == catalog_key(catalog.default):
+            return tr("It is the active database: make another database active first.")
+        if len(catalog.databases) == 1:
+            return tr("It is the only database: there must always be one.")
+        if self._sm.state is not SessionState.READY:
+            return tr("GeoDuck is busy: wait until it finishes.")
+        if self._transaction is not None and self._transaction.is_open:
+            return tr("There is an open transaction: commit (COMMIT) or roll back (ROLLBACK) first.")
+        # Las capas Conectadas no bloquean (G3, qgis-bridge-spec §5.5): quedan «no disponibles» y vuelven al
+        # reabrir la base; solo bloquean los cambios sin guardar (`_guard_unsaved`). Propietario, 2026-11-13.
+        return None
+
+    def layers_reading(self, name: str) -> list[str]:
+        """Capas Conectadas de QGIS que leen la base `name` (para avisar al cerrar una base en memoria)."""
+        return self._loader.layers_reading(name) if self._loader is not None else []
+
+    def activate_database(self, name: str) -> None:
+        """«Usar como base activa» (#168): la única base activa de la sesión. La sesión pasa por `BUSY`."""
+        if self._sm.state is not SessionState.READY or self._engine is None:
+            raise SessionStateError(
+                tr("The active database cannot be changed in state {0}").format(self._sm.state.value)
+            )
+        if self._catalog is not None and catalog_key(name) == catalog_key(self._catalog.default):
+            return
+        engine = self._engine
+        self._sm.transition(SessionState.BUSY)
+        activating = engine.activate(name)
+        activating.add_done_callback(
+            lambda fut: self._dispatcher.post(lambda: self._on_activated(engine, fut))
+        )
+
+    def _on_activated(self, engine: SessionEngine, fut: Future[CatalogSnapshot]) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return  # la sesión se cerró o se invalidó mientras tanto
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return
+        if exc is None:
+            self._sm.transition(SessionState.READY)
+            self._catalog_generation += 1
+            self._catalog = fut.result()
+            self._emit(CatalogChanged(self._catalog))
+            return
+        code, message = _describe(exc)
+        usable = self._end_failed_operation(exc)
+        self._emit(ActivationFailed(code, message))
+        if usable:
+            self.refresh_catalog()
 
     @property
     def data_epoch(self) -> int:

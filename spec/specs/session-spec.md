@@ -3,7 +3,7 @@
 **Estado:** baseline para Alpha · **IDs:** GD-SES-001..005
 
 ## 1. Semántica general
-GeoDuck mantiene una **única sesión lógica** con conexión física raíz en `:memory:`. Seleccionar archivo persistente en la pantalla de inicio equivale a adjuntarlo con alias asignado a su base principal visible. El archivo se puede `DETACH` sin cerrar todo GeoDuck. La raíz en memoria no se puede `DETACH` desde la UI.
+GeoDuck mantiene una **única sesión lógica** con conexión física raíz en `:memory:`. Seleccionar archivo persistente en la pantalla de inicio equivale a adjuntarlo con alias asignado a su base principal visible. El archivo se puede `DETACH` sin cerrar todo GeoDuck. **Base activa** (#168, propietario, 2026-11-13): una sola por sesión, la predeterminada de DuckDB (`USE`); el explorador y el editor muestran la misma. Cualquier base se puede `DETACH`, también la `memory` del inicio, **salvo la activa y la última**: siempre queda una. Se puede adjuntar una base nueva en memoria con alias (`ATTACH ':memory:' AS <alias>`; por defecto `memory`, o `memory_2`… si ya existe).
 
 La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` compartido simultáneamente con la UI. Los objetos temporales persisten durante la sesión; al salir de ella desaparecen.
 
@@ -22,9 +22,9 @@ La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` 
 - El motor decide cuándo un mismo archivo puede o no adjuntarse simultáneamente o en modo RW por bloqueos.
 
 ### `DetachDatabase(alias)`
-- Comprueba que no sea la raíz y que la base esté adjunta.
-- Rechaza o encola la operación cuando hay transferencias/consultas activas; ofrece cancelar primero.
-- Si el catálogo elegido es predeterminado, cambia primero al catálogo raíz identificado en introspección, no asume que se llama `memory`.
+- Comprueba que la base esté adjunta, que **no sea la activa** (predeterminada) ni **la última** (#168). Nunca cambia la activa en silencio para poder cerrarla: hay que activar otra antes. La `memory` del inicio se cierra como cualquier otra.
+- Rechaza o encola la operación cuando hay transferencias/consultas activas o una transacción abierta; la interfaz deja «Cerrar base» en gris con el motivo.
+- Una base en memoria con tablas pide confirmar («Cerrar y perder N tablas»), y avisa si la leen capas Conectadas (quedarán sin datos).
 - Ejecuta `DETACH` real; verifica desaparición del catálogo; libera readers/resultados propios relacionados.
 - **No modifica ni elimina capas QGIS previamente entregadas** (Memoria e Instantánea).
 - Capas **Conectadas** de esa base (qgis-bridge-spec §5.5): si alguna tiene cambios sin guardar, el DETACH se rechaza con la lista de capas; si no, quedan «no disponibles» y vuelven al adjuntar de nuevo la base con el mismo alias.
@@ -89,7 +89,7 @@ Mensajes operativos distinguibles: `DB_NOT_FOUND`, `DB_LOCKED`, `DB_ALIAS_CONFLI
 - Archivo RW: escritura y persistencia; bloqueos recuperados al `DETACH`.
 - `ATTACH` en SQL se refleja en UI; `DETACH` en UI invalida futuras lecturas de ese alias.
 - Capa ya entregada permanece funcional después de `DETACH` y del cierre del plugin.
-- `USE <alias>` seguido de `DETACH <alias>`: transición correcta al catálogo raíz.
+- `USE <alias>` seguido de `DETACH <alias>`: rechazado (es la activa) sin cambio oculto; con otra activa, la `memory` del inicio se cierra y la referencia pasa a la activa (#168).
 - Reader Arrow abierto: `DETACH` no se adelanta a la liberación del reader.
 - Base externa bloqueada: error claro, catálogo coherente, sin estado fantasma.
 - Invalidación de sesión (G1): INV-1 una sola notificación `SESSION_INVALIDATED`; INV-2 lo pendiente y la lectura Arrow en curso terminan con error, nunca con resultado ni como lectura completa; INV-3 toda operación posterior se rechaza sin llamar a DuckDB; INV-4 `ERROR_RECOVERABLE` sin retorno a `READY` y «Nueva sesión» con hilo y conexión nuevos; INV-5 el cierre pedido por el usuario no emite la notificación.
