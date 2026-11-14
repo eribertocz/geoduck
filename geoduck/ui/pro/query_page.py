@@ -140,6 +140,8 @@ class QueryPage(QWidget):
     open_requested = pyqtSignal()
     #: Aviso para el pie del workspace.
     notice = pyqtSignal(str)
+    #: Un aviso de esta consulta mostrado en su pestaña (#177).
+    said = pyqtSignal(str)
     #: Archivos soltados en el editor que no se leen con SQL (Arrow, no compatibles): al área de trabajo.
     import_files_requested = pyqtSignal(list)
     #: «Base activa ▾» (#168): el usuario eligió otra base; el workspace la activa para toda la sesión.
@@ -342,6 +344,10 @@ class QueryPage(QWidget):
         self.error_link.linkActivated.connect(lambda _l: self._go_to_error())
         self.error_link.hide()
         row.addWidget(self.error_link)
+        # #177: los avisos de esta consulta se quedan aquí, en su pestaña (nunca en el pie de la aplicación)
+        self.hint = label("", "error")
+        self.hint.hide()
+        row.addWidget(self.hint)
         # en una ventana angosta, el resumen y el enlace se recortan; «Resultado | Mensajes» nunca (#145)
         self.view.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         for text in (self.summary, self.error_link):
@@ -461,6 +467,14 @@ class QueryPage(QWidget):
         row.addWidget(self.column_summary, 1)
         return foot
 
+    def say(self, text: str) -> None:
+        """Un aviso de esta consulta (#177): en la barra del resultado, hasta la siguiente acción."""
+        self.hint.setText(text)
+        self.hint.setToolTip(text)
+        self.hint.setVisible(bool(text))
+        if text:
+            self.said.emit(text)
+
     # -- base de la consulta --------------------------------------------------------------------------
 
     @property
@@ -528,11 +542,11 @@ class QueryPage(QWidget):
         que corre: la sentencia se calcula aquí (`domain.statements`), igual con DuckDB 1.5 y 2.0."""
         blocked = self._blocked()
         if blocked:
-            self.notice.emit(blocked)  # nunca en silencio (#139)
+            self.say(blocked)  # nunca en silencio (#139)
             return
         text = self.editor.text()
         if not text.strip():
-            self.notice.emit(tr("There is no SQL to run"))
+            self.say(tr("There is no SQL to run"))
             return
         cursor, base = 0, 0
         sql = text
@@ -544,7 +558,7 @@ class QueryPage(QWidget):
         elif scope is RunScope.CURRENT:
             span = self.current_span()
             if span is None:
-                self.notice.emit(tr("There is no SQL to run"))
+                self.say(tr("There is no SQL to run"))
                 return
             scope, base, sql = RunScope.SELECTION, span[0], text[span[0] : span[1]]
         try:
@@ -557,8 +571,9 @@ class QueryPage(QWidget):
                 database=self.database,
             )
         except GeoDuckError as exc:
-            self.notice.emit(exc.message)
+            self.say(exc.message)
             return
+        self.say("")  # la acción siguiente borra el aviso anterior (#177)
         self.run = Run(run_id, text)
         self.set_result_open(True)  # al ejecutar, el resultado se abre solo (#144, punto 10)
         self.editor.status.clear()  # las marcas son de la ejecución anterior (#139)
@@ -1104,7 +1119,7 @@ class QueryPage(QWidget):
             self.load_extension(fix.value)
             return
         if self.editor.text() != text:  # las posiciones son las del texto que corrió
-            self.notice.emit(tr("The SQL changed since it ran: run it again to fix this error"))
+            self.say(tr("The SQL changed since it ran: run it again to fix this error"))
             return
         replacement = fix.text
         if fix.kind == CHOOSE_FILE:
@@ -1125,7 +1140,7 @@ class QueryPage(QWidget):
         from qgis.PyQt.QtGui import QDesktopServices  # noqa: PLC0415
 
         if not folder or not Path(folder).is_dir():
-            self.notice.emit(tr("The folder «{}» does not exist either").format(folder))
+            self.say(tr("The folder «{}» does not exist either").format(folder))
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
@@ -1142,7 +1157,7 @@ class QueryPage(QWidget):
             self._coordinator.check_spatial()  # instalada o no: la respuesta decide INSTALL + LOAD o LOAD
         except GeoDuckError as exc:
             self._loading_extension = False
-            self.notice.emit(exc.message)
+            self.say(exc.message)
 
     def _line(self, ok: bool, message: str, text: str, offset: int | None) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -1321,11 +1336,11 @@ class QueryPage(QWidget):
         try:
             write_text(Path(path), text)
         except OSError as exc:
-            self.notice.emit(tr("The query could not be saved: {}").format(exc.strerror or str(exc)))
+            self.say(tr("The query could not be saved: {}").format(exc.strerror or str(exc)))
             return False
         self.saved_text = text
         self.changed.emit()
-        self.notice.emit(tr("Query saved in {}").format(Path(path).name))
+        self.say(tr("Query saved in {}").format(Path(path).name))
         return True
 
     def _file_dialog(self, title: str, name: str, pattern: str) -> str:
@@ -1392,19 +1407,19 @@ class QueryPage(QWidget):
         if isinstance(event, SpatialChecked):
             if event.loaded:
                 self._loading_extension = False
-                self.notice.emit(tr("«spatial» is already loaded: run the query again"))
+                self.say(tr("«spatial» is already loaded: run the query again"))
                 return
             try:
                 self._coordinator.activate_spatial(install=not event.installed)
             except GeoDuckError as exc:
                 self._loading_extension = False
-                self.notice.emit(exc.message)
+                self.say(exc.message)
         elif isinstance(event, SpatialActivated):
             self._loading_extension = False
-            self.notice.emit(tr("«spatial» is loaded: run the query again"))
+            self.say(tr("«spatial» is loaded: run the query again"))
         elif isinstance(event, SpatialActivationFailed):
             self._loading_extension = False
-            self.notice.emit(tr("«spatial» could not be loaded: {}").format(event.message))
+            self.say(tr("«spatial» could not be loaded: {}").format(event.message))
 
     def close_page(self) -> None:
         """La pestaña se cierra: deja de escuchar; lo pendiente se guarda en su archivo."""

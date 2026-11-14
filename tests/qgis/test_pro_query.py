@@ -243,13 +243,13 @@ def test_run_never_fails_silently(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT count(*) FROM range(100000000000) a;")
     notices = []
-    page.notice.connect(notices.append)
+    page.said.connect(notices.append)  # #177: en su pestaña
     page.run_button.click()
     assert wait_for(page.stop_button.isEnabled)
     _ctrl_enter(page)
     assert notices == [tr("A query is already running · «Cancel» stops it")]
     other = new_query(ws, "SELECT 1;")
-    other.notice.connect(notices.append)
+    other.said.connect(notices.append)  # #177: en su pestaña
     _ctrl_enter(other)
     assert notices[-1] == tr(
         "GeoDuck is finishing another task (loading, exporting or importing): run it when it ends"
@@ -761,7 +761,7 @@ def test_a_card_does_not_fix_a_text_that_changed_and_loading_spatial_asks_first(
     assert wait_for(lambda: done(coordinator, page) and page.results)
     [card] = page.cards
     notices = []
-    page.notice.connect(notices.append)
+    page.said.connect(notices.append)  # #177: en su pestaña
     page.editor.setText("SELECT kwhh FROM range(1); -- cambiado")
     page.apply_fix(card.card.fixes[0], page.run_text)
     assert page.editor.text().endswith("-- cambiado") and notices
