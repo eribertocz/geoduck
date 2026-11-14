@@ -1086,9 +1086,11 @@ class DataGrid(QWidget):
         rows: tuple[tuple[object, ...], ...] | None = None,
         total: int | None = None,
         replayable: bool = True,
+        count: bool = True,
     ) -> None:
         """Muestra `browse`. Con `rows` (las primeras filas que trajo la ejecución de una consulta), sin leer
-        nada; el total, si no se sabe, lo cuenta DuckDB aparte."""
+        nada; el total, si no se sabe, lo cuenta DuckDB aparte (salvo `count=False`: una consulta cara que se
+        está guardando, #170; el total sale del resultado guardado)."""
         self.replayable = replayable
         self.browse = browse
         self.header.sortable = replayable
@@ -1103,11 +1105,17 @@ class DataGrid(QWidget):
         self.dense = False
         self._generation += 1
         self._render_filters()
-        count = total if total is not None else (None if replayable else len(rows))
-        self._show_page(browse, rows, 0, count)
-        if total is None and replayable:
-            self._read(browse.count_sql(), 1, self._counted, fresh=lambda: self.browse is browse, quiet=True)
+        known = total if total is not None else (None if replayable else len(rows))
+        self._show_page(browse, rows, 0, known)
+        if total is None and replayable and count:
+            self.count_total()
         self.changed.emit()
+
+    def count_total(self) -> None:
+        """Cuenta el total con los filtros actuales (aparte, sin bloquear)."""
+        browse = self.browse
+        if browse is not None and self.replayable:
+            self._read(browse.count_sql(), 1, self._counted, fresh=lambda: self.browse is browse, quiet=True)
 
     def reload(self, *, keep_offset: bool = False) -> None:
         """Vuelve a leer lo visible (y el total) con los filtros y el orden actuales."""

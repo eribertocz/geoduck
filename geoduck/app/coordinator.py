@@ -84,7 +84,7 @@ from geoduck.domain.sql import (
     StatementStatus,
     detach_target,
 )
-from geoduck.domain.sql_text import load_sql
+from geoduck.domain.sql_text import load_sql, quote_identifier
 from geoduck.domain.transaction import CloseChoice, TransactionState
 
 _log = logging.getLogger("geoduck.app")
@@ -851,6 +851,54 @@ class SessionCoordinator:
         handle.future.add_done_callback(
             lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result()))
         )
+
+    def save_result(
+        self,
+        name: str,
+        sql: str,
+        on_done: Callable[[StatementOutcome | BaseException], None],
+        *,
+        database: str | None = None,
+    ) -> int:
+        """Guarda **una vez** el resultado de una consulta cara en `temp.<name>` (#170, performance-spec §8):
+        desde ahí, desplazarse, ordenar, contar, exportar y cargar no la repiten. En segundo plano (la sesión
+        sigue `READY`; las lecturas esperan su turno), con «Cancelar» (`cancel_operation`). DuckDB lo pasa a
+        disco si no cabe en memoria. Devuelve el id de la operación."""
+        engine = self._require_ready(tr("save the result"))
+        statement = f"CREATE OR REPLACE TEMP TABLE {quote_identifier(name)} AS {load_sql(sql)}"
+
+        def save(handle: Any, _token: Any) -> StatementOutcome:
+            # el avance («64 %») solo existe con el seguimiento de DuckDB encendido; en la sesión propia de
+            # GeoDuck y sin imprimir nada (ADR-0011: nada ajeno se toca)
+            handle.execute("SET enable_progress_bar = true", max_rows=1)
+            handle.execute("SET enable_progress_bar_print = false", max_rows=1)
+            outcome: StatementOutcome = handle.execute(statement, max_rows=1)
+            return outcome
+
+        handle = engine.submit(save, database=database)
+        handle.future.add_done_callback(
+            lambda f: self._dispatcher.post(lambda: on_done(f.exception() or f.result()))
+        )
+        return handle.op_id
+
+    def drop_result(self, name: str) -> None:
+        """Borra un resultado guardado (al volver a ejecutar o al cerrar la pestaña). Sin sesión no hace
+        falta: las tablas temporales se van con ella."""
+        engine = self._engine
+        if engine is None or self._sm.state not in (SessionState.READY, SessionState.BUSY):
+            return
+        statement = f"DROP TABLE IF EXISTS temp.main.{quote_identifier(name)}"
+        try:
+            engine.submit(lambda h, _t: h.execute(statement, max_rows=1))
+        except GeoDuckError:
+            return
+
+    def cancel_operation(self, op_id: int) -> bool:
+        """Cancela una operación concreta del motor (guardar un resultado), sin tocar las demás."""
+        return self._engine.cancel(op_id) if self._engine is not None else False
+
+    def query_progress(self) -> float | None:
+        return self._engine.progress() if self._engine is not None else None
 
     def scan_files(self, paths: list[str], on_done: Callable[[Any], None]) -> None:
         """Archivos → DuckDB, paso 1 (qgis-import-spec §10): las capas de cada archivo, leídas por DuckDB

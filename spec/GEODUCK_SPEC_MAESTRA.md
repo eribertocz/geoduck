@@ -1734,6 +1734,12 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   el total repiten la lectura (`LIMIT`/`OFFSET`, `count(*)`) en el worker, sin bloquear. Sin `ORDER BY`, el
   orden entre páginas no está garantizado. Una escritura con filas (`… RETURNING`) nunca se repite: muestra su
   primera página, «Filas 1–8 de más de 100»: se recorre, pero no trae más.
+  **Consulta cara** (#170, E2b; performance-spec §8): si la ejecución tardó más de 300 ms, el resultado se guarda
+  **una vez** en `temp.geoduck_result_<n>`, en segundo plano, con «⟳ Preparando… 64 % · Cancelar» en el pie (el
+  porcentaje, con DuckDB 2.0; con 1.5, solo «Preparando…»). Desde ahí se lee por posición: desplazarse, contar,
+  ordenar, filtrar, exportar y «Copia» no repiten la consulta («Conectada» usa la consulta original, para que la
+  capa no dependa de un resultado que se borra). Se borra al volver a ejecutar, al cerrar la pestaña o la
+  sesión. Al cancelar o si falla, se sigue repitiendo la consulta con ventana, y se dice en la pestaña.
 - **Abrir y guardar** `.sql` (Ctrl+O, Ctrl+S) con autoguardado y copia de recuperación activada por defecto
   (ADR-0014, ahora por consulta; propietario, 2026-11-05). Un cuaderno de G7 se abre como **una consulta** (sus celdas, en orden; la base de cada celda,
   como comentario).
