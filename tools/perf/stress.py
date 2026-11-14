@@ -39,7 +39,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from qgis.core import Qgis, QgsApplication, QgsProject
-from qgis.PyQt.QtCore import QT_VERSION_STR, QCoreApplication
+from qgis.PyQt.QtCore import QT_VERSION_STR, QCoreApplication, QEvent
 
 #: Crecimiento máximo de la RAM entre la primera y la última vuelta (performance-spec §6).
 RAM_GROWTH = 0.10
@@ -317,6 +317,9 @@ def main() -> None:  # noqa: PLR0915 - la vuelta completa, en orden
                 except Exception:
                     failures.append(f"vuelta {n}: no se pudo cerrar la sesión")
                     break
+        # Sin el bucle de eventos de QGIS, Qt 5 no borra lo que espera `deleteLater()` (ventanas cerradas):
+        # aquí se hace como lo haría QGIS, para medir la RAM real y no lo que solo espera su turno.
+        QCoreApplication.sendPostedEvents(None, getattr(QEvent, "Type", QEvent).DeferredDelete)
         gc.collect()
         lap["segundos"] = round(time.monotonic() - lap_start, 1)
         lap["ram_mb"] = round(rss_mb(), 1)
