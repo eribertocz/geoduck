@@ -403,3 +403,22 @@ def test_the_export_window_shows_duckdbs_progress(qgis_app, tmp_path):
     assert trace.row.status.text() == "Escribiendo… 42 %"
     assert trace.steps[1].progress == 0.424
     trace.window.close()
+
+
+def test_a_closed_export_window_is_freed(qgis_app, tmp_path):
+    """#175: cada exportación abre su ventana; al cerrarla se libera (antes quedaba en memoria)."""
+    from qgis.PyQt import sip
+
+    from geoduck.app.events import ExportFinished, ExportStarted
+    from geoduck.domain.export import ExportFormat, ExportReport, ExportRequest
+    from geoduck.ui.pro.export_progress import ExportProgress
+
+    path = tmp_path / "salida.csv"
+    path.write_text("n\n1\n")
+    request = ExportRequest("SELECT 1", str(path), ExportFormat.CSV)
+    trace = ExportProgress(None, ExportStarted(1, request), cancel=lambda: None, load=lambda _p: None)
+    trace.finish(ExportFinished(1, ExportReport(str(path), ExportFormat.CSV, 1, ())))
+    window = trace.window
+    window.close()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)

@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QTimer, QUrl
+from qgis.PyQt.QtCore import Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QWidget
 
@@ -79,6 +79,8 @@ class ExportProgress:
         self.done = False
         path = Path(self.request.path)
         self.window = TimelineWindow(parent, tr("Export"))
+        # una ventana por exportación: al cerrarla se libera (#175: si no, cada una quedaba en memoria)
+        self.window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.row = self.window.view.add_row(path.name)
         self.row.set_open(True)
         self.row.user_set = True
