@@ -49,6 +49,9 @@ class LoadRequest:
     separate_types: bool = False
     #: Familia de una capa Conectada separada («Point», «LineString», «Polygon», «GeometryCollection»).
     family: str | None = None
+    #: #172: las filas que se esperan (el total que ya mostraba la grilla), para saber antes si una Copia
+    #: cabe en memoria; None si no se sabe (entonces se mide mientras se copia).
+    expected_rows: int | None = None
 
     @property
     def format_map(self) -> dict[str, str]:

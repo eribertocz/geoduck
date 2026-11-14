@@ -86,6 +86,7 @@ def build_request(
     source_kind: str | None = None,
     database: str | None = None,
     options: dict[str, Any] | None = None,
+    expected_rows: int | None = None,
 ) -> LoadRequest:
     """La carga de un clic: todas las geometrías, con el SRC elegido donde faltaba. Con `options` («Más
     opciones…»), las geometrías elegidas, las columnas WKB/WKT, «Reproyectar a…» y «Separar por tipo»."""
@@ -108,6 +109,7 @@ def build_request(
         formats=tuple(options["formats"]) if options else (),
         reproject_to=options["reproject_to"] if options else None,
         separate_types=bool(options and options["separate_types"]),
+        expected_rows=expected_rows,
     )
 
 
@@ -427,10 +429,18 @@ class QuickLoad:
         source: tuple[str, str, str] | None = None,
         source_kind: str | None = None,
         database: str | None = None,
+        rows: int | None = None,
     ) -> None:
         """«Copia» o «Conectada» de `sql` (una tabla o vista con su `source`, o el resultado de una consulta
-        con su `database`), con el nombre de capa `name`."""
-        job = {"sql": sql, "name": name, "source": source, "source_kind": source_kind, "database": database}
+        con su `database`), con el nombre de capa `name`. `rows`: el total que ya se conoce (#172)."""
+        job = {
+            "sql": sql,
+            "name": name,
+            "source": source,
+            "source_kind": source_kind,
+            "database": database,
+            "rows": rows,
+        }
         self.start_many([job], kind)
 
     def start_many(self, jobs: list[dict[str, Any]], kind: str, *, watch: Any = None) -> None:
@@ -522,6 +532,7 @@ class QuickLoad:
                 source_kind=job.get("source_kind"),
                 database=job.get("database"),
                 options=options,
+                expected_rows=job.get("rows"),
             )
             self._queue.append((request, batch, places[i]))
         self._next()

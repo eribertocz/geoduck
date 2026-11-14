@@ -1373,7 +1373,7 @@ class QueryPage(QWidget):
             return
         name = layer_name(self.load_menu, self._proposed_layer_name())
         sql = self._result_sql(result, connected=kind == CONNECTED)
-        self._loader(sql, name, kind, database=result.database)
+        self._loader(sql, name, kind, database=result.database, rows=self.data.total)  # #172
         self.editor.setFocus()  # el teclado vuelve al editor: Ctrl+Enter sigue funcionando (#139)
 
     # -- archivo --------------------------------------------------------------------------------------

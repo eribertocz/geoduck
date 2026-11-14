@@ -50,3 +50,6 @@ class EngineInfo:
     #: Nombre del catálogo raíz tal como lo informa DuckDB al conectar (`current_database()`).
     #: No se asume que se llame `memory` (session-spec §2, DetachDatabase).
     root_catalog: str
+    #: #172: la carpeta temporal propia de la sesión (DuckDB usa disco cuando no cabe en memoria) y su tope.
+    temp_directory: str = ""
+    temp_limit: int = 0

@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import itertools
 import logging
+import os
 import queue
+import shutil
 import threading
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import Future
@@ -56,7 +58,9 @@ from geoduck.domain.export import ExportReport, ExportRequest
 from geoduck.domain.i18n import tr
 from geoduck.domain.importing import ImportedTable, ImportJob, ImportReport, ImportTarget
 from geoduck.domain.operations import EngineInfo, ReadOutcome, ReadSummary, StatementOutcome
+from geoduck.domain.resources import session_temp_dir, temp_limit
 from geoduck.domain.sql import DEFAULT_PREVIEW_LIMIT, RunScope, ScriptRun, SqlStatement
+from geoduck.domain.sql_text import quote_string_literal
 from geoduck.domain.transaction import TransactionState
 from geoduck.engine.arrow_plain import plain_batch
 from geoduck.engine.attach import attach_database
@@ -278,6 +282,9 @@ class SessionWorker:
         self._con: Any = None  # solo se usa en el hilo del worker; interrupt() es la excepción
         self._caps: EngineCapabilities | None = None
         self._root = ""
+        #: #172: la carpeta temporal propia de la sesión y su tope de disco (bytes).
+        self._temp_dir = ""
+        self._temp_limit = 0
         self._accepting = False
         self._close_requested = False
         self._invalidated: SessionInvalidatedError | None = None
@@ -617,6 +624,7 @@ class SessionWorker:
         con = duckdb.connect(database=self._database)
         try:
             root = str(con.execute("SELECT current_database()").fetchall()[0][0])
+            self._temp_dir, self._temp_limit = _own_temp_directory(con)
         except BaseException:
             con.close()
             raise
@@ -643,6 +651,8 @@ class SessionWorker:
                 database=self._database,
                 interrupt_enabled=caps.interrupt_verified,
                 root_catalog=root,
+                temp_directory=self._temp_dir,
+                temp_limit=self._temp_limit,
             )
         )
         cause: SessionInvalidatedError | None = None
@@ -678,6 +688,8 @@ class SessionWorker:
             except Exception:
                 _log.warning("No se pudo cerrar la conexión DuckDB", exc_info=True)
             finally:
+                if self._temp_dir:  # #172: la carpeta temporal de la sesión se va con ella
+                    shutil.rmtree(self._temp_dir, ignore_errors=True)
                 _resolve(self._invalidation, cause)
                 self._stopped.set_result(None)
 
@@ -786,6 +798,23 @@ class SessionWorker:
             return probe_transaction(handle)
         except Exception:
             return None
+
+
+def _own_temp_directory(con: Any) -> tuple[str, int]:
+    """#172: los archivos temporales de DuckDB, en una carpeta propia de la sesión, con su tope de disco.
+    Sin esto, una base en memoria escribe en `.tmp` dentro de la carpeta de trabajo de QGIS (a menudo de
+    solo lectura) y una consulta que no cabe en memoria falla en vez de usar disco. Si no se puede crear,
+    DuckDB sigue con lo suyo (nunca impide abrir la sesión)."""
+    path = session_temp_dir()
+    try:
+        os.makedirs(path, exist_ok=True)
+        limit = temp_limit(shutil.disk_usage(path).free)
+        con.execute(f"SET temp_directory = {quote_string_literal(path)}")
+        con.execute(f"SET max_temp_directory_size = '{limit // 1024**2}MiB'")
+    except (OSError, duckdb.Error):
+        _log.warning("No se pudo fijar la carpeta temporal de la sesión", exc_info=True)
+        return "", 0
+    return path, limit
 
 
 def _fatal_in_chain(exc: BaseException) -> BaseException | None:

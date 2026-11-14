@@ -93,9 +93,17 @@ class LoadWindow:
         source: tuple[str, str, str] | None = None,
         source_kind: str | None = None,
         database: str | None = None,
+        rows: int | None = None,
     ) -> None:
         """El atajo para una sola carga, con la firma de `QuickLoad.start` (pestañas de tabla y consulta)."""
-        job = {"sql": sql, "name": name, "source": source, "source_kind": source_kind, "database": database}
+        job = {
+            "sql": sql,
+            "name": name,
+            "source": source,
+            "source_kind": source_kind,
+            "database": database,
+            "rows": rows,
+        }
         self.quick([job], kind)
 
     def _arm_reveal(self) -> None:

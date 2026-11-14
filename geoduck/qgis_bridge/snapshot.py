@@ -24,10 +24,11 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import FieldKind, LoadPlan, missing_crs_warning
-from geoduck.domain.errors import ErrorCode, GeoDuckError
+from geoduck.domain.errors import ErrorCode, GeoDuckError, MemoryBudgetError
 from geoduck.domain.i18n import tr
 from geoduck.domain.load import COPY_ACCESS, LoadMode, LoadReport, LoadRequest, describe_origin
 from geoduck.domain.operations import ReadOutcome
+from geoduck.domain.resources import available_memory, copy_budget, size_text
 from geoduck.qgis_bridge.convert import crs_from_field, strip_unreadable
 from geoduck.qgis_bridge.copies import mark_copy
 from geoduck.qgis_bridge.memory import LoadCancelledError
@@ -250,6 +251,11 @@ class _Writer:
         unlink(self.path)
 
 
+#: Filas mínimas antes de estimar lo que ocupará la Copia (con menos, la cabecera del GeoPackage pesa
+#: demasiado en la cuenta).
+BUDGET_SAMPLE_ROWS = 10_000
+
+
 class SnapshotLoad:
     """Una carga Instantánea. Se crea en el hilo principal; GDAL escribe en el hilo del worker."""
 
@@ -283,6 +289,8 @@ class SnapshotLoad:
         self._timer = QTimer()
         self._timer.setInterval(50)
         self._timer.timeout.connect(self._poll)
+        #: #172: cuánto puede ocupar la Copia (la mitad de la memoria libre al empezar); None = no se sabe.
+        self._budget = copy_budget(available_memory())
 
     @property
     def path(self) -> str:
@@ -316,6 +324,7 @@ class SnapshotLoad:
                 self._writer.write(reproject(batch, self._writer))
             finally:
                 gdal.PopErrorHandler()
+            self._check_budget(self._writer)
 
         self._handle = self._engine.load_query(
             self._request.sql,
@@ -327,6 +336,26 @@ class SnapshotLoad:
         )
         self._handle.future.add_done_callback(self._on_read_done)
         self._timer.start()
+
+    def _check_budget(self, writer: _Writer) -> None:  # hilo del worker
+        """#172: tras cada bloque, lo que ocupa el GeoPackage en memoria por fila, por las filas que se
+        esperan, contra el presupuesto. Si no cabe, se detiene antes de llenar la memoria (la Copia a medias
+        se borra como en cualquier fallo)."""
+        budget = self._budget
+        if budget is None or writer.rows < BUDGET_SAMPLE_ROWS:
+            return
+        stat = gdal.VSIStatL(self._path)
+        used = int(stat.size) if stat is not None else 0
+        expected = max(self._request.expected_rows or 0, writer.rows)
+        estimate = used * expected // writer.rows
+        if estimate > budget:
+            raise MemoryBudgetError(
+                tr("It would take about {0} and QGIS has {1} free.").format(
+                    size_text(estimate), size_text(budget * 2)
+                ),
+                estimate=estimate,
+                available=budget * 2,
+            )
 
     def cancel(self) -> None:
         if self._finished:
