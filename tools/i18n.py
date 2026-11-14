@@ -5,7 +5,9 @@ Los textos del código están en inglés, dentro de `tr("…")` o `N_("…")`. E
 `geoduck/i18n/geoduck_es.ts` (XML de Qt Linguist, editable), que GeoDuck lee tal cual (sin `.qm`).
 
     python tools/i18n.py --check    # CI: el .ts tiene cada texto del código, traducido y con los
-                                    # mismos marcadores ({0}, {})
+                                    # mismos marcadores ({0}, {}); ningún texto de la interfaz
+                                    # escrito sin `tr()` (#149); la ficha del complemento, en los dos
+                                    # idiomas
     python tools/i18n.py --write    # actualiza el .ts (añade los nuevos sin traducir, quita los que
                                     # ya no están)
     python tools/i18n.py --write --seed pares.json    # rellena traducciones desde [[es, en], …]
@@ -96,6 +98,119 @@ def problems(sources: dict[str, list[str]], translations: dict[str, str]) -> lis
     return errors
 
 
+#: Funciones de Qt (y de GeoDuck) que muestran su primer argumento al usuario: con un texto escrito tal
+#: cual (sin `tr()`), el inglés se vería también con QGIS en español (#149).
+_SHOWS_TEXT = {
+    "setText", "setToolTip", "setWindowTitle", "setPlaceholderText", "setStatusTip", "setWhatsThis",
+    "addAction", "setTitle", "addItem", "setAccessibleName", "setAccessibleDescription", "showMessage",
+    "pushMessage",
+    "notify", "toast", "setHeaderLabels", "addMenu", "setLabelText", "setTabText", "setTabToolTip",
+    "setButtonText", "information", "critical", "question", "label", "button", "QLabel", "QPushButton",
+    "QCheckBox", "QRadioButton", "QAction", "QMenu", "QGroupBox", "QTreeWidgetItem", "QListWidgetItem",
+    "QTableWidgetItem",
+}  # fmt: skip
+#: Su segundo argumento (la ayuda de un botón con ícono).
+_SHOWS_SECOND = {"icon_button"}
+#: Palabras que no se traducen: nombres propios, teclas, SQL y formatos.
+_NAMES = frozenset(
+    {
+        "GeoDuck",
+        "DuckDB",
+        "QGIS",
+        "Ctrl",
+        "Shift",
+        "Enter",
+        "Esc",
+        "Alt",
+        "Space",
+        "NULL",
+        "WHERE",
+        "SQL",
+        "EPSG",
+        "GPL",
+        "LICENSE",
+        "Duck",
+        "Geo",
+        "href",
+        "style",
+        "color",
+        "span",
+        "nbsp",
+        "issues",
+        "blob",
+        "main",
+        "later",
+        "PyArrow",
+        "GeoParquet",
+        "Parquet",
+        "CSV",
+        "JSON",
+        "GPKG",
+        "WKT",
+        "WKB",
+        "COPY",
+        "FORMAT",
+        "Arrow",
+    }
+)
+
+
+def _literals(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    if isinstance(node, ast.JoinedStr):
+        return [v.value for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str)]
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return [text for e in node.elts for text in _literals(e)]
+    if isinstance(node, ast.BinOp):
+        return _literals(node.left) + _literals(node.right)
+    if isinstance(node, ast.IfExp):
+        return _literals(node.body) + _literals(node.orelse)
+    return []
+
+
+def untranslated() -> list[str]:
+    """Textos de la interfaz escritos sin `tr()` (#149): `label("Guardar")` en vez de `label(tr("Save"))`.
+    Los registros (`log.warning`) no son interfaz; las palabras de `_NAMES` no se traducen."""
+    found = []
+    for path in sorted(PKG.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if isinstance(func, ast.Attribute) and getattr(func.value, "id", "") in ("log", "logger", "_log"):
+                continue
+            if name in _SHOWS_TEXT:
+                args = node.args[:1]
+            elif name in _SHOWS_SECOND:
+                args = node.args[1:2]
+            else:
+                continue
+            for text in (t for arg in args for t in _literals(arg)):
+                plain = re.sub(r"<[^>]*>|&\w+;", "", text)
+                words = [w for w in re.findall(r"[A-Za-zÁÉÍÓÚáéíóúñÑ]{3,}", plain) if w not in _NAMES]
+                if words:
+                    where = f"{path.relative_to(ROOT).as_posix()}:{node.lineno}"
+                    found.append(f"Texto sin tr(): {text!r} ({where})")
+    return found
+
+
+def metadata_problems() -> list[str]:
+    """La ficha del complemento (#149): `description` y `about` en inglés y en español (`[es]`)."""
+    import configparser
+
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(PKG / "metadata.txt", encoding="utf-8")
+    general = parser["general"]
+    return [
+        f"metadata.txt: falta «{key}»"
+        for key in ("description", "about", "description[es]", "about[es]")
+        if not general.get(key, "").strip()
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -117,7 +232,7 @@ def main() -> int:
         for line in missing:
             print("  " + line)
         return 1 if missing else 0
-    errors = problems(sources, translations)
+    errors = problems(sources, translations) + untranslated() + metadata_problems()
     for line in errors:
         print(line)
     if not errors:

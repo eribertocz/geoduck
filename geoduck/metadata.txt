@@ -3,8 +3,14 @@ name=GeoDuck
 qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 supportsQt6=True
-description=DuckDB en QGIS: SQL espacial y capas en los dos sentidos.
-about=GeoDuck lleva DuckDB a QGIS: consultas SQL y capas que van y vuelven entre QGIS y DuckDB.
+description=DuckDB in QGIS: spatial SQL and layers in both directions.
+description[es]=DuckDB en QGIS: SQL espacial y capas en los dos sentidos.
+about=GeoDuck brings DuckDB to QGIS: SQL queries and layers that go back and forth between QGIS and DuckDB.
+
+    STATUS: Alpha (0.10.0a1, Workspace Pro). It may have bugs and change without notice; try it with copies of your data.
+
+    EXTERNAL DEPENDENCIES (not included in the plugin): the Python packages "duckdb" (>= 1.5.0) and "pyarrow", installed in the QGIS Python. Use "Environment diagnostics" in GeoDuck to check them. The DuckDB "spatial" extension is optional.
+about[es]=GeoDuck lleva DuckDB a QGIS: consultas SQL y capas que van y vuelven entre QGIS y DuckDB.
 
     ESTADO: Alpha (0.10.0a1, Workspace Pro). Puede tener errores y cambiar sin aviso; pruébelo con copias de sus datos.
 

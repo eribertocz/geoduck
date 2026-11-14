@@ -46,7 +46,7 @@ def test_start_and_close_memory_session_from_the_dock(iface):
     ws.start_button.click()
     assert wait_for(lambda: coordinator.state is SessionState.READY)
     assert side.status.text().startswith("Lista")
-    assert "DuckDB" in side.title.text()
+    assert side.title.text() == "GeoDuck"  # sin la versión de DuckDB: solo en «Acerca de» (#149)
     assert side.close_action.isEnabled()
 
     worker_thread = plugin.coordinator._engine.thread

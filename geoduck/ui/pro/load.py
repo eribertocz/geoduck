@@ -42,6 +42,7 @@ from geoduck.app.events import (
 )
 from geoduck.domain.bridge_types import LoadPlan
 from geoduck.domain.errors import GeoDuckError
+from geoduck.domain.i18n import number as number_text
 from geoduck.domain.load import LoadMode, LoadReport, LoadRequest
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
@@ -124,7 +125,7 @@ def finished_headline(report: LoadReport) -> str:
 
 def finished_detail(report: LoadReport) -> str:
     """Cómo se cargó y cuántas entidades."""
-    rows = f"{report.rows:,}".replace(",", " ")
+    rows = number_text(report.rows)
     if len(report.layers) > 1:
         count = tr("{} features each") if report.rows_each else tr("{} features in total")
     else:
