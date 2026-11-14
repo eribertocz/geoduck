@@ -81,6 +81,9 @@ TARGET = Qt.ItemDataRole.UserRole + 2
 ACCENT_META = Qt.ItemDataRole.UserRole + 3
 #: La base activa (#168): franja y nombre turquesa, con la etiqueta «activa».
 ACTIVE = Qt.ItemDataRole.UserRole + 4
+#: Los objetos de una base, esquema o grupo plegado, que se agregan al desplegarlo (#174: con 10 000 tablas,
+#: el explorador no crea lo que no se ve).
+PENDING = Qt.ItemDataRole.UserRole + 5
 SECTION, DATABASE, SCHEMA, GROUP, PLACE = "section", "database", "schema", "group", "place"
 #: Una columna de una tabla o vista (#147): (fuente, ColumnInfo).
 COLUMN = "column"
@@ -806,7 +809,8 @@ class Sidebar(QFrame):
                 temp = self._node(None, tr("Temporary"), (GROUP, "temp"), GROUP, bold=True)
                 for obj in sorted(catalog.temporaries, key=lambda o: o.name.casefold()):
                     self._add_object(temp, place_of(obj.database, obj.schema, obj.name, obj.kind))
-        self._apply_filter(self.search.edit.text())
+        if self.search.edit.text().strip():  # sin búsqueda, el árbol recién hecho ya está como corresponde
+            self._apply_filter(self.search.edit.text())
         tree.setUpdatesEnabled(True)
         if self._pending_new:
             self._show_new()
@@ -887,10 +891,13 @@ class Sidebar(QFrame):
                 if writable:
                     parent.setData(0, TARGET, (name, schema))
             objects = sorted(catalog.objects_in(name, schema), key=lambda o: o.name.casefold())
-            for obj in objects:
-                if obj.kind is ObjectKind.TABLE:
-                    self._add_object(parent, place_of(obj.database, obj.schema, obj.name, obj.kind))
-            views = [o for o in objects if o.kind is ObjectKind.VIEW]
+            tables = [
+                place_of(o.database, o.schema, o.name, o.kind) for o in objects if o.kind is ObjectKind.TABLE
+            ]
+            views = [
+                place_of(o.database, o.schema, o.name, o.kind) for o in objects if o.kind is ObjectKind.VIEW
+            ]
+            self._add_objects(parent, tables)
             if views:
                 group = self._node(
                     parent,
@@ -898,8 +905,42 @@ class Sidebar(QFrame):
                     (GROUP, "views", catalog_key(name), schema),
                     GROUP,
                 )
-                for obj in views:
-                    self._add_object(group, place_of(obj.database, obj.schema, obj.name, obj.kind))
+                self._add_objects(group, views)
+
+    def _add_objects(self, parent: QTreeWidgetItem, places: list[Place]) -> None:
+        """Los objetos de `parent`: ya, si está desplegado; si no, al desplegarlo."""
+        if not places:
+            return
+        if parent.isExpanded():
+            for place in places:
+                self._add_object(parent, place)
+            return
+        pending = list(parent.data(0, PENDING) or []) + places
+        parent.setData(0, PENDING, pending)
+        parent.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
+
+    def _fill_pending(self, item: QTreeWidgetItem) -> None:
+        """Agrega los objetos que esperaban a que se despliegue `item` (antes que sus subgrupos)."""
+        pending = item.data(0, PENDING)
+        if not pending:
+            return
+        item.setData(0, PENDING, None)
+        groups = item.takeChildren()  # el grupo «Vistas» va después de las tablas
+        for place in pending:
+            self._add_object(item, place)
+        item.addChildren(groups)
+        item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
+
+    def _fill_all_pending(self) -> None:
+        """Todo el árbol creado: para buscar, revelar o marcar lo nuevo."""
+
+        def visit(item: QTreeWidgetItem) -> None:
+            self._fill_pending(item)
+            for index in range(item.childCount()):
+                visit(item.child(index))
+
+        for index in range(self.tree.topLevelItemCount()):
+            visit(self.tree.topLevelItem(index))
 
     def _add_object(self, parent: QTreeWidgetItem, place: Place) -> None:
         item = QTreeWidgetItem([place.name])
@@ -1002,6 +1043,8 @@ class Sidebar(QFrame):
         self._show_new()
 
     def _show_new(self) -> None:
+        if self._pending_new:
+            self._fill_all_pending()
         shown = set()
         last = None
         for source in self._pending_new:
@@ -1026,6 +1069,8 @@ class Sidebar(QFrame):
         return key not in self._collapsed
 
     def _remember_expanded(self, item: QTreeWidgetItem, expanded: bool) -> None:
+        if expanded:
+            self._fill_pending(item)
         data = item.data(0, ROLE)
         if data and data[0] == PLACE and not data[1].is_query and item.parent() is not None:
             source = _source(data[1])
@@ -1052,6 +1097,7 @@ class Sidebar(QFrame):
         query = fuzzy.fold(text.strip())
         if query:
             self._want_all_columns()
+            self._fill_all_pending()
         self._quiet = True
 
         def matches(name: str) -> bool:
@@ -1144,6 +1190,7 @@ class Sidebar(QFrame):
         y a la vista. Devuelve si estaba en el árbol."""
         if self.search.edit.text():
             self.search.edit.clear()
+        self._fill_all_pending()
 
         def visit(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
             data = item.data(0, ROLE)

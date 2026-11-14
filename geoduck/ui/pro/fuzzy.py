@@ -8,6 +8,8 @@ seguidas y el comienzo de palabra. Sin Qt: se prueba sola y responde en milisegu
 
 from __future__ import annotations
 
+import heapq
+import re
 import unicodedata
 from collections.abc import Callable, Iterable
 from typing import TypeVar
@@ -52,6 +54,23 @@ def score(query: str, text: str) -> int | None:
     return best
 
 
+def in_order_pattern(query: str) -> re.Pattern[str]:
+    """Las letras de `query` en orden, a cualquier distancia, como expresión regular (se busca en C)."""
+    return re.compile(".*?".join(re.escape(ch) for ch in query), re.DOTALL)
+
+
+def in_order(query: str, text: str) -> bool:
+    """Las letras de `query` aparecen en orden en `text`, a cualquier distancia: lo que coincide con una
+    búsqueda más larga siempre cumple esto con la más corta (`score` además limita la distancia)."""
+    position = 0
+    for ch in query:
+        position = text.find(ch, position)
+        if position < 0:
+            return False
+        position += 1
+    return True
+
+
 def _in_order(query: str, text: str, begin: int) -> int | None:
     """Puntuación de las letras de `query` en orden en `text` desde `begin`, o `None`."""
     limit = begin + MAX_SPREAD * len(query)  # letras demasiado separadas: no es lo buscado
@@ -78,10 +97,11 @@ def rank(query: str, items: Iterable[T], text: Callable[[T], str], limit: int = 
     `text(item)` debe devolver el texto **ya plegado** (`fold`), para no plegarlo en cada tecla.
     """
     folded = fold(query.strip())
-    scored: list[tuple[int, int, T]] = []
-    for order, item in enumerate(items):
-        value = score(folded, text(item))
-        if value is not None:
-            scored.append((-value, order, item))
-    scored.sort(key=lambda entry: (entry[0], entry[1]))
-    return [item for _, _, item in scored[:limit]]
+    scored = (
+        (-value, order, item)
+        for order, item in enumerate(items)
+        if (value := score(folded, text(item))) is not None
+    )
+    # solo las mejores `limit`: sin ordenar (ni guardar) miles de coincidencias en cada tecla
+    best = heapq.nsmallest(limit, scored, key=lambda entry: (entry[0], entry[1]))
+    return [item for _, _, item in best]

@@ -107,6 +107,9 @@ class CommandPalette(QFrame):
         self.colors = colors
         self.source = source
         self.entries: list[Entry] = []
+        #: La última búsqueda y las entradas que tienen sus letras en orden: al escribir una letra más, solo
+        #: esas pueden coincidir (#174: con 10 000 objetos, cada tecla busca en menos).
+        self._pool: tuple[str, list[Entry]] = ("", [])
         self.shown: list[Entry] = []
         self.setProperty("pro", "palette")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -150,6 +153,7 @@ class CommandPalette(QFrame):
 
     def open(self) -> None:
         self.entries = self.source()
+        self._pool = ("", [])
         self.edit.blockSignals(True)
         self.edit.clear()
         self.edit.blockSignals(False)
@@ -168,11 +172,16 @@ class CommandPalette(QFrame):
     def refresh(self, text: str) -> None:
         """Filtra las entradas con `text` y muestra las mejores (sin texto, las primeras: pestañas, recientes
         y acciones, en ese orden)."""
-        self.shown = (
-            fuzzy.rank(text, self.entries, lambda e: e.folded, LIMIT)
-            if text.strip()
-            else self.entries[:LIMIT]
-        )
+        folded = fuzzy.fold(text.strip())
+        if folded:
+            previous, pool = self._pool
+            source = pool if previous and folded.startswith(previous) else self.entries
+            letters = fuzzy.in_order_pattern(folded)
+            pool = [e for e in source if letters.search(e.folded)]
+            self._pool = (folded, pool)
+            self.shown = fuzzy.rank(text, pool, lambda e: e.folded, LIMIT)
+        else:
+            self.shown = self.entries[:LIMIT]
         self.list.setUpdatesEnabled(False)
         self.list.clear()
         for entry in self.shown:

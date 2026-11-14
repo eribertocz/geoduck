@@ -118,7 +118,8 @@ y el total es otra ejecución. Nuevo contrato:
   páginas por extensión y cancelación inmediata de lo que ya no se ve. La selección de QGIS, leída por DuckDB
   (lista de identificadores) en «→ GeoDuck». Progreso real con porcentaje en importar y exportar.
 - **Catálogo (GD-PERF-010):** columnas y autocompletado cargados por partes; bases con 10 000 tablas sin pausas
-  (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla).
+  (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla). Hecho en E4b (#174): lo plegado se crea al desplegarlo; Ctrl+K busca
+  cada letra entre lo que ya coincidía (`docs/evidence/g10/174/`).
 
 ## 10. Fuera de alcance de G10
 

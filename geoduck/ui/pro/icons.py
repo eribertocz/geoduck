@@ -132,7 +132,15 @@ def file(name: str, color: str, size: int = 12) -> str:
 
 
 def icon(name: str, color: str, size: int = 16) -> QIcon:
-    return QIcon(pixmap(name, color, size))
+    key = (name, color, size, 2.0)
+    cached = _ICONS.get(key)
+    if cached is None:
+        cached = _ICONS[key] = QIcon(pixmap(name, color, size))
+    return cached
+
+
+#: QIcon también se comparte implícitamente: el explorador usa el mismo para miles de objetos.
+_ICONS: dict[tuple[str, str, int, float], QIcon] = {}
 
 
 def toggle(name: str, off: str, on: str, size: int = 16) -> QIcon:
