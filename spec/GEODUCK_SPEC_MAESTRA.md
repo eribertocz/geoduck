@@ -1596,7 +1596,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
     oculta con su icono ◫ (turquesa = abierto).
 - **Estructura:** columnas (nombre, tipo, nulos, clave), filas, tamaño aproximado y la sentencia `CREATE`.
 - **Botones de acción solo con icono** (propietario, 2026-11-13), en la ventana y en el panel: «Exportar»,
-  «Cargar en QGIS», «Ver SQL», «Buscar» (Ctrl+K) y «Acoplar a QGIS», como la barra «Resultado»; la ayuda y el
+  «Cargar en QGIS», «Ver SQL», «Buscar» (Ctrl+K), «Acoplar a QGIS» y «Copiar error» de la tarjeta de
+  error, como la barra «Resultado»; la ayuda y el
   nombre accesible dicen qué hacen.
 - **Acciones:** «Cargar en QGIS ▾» (§7), «Ver en el mapa» tras cargar, «Exportar ▾» (CSV, Parquet), «Copiar»
   (Ctrl+C sobre la selección).
