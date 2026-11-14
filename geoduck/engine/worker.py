@@ -234,7 +234,7 @@ class ConnectionHandle:
             if token.cancelled or is_interrupt_error(exc):
                 return ReadSummary(rows, batches, ReadOutcome.CANCELLED, error=type(exc).__name__)
             if isinstance(exc, duckdb.Error):
-                return ReadSummary(rows, batches, ReadOutcome.FAILED, error=_first_line(exc))
+                return ReadSummary(rows, batches, ReadOutcome.FAILED, error=_message(exc))
             raise
         if token.cancelled:
             return ReadSummary(rows, batches, ReadOutcome.CANCELLED)
@@ -842,6 +842,11 @@ def _first_line(exc: BaseException) -> str:
     return text.splitlines()[0] if text else type(exc).__name__
 
 
+def _message(exc: BaseException) -> str:
+    """El mensaje de DuckDB tal cual, completo (#189)."""
+    return str(exc).strip() or type(exc).__name__
+
+
 def _classify(exc: BaseException, token: CancelToken) -> BaseException:
     if isinstance(exc, GeoDuckError):
         return exc
@@ -849,12 +854,12 @@ def _classify(exc: BaseException, token: CancelToken) -> BaseException:
         return OperationCancelledError(tr("Operation cancelled"), detail=type(exc).__name__)
     if isinstance(exc, duckdb.Error) and is_aborted_error(exc):
         return GeoDuckError(
-            tr("The transaction is aborted; it can only be rolled back (ROLLBACK)."),
+            _message(exc),
             code=ErrorCode.TRANSACTION_ABORTED,
             detail=type(exc).__name__,
         )
     if isinstance(exc, duckdb.Error):
-        return EngineError(_first_line(exc), detail=type(exc).__name__)
+        return EngineError(_message(exc), detail=type(exc).__name__)
     return exc
 
 
@@ -863,7 +868,7 @@ def _wrap_start_error(exc: BaseException) -> BaseException:
         return exc
     if isinstance(exc, duckdb.Error):
         return EngineError(
-            tr("The session could not start: {0}").format(_first_line(exc)), detail=type(exc).__name__
+            tr("The session could not start: {0}").format(_message(exc)), detail=type(exc).__name__
         )
     return exc
 

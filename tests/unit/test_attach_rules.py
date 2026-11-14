@@ -78,7 +78,8 @@ class ResourceInUseException(Exception):  # noqa: N818
 def test_attach_errors_map_to_stable_codes(exc, code):
     error = classify_attach_error(exc)
     assert error.code is code
-    assert "/u/" not in error.detail and "/u/" not in error.message  # sin rutas del usuario
+    assert "/u/" not in error.detail  # el detalle va al registro: sin rutas del usuario
+    assert error.message == str(exc)  # lo que ve el usuario: el mensaje de DuckDB tal cual (#189)
     assert error.detail.startswith(type(exc).__name__)
 
 

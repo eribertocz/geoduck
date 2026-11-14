@@ -867,233 +867,188 @@
             <translation>Eliminados de</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="293" />
-            <source>This statement could not run</source>
-            <translation>No se pudo ejecutar esta sentencia</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="157" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="173" />
             <source>Syntax error</source>
             <translation>Error de sintaxis</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="169" />
-            <source>A name or a type is not recognized here</source>
-            <translation>Un nombre o un tipo no se reconoce aquí</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="208" />
-            <source>Something the query names is not in the catalog</source>
-            <translation>Algo que nombra la consulta no está en el catálogo</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="263" />
-            <source>A file could not be read or written</source>
-            <translation>No se pudo leer ni escribir un archivo</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="282" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="298" />
             <source>The query needs more memory than allowed</source>
             <translation>La consulta necesita más memoria de la permitida</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="284" />
-            <source>A rule of the table does not allow this change</source>
-            <translation>Una regla de la tabla no permite este cambio</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="286" />
-            <source>The transaction does not allow this statement</source>
-            <translation>La transacción no permite esta sentencia</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="288" />
-            <source>A value is not accepted here</source>
-            <translation>Un valor no se acepta aquí</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="290" />
-            <source>This is not supported yet</source>
-            <translation>Esto todavía no se admite</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="292" />
-            <source>This is not allowed here</source>
-            <translation>Esto no se permite aquí</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="131" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="143" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1283" />
             <source>Line {0}</source>
             <translation>Línea {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="200" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="216" />
             <source>The table «{}» does not exist</source>
             <translation>La tabla «{}» no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="201" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="217" />
             <source>The view «{}» does not exist</source>
             <translation>La vista «{}» no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="202" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="218" />
             <source>The schema «{}» does not exist</source>
             <translation>El esquema «{}» no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="203" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="219" />
             <source>The database «{}» is not attached</source>
             <translation>La base «{}» no está abierta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="204" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="220" />
             <source>The type «{}» does not exist</source>
             <translation>El tipo «{}» no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="218" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="234" />
             <source>A value is not a number</source>
             <translation>Un valor no es un número</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="225" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="241" />
             <source>A value cannot be converted</source>
             <translation>Un valor no se puede convertir</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="255" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="271" />
             <source>The file is not found</source>
             <translation>No se encuentra el archivo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="257" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="273" />
             <source>There is no file with that path.</source>
             <translation>No hay ningún archivo con esa ruta.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="128" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="140" />
             <source>Line {0} · the whole statement</source>
             <translation>Línea {0} · toda la sentencia</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="130" />
-            <location filename="../../geoduck/domain/sql_errors.py" line="230" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="142" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="246" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1281" />
             <source>Line {0} · near «{1}»</source>
             <translation>Línea {0} · cerca de «{1}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="157" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="173" />
             <source>Syntax error near «{}»</source>
             <translation>Error de sintaxis cerca de «{}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="158" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="174" />
             <source>The SQL could not be read here: {}</source>
             <translation>No se pudo leer el SQL aquí: {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="196" />
-            <location filename="../../geoduck/domain/sql_errors.py" line="167" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="212" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="183" />
             <source>Suggestion: {}.</source>
             <translation>Sugerencia: {}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="222" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="238" />
             <source>A value is not a date</source>
             <translation>Un valor no es una fecha</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="228" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="244" />
             <source>Use TRY_CAST</source>
             <translation>Usar TRY_CAST</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="232" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="248" />
             <source>The value «{0}» cannot be converted to {1}.</source>
             <translation>El valor «{0}» no se puede convertir a {1}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="234" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="250" />
             <source>TRY_CAST leaves it empty instead.</source>
             <translation>Con TRY_CAST queda vacío en su lugar.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="238" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="254" />
             <source>source column «{}»</source>
             <translation>columna de origen «{}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="267" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="283" />
             <source>{0} of {1} were used (session «memory_limit»).</source>
             <translation>Se usaron {0} de {1} (límite «memory_limit» de la sesión).</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="276" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="292" />
             <source>Raise memory_limit…</source>
             <translation>Subir memory_limit…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="168" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="184" />
             <source>The column «{}» does not exist</source>
             <translation>La columna «{}» no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="184" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="200" />
             <source>This query needs the «{}» extension</source>
             <translation>Esta consulta necesita la extensión «{}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="185" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="201" />
             <source>«{0}» exists in the «{1}» extension, which is not loaded.</source>
             <translation>«{0}» existe en la extensión «{1}», que no está cargada.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="206" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="222" />
             <source>The function «{}» does not exist</source>
             <translation>La función «{}» no existe</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="216" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="232" />
             <source>A value of «{}» is not a number</source>
             <translation>Un valor de «{}» no es un número</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="247" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="263" />
             <source>Choose file…</source>
             <translation>Elegir archivo…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="251" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="267" />
             <location filename="../../geoduck/ui/pro/export_progress.py" line="143" />
             <source>Open folder</source>
             <translation>Abrir carpeta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="252" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="268" />
             <source>Line {0} · «{1}»</source>
             <translation>Línea {0} · «{1}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="194" />
-            <location filename="../../geoduck/domain/sql_errors.py" line="165" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="210" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="181" />
             <source>Change to «{}»</source>
             <translation>Cambiar a «{}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="222" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="238" />
             <source>A value of «{}» is not a date</source>
             <translation>Un valor de «{}» no es una fecha</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="177" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="193" />
             <source>Load «{}»…</source>
             <translation>Cargar «{}»…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/domain/sql_errors.py" line="181" />
+            <location filename="../../geoduck/domain/sql_errors.py" line="197" />
             <source>Write LOAD {}</source>
             <translation>Escribir LOAD {}</translation>
         </message>
@@ -1193,104 +1148,52 @@
             <translation>Versión no reconocida: {0!r}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="53" />
-            <source>The transaction is aborted; roll it back.</source>
-            <translation>La transacción está abortada; reviértala.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="55" />
-            <location filename="../../geoduck/engine/attach.py" line="56" />
-            <source>Another process has locked the file.</source>
-            <translation>Otro proceso tiene el archivo bloqueado.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="60" />
-            <source>The file is already attached in this session.</source>
-            <translation>El archivo ya está adjunto en esta sesión.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="62" />
-            <source>There is already a database with that alias.</source>
-            <translation>Ya hay una base con ese alias.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="63" />
-            <source>That alias is reserved.</source>
-            <translation>Ese alias está reservado.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="64" />
-            <location filename="../../geoduck/engine/attach.py" line="155" />
-            <source>The file does not exist.</source>
-            <translation>El archivo no existe.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="65" />
-            <source>The file or its folder does not exist.</source>
-            <translation>El archivo o su carpeta no existen.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="66" />
-            <source>There is no write permission on the file.</source>
-            <translation>No hay permiso de escritura sobre el archivo.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="67" />
-            <source>The file system is read only.</source>
-            <translation>El sistema de archivos es de solo lectura.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="71" />
-            <source>The file is not a valid database.</source>
-            <translation>El archivo no es una base válida.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="86" />
-            <source>The file could not be opened.</source>
-            <translation>No se pudo abrir el archivo.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/attach.py" line="122" />
+            <location filename="../../geoduck/engine/attach.py" line="109" />
             <source>The file changed or disappeared while it was being opened; it was not used.</source>
             <translation>El archivo cambió o desapareció mientras se abría; no se usó.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="130" />
+            <location filename="../../geoduck/engine/attach.py" line="117" />
             <source>The attached database does not match the request; it was detached</source>
             <translation>La base adjuntada no coincide con lo pedido; se desadjuntó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="160" />
+            <location filename="../../geoduck/engine/attach.py" line="147" />
             <source>A file with that name already exists; «Create new» never overwrites it.</source>
             <translation>Ya existe un archivo con ese nombre; «Crear nueva» nunca lo sobrescribe.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="164" />
+            <location filename="../../geoduck/engine/attach.py" line="151" />
             <source>There is a .wal file with that name; it would be applied to the new database. Choose another name.</source>
             <translation>Existe un archivo .wal con ese nombre; se aplicaría a la base nueva. Elija otro nombre.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="171" />
+            <location filename="../../geoduck/engine/attach.py" line="158" />
             <source>The folder does not exist.</source>
             <translation>La carpeta no existe.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="209" />
+            <location filename="../../geoduck/engine/attach.py" line="196" />
             <source>That file already exists: choose a new name.</source>
             <translation>Ese archivo ya existe: elige otro nombre.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="241" />
+            <location filename="../../geoduck/engine/attach.py" line="228" />
             <source>The saved database could not be opened again.</source>
             <translation>No se pudo volver a abrir la base guardada.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="137" />
+            <location filename="../../geoduck/engine/attach.py" line="142" />
+            <source>The file does not exist.</source>
+            <translation>El archivo no existe.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/engine/attach.py" line="124" />
             <source>The alias «{0}» is reserved.</source>
             <translation>El alias «{0}» está reservado.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/attach.py" line="144" />
+            <location filename="../../geoduck/engine/attach.py" line="131" />
             <source>There is already a database called «{0}» in the session.</source>
             <translation>Ya hay una base llamada «{0}» en la sesión.</translation>
         </message>
@@ -1320,30 +1223,9 @@
             <translation>Catálogo incoherente: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/detach.py" line="106" />
-            <source>The database could not be closed.</source>
-            <translation>No se pudo cerrar la base.</translation>
-        </message>
-        <message>
             <location filename="../../geoduck/engine/detach.py" line="80" />
             <source>The database is still open after closing it.</source>
             <translation>La base sigue abierta después de cerrarla.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/detach.py" line="88" />
-            <location filename="../../geoduck/engine/worker.py" line="852" />
-            <source>The transaction is aborted; it can only be rolled back (ROLLBACK).</source>
-            <translation>La transacción está abortada; solo se puede revertir (ROLLBACK).</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/detach.py" line="94" />
-            <source>There is an open transaction with changes in that database; commit or roll back before detaching.</source>
-            <translation>Hay una transacción abierta con cambios en esa base; confirme o revierta antes de desadjuntar.</translation>
-        </message>
-        <message>
-            <location filename="../../geoduck/engine/detach.py" line="102" />
-            <source>There is an open result in the session.</source>
-            <translation>Hay un resultado abierto en la sesión.</translation>
         </message>
         <message>
             <location filename="../../geoduck/engine/detach.py" line="48" />
@@ -1484,7 +1366,7 @@
             <translation>Tras {0} la transacción sigue {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="849" />
+            <location filename="../../geoduck/engine/worker.py" line="854" />
             <location filename="../../geoduck/engine/worker.py" line="98" />
             <source>Operation cancelled</source>
             <translation>Operación cancelada</translation>
@@ -1540,7 +1422,7 @@
             <translation>La sesión no responde tras una interrupción y se invalidó</translation>
         </message>
         <message>
-            <location filename="../../geoduck/engine/worker.py" line="866" />
+            <location filename="../../geoduck/engine/worker.py" line="871" />
             <source>The session could not start: {0}</source>
             <translation>No se pudo iniciar la sesión: {0}</translation>
         </message>
@@ -3239,35 +3121,35 @@ de {2}</translation>
             <translation>{} columnas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="99" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="104" />
             <source>Only changes the text in the editor; nothing runs until you press ▶</source>
             <translation>Solo cambia el texto del editor; nada se ejecuta hasta que pulses ▶</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="96" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="101" />
             <source>Asks before installing or loading the extension (only for this session)</source>
             <translation>Pregunta antes de instalar o cargar la extensión (solo para esta sesión)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="76" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="81" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1296" />
             <source>Go</source>
             <translation>Ir</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="77" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="82" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="864" />
             <source>Goes to the error in the editor</source>
             <translation>Lleva al error en el editor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="83" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="88" />
             <source>Copies the engine's original message (to search for it or report it)</source>
             <translation>Copia el mensaje original del motor (para buscarlo o reportarlo)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="52" />
-            <location filename="../../geoduck/ui/pro/error_card.py" line="91" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="55" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="96" />
             <source>Original engine message</source>
             <translation>Mensaje original del motor</translation>
         </message>
@@ -5411,13 +5293,13 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/workspace.py" line="1560" />
-            <source>The database was not attached.</source>
-            <translation>No se adjuntó la base.</translation>
+            <source>The database was not opened.</source>
+            <translation>No se abrió la base.</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/workspace.py" line="1563" />
-            <source>The database was not detached.</source>
-            <translation>No se desadjuntó la base.</translation>
+            <source>The database was not closed.</source>
+            <translation>No se cerró la base.</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/workspace.py" line="1565" />

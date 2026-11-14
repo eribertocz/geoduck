@@ -1557,10 +1557,10 @@ class ProWorkspace(QWidget):
             self._resave_project = None
             self.notify(tr("The database was not saved.") + f" {event.message}", error=True)
         elif isinstance(event, AttachFailed):
-            self.notify(tr("The database was not attached.") + f" {event.message}", error=True)
+            self.notify(tr("The database was not opened.") + f" {event.message}", error=True)
         elif isinstance(event, DetachFailed):
             self._detaching = None
-            self.notify(tr("The database was not detached.") + f" {event.message}", error=True)
+            self.notify(tr("The database was not closed.") + f" {event.message}", error=True)
         elif isinstance(event, ActivationFailed):
             self.notify(tr("The active database did not change.") + f" {event.message}", error=True)
         elif isinstance(event, CloseConfirmationRequired):

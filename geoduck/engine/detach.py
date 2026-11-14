@@ -82,28 +82,16 @@ def detach_database(handle: ConnectionHandle, alias: str, root: str) -> DetachRe
 
 
 def _classify(exc: duckdb.Error) -> DetachError:
-    text = str(exc).lower()
+    """El código estable para un error de DuckDB al cerrar una base, con su mensaje tal cual (#189)."""
+    message = str(exc).strip() or type(exc).__name__
+    text = message.lower()
     if is_aborted_error(exc):
-        return DetachError(
-            tr("The transaction is aborted; it can only be rolled back (ROLLBACK)."),
-            code=ErrorCode.TRANSACTION_ABORTED,
-            detail=type(exc).__name__,
-        )
+        return DetachError(message, code=ErrorCode.TRANSACTION_ABORTED, detail=type(exc).__name__)
     if "outstanding work" in text:
-        return DetachError(
-            tr(
-                "There is an open transaction with changes in that database; commit "
-                "or roll back before detaching."
-            ),
-            detail=f"{type(exc).__name__}: outstanding work",
-        )
+        return DetachError(message, detail=f"{type(exc).__name__}: outstanding work")
     if "open result" in text:
-        return DetachError(
-            tr("There is an open result in the session."),
-            code=ErrorCode.ACTIVE_RESULT,
-            detail=type(exc).__name__,
-        )
-    return DetachError(tr("The database could not be closed."), detail=type(exc).__name__)
+        return DetachError(message, code=ErrorCode.ACTIVE_RESULT, detail=type(exc).__name__)
+    return DetachError(message, detail=type(exc).__name__)
 
 
 def _execute(handle: ConnectionHandle, sql: str) -> None:

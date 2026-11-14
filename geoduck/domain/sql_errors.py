@@ -75,6 +75,8 @@ class ErrorCard:
     original: str
     offset: int | None
     line: int | None
+    #: El título es el mensaje de DuckDB tal cual (un error que GeoDuck no reconoce): sin pliegue.
+    raw: bool = False
 
 
 def error_class(kind: str, message: str) -> str:
@@ -95,6 +97,16 @@ def _body(message: str) -> str:
         if line.strip():
             kept.append(line.strip())
     return " ".join(kept)
+
+
+def headline(message: str) -> str:
+    """El mensaje de DuckDB tal cual, sin la marca `LINE n` que señala la posición (la dice «dónde»)."""
+    kept: list[str] = []
+    for line in message.strip().splitlines():
+        if line.startswith("LINE "):
+            break
+        kept.append(line.rstrip())
+    return "\n".join(kept).strip()
 
 
 def _quoted(name: str) -> str:
@@ -152,6 +164,10 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
     def card(title: str, explanation: str = "") -> ErrorCard:
         return ErrorCard(cls, title, where, explanation, tuple(fixes), original, offset, line)
 
+    def raw() -> ErrorCard:
+        """Un error que GeoDuck no reconoce: el texto de DuckDB, tal cual, es el título (#189)."""
+        return ErrorCard(cls, headline(original), where, "", tuple(fixes), original, offset, line, raw=True)
+
     suggestion = _suggestion(original)
     if cls == "Parser Error":
         title = tr("Syntax error near «{}»").format(word) if word else tr("Syntax error")
@@ -166,7 +182,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
                 )
             hint = tr("Suggestion: {}.").format(suggestion) if suggestion else body
             return card(tr("The column «{}» does not exist").format(name), hint)
-        return card(tr("A name or a type is not recognized here"), body)
+        return raw()
     if cls == "Catalog Error":
         extension = re.search(
             r'with name "?([\w.]+)"? is not in the catalog, but it exists in the (\w+) extension', original
@@ -205,7 +221,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
             }
             title = titles.get(what, tr("The function «{}» does not exist")).format(name)
             return card(title, hint)
-        return card(tr("Something the query names is not in the catalog"), hint)
+        return raw()
     if cls == "Conversion Error":
         value = re.search(r"Could not convert (?:string )?'((?:[^']|'')*)' to (\w+)", original)
         source = re.search(r"from source column (\S+)", original)
@@ -260,7 +276,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
                 offset,
                 line,
             )
-        return card(tr("A file could not be read or written"), body)
+        return raw()
     if cls == "Out of Memory Error":
         used = re.search(r"\(([\d.]+ ?\w+)/([\d.]+ ?\w+) used\)", original)
         hint = (
@@ -281,16 +297,16 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
             )
         return card(tr("The query needs more memory than allowed"), hint)
     if cls == "Constraint Error":
-        return card(tr("A rule of the table does not allow this change"), body)
+        return raw()
     if cls == "TransactionContext Error":
-        return card(tr("The transaction does not allow this statement"), body)
+        return raw()
     if cls in ("Invalid Input Error", "Out of Range Error", "Mismatch Type Error"):
-        return card(tr("A value is not accepted here"), body)
+        return raw()
     if cls == "Not implemented Error":
-        return card(tr("This is not supported yet"), body)
+        return raw()
     if cls == "Permission Error":
-        return card(tr("This is not allowed here"), body)
-    return card(tr("This statement could not run"), body)
+        return raw()
+    return raw()
 
 
 def _suggestion(message: str) -> str:
