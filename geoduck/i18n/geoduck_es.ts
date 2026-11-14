@@ -4373,8 +4373,8 @@ de {2}</translation>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="562" />
             <location filename="../../geoduck/ui/pro/workspace.py" line="128" />
-            <source>Not started</source>
-            <translation>No iniciado</translation>
+            <source>Stopped</source>
+            <translation>Detenido</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="567" />
@@ -4894,8 +4894,8 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/workspace.py" line="135" />
-            <source>Ready</source>
-            <translation>Lista</translation>
+            <source>Active</source>
+            <translation>Activo</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/workspace.py" line="136" />

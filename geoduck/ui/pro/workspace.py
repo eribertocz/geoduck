@@ -119,20 +119,20 @@ NAME = "GeoDuck"
 
 def session_parts(coordinator: Any) -> tuple[str, str, str]:
     """Punto de estado (`ok`, `busy`, `error`, `off`), nombre («GeoDuck») y estado con la base raíz
-    («Lista · en memoria») de la sesión (§3). La versión de DuckDB solo va en «Acerca de» (#149)."""
+    («Activo · en memoria») de la sesión (§3). La versión de DuckDB solo va en «Acerca de» (#149)."""
     state: SessionState = coordinator.state
     info = coordinator.engine_info
     if state is SessionState.DISCONNECTED or info is None:
         if state is SessionState.CONNECTING:
             return "busy", NAME, tr("Starting…")
-        return "off", NAME, tr("Not started")
+        return "off", NAME, tr("Stopped")
     engine = NAME
     catalog = coordinator.catalog
     where = tr("in memory")
     if catalog is not None and not catalog.root_database.in_memory:
         where = catalog.root_database.name
     known = {
-        SessionState.READY: ("ok", tr("Ready") + " · " + where),
+        SessionState.READY: ("ok", tr("Active") + " · " + where),
         SessionState.BUSY: ("busy", tr("Busy") + " · " + where),
         SessionState.ERROR_RECOVERABLE: ("error", tr("With error") + " · " + where),
         SessionState.DETACHING: ("busy", tr("Closing database…")),
@@ -142,7 +142,7 @@ def session_parts(coordinator: Any) -> tuple[str, str, str]:
 
 
 def session_text(coordinator: Any) -> tuple[str, str]:
-    """Punto de estado y texto de la sesión: «Lista · en memoria»."""
+    """Punto de estado y texto de la sesión: «Activo · en memoria»."""
     dot, _name, status = session_parts(coordinator)
     return dot, status
 
