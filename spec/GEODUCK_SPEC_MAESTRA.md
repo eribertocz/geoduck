@@ -602,7 +602,7 @@ Una sentencia no se clasifica solo por su primera palabra: `WITH` puede antecede
 
 ## 5. Política de «Cargar resultado en QGIS»
 - Solo se activa para resultados tabulares convertibles, seleccionados por el usuario.
-- Ofrece las tres modalidades de qgis-bridge-spec §1: «Copia en memoria», «Copia rápida» (desactivada con motivo si GDAL < 3.8) y «Conectada a DuckDB». Un resultado SQL conectado es de solo lectura; editar exige cargar la tabla desde el explorador.
+- Ofrece las tres modalidades de qgis-bridge-spec §1: «Copia en memoria», «Copia rápida» (desactivada con motivo si GDAL < 3.8) y «Conectada». Un resultado SQL conectado es de solo lectura; editar exige cargar la tabla desde el explorador.
 - Para `SELECT` reejecutable, volver a ejecutar **únicamente esa consulta de lectura** para obtener el conjunto completo mediante Arrow; comunicar que se basa en el estado actual y puede diferir de la preview.
 - Si la query depende de tablas temporales eliminadas, base desadjuntada o una transacción ya cerrada, informar fallo en lugar de cargar otro resultado.
 - Para consultas no deterministas o con funciones de efecto lateral, mostrar advertencia/solicitar confirmación explícita; la clasificación «SELECT» no es prueba absoluta de ausencia de efectos secundarios.
@@ -730,7 +730,7 @@ control de errores, progreso y cancelación, en una de tres modalidades:
 |---|---|---|---|
 | Memoria | «Copia en memoria» | `QgsVectorLayer(provider="memory")` | Ninguno |
 | Instantánea | «Copia rápida» | GeoPackage en `/vsimem/geoduck/…` abierto con el proveedor `ogr` | Ninguno; GeoDuck libera `/vsimem` al quitar la capa |
-| Conectada | «Conectada a DuckDB» | Proveedor PyQGIS `geoduck` | Sí, con la sesión y la base adjunta |
+| Conectada | «Conectada» | Proveedor PyQGIS `geoduck` | Sí, con la sesión y la base adjunta |
 
 **Interfaz (G5, ui-ux-spec §8):** «Cargar en QGIS ▾» muestra las tres modalidades; elegir una abre el diálogo de carga con esa modalidad marcada. La presentación (ventana propia o panel) no cambia nada de este documento: una carga en curso sigue y entrega una sola vez aunque se alterne la presentación.
 
@@ -1051,7 +1051,7 @@ Consulta ejemplo:
 SELECT id, ST_Centroid(geom) AS centro, geom AS poligono
 FROM zonas;
 ```
-El panel detecta `centro` y `poligono` y permite marcar una o ambas. Por cada columna marcada GeoDuck crea una capa independiente, con su propio CRS y tipo y los mismos atributos no geométricos, en la modalidad elegida (Memoria, Instantánea o Conectada; decisión del propietario, 2026-11-02, que sustituye «las dos capas no mantienen conexión a DuckDB»).
+El panel detecta `centro` y `poligono` y permite marcar una o ambas. Por cada columna marcada GeoDuck crea una capa independiente, con su propio CRS y tipo y los mismos atributos no geométricos, en la modalidad elegida (Memoria, Instantánea o Conectada; decisión del propietario, 2026-11-02, que sustituye «las dos capas no mantienen conexión con la base»).
 
 - **Nombres:** `<nombre> · <columna>` cuando se marca más de una; únicos en el proyecto.
 - **Entrega atómica:** las capas se publican juntas al terminar; un error o una cancelación no publica ninguna.
@@ -1102,7 +1102,7 @@ Ninguna función de G4 requiere `spatial`: CRS (GeoArrow/PROJJSON), filtro espac
 
 GeoDuck nunca ejecuta `INSTALL` ni `LOAD` por su cuenta. `LOAD`/`INSTALL` escritos por el usuario en el editor son su SQL y se ejecutan como tal; valen solo para esa sesión. «Diagnóstico del entorno…» muestra si `spatial` está instalada y cargada. (Decisión del propietario, 2026-11-02, en G5: se retira la acción «Activar spatial…» de G4/E2; quien necesita `spatial` escribe SQL con `ST_*` y la carga con su propio SQL.)
 
-**Excepción con consentimiento (G9, decisión del propietario, 2026-11-07):** «Archivos → DuckDB» (qgis-import-spec §10) y «Exportar ▾» a un formato de GDAL necesitan `spatial`. Si no está cargada, el diálogo lo explica y ofrece «Instalar y continuar» (o «Cargar y continuar» si ya está instalada); solo ese clic ejecuta `INSTALL spatial` (repositorio oficial firmado) y `LOAD spatial`, para esa sesión. Nunca en silencio.
+**Excepción con consentimiento (G9, decisión del propietario, 2026-11-07):** «Archivos → GeoDuck» (qgis-import-spec §10) y «Exportar ▾» a un formato de GDAL necesitan `spatial`. Si no está cargada, el diálogo lo explica y ofrece «Instalar y continuar» (o «Cargar y continuar» si ya está instalada); solo ese clic ejecuta `INSTALL spatial` (repositorio oficial firmado) y `LOAD spatial`, para esa sesión. Nunca en silencio.
 
 
 
@@ -1136,11 +1136,11 @@ Una sola superficie coherente dentro de QGIS: **explorar, escribir, consultar y 
 El explorador puede colapsarse; el área del editor y resultados tiene divisores ajustables. El dock es redimensionable, con estados vacíos informativos.
 
 ## 3. Interacciones definidas
-- **Inicio:** tarjeta discreta «En memoria» / «Archivo DuckDB», selector de archivo, toggle «Solo lectura / Lectura y escritura», botón «Iniciar sesión». La UI se desbloquea al confirmar la sesión.
+- **Inicio:** tarjeta discreta «En memoria» / «Archivo», selector de archivo, toggle «Solo lectura / Lectura y escritura», botón «Iniciar sesión». La UI se desbloquea al confirmar la sesión.
 - **ATTACH:** icono `+` al lado de catálogos; diálogo path, alias, RO/RW; feedback al finalizar.
 - **DETACH:** menú contextual «Desadjuntar» con confirmación si hay operaciones propias activas. No mostrar advertencia falsa de que se perderán capas QGIS ya entregadas. Si hay capas conectadas a esa base, avisar de que quedarán no disponibles hasta adjuntarla de nuevo.
 - **Tabla/Vista:** doble clic o clic derecho «Cargar en QGIS…» con las tres modalidades y selector espacial si aplica. Toda tabla cargada como Conectada es editable; vistas y consultas, de solo lectura (qgis-bridge-spec §5.1).
-- **Modalidad de carga:** un solo diálogo pequeño con tres opciones y una línea de ayuda cada una: «Copia en memoria — compatible, para resultados pequeños», «Copia rápida — rápida y con poca memoria», «Conectada a DuckDB — sin copiar, siempre al día». Recuerda la última elección. Las opciones no disponibles se muestran desactivadas con el motivo. Sin términos técnicos (`/vsimem`, GeoArrow, proveedor).
+- **Modalidad de carga:** un solo diálogo pequeño con tres opciones y una línea de ayuda cada una: «Copia en memoria — compatible, para resultados pequeños», «Copia rápida — rápida y con poca memoria», «Conectada — sin copiar, siempre al día». Recuerda la última elección. Las opciones no disponibles se muestran desactivadas con el motivo. Sin términos técnicos (`/vsimem`, GeoArrow, proveedor).
 - **SQL:** botón principal «Ejecutar» opera sobre sentencia actual si no hay selección, o selección según preferencia explícita; comandos «Todo» y «Selección» inequívocos.
 - **Resultados:** pestañas por sentencia con nombre legible y ID; cambiar pestaña selecciona solo ese resultado. `Cargar en QGIS` siempre etiqueta el resultado objetivo.
 - **Múltiples geometrías:** selector pequeño con una casilla por columna, nombre/tipo/CRS; permitir una o varias (una capa por columna). No modal por cada consulta cuando no hay ambigüedad.
@@ -1284,7 +1284,7 @@ La capa de QGIS nunca cambia.
   capas seleccionadas, las envía todas).
 - Workspace de GeoDuck: «+» de la barra lateral → «Importar capas de QGIS…».
 - Con la interfaz de G9 (Workspace Pro): arrastrar capas del panel de capas a una base de la barra lateral
-  y Ctrl+K → «Enviar capa de QGIS a DuckDB…».
+  y Ctrl+K → «Enviar capa de QGIS a GeoDuck…».
 
 Las capas ráster, de malla o de nube de puntos aparecen desactivadas con el motivo. Sin sesión lista, la
 acción explica que hay que iniciar una.
@@ -1346,7 +1346,7 @@ acción explica que hay que iniciar una.
    contra 2,4 s (**8×**). Necesita `spatial` cargada: si no lo está, el paso 1 lo dice («Con la extensión
    «spatial» de DuckDB, las capas que vienen de un archivo las copia DuckDB: hasta 20 veces más rápido… Sin
    ella, las copia QGIS como siempre») con «Instalar y acelerar» / «Cargar y acelerar». **Nunca bloquea:** sin
-   ese clic, el camino 3. El resumen dice «leído directo por DuckDB». **El filtro de la capa** va como `WHERE`
+   ese clic, el camino 3. El resumen dice «leído directo por GeoDuck». **El filtro de la capa** va como `WHERE`
    y se comprueba con las filas que muestra QGIS: si no coinciden o DuckDB no lo entiende, nada se escribe y
    esa capa se copia por el camino 3, sin error. **Trazabilidad** (#148: la línea de tiempo vertical de
    workspace-pro-spec §9, también en «Exportar ▾»): origen y filtro → lectura («⚡ Lectura directa con
@@ -1356,7 +1356,7 @@ acción explica que hay que iniciar una.
    con el filtro como `WHERE`. La geometría y el SRC salen de la capa de QGIS (sin `pyarrow.parquet`, que en
    algunos QGIS de Windows no carga: F-130). CSV y JSON solo sin geometría (QGIS la arma de columnas de texto
    que DuckDB no ve como geometría) y siempre con la comprobación de filas. Si la lectura directa falla o da
-   otras filas, esa capa se copia por el camino 3 («DuckDB lee el archivo distinto que QGIS»). Una unidad
+   otras filas, esa capa se copia por el camino 3 («GeoDuck lee el archivo distinto que QGIS»). Una unidad
    montada (Google Drive, OneDrive) es una ruta más.
 
 ## 6. Columnas y tipos (GD-IMP-005)
@@ -1442,7 +1442,7 @@ rendimiento es la idea de GeoDuck). Maqueta aprobada: `docs/g9/maqueta/importar-
   filas (las de los metadatos; CSV y JSON muestran el tamaño del archivo, porque contarlas exige leerlos).
   Las que no se pueden leer, en gris con el motivo.
 - **Pasos 2 y 3:** los de §3 y §4 (destino, «si ya existe», progreso, «Deshacer»), con el título
-  «Archivos → DuckDB». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
+  «Archivos → GeoDuck». Cada capa se copia con `CREATE TABLE … AS SELECT` en el motor, en su propia
   transacción, con el conteo de §4.
 - **Solo formatos modernos, rápidos o muy usados** (decisión del propietario, 2026-11-07): cualquier otro
   archivo (p. ej. SpatiaLite) no entra al diálogo: un aviso claro dice cuáles, qué hacer y si los demás siguen. Si el GDAL de
@@ -1542,7 +1542,7 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   **fijado** queda al lado (240 px; el editor se angosta) y no se cierra solo. Se recuerda entre sesiones; en
   la ventana sigue siempre al lado. **Mientras se arrastran capas o archivos nunca se cierra**; arrastrando
   sobre ☰, el botón se ilumina («Mantén para abrir el explorador») y a los ½ s el explorador se abre, con la
-  guía punteada «Suelta sobre una base para llevar a DuckDB» (también al pasar con algo arrastrado por el
+  guía punteada «Suelta sobre una base para llevar a GeoDuck» (también al pasar con algo arrastrado por el
   árbol). Una ventana usa el mismo modo compacto por debajo de 640 px **o cuando la página no cabe con sus
   textos**; recuerda cuánto pedía y vuelve al modo normal cuando vuelve a caber (nunca se queda atascado: el
   ancho mínimo de la ventana no lo fija la página).
@@ -1752,7 +1752,7 @@ con la base y el tipo de cada resultado. Intro abre; Esc cierra.
 
 ## 7. Cargar en QGIS (GD-WSP-006; decisión del propietario, 2026-11-05)
 Dos opciones, en lenguaje simple:
-- **«Copia»:** «Copia los datos a la memoria de QGIS; ya no depende de DuckDB» (propietario, 2026-11-07: sin
+- **«Copia»:** «Copia los datos a la memoria de QGIS; ya no depende de la base» (propietario, 2026-11-07: sin
   «rápida», que hacía pensar en velocidad; lo que la define es que es una copia en memoria). Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
   Copia en memoria solo como **respaldo automático** si GDAL no permite la rápida. El usuario nunca elige entre
   las dos.
@@ -1760,7 +1760,7 @@ Dos opciones, en lenguaje simple:
   copia sobrevive a reabrir el proyecto), GeoDuck lo avisa y ofrece en un clic **«Guardar las copias junto al
   proyecto»**: un GeoPackage al lado del `.qgz`, y cada capa pasa a leer ese archivo y sobrevive. Con «No, gracias»,
   al reabrir la capa se muestra «no disponible» con su motivo, nunca rota sin explicación.
-- **«Conectada»:** «Lee directamente de DuckDB, sin copiar; lo que edites se guarda en DuckDB» (ADR-0012).
+- **«Conectada»:** «Lee directamente de la base, sin copiar; lo que edites se guarda en la base» (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
 - **El nombre de la capa arriba del menú** (#148, punto 15; maqueta `cargar-qgis`): con una tabla o un
   resultado, «Nombre de la capa en QGIS», ya relleno con el de la pestaña (o la tabla); se edita y **Enter =
@@ -1811,7 +1811,7 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
    → **Copia a DuckDB** (filas, barra y «≈ 1 s restante») → **Destino** (memory.main.redes · filas · SRC),
    cada uno con su tiempo. Círculos con icono: ✓ verde = hecho, girando turquesa = ahora, punteado gris = en
    espera o saltado; **un paso que falla se pone rojo con la tarjeta de error** (#145). «Cancelar · Esc»
-   mientras corre (y «Seguir en segundo plano»); al terminar, «Listo: 3 capas en DuckDB» con la píldora «⚡ 1
+   mientras corre (y «Seguir en segundo plano»); al terminar, «Listo: 3 capas en GeoDuck» con la píldora «⚡ 1
    directo por DuckDB · 2 por QGIS», **«Deshacer», «Abrir» y «Cerrar»**. Exportar: Consulta → DuckDB escribe
    el archivo → Archivo, con «Abrir carpeta», «Cargar en QGIS» y «Cerrar». Hacia QGIS: Origen → Copia a QGIS
    (o Capa conectada) → Capa en QGIS, con «Ver en el mapa» y «Cerrar».
@@ -1831,9 +1831,10 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
   «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
 - **Nombres** (#142, punto 26, reemplaza la regla de G9): en menús, botones y títulos va siempre
   **«GeoDuck»** («Añadir … a GeoDuck», «Enviar a GeoDuck…»); «Cargar en QGIS» siempre termina en QGIS.
-  **«DuckDB»** se nombra solo como información técnica: la trazabilidad («⚡ leída directamente por DuckDB»),
-  el mensaje original de DuckDB, el formato de archivo («base de datos DuckDB»), la versión del motor y
-  «Acerca de».
+  **«DuckDB»** no se nombra en la interfaz (#184, propietario, 2026-11-14): solo en «Acerca de» (versión y
+  marca) y en la revisión de componentes de «Diagnóstico» (versión, origen e instalación). En lo demás se dice
+  «GeoDuck», «la base» o «el motor» («Mensaje original del motor»); la trazabilidad dice «⚡ leída directamente
+  por GeoDuck», y el filtro de archivos, «Base de datos (*.duckdb *.ddb *.db)». Una prueba lo comprueba.
 - **Avisos:** todos llevan «×» para cerrarlos sin hacer nada más (F-132).
 
 **Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5).
@@ -2049,7 +2050,7 @@ y el total es otra ejecución. Nuevo contrato:
 - **Cargar en QGIS (GD-PERF-009):** «Copia» escrita por DuckDB directo a GeoPackage cuando `spatial` está cargada
   (con el permiso de spatial-spec §10; si no, el camino actual), comprobando filas y SRC. «Conectada»: caché de
   páginas por extensión y cancelación inmediata de lo que ya no se ve. La selección de QGIS, leída por DuckDB
-  (lista de identificadores) en «→ DuckDB». Progreso real con porcentaje en importar y exportar.
+  (lista de identificadores) en «→ GeoDuck». Progreso real con porcentaje en importar y exportar.
 - **Catálogo (GD-PERF-010):** columnas y autocompletado cargados por partes; bases con 10 000 tablas sin pausas
   (barra lateral ≤ 100 ms al desplegar, Ctrl+K ≤ 50 ms por tecla).
 

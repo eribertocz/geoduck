@@ -824,7 +824,7 @@ class SessionCoordinator:
     def send_candidates(self, layer_ids: list[str] | None) -> list[SendCandidate]:
         """Las capas para el diálogo (todas las del proyecto si `layer_ids` es None)."""
         if self._sender is None:
-            raise SessionStateError(tr("Sending layers to DuckDB is not available"))
+            raise SessionStateError(tr("Sending layers to GeoDuck is not available"))
         return self._sender.describe(layer_ids)
 
     def read_import_target(
@@ -914,9 +914,9 @@ class SessionCoordinator:
     def send_layers(self, request: SendRequest) -> int:
         """Envía capas de QGIS a DuckDB en una transacción (qgis-import-spec §4). La sesión pasa por `BUSY`
         (bloquea `DETACH` y el cierre, §9); se cancela con `cancel_current_operation`. Devuelve el id."""
-        engine = self._require_ready(tr("send layers to DuckDB"))
+        engine = self._require_ready(tr("send layers to GeoDuck"))
         if self._sender is None:
-            raise SessionStateError(tr("Sending layers to DuckDB is not available"))
+            raise SessionStateError(tr("Sending layers to GeoDuck is not available"))
         self._send_ids += 1
         send_id = self._send_ids
         self._sm.transition(SessionState.BUSY)

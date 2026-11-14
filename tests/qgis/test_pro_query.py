@@ -406,7 +406,7 @@ def test_export_writes_the_full_query(coordinator, tmp_path):
     )
     view = windows[-1].view
     [row] = view.rows
-    assert [v.title.text() for v in row.views] == [tr("Query"), tr("DuckDB writes the file"), tr("File")]
+    assert [v.title.text() for v in row.views] == [tr("Query"), tr("GeoDuck writes the file"), tr("File")]
     assert all(v.node.state == "done" for v in row.views)
     assert row.status.text() == "✓ " + tr("{0} rows").format("5 000")
     texts = [b.text() for b in windows[-1].findChildren(QPushButton) if b.isVisible()]
@@ -741,7 +741,7 @@ def test_an_error_card_fixes_only_the_editor_text_and_copies_the_original(coordi
     [card] = page.cards
     assert card.title.text() == tr("The column «{}» does not exist").format("kwhh")
     assert card.where.text() == tr("Line {0} · near «{1}»").format(2, "kwhh")
-    assert card.explanation.text() == tr("DuckDB suggests: {}.").format("kwh")
+    assert card.explanation.text() == tr("Suggestion: {}.").format("kwh")
     assert not card.original.isVisibleTo(card)  # el mensaje original, plegado
     card.toggle.click()
     assert card.original.isVisibleTo(card) and card.original.text().startswith("Binder Error")
@@ -787,7 +787,7 @@ def test_a_syntax_error_is_underlined_while_typing_without_running(coordinator):
     assert wait_for(lambda: page.editor.status.shown)
     assert page.editor.markersAtLine(2) & (1 << pro_editor.ERROR_MARK)
     offset = len("SELECT zona, sum(kwh)\nFROM lecturas\nGROUP ")
-    assert tr("DuckDB parser · not run yet") in page.editor.status.message_at(offset)
+    assert tr("SQL check · not run yet") in page.editor.status.message_at(offset)
     assert page.results == [] and page.run is None  # no se ejecutó nada
     page.editor.setText("SELECT 1;")  # al escribir, el aviso se va y se vuelve a revisar
     assert not page.editor.status.shown

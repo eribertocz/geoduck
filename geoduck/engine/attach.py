@@ -60,7 +60,7 @@ _RULES: tuple[tuple[str, ErrorCode, str], ...] = (
         tr("The file is already attached in this session."),
     ),
     ("already exists", ErrorCode.DB_ALIAS_CONFLICT, tr("There is already a database with that alias.")),
-    ("reserved name", ErrorCode.DB_ALIAS_CONFLICT, tr("That alias is reserved by DuckDB.")),
+    ("reserved name", ErrorCode.DB_ALIAS_CONFLICT, tr("That alias is reserved.")),
     ("database does not exist", ErrorCode.DB_NOT_FOUND, tr("The file does not exist.")),
     ("no such file or directory", ErrorCode.DB_NOT_FOUND, tr("The file or its folder does not exist.")),
     ("permission denied", ErrorCode.DB_READ_ONLY, tr("There is no write permission on the file.")),
@@ -68,7 +68,7 @@ _RULES: tuple[tuple[str, ErrorCode, str], ...] = (
     (
         "not a valid duckdb database file",
         ErrorCode.ENGINE_ERROR,
-        tr("The file is not a valid DuckDB database."),
+        tr("The file is not a valid database."),
     ),
 )
 
@@ -83,7 +83,7 @@ def classify_attach_error(exc: BaseException) -> AttachError:
         if needle in text:
             return AttachError(message, code=code, detail=f"{type(exc).__name__}: {needle}")
     return AttachError(
-        tr("DuckDB could not attach the file."), code=ErrorCode.ENGINE_ERROR, detail=type(exc).__name__
+        tr("The file could not be opened."), code=ErrorCode.ENGINE_ERROR, detail=type(exc).__name__
     )
 
 
@@ -122,7 +122,7 @@ def attach_database(handle: ConnectionHandle, request: AttachRequest, root: str)
 def _check_alias(catalog: CatalogSnapshot, alias: str) -> None:
     if catalog_key(alias) in RESERVED_CATALOG_NAMES:
         raise AttachError(
-            tr("The alias «{0}» is reserved by DuckDB.").format(alias),
+            tr("The alias «{0}» is reserved.").format(alias),
             code=ErrorCode.DB_ALIAS_CONFLICT,
             detail="reserved",
         )
@@ -150,7 +150,7 @@ def _check_path(path: str, action: OpenAction) -> tuple[int, int, int, int] | No
     if os.path.lexists(path + ".wal"):
         raise InvalidArgumentError(
             tr(
-                "There is a .wal file with that name; DuckDB would apply it to the "
+                "There is a .wal file with that name; it would be applied to the "
                 "new database. Choose another name."
             )
         )

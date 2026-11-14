@@ -79,7 +79,7 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   **fijado** queda al lado (240 px; el editor se angosta) y no se cierra solo. Se recuerda entre sesiones; en
   la ventana sigue siempre al lado. **Mientras se arrastran capas o archivos nunca se cierra**; arrastrando
   sobre ☰, el botón se ilumina («Mantén para abrir el explorador») y a los ½ s el explorador se abre, con la
-  guía punteada «Suelta sobre una base para llevar a DuckDB» (también al pasar con algo arrastrado por el
+  guía punteada «Suelta sobre una base para llevar a GeoDuck» (también al pasar con algo arrastrado por el
   árbol). Una ventana usa el mismo modo compacto por debajo de 640 px **o cuando la página no cabe con sus
   textos**; recuerda cuánto pedía y vuelve al modo normal cuando vuelve a caber (nunca se queda atascado: el
   ancho mínimo de la ventana no lo fija la página).
@@ -289,7 +289,7 @@ con la base y el tipo de cada resultado. Intro abre; Esc cierra.
 
 ## 7. Cargar en QGIS (GD-WSP-006; decisión del propietario, 2026-11-05)
 Dos opciones, en lenguaje simple:
-- **«Copia»:** «Copia los datos a la memoria de QGIS; ya no depende de DuckDB» (propietario, 2026-11-07: sin
+- **«Copia»:** «Copia los datos a la memoria de QGIS; ya no depende de la base» (propietario, 2026-11-07: sin
   «rápida», que hacía pensar en velocidad; lo que la define es que es una copia en memoria). Por dentro, la Copia rápida (GeoPackage en `/vsimem`, ADR-0012); la
   Copia en memoria solo como **respaldo automático** si GDAL no permite la rápida. El usuario nunca elige entre
   las dos.
@@ -297,7 +297,7 @@ Dos opciones, en lenguaje simple:
   copia sobrevive a reabrir el proyecto), GeoDuck lo avisa y ofrece en un clic **«Guardar las copias junto al
   proyecto»**: un GeoPackage al lado del `.qgz`, y cada capa pasa a leer ese archivo y sobrevive. Con «No, gracias»,
   al reabrir la capa se muestra «no disponible» con su motivo, nunca rota sin explicación.
-- **«Conectada»:** «Lee directamente de DuckDB, sin copiar; lo que edites se guarda en DuckDB» (ADR-0012).
+- **«Conectada»:** «Lee directamente de la base, sin copiar; lo que edites se guarda en la base» (ADR-0012).
 Reproyectar, separar por tipo y SRC siguen igual (spatial-spec), escondidos hasta que aplican.
 - **El nombre de la capa arriba del menú** (#148, punto 15; maqueta `cargar-qgis`): con una tabla o un
   resultado, «Nombre de la capa en QGIS», ya relleno con el de la pestaña (o la tabla); se edita y **Enter =
@@ -348,7 +348,7 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
    → **Copia a DuckDB** (filas, barra y «≈ 1 s restante») → **Destino** (memory.main.redes · filas · SRC),
    cada uno con su tiempo. Círculos con icono: ✓ verde = hecho, girando turquesa = ahora, punteado gris = en
    espera o saltado; **un paso que falla se pone rojo con la tarjeta de error** (#145). «Cancelar · Esc»
-   mientras corre (y «Seguir en segundo plano»); al terminar, «Listo: 3 capas en DuckDB» con la píldora «⚡ 1
+   mientras corre (y «Seguir en segundo plano»); al terminar, «Listo: 3 capas en GeoDuck» con la píldora «⚡ 1
    directo por DuckDB · 2 por QGIS», **«Deshacer», «Abrir» y «Cerrar»**. Exportar: Consulta → DuckDB escribe
    el archivo → Archivo, con «Abrir carpeta», «Cargar en QGIS» y «Cerrar». Hacia QGIS: Origen → Copia a QGIS
    (o Capa conectada) → Capa en QGIS, con «Ver en el mapa» y «Cerrar».
@@ -368,9 +368,10 @@ sentidos siguen los mismos pasos: **elegir → destino y nombres → progreso �
   «Suelta para enviar N capas a «db»»; en un espacio vacío o en la cabecera, la base actual.
 - **Nombres** (#142, punto 26, reemplaza la regla de G9): en menús, botones y títulos va siempre
   **«GeoDuck»** («Añadir … a GeoDuck», «Enviar a GeoDuck…»); «Cargar en QGIS» siempre termina en QGIS.
-  **«DuckDB»** se nombra solo como información técnica: la trazabilidad («⚡ leída directamente por DuckDB»),
-  el mensaje original de DuckDB, el formato de archivo («base de datos DuckDB»), la versión del motor y
-  «Acerca de».
+  **«DuckDB»** no se nombra en la interfaz (#184, propietario, 2026-11-14): solo en «Acerca de» (versión y
+  marca) y en la revisión de componentes de «Diagnóstico» (versión, origen e instalación). En lo demás se dice
+  «GeoDuck», «la base» o «el motor» («Mensaje original del motor»); la trazabilidad dice «⚡ leída directamente
+  por GeoDuck», y el filtro de archivos, «Base de datos (*.duckdb *.ddb *.db)». Una prueba lo comprueba.
 - **Avisos:** todos llevan «×» para cerrarlos sin hacer nada más (F-132).
 
 **Arrastrar, en los dos sentidos** (propietario, 2026-11-06; E5).

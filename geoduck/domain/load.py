@@ -97,7 +97,7 @@ class LoadReport:
 
 
 _KINDS = {"table": tr("table"), "view": tr("view")}
-COPY_ACCESS = tr("independent copy of DuckDB")
+COPY_ACCESS = tr("independent copy of the database")
 
 
 def describe_origin(request: LoadRequest, kind: str | None = None) -> str:

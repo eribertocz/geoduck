@@ -185,7 +185,9 @@ def test_round_trip_keeps_crs_geometry_and_values(session, case):
     source = _layer(uri, fields, features)
     plan = plan_layer(source, table="t")
     curved = QgsWkbTypes.isCurvedType(source.wkbType())
-    assert (tr("Curves are converted to straight segments: DuckDB has no curves") in plan.warnings) == curved
+    assert (
+        tr("Curves are converted to straight segments: the database has no curves") in plan.warnings
+    ) == curved
     report, _ = send(session, [plan])
     assert isinstance(report, ImportReport), report
     expected = {f["id"]: f for f in source.getFeatures()}

@@ -49,7 +49,7 @@ class ErrorCardView(QFrame):
             self.explanation.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             box.addWidget(self.explanation)
         self._buttons(box, card, colors)
-        self.toggle = button("▸ " + tr("Original DuckDB message"), "link")
+        self.toggle = button("▸ " + tr("Original engine message"), "link")
         self.toggle.setCheckable(True)
         self.toggle.toggled.connect(self._toggled)
         box.addWidget(self.toggle, 0, Qt.AlignmentFlag.AlignLeft)
@@ -80,7 +80,7 @@ class ErrorCardView(QFrame):
         row.addWidget(self.go_button)
         # solo el ícono, en la ventana y en el panel (propietario, 2026-11-13); la ayuda dice qué copia
         self.copy_button = icon_button(
-            "copy", tr("Copies DuckDB's original message (to search for it or report it)"), colors
+            "copy", tr("Copies the engine's original message (to search for it or report it)"), colors
         )
         self.copy_button.clicked.connect(lambda: QGuiApplication.clipboard().setText(card.original))
         row.addWidget(self.copy_button)
@@ -88,7 +88,7 @@ class ErrorCardView(QFrame):
 
     def _toggled(self, open_: bool) -> None:
         self.original.setVisible(open_)
-        self.toggle.setText(("▾ " if open_ else "▸ ") + tr("Original DuckDB message"))
+        self.toggle.setText(("▾ " if open_ else "▸ ") + tr("Original engine message"))
 
 
 def _fix_help(fix: Fix) -> str:

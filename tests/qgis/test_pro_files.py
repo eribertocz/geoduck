@@ -377,7 +377,7 @@ def test_a_filter_that_gives_other_rows_in_duckdb_falls_back_to_qgis(coordinator
     flow = add_with_spatial(ws, coordinator, layer)
     assert flow.states[0]["state"] == "done" and flow.states[0]["fallback"]
     assert not flow._route(0)[0]
-    assert tr("DuckDB does not understand its filter, so QGIS applies it") in flow._steps(0)[1].detail
+    assert tr("GeoDuck does not understand its filter, so QGIS applies it") in flow._steps(0)[1].detail
     assert read_one(coordinator, "SELECT count(*) FROM memory.main.rara")[0] == 50
 
 

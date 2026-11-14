@@ -78,7 +78,7 @@ from geoduck.qgis_bridge.qgis_compat import (
 from geoduck.qgis_bridge.sql_compile import compile_expression
 
 KEY = "geoduck"
-DESCRIPTION = tr("GeoDuck (connected DuckDB)")
+DESCRIPTION = tr("GeoDuck (Connected)")
 #: Filas por página (qgis-bridge-spec §5.2): el worker queda libre entre páginas.
 PAGE = 50_000
 #: Columna interna con el FID en la consulta base.
@@ -802,7 +802,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
         return str(self._subset)
 
     def subsetStringDialect(self) -> str:
-        return tr("DuckDB SQL (WHERE clause)")
+        return tr("SQL (WHERE clause)")
 
     def _full_extent(self) -> QgsRectangle:
         ext = [float(v) for v in self._params.get("extent", "").split(",") if v]
@@ -852,7 +852,7 @@ class GeoDuckProvider(QgsVectorDataProvider):  # type: ignore[misc]
                 return False
             except Exception as exc:
                 self.pushError(
-                    tr("Invalid filter for DuckDB: {0}").format(str(exc).splitlines()[0] if str(exc) else exc)
+                    tr("Invalid filter: {0}").format(str(exc).splitlines()[0] if str(exc) else exc)
                 )
                 return False
         self._subset = subset

@@ -135,7 +135,7 @@ def test_open_existing_on_a_non_duckdb_file_leaves_it_untouched(worker, tmp_path
     other.write_text("no es una base" * 50)
     before = digest(str(other))
     error = attach_error(worker, str(other), RW, OPEN)
-    assert error.code is ErrorCode.ENGINE_ERROR and "no es una base DuckDB" in error.message
+    assert error.code is ErrorCode.ENGINE_ERROR and "no es una base válida" in error.message
     assert digest(str(other)) == before and names(worker) == []
 
 

@@ -58,7 +58,7 @@ def test_a_missing_column_offers_the_candidate_duckdb_names():
     card = card_for("BinderException", BINDER, text)
     assert card.title == tr("The column «{}» does not exist").format("kwhh")
     assert card.where == tr("Line {0} · near «{1}»").format(2, "kwhh") and card.line == 1
-    assert card.explanation == tr("DuckDB suggests: {}.").format("kwh")
+    assert card.explanation == tr("Suggestion: {}.").format("kwh")
     [fix] = card.fixes
     assert (fix.kind, fix.label, text[fix.start : fix.end], fix.text) == (
         REPLACE,
@@ -116,7 +116,7 @@ def test_a_missing_file_offers_to_choose_another_and_open_its_folder():
 def test_out_of_memory_says_how_much_and_writes_a_higher_limit():
     card = card_for("OutOfMemoryException", MEMORY, "SELECT * FROM grande")
     assert card.title == tr("The query needs more memory than allowed")
-    assert card.explanation == tr("{0} of {1} were used (DuckDB «memory_limit»).").format(
+    assert card.explanation == tr("{0} of {1} were used (session «memory_limit»).").format(
         "3.9 GiB", "4.0 GiB"
     )
     assert card.where == tr("Line {0} · the whole statement").format(1)
@@ -130,7 +130,7 @@ def test_a_syntax_error_and_any_other_class_still_get_a_card():
     card = card_for("", 'Constraint Error: Duplicate key "id: 1" violates primary key constraint.', "INSERT")
     assert card.title == tr("A rule of the table does not allow this change") and card.fixes == ()
     card = card_for("WeirdException", "Something odd", "SELECT 1")
-    assert card.title == tr("DuckDB could not run this statement") and card.explanation == "Something odd"
+    assert card.title == tr("This statement could not run") and card.explanation == "Something odd"
 
 
 def test_the_typing_check_reads_only_syntax_errors_and_counts_bytes():

@@ -164,11 +164,11 @@ class LoadWindow:
             self.mode.buttons[1].setToolTip(reason)
         self.mode.buttons[1 if kind == CONNECTED and reason is None else 0].setChecked(True)
         self.mode.buttons[0].setToolTip(
-            tr("Copies the data into QGIS memory; it no longer depends on DuckDB")
+            tr("Copies the data into QGIS memory; it no longer depends on the database")
         )
         if reason is None:
             self.mode.buttons[1].setToolTip(
-                tr("Reads straight from DuckDB without copying; edits are saved in DuckDB")
+                tr("Reads straight from the database without copying; edits are saved in the database")
             )
         window.destination.addWidget(self.mode)
         self.rows: list[NameRow] = []
@@ -306,7 +306,9 @@ class LoadWindow:
         connected = s.get("connected", self.connected)
         origin = Step("database", tr("Source"), origin_text(job), DONE if state != WAITING else WAITING)
         if connected:
-            move = Step("database", tr("Connected layer"), tr("Reads straight from DuckDB without copying"))
+            move = Step(
+                "database", tr("Connected layer"), tr("Reads straight from the database without copying")
+            )
         else:
             move = Step("layers", tr("Copy to QGIS"))
         layer = Step("map", tr("Layer in QGIS"), f"«{job['name']}»")

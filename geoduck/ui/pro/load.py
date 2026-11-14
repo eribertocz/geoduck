@@ -220,8 +220,8 @@ def load_menu(
         menu.name_edit = _name_field(menu, name, lambda: (pick(COPY), menu.close()))  # type: ignore[attr-defined]
     if rename is not None:
         _rename_row(menu, rename)
-    copy_text = tr("Copies the data into QGIS memory; it no longer depends on DuckDB")
-    connected_text = tr("Reads straight from DuckDB without copying; edits are saved in DuckDB")
+    copy_text = tr("Copies the data into QGIS memory; it no longer depends on the database")
+    connected_text = tr("Reads straight from the database without copying; edits are saved in the database")
     for kind, icon, mode, text in (
         (COPY, "layers", tr("Copy (mode)"), copy_text),
         (CONNECTED, "database", tr("Connected"), connected_text),
@@ -665,7 +665,7 @@ def confirm_spatial(label_text: str, installed: bool) -> bool:
 
     box = QMessageBox(QApplication.activeWindow())
     box.setWindowTitle(tr("GeoDuck"))
-    text = tr("«{0}» is written with DuckDB's «spatial» extension (the fastest).").format(label_text)
+    text = tr("«{0}» is written with the «spatial» extension (the fastest).").format(label_text)
     if installed:
         text += " " + tr("It is installed but not loaded: GeoDuck will load it now, for this session.")
         go = box.addButton(tr("Load and export"), QMessageBox.ButtonRole.AcceptRole)

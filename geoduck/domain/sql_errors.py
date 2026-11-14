@@ -155,7 +155,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
     suggestion = _suggestion(original)
     if cls == "Parser Error":
         title = tr("Syntax error near «{}»").format(word) if word else tr("Syntax error")
-        return card(title, tr("DuckDB could not read the SQL here: {}").format(body))
+        return card(title, tr("The SQL could not be read here: {}").format(body))
     if cls == "Binder Error":
         referenced = re.search(r'Referenced column "((?:[^"]|"")+)" not found', original)
         if referenced:
@@ -164,9 +164,9 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
                 fixes.append(
                     Fix(REPLACE, tr("Change to «{}»").format(suggestion), start, end, _quoted(suggestion))
                 )
-            hint = tr("DuckDB suggests: {}.").format(suggestion) if suggestion else body
+            hint = tr("Suggestion: {}.").format(suggestion) if suggestion else body
             return card(tr("The column «{}» does not exist").format(name), hint)
-        return card(tr("DuckDB cannot resolve a name or a type here"), body)
+        return card(tr("A name or a type is not recognized here"), body)
     if cls == "Catalog Error":
         extension = re.search(
             r'with name "?([\w.]+)"? is not in the catalog, but it exists in the (\w+) extension', original
@@ -182,7 +182,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
                 )
             return card(
                 tr("This query needs the «{}» extension").format(ext),
-                tr("DuckDB says «{0}» exists in the «{1}» extension, which is not loaded.").format(name, ext),
+                tr("«{0}» exists in the «{1}» extension, which is not loaded.").format(name, ext),
             )
         missing = re.search(
             r"(Table|View|Schema|Catalog|Type|(?:Scalar |Table |Aggregate )?Function) "
@@ -193,7 +193,7 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
             fixes.append(
                 Fix(REPLACE, tr("Change to «{}»").format(suggestion), start, end, _quoted(suggestion))
             )
-        hint = tr("DuckDB suggests: {}.").format(suggestion) if suggestion else body
+        hint = tr("Suggestion: {}.").format(suggestion) if suggestion else body
         if missing:
             what, name = missing.group(1).lower(), missing.group(2).strip()
             titles = {
@@ -254,17 +254,17 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
                 cls,
                 tr("The file is not found"),
                 where,
-                tr("DuckDB found no file with that path."),
+                tr("There is no file with that path."),
                 tuple(fixes),
                 original,
                 offset,
                 line,
             )
-        return card(tr("DuckDB could not read or write a file"), body)
+        return card(tr("A file could not be read or written"), body)
     if cls == "Out of Memory Error":
         used = re.search(r"\(([\d.]+ ?\w+)/([\d.]+ ?\w+) used\)", original)
         hint = (
-            tr("{0} of {1} were used (DuckDB «memory_limit»).").format(used.group(1), used.group(2))
+            tr("{0} of {1} were used (session «memory_limit»).").format(used.group(1), used.group(2))
             if used
             else body
         )
@@ -285,12 +285,12 @@ def explain(  # noqa: PLR0911, PLR0912, PLR0915 - una rama por clase de error de
     if cls == "TransactionContext Error":
         return card(tr("The transaction does not allow this statement"), body)
     if cls in ("Invalid Input Error", "Out of Range Error", "Mismatch Type Error"):
-        return card(tr("DuckDB does not accept a value here"), body)
+        return card(tr("A value is not accepted here"), body)
     if cls == "Not implemented Error":
-        return card(tr("DuckDB does not support this yet"), body)
+        return card(tr("This is not supported yet"), body)
     if cls == "Permission Error":
-        return card(tr("DuckDB does not allow this here"), body)
-    return card(tr("DuckDB could not run this statement"), body)
+        return card(tr("This is not allowed here"), body)
+    return card(tr("This statement could not run"), body)
 
 
 def _suggestion(message: str) -> str:

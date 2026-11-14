@@ -568,7 +568,7 @@ class Sidebar(QFrame):
         trees.setSpacing(6)
         box.addLayout(trees, 1)  # antes de sus widgets: sin padre, uno visible sería una ventana suelta
         # la guía mientras se arrastra (#147): dónde soltar
-        self.drop_guide = label(tr("Drop on a database to bring it to DuckDB"), "drop-guide")
+        self.drop_guide = label(tr("Drop on a database to bring it to GeoDuck"), "drop-guide")
         self.drop_guide.setWordWrap(True)
         self.drop_guide.hide()
         trees.addWidget(self.drop_guide)
@@ -591,7 +591,7 @@ class Sidebar(QFrame):
         row.addWidget(self.dot)
         titles = QVBoxLayout()
         titles.setSpacing(0)
-        self.title = label("DuckDB")
+        self.title = label("GeoDuck")
         self.title.setFont(ui_font(bold=True))
         self.status = ElidedLabel(tr("Stopped"), "muted")
         self.status.setFont(ui_font(METRICS.font_small))
@@ -723,7 +723,9 @@ class Sidebar(QFrame):
         row = QHBoxLayout(foot)
         row.setContentsMargins(8, 6, 14, 6)
         row.setSpacing(0)
-        self.diagnostics_button = self._link(tr("Diagnostics"), tr("Checks Python, QGIS, DuckDB and PyArrow"))
+        self.diagnostics_button = self._link(
+            tr("Diagnostics"), tr("Checks that GeoDuck has everything it needs")
+        )
         self.diagnostics_button.clicked.connect(self.diagnostics_requested.emit)
         self.about_button = self._link(tr("About"), tr("Version, license and components"))
         self.about_button.clicked.connect(self.about_requested.emit)
