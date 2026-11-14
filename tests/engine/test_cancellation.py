@@ -179,11 +179,20 @@ def test_unverified_version_does_not_call_interrupt():
     assert fake.interrupted is True
 
 
-def test_async_writes_are_off_where_duckdb_has_them(worker):
-    """#175: cancelar un `COPY … TO` con escritura asíncrona (DuckDB 2.0) a veces no termina nunca."""
+def test_writes_are_synchronous_only_during_a_copy(worker):
+    """#175: cancelar un `COPY … TO` con escritura asíncrona (DuckDB 2.0) a veces no termina nunca; fuera
+    del `COPY` el ajuste queda como estaba."""
     sql = "SELECT value FROM duckdb_settings() WHERE name = 'async_threads'"
-    rows = worker.submit(lambda h, t: h.execute(sql)).future.result(TIMEOUT).rows
-    assert rows in ((), (("0",),))
+
+    def op(h, t):
+        before = h.execute(sql).rows
+        with h.sync_writes():
+            during = h.execute(sql).rows
+        return before, during, h.execute(sql).rows
+
+    before, during, after = worker.submit(op).future.result(TIMEOUT)
+    assert after == before
+    assert during == (() if not before else (("0",),))
 
 
 @needs_verified_interrupt

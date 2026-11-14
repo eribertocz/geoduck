@@ -187,7 +187,11 @@ def _execute_one(
 ) -> StatementResult:
     started = time.perf_counter()
     try:
-        out = handle.execute(st.text, max_rows=limit, token=token)
+        if st.type == "COPY":
+            with handle.sync_writes():
+                out = handle.execute(st.text, max_rows=limit, token=token)
+        else:
+            out = handle.execute(st.text, max_rows=limit, token=token)
     except OperationCancelledError:  # se canceló justo antes de empezar
         return StatementResult(st, StatementStatus.SKIPPED)
     except duckdb.FatalException:

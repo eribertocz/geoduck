@@ -43,7 +43,8 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
 - **Cancelación que siempre termina (#175):** una interrupción que llega justo antes de que DuckDB empiece la
   sentencia se perdía; ahora se repite mientras la sentencia cancelada siga en curso (consultas del editor y
   exportar). Y cancelar un `COPY … TO` de DuckDB 2.0 a veces quedaba bloqueado para siempre dentro de DuckDB (su
-  escritura asíncrona); la sesión propia de GeoDuck usa `async_threads = 0`, que escribe igual de rápido.
+  escritura asíncrona); GeoDuck usa `async_threads = 0` solo mientras corre un `COPY … TO` (exportar o el editor)
+  y después lo deja como estaba: escribe igual de rápido y las lecturas siguen siendo asíncronas.
 - **Spike G10-A:** medir `interrupt()` y la cancelación cooperativa por tipo de operación (SQL largo, `COPY`,
   `CREATE TABLE AS` con `ST_Read`, lectura por lotes hacia QGIS, PyArrow) en DuckDB 1.5 y 2.0; casos que no
   responden y su arreglo (puntos de control entre lotes, lotes más pequeños, cierre del lector).

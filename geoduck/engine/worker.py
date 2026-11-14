@@ -226,6 +226,28 @@ class ConnectionHandle:
                 self._reader_open = False
 
     @contextmanager
+    def sync_writes(self) -> Iterator[None]:
+        """Escritura sin hilos asíncronos durante el bloque, y después como estaba (#175).
+
+        DuckDB 2.0 escribe los archivos de `COPY … TO` en segundo plano, y cancelar esa escritura a veces la
+        deja bloqueada para siempre dentro de DuckDB. Sin hilos asíncronos escribe igual de rápido y la
+        cancelación siempre termina; fuera del bloque las lecturas siguen siendo asíncronas. En versiones
+        sin el ajuste (1.5) no cambia nada.
+        """
+        self._guard()
+        rows = self._con.execute(
+            "SELECT value FROM duckdb_settings() WHERE name = 'async_threads'"
+        ).fetchall()
+        if not rows or str(rows[0][0]) == "0":
+            yield
+            return
+        self._con.execute("SET async_threads = 0")
+        try:
+            yield
+        finally:
+            self._con.execute(f"SET async_threads = {int(rows[0][0])}")
+
+    @contextmanager
     def registered(self, name: str, data: Any) -> Iterator[None]:
         """Registra un objeto Arrow como vista temporal durante el bloque (escrituras por lotes, ADR-0012)."""
         self._guard()
@@ -693,7 +715,6 @@ class SessionWorker:
             con.execute("SET enable_progress_bar = true")
             con.execute("SET enable_progress_bar_print = false")
             con.execute("SET progress_bar_time = 0")
-            _without_async_writes(con)
         except BaseException:
             con.close()
             raise
@@ -884,15 +905,6 @@ def _own_spatial(con: Any) -> str:
     with contextlib.suppress(duckdb.Error):  # el ajuste existe desde spatial 2.0
         con.execute("SET geometry_always_xy = true")
     return ""
-
-
-def _without_async_writes(con: Any) -> None:
-    """DuckDB 2.0 escribe los archivos de `COPY … TO` con hilos asíncronos, y cancelar una de esas
-    escrituras a veces la deja bloqueada para siempre (#175). Sin hilos asíncronos escribe igual de
-    rápido y la cancelación siempre termina. En versiones sin el ajuste no hay nada que cambiar."""
-    has = con.execute("SELECT count(*) FROM duckdb_settings() WHERE name = 'async_threads'").fetchall()
-    if has[0][0]:
-        con.execute("SET async_threads = 0")
 
 
 def _own_temp_directory(con: Any) -> tuple[str, int]:
