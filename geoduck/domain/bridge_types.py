@@ -107,6 +107,13 @@ INTEGER_KEY_TYPES = frozenset(
 )
 
 
+def stale_geometry_stats(version: str) -> bool:
+    """DuckDB 1.5.0 a 1.5.3 (#154): al reabrir una base de archivo grande, un filtro por rectángulo
+    (`st_intersects_extent`, `&&`) se salta filas que sí están dentro. Arreglado en 1.5.4."""
+    parts = [int(n) for n in re.findall(r"\d+", version)[:3]]
+    return len(parts) == 3 and parts[:2] == [1, 5] and parts[2] <= 3
+
+
 def is_geometry_type(source_type: str) -> bool:
     return bool(_GEOMETRY.match(source_type.strip()))
 

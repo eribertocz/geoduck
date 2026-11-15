@@ -329,6 +329,9 @@ class OperationHandle(Generic[T]):
 class SessionWorker:
     """Hilo propietario de una conexión DuckDB con cola serial de operaciones."""
 
+    #: La versión de DuckDB de la sesión (las capas Conectadas la consultan; #154).
+    duckdb_version: str = duckdb.__version__
+
     def __init__(
         self, database: str = ":memory:", *, name: str = "geoduck-session", spatial: bool | None = None
     ) -> None:

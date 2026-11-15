@@ -61,6 +61,7 @@ from geoduck.domain.bridge_types import (
     build_load_plan,
     family_filter_sql,
     geometry_read_sql,
+    stale_geometry_stats,
     strip_terminator,
 )
 from geoduck.domain.i18n import tr
@@ -324,11 +325,7 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
             cols.append(quote_identifier(geometry.name))
         where: list[str] = []
         if has_rect:
-            g = quote_identifier(geometry.name)  # type: ignore[union-attr]
-            extent = f"st_intersects_extent({g}, {_extent_polygon(self.rect)})"
-            # #154: DuckDB 2.0 falla con un error interno si usa un índice R-tree junto a un filtro por
-            # `rowid` (las páginas de una tabla sin clave). `IS TRUE` da lo mismo y no usa el índice.
-            where.append(f"({extent} IS TRUE)" if p.fid_mode == "rowid" else extent)
+            where.append(self._extent_filter(geometry.name))  # type: ignore[union-attr]
         ft = r.filterType()
         if ft in (FilterType.Fid, FilterType.Fids):
             fids = [int(r.filterFid())] if ft == FilterType.Fid else sorted(int(x) for x in r.filterFids())
@@ -353,6 +350,18 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         #: preguntarle el tipo a la geometría.
         self.layer_header = b"\x01" + int(self.layer_wkb).to_bytes(4, "little")
         self.reproject = self.transform.isValid() and not self.transform.isShortCircuited()
+
+    def _extent_filter(self, column: str) -> str:
+        p = self.p
+        extent = f"st_intersects_extent({quote_identifier(column)}, {_extent_polygon(self.rect)})"
+        # #154: `IS TRUE` da lo mismo, pero DuckDB no lo usa para saltarse datos. Hace falta (1) con un
+        # índice R-tree y un filtro por `rowid` (las páginas de una tabla sin clave): DuckDB 2.0 da un
+        # error interno; (2) en DuckDB 1.5.0–1.5.3, que al reabrir una base de archivo grande se salta
+        # filas que sí están en el rectángulo (devuelve 0).
+        engine = p.engine()
+        stale = stale_geometry_stats(getattr(engine, "duckdb_version", "")) if engine is not None else False
+        plain = p.fid_mode != "rowid" and not stale
+        return extent if plain else f"({extent} IS TRUE)"
 
     def _key_tuple_sql(self, values: tuple[Any, ...]) -> str:
         return self.p.key_tuple_sql(values)
