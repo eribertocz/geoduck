@@ -6,8 +6,8 @@
   "documents": [
     {
       "path": "GEODUCK_SPEC_MAESTRA.md",
-      "bytes": 236444,
-      "sha256": "5b7fc303a6d40a8fafdfab386e6168ad434053df0b7818882f474a87a3da6ed3"
+      "bytes": 236816,
+      "sha256": "b1ab511e78f073d8c5e561866a8f4215b59cf9d7f20df9cffe8b33f1c477c10b"
     },
     {
       "path": "README.md",
@@ -106,13 +106,13 @@
     },
     {
       "path": "docs/compatibility-distribution.md",
-      "bytes": 4212,
-      "sha256": "681fd55408341e9c49c30a3b93f73d0d6c8c2406ef6046a51d8002d7427d3bc9"
+      "bytes": 4348,
+      "sha256": "79bef6297f18073beb0710e91b9a7be173c87327d30ac5aa752cc7df1e482907"
     },
     {
       "path": "docs/implementation-handoff.md",
-      "bytes": 3828,
-      "sha256": "550bf88c0263c5debaa84405c28ed536db80dce347aa9e72b08ccc83e596dc02"
+      "bytes": 3868,
+      "sha256": "7accbcf64ef184558c6aba448425ee2dd1187cfca61e762a12baaa9a10b14e2c"
     },
     {
       "path": "docs/product-spec.md",
@@ -126,8 +126,8 @@
     },
     {
       "path": "docs/roadmap.md",
-      "bytes": 9760,
-      "sha256": "ffc2397e9234e18382ef7b391ec94c328e8affffad2db476d221343b1ee55cd9"
+      "bytes": 9781,
+      "sha256": "f9b5c6279b0f89b136d4c6887376b034c18f8f85a93c12c5c987b627c1998416"
     },
     {
       "path": "docs/security.md",
@@ -136,8 +136,8 @@
     },
     {
       "path": "docs/technology.md",
-      "bytes": 5606,
-      "sha256": "c4fc85bde38de5d10c736c59ce73476381e7314a0744af4e6dbd15aae5579660"
+      "bytes": 5820,
+      "sha256": "7fe23aed3461531157aa81e4ec86df0fdb4a0caa15a302bce6311c221614f8b7"
     },
     {
       "path": "docs/vision.md",
@@ -151,8 +151,8 @@
     },
     {
       "path": "qa/test-strategy.md",
-      "bytes": 17395,
-      "sha256": "eb0ca6fe7f812d0d4c0ce8f645fd3dc0573f89c7dbed08f47fcaa2f746b4db9f"
+      "bytes": 17408,
+      "sha256": "4abf38287996531df4dd989d1b7c92c20cb365acde7c2783488a27cf518d2345"
     },
     {
       "path": "specs/performance-spec.md",
@@ -161,8 +161,8 @@
     },
     {
       "path": "specs/qgis-bridge-spec.md",
-      "bytes": 19647,
-      "sha256": "727a86e1e26dad96cf31d32d06add18533c650e7c7bc6aee62b9313b6eb35bfe"
+      "bytes": 19595,
+      "sha256": "7b8e00a547e523c2cecf4f26684930aabb0229b34bd9b3b5c5cac167e0598a4b"
     },
     {
       "path": "specs/qgis-import-spec.md",

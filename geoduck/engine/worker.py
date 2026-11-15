@@ -185,16 +185,11 @@ class ConnectionHandle:
             return StatementOutcome()
         types = [str(d[1]) for d in description]
         geometry = [i for i, t in enumerate(types) if is_geometry_type(t)]
-        if geometry and not self._caps.python_geometry:
-            # DuckDB 1.5.0 no convierte GEOMETRY a Python («Unsupported type»): vista previa por Arrow.
-            fetched = _arrow_preview(result, max_rows + 1, types)
-        else:
-            fetched = result.fetchmany(max_rows + 1)
-            if geometry:  # misma presentación en todas las versiones: «TIPO · n B»
-                fetched = [
-                    tuple(describe_wkb(v) if i in geometry else v for i, v in enumerate(row))
-                    for row in fetched
-                ]
+        fetched = result.fetchmany(max_rows + 1)
+        if geometry:  # misma presentación en todas las versiones: «TIPO · n B»
+            fetched = [
+                tuple(describe_wkb(v) if i in geometry else v for i, v in enumerate(row)) for row in fetched
+            ]
         truncated = len(fetched) > max_rows
         if self._caps.has_complete:
             self._con.complete()
@@ -328,9 +323,6 @@ class OperationHandle(Generic[T]):
 
 class SessionWorker:
     """Hilo propietario de una conexión DuckDB con cola serial de operaciones."""
-
-    #: La versión de DuckDB de la sesión (las capas Conectadas la consultan; #154).
-    duckdb_version: str = duckdb.__version__
 
     def __init__(
         self, database: str = ":memory:", *, name: str = "geoduck-session", spatial: bool | None = None
@@ -1028,22 +1020,3 @@ def describe_wkb(value: bytes | None) -> str | None:
     name = _WKB_NAMES.get(code % 1000, "GEOMETRY")
     suffix = {1: " Z", 2: " M", 3: " ZM"}.get(code // 1000, "")
     return f"{name}{suffix} · {len(value)} B"
-
-
-def _arrow_preview(result: Any, limit: int, types: list[str]) -> list[tuple[Any, ...]]:
-    """Hasta `limit` filas leídas por Arrow; las columnas de geometría se describen como texto."""
-    reader = result.fetch_record_batch(limit)  # solo en 1.5.0, donde es la API vigente
-    rows: list[tuple[Any, ...]] = []
-    try:
-        for batch in reader:
-            columns = batch.to_pydict()
-            values = [
-                [describe_wkb(v) for v in col] if is_geometry_type(types[i]) else col
-                for i, col in enumerate(columns.values())
-            ]
-            rows.extend(zip(*values, strict=True))
-            if len(rows) >= limit:
-                break
-    finally:
-        reader.close()
-    return rows[:limit]

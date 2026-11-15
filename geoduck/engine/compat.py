@@ -12,8 +12,9 @@ from dataclasses import dataclass
 
 from geoduck.domain.versions import Version
 
-#: Mínimo funcional aprobado (spec/docs/technology.md).
-MINIMUM = (1, 5, 0)
+#: Mínimo funcional aprobado (spec/docs/technology.md): 1.5.4 desde el 2026-11-15 (antes, 1.5.0). Por
+#: debajo, un filtro por rectángulo se salta filas al reabrir una base de archivo grande (#154).
+MINIMUM = (1, 5, 4)
 #: Recomendada en la rama 1.5 (decisión D5): última 1.5.x verificada; incluye la corrección de F-04 (1.5.4).
 RECOMMENDED = (1, 5, 6)
 
@@ -22,10 +23,6 @@ RECOMMENDED = (1, 5, 6)
 #: en la versión nueva (ADR-0007). Clave: (major, minor, patch).
 INTERRUPT_VERIFIED: frozenset[tuple[int, int, int]] = frozenset(
     {
-        (1, 5, 0),
-        (1, 5, 1),
-        (1, 5, 2),
-        (1, 5, 3),
         (1, 5, 4),
         (1, 5, 5),
         (1, 5, 6),
@@ -37,7 +34,7 @@ INTERRUPT_VERIFIED: frozenset[tuple[int, int, int]] = frozenset(
 @dataclass(frozen=True)
 class EngineCapabilities:
     version: Version
-    #: >= 1.5.0
+    #: >= 1.5.4
     supported: bool
     #: >= 1.5.6 (D5)
     recommended: bool
@@ -50,8 +47,6 @@ class EngineCapabilities:
     attach_accepts_parameters: bool
     #: `con.complete()` existe para terminar un resultado DB-API abierto sin leerlo (2.0+).
     has_complete: bool
-    #: `fetchmany` convierte GEOMETRY a Python (1.5.1+; en 1.5.0 «Unsupported type», hallazgo de G3/E4).
-    python_geometry: bool = True
 
     @classmethod
     def for_version(cls, text: str) -> EngineCapabilities:
@@ -65,7 +60,6 @@ class EngineCapabilities:
             engine_guards_open_result=is_2x,
             attach_accepts_parameters=is_2x,
             has_complete=is_2x,
-            python_geometry=v.at_least(1, 5, 1),
         )
 
 

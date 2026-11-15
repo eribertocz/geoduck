@@ -42,14 +42,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        duckdb: ["1.5.0", "1.5.6", "2.0.0"]   # mínimo, última 1.5.x, última 2.x (compat/matrix.toml)
+        duckdb: ["1.5.4", "1.5.6", "2.0.0"]   # mínimo, última 1.5.x, última 2.x (compat/matrix.toml)
         python: ["3.12", "3.14"]
         pyarrow: ["25.0.1"]
         numpy: [""]
         include:
           # Reproduce en Ubuntu las versiones de dependencias de QGIS 3.34.15 para Windows (PyArrow 18.1.0 y
           # NumPy 1.26.4 incluidas por QGIS, F-13). Comprueba APIs; NO es certificación Windows.
-          - { duckdb: "1.5.0", python: "3.12", pyarrow: "18.1.0", numpy: "1.26.4" }
+          - { duckdb: "1.5.4", python: "3.12", pyarrow: "18.1.0", numpy: "1.26.4" }
           - { duckdb: "2.0.0", python: "3.12", pyarrow: "18.1.0", numpy: "1.26.4" }
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
       matrix:
         # Mínima soportada (3.34), cada LTR y la última (spec/docs/compatibility-distribution.md §1).
         qgis: ["3.34.6", "3.40.3", "3.44.14", "4.2.3"]
-        duckdb: ["1.5.0", "2.0.0"]
+        duckdb: ["1.5.4", "2.0.0"]
     defaults:
       run:
         shell: bash -el {0}

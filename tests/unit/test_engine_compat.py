@@ -10,8 +10,8 @@ from geoduck.engine.compat import EngineCapabilities, is_interrupt_error
     ("version", "supported", "recommended", "interrupt", "guards"),
     [
         ("1.4.4", False, False, False, False),
-        ("1.5.0", True, False, True, False),
-        ("1.5.3", True, False, True, False),
+        ("1.5.0", False, False, False, False),
+        ("1.5.3", False, False, False, False),  # mínimo 1.5.4 (#154)
         ("1.5.4", True, False, True, False),
         ("1.5.5", True, False, True, False),
         ("1.5.6", True, True, True, False),

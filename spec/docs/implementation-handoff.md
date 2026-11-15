@@ -26,7 +26,7 @@
 - No materializar todas las filas a pandas o `fetchall()`.
 - No asumir CRS predeterminado.
 - No publicar capas parciales o confundir preview con resultado completo.
-- No bajar DuckDB por debajo de 1.5.0; toda API utilizada debe tener ruta probada para DuckDB 1.5.x y 2.x.
+- No bajar DuckDB por debajo de 1.5.4 (antes 1.5.0; #154); toda API utilizada debe tener ruta probada para DuckDB 1.5.x y 2.x.
 - No declarar «QGIS 3/4 compatible» sin prueba en ambos.
 
 ## 5. Contrato de PR
@@ -49,4 +49,4 @@ Cambios de producto, aceptación de degradaciones incompatibles, renuncias a QGI
 Informe G0-A/G0-B con tabla de entornos reales, comandos/evidencia de import, funcionamiento de Arrow/Spatial, PyQGIS memory, editor SQL y recomendación de empaquetado Windows, más `metadata.txt` mínimo y test smoke; **sin** construir antes una arquitectura gigante sin pruebas.
 
 ## Actualización obligatoria de alcance
-Claude Code debe implementar soporte mínimo de **DuckDB 1.5.0** y mantener compatibilidad probada con DuckDB 2.x. Queda prohibido codificar una dependencia incondicional de una API exclusiva de 2.x sin adaptación y prueba equivalente para 1.5.x.
+Claude Code debe implementar soporte mínimo de **DuckDB 1.5.4** (antes 1.5.0; #154) y mantener compatibilidad probada con DuckDB 2.x. Queda prohibido codificar una dependencia incondicional de una API exclusiva de 2.x sin adaptación y prueba equivalente para 1.5.x.
