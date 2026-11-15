@@ -22,7 +22,7 @@ from geoduck import __version__
 from geoduck.domain.diagnostics import DiagnosticReport
 from geoduck.domain.operations import EngineInfo
 from geoduck.domain.versions import release_stage
-from geoduck.ui import theme
+from geoduck.ui import guide, theme
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.tokens import BRAND_DEEP
 
@@ -50,6 +50,14 @@ def components(report: DiagnosticReport | None, engine: EngineInfo | None) -> li
     if report is not None:
         rows.append(("PyArrow", report.by_id("pyarrow").detail.removeprefix("PyArrow ")))
     return rows
+
+
+def _performance_link(style: str) -> str:
+    """#176: los números medidos, en la guía (performance-spec §7); nada si la guía no está."""
+    measured = guide.page_url(guide.PERFORMANCE, "measured")
+    if measured is None:
+        return ""
+    return f'<a style="{style}" href="{measured.toString()}">{tr("Performance")}</a> &nbsp;·&nbsp; '
 
 
 class _Band(QWidget):
@@ -97,7 +105,8 @@ class AboutDialog(QDialog):
 
         link = f"color: {palette.action};"
         self.links = QLabel(
-            f'<a style="{link}" href="{REPOSITORY}">{tr("Repository")}</a> &nbsp;·&nbsp; '
+            _performance_link(link)
+            + f'<a style="{link}" href="{REPOSITORY}">{tr("Repository")}</a> &nbsp;·&nbsp; '
             f'<a style="{link}" href="{REPOSITORY}/issues">{tr("Report a problem")}</a> &nbsp;·&nbsp; '
             f'<a style="{link}" href="{REPOSITORY}/blob/main/LICENSE">GPL-2.0-or-later</a>'
         )

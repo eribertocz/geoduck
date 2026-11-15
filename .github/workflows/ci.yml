@@ -160,6 +160,47 @@ jobs:
           name: stress-qgis-${{ matrix.qgis }}
           path: stress/
 
+  # #176 (performance-spec §7): la versión nueva contra la base del PR, en el mismo runner y en rondas alternadas
+  # (los runners varían 30–180 % entre corridas: nunca contra números guardados). Falla con una regresión de más
+  # del 20 % y más de 50 ms en alguna operación.
+  performance:
+    name: rendimiento · nueva contra base · QGIS 4.2.3 · DuckDB 2.0.0
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: qgis
+          create-args: qgis=4.2.3 pip
+          cache-environment: true
+      - run: python -m pip install "pytest>=8" "duckdb==2.0.0" "pyarrow==25.0.1"
+      - name: la base del PR, al lado
+        run: git worktree add ../base "origin/${{ github.base_ref }}"
+      - name: cuatro rondas alternadas (base, nueva, base, nueva)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          for round in 1 2; do
+            (cd ../base && python tools/perf/bench.py --rows 1000000 --repeat 3 --out "$GITHUB_WORKSPACE/perf/base-$round") || true
+            python tools/perf/bench.py --rows 1000000 --repeat 3 --out "perf/head-$round" || true
+          done
+      - name: comparar
+        run: >-
+          python tools/perf/compare.py --base perf/base-1 perf/base-2 --head perf/head-1 perf/head-2
+          --out perf/comparacion.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-ab
+          path: perf/
+
   build:
     name: ZIP del complemento
     runs-on: ubuntu-24.04
