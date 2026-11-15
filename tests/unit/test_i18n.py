@@ -65,7 +65,7 @@ def test_the_check_command_passes():
 
 def test_the_zip_contains_the_compiled_translation(tmp_path):
     subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "build_zip.py"), "--out", str(tmp_path)],
+        [sys.executable, str(ROOT / "tools" / "build_zip.py"), "--out", str(tmp_path), "--no-guide"],
         check=True,
         capture_output=True,
     )

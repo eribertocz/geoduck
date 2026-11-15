@@ -115,6 +115,8 @@ class SessionCoordinator:
         self._send_ids = 0
         #: Carga en QGIS en curso (Memoria o Instantánea); la sesión está en BUSY mientras dura.
         self._load: LoadTask | None = None
+        #: «Crear índice espacial» en curso (#154): su operación, para que «Cancelar» detenga solo esa.
+        self._index_op: int | None = None
         self._load_ids = 0
         self._export_ids = 0
         self._prepare_tokens = 0
@@ -380,10 +382,12 @@ class SessionCoordinator:
         `SpatialIndexChanged` o `SpatialIndexFailed`."""
         engine = self._require_ready(tr("change the spatial index"))
         existing = self._catalog.spatial_index(*source, column) if self._catalog is not None else None
+        name = existing.name if existing is not None else None
+        handle = engine.spatial_index(source, column, name)
         self._sm.transition(SessionState.BUSY)
         started = time.monotonic()
-        name = existing.name if existing is not None else None
-        fut = engine.spatial_index(source, column, name)
+        self._index_op = handle.op_id
+        fut = handle.future
         fut.add_done_callback(
             lambda f: self._dispatcher.post(
                 lambda: self._on_spatial_index(engine, f, source, column, name is None, started)
@@ -399,6 +403,7 @@ class SessionCoordinator:
         created: bool,
         started: float,
     ) -> None:
+        self._index_op = None
         if engine is not self._engine or self._sm.state is not SessionState.BUSY:
             return
         exc = fut.exception()
@@ -416,6 +421,11 @@ class SessionCoordinator:
         self._emit(SpatialIndexFailed(source, created, code, message))
         if usable:
             self.refresh_catalog()
+
+    def cancel_spatial_index(self) -> bool:
+        """«Cancelar» del pie mientras se crea un índice espacial: solo esa operación (#154)."""
+        op = self._index_op
+        return op is not None and self._engine is not None and self._engine.cancel(op)
 
     def close_reason(self, name: str) -> str | None:
         """Por qué no se puede cerrar la base `name` ahora (#168), o None si se puede. La interfaz deja

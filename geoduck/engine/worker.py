@@ -566,9 +566,9 @@ class SessionWorker:
 
     def spatial_index(
         self, source: tuple[str, str, str], column: str, existing: str | None
-    ) -> Future[CatalogSnapshot]:
+    ) -> OperationHandle[CatalogSnapshot]:
         """«Crear índice espacial» (`existing` None) o «Quitar» el índice `existing` (#154), y el catálogo
-        nuevo, en una sola operación. Crear se cancela con `cancel_current`."""
+        nuevo, en una sola operación. Crear se cancela con `cancel(op_id)`."""
         root = self._root
 
         def run(handle: ConnectionHandle, token: CancelToken) -> CatalogSnapshot:
@@ -578,7 +578,7 @@ class SessionWorker:
                 drop_spatial_index(handle, source[0], source[1], existing)
             return read_catalog(handle, root)
 
-        return self._submit_future(run)
+        return self.submit(run)
 
     def transaction_state(self) -> Future[TransactionState]:
         """Estado transaccional real, comprobado sin modificarlo."""

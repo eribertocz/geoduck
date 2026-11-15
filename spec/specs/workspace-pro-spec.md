@@ -101,6 +101,19 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
   (`docs/evidence/g10/154/`): con 10 millones de puntos, una vista cercana pasa de 233 ms a 26 ms; con
   1 millón o con vistas grandes no cambia.
 
+- **Guía de uso (#150; maqueta `150`, aprobada el 2026-11-15).** La guía (MkDocs Material, español e inglés,
+  `docs/guide/`) va **dentro del complemento** (`geoduck/guide/<idioma>/`, la construye
+  `tools/build_guide.py`) y se abre en el navegador, también sin internet (buscador incluido); el idioma es el
+  de QGIS (español o, en cualquier otro, inglés). Accesos: el **«?»** de la barra, junto a la lupa (Guía de
+  uso · F1, Empieza aquí, Atajos del teclado, Novedades, Reportar un problema…, Diagnóstico del entorno,
+  Acerca de GeoDuck); **F1** abre la página de lo que se ve (el editor, una tabla o, sin pestañas, «Empieza
+  aquí»); **«¿Primera vez? Empieza aquí · 5 min»** cuando no hay pestañas; **«Más información»** en las
+  tarjetas de error que la guía explica; y **Base de datos › GeoDuck › Guía de uso**. «Reportar un problema…»
+  copia el diagnóstico (versiones, nunca datos) y abre la página que explica qué enviar. Si una instalación
+  no trae la guía, el pie lo dice. La CI revisa que las dos guías tengan las mismas páginas, anclas e
+  imágenes, y la construye con `--strict` (enlaces y anclas). Las capturas las genera
+  `tools/guide_shots.py`. La publicación en la web, los GIFs y la hoja de atajos en PDF, en #200 (G11).
+
 - **La marca** (propietario, 2026-11-07; `claude/marca.md` en el proyecto): el **logo de GeoDuck dice el estado
   de la sesión** en la barra lateral y en la cabecera del panel: un puntito en su esquina (verde lista, ámbar
   trabajando, rojo con error); sin sesión, el logo en gris y sin puntito. Un clic en el logo abre el menú de
@@ -271,7 +284,8 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
   - un archivo que no existe → «Elegir archivo…» (cambia la ruta) y «Abrir carpeta»;
   - sin memoria → cuánto se usó y «Subir memory_limit…» (escribe `SET memory_limit` antes de la sentencia).
   Los arreglos **solo cambian el texto del editor** (se deshacen con Ctrl+Z) y nunca ejecutan nada; si el texto
-  cambió desde que corrió, lo dicen y no tocan nada. «Más información» enlazará a la guía cuando exista (#150).
+  cambió desde que corrió, lo dicen y no tocan nada. «Más información» abre la sección de «Errores frecuentes» de la guía que explica esa clase de error (#150);
+  en los errores que GeoDuck no reconoce, no aparece.
 - **Aviso mientras se escribe** (#145): medio segundo después de dejar de escribir, el analizador de DuckDB
   (`json_serialize_sql`) revisa **solo la sintaxis** —no ejecuta nada ni lee datos— y un error se subraya con su
   ✕ y su mensaje al pasar el ratón («Analizador de DuckDB · aún no se ejecutó»). Solo con la sesión lista y sin

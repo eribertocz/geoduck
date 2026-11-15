@@ -26,7 +26,11 @@ def test_init_gui_registers_and_unload_removes(iface):
     plugin = geoduck.classFactory(iface)
     plugin.initGui()
     assert len(iface.toolbar) == 1
-    assert [action.objectName() for _menu, action in iface.menu] == ["geoduckToggleDock", "geoduckAbout"]
+    assert [action.objectName() for _menu, action in iface.menu] == [
+        "geoduckToggleDock",
+        "geoduckGuide",
+        "geoduckAbout",
+    ]
     window = plugin.workspace.window
     assert window.isHidden() and plugin.workspace.dock.isHidden()  # nada se abre solo al iniciar QGIS
     plugin.action.trigger()

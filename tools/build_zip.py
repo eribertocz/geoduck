@@ -4,7 +4,10 @@
 Reglas (plugins.qgis.org/publish y docs/licensing.md): carpeta raíz `geoduck/`, `metadata.txt` válido,
 `LICENSE` incluido, sin binarios ni archivos ocultos/generados y tamaño < 20 MB.
 
-Uso: python tools/build_zip.py [--out dist]
+Uso: python tools/build_zip.py [--out dist] [--no-guide]
+
+La guía de uso (#150) va dentro: antes, `python tools/build_guide.py`. `--no-guide` solo para pruebas que
+revisan otra parte del ZIP.
 """
 
 from __future__ import annotations
@@ -70,9 +73,15 @@ def collect_files() -> list[Path]:
     return files
 
 
-def build(out_dir: Path) -> Path:
+def build(out_dir: Path, *, guide: bool = True) -> Path:
     version = read_version()
     errors = validate_metadata(version)
+    # #150: la guía de uso va dentro del complemento (se abre sin internet)
+    errors += [
+        f"Falta la guía en {lang}: python tools/build_guide.py"
+        for lang in ("es", "en")
+        if guide and not (PKG / "guide" / lang / "index.html").is_file()
+    ]
     files = collect_files()
     errors += [
         f"Binario o generado no permitido: {f.relative_to(ROOT)}"
@@ -102,7 +111,9 @@ def build(out_dir: Path) -> Path:
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(ROOT / "dist"))
-    build(Path(parser.parse_args(argv).out))
+    parser.add_argument("--no-guide", action="store_true", help="sin exigir la guía (solo para pruebas)")
+    args = parser.parse_args(argv)
+    build(Path(args.out), guide=not args.no_guide)
 
 
 if __name__ == "__main__":
