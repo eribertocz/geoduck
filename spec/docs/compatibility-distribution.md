@@ -9,11 +9,11 @@
   API de QGIS entre versiones se resuelven en un único módulo de compatibilidad
   (`geoduck/qgis_bridge/qgis_compat.py`), nunca con suposiciones sobre la versión.
 - **Matriz de la CI (Linux, PyQGIS sin interfaz):** la mínima (3.34), cada LTR (3.40, 3.44) y la última
-  publicada (4.2), con DuckDB 1.5.0 y 2.0.0. Al publicarse una LTR o una versión mayor nueva, se añade.
+  publicada (4.2), con DuckDB 1.5.4 y 2.0.0. Al publicarse una LTR o una versión mayor nueva, se añade.
   Las versiones intermedias comparten API con sus vecinas y quedan cubiertas por ellas.
 - **Anclas de prueba iniciales al 2026-11-01**: QGIS 3.44.15 LTR (Qt5) y QGIS 4.2.3 (Qt6).
 - Windows 11 x64 primero. Otros SO en fases posteriores mediante decisiones registradas.
-- DuckDB >= 1.5.0: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
+- DuckDB >= 1.5.4: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
 - PyArrow requiere coincidencia de ABI, arquitectura y wheels reales; verificar en `sys.executable` de QGIS.
 
 ## 2. Matriz de soporte
@@ -49,5 +49,6 @@ La compatibilidad con QGIS 3 es un objetivo **realista por matriz**, no promesa 
 ## 6. Condición para marcar «soportado»
 Solo cuando pasen: instalación limpia, carga del panel, inicio/attach/detach, SQL multi-statement, streaming Arrow, geometría CRS y entrega de capa QGIS en el equipo de prueba correspondiente. El QGIS Plugin Checker complementa pero no sustituye pruebas.
 
-## DuckDB mínimo 1.5.0
+## DuckDB mínimo 1.5.4
+Desde el 2026-11-15 (#154; antes 1.5.0): 1.5.0–1.5.3 se saltan filas al filtrar por rectángulo una base de archivo grande reabierta.
 GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de primera clase junto a 2.x. Se requiere matriz independiente por QGIS, Python embebido, DuckDB, Spatial y PyArrow. La instalación no debe actualizar forzosamente una instalación compatible de DuckDB 1.5.x.

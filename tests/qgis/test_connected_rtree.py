@@ -66,7 +66,8 @@ def test_a_view_over_an_rtree_table_reads_every_feature(session, tmp_path, key):
 
 @pytest.mark.parametrize("key", [True, False], ids=["con-clave", "sin-clave"])
 def test_a_view_over_a_large_reopened_file_reads_every_feature(session, tmp_path, key):
-    """DuckDB 1.5.0–1.5.3 se saltaba las filas del rectángulo al reabrir una base de archivo grande."""
+    """DuckDB 1.5.0–1.5.3 se saltaba las filas del rectángulo al reabrir una base de archivo grande (por eso
+    el mínimo es 1.5.4)."""
     attach(session, make_db(tmp_path / "grande.duckdb", key, index=False))
     _, layer = session.load('SELECT * FROM "d"."main"."t"', name="t", source=("d", "main", "t"))
     request = QgsFeatureRequest().setFilterRect(QgsRectangle(0, 0, 999, 59))

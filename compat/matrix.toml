@@ -8,14 +8,16 @@
 # NumPy 1.26.4) tampoco equivalen a certificación Windows.
 
 schema = 1
-updated = "2026-11-01"
+updated = "2026-11-15"
 # D8 (2026-11-01): QGIS mínimo = 3.34 (primera serie con Python >= 3.10 en Windows), DuckDB >= 1.5.0.
+# 2026-11-15 (#154): DuckDB >= 1.5.4. Por debajo, un filtro por rectángulo se salta filas al reabrir una base
+# de archivo grande (las capas Conectadas salían vacías o incompletas).
 # F-13: en QGIS para Windows se usa la PyArrow incluida por QGIS; GeoDuck solo instala duckdb.
 
 [duckdb]
-minimum = "1.5.0"
+minimum = "1.5.4"
 recommended = "1.5.6"     # D5: recomendada en la rama 1.5; 2.x con soporte verificado
-ci_versions = ["1.5.0", "1.5.6", "2.0.0"]
+ci_versions = ["1.5.4", "1.5.6", "2.0.0"]
 
 [[cell]]
 id = "win-qgis-3.44-py312"
@@ -24,7 +26,7 @@ qgis = "3.44.x LTR"
 qt = "5.15"
 python = "3.12"            # documentado (QGIS issue #63733); por confirmar en la certificación
 numpy = "1.26.4?"          # por confirmar en la certificación
-duckdb = ["1.5.0", "1.5.6", "2.0.0"]
+duckdb = ["1.5.4", "1.5.6", "2.0.0"]
 pyarrow = "la incluida por QGIS, si existe (F-13); por verificar en 3.44"
 constraints = "constraints/win-qgis-3.44-py312.txt"
 status = "no probado"
@@ -37,7 +39,7 @@ qgis = "4.2.3"
 qt = "6"
 python = "por verificar"
 numpy = "por verificar"
-duckdb = ["1.5.0", "1.5.6", "2.0.0"]
+duckdb = ["1.5.4", "1.5.6", "2.0.0"]
 pyarrow = "por elegir tras la certificación"
 constraints = "constraints/win-qgis-4.2.txt"
 status = "no probado"

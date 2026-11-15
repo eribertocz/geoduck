@@ -132,6 +132,6 @@ A cada plataforma/versión declarar: `certificado`, `conocido con limitaciones`,
 - Cada PR debe adjuntar test ID, evidencia y release target. Regresiones verificadas bloquean release. Los benchmarks no justifican reducir corrección.
 
 ## Matriz obligatoria de regresión DuckDB
-- Ejecutar pruebas con **1.5.x y 2.x** (comenzando con 1.5.0 y 2.0.0 si sus wheels son compatibles con el runtime).
+- Ejecutar pruebas con **1.5.x y 2.x** (comenzando con 1.5.4, el mínimo, y 2.0.0 si sus wheels son compatibles con el runtime).
 - Verificar por cada versión DuckDB + Spatial + PyArrow: SELECT lazy, lector por lotes, SQL mixto, ATTACH/DETACH, geometría y CRS, cancelación, archivo persistente y casos de error.
 - Mantener artefactos de resultado y versión exacta; no declarar soporte para una combinación no probada.

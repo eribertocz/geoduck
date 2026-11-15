@@ -406,7 +406,7 @@ Es una estructura orientativa: Claude Code puede simplificar carpetas **sin camb
 | Lenguaje plugin | Python de QGIS | API PyQGIS y mantenibilidad | QGIS controla el runtime |
 | UI | PyQGIS + `qgis.PyQt`, widgets Qt | Integración y diseño nativo minimalista | diferencias Qt5/Qt6 |
 | SQL editor | Preferir `QgsCodeEditorSQL` si el binding existe; fallback QScintilla/Qt | evitar editor web innecesario | spike Windows QGIS3/4 |
-| Motor | DuckDB Python `>=1.5.0` certificado | SQL + relaciones + Spatial | versiones de almacenamiento y DLL |
+| Motor | DuckDB Python `>=1.5.4` certificado | SQL + relaciones + Spatial | versiones de almacenamiento y DLL |
 | Spatial | extensión oficial DuckDB `spatial` | geometría y funciones `ST_*` | instalación/carga y permisos |
 | Transporte | PyArrow RecordBatch | lotes, tipos columnares, transferencias acotadas | conversión a QVariant y RAM |
 | Geometría | WKB → `QgsGeometry` | intercambio binario estándar | CRS separado y geometría mixta |
@@ -419,14 +419,14 @@ Es una estructura orientativa: Claude Code puede simplificar carpetas **sin camb
 - Certificación inicial de referencia: QGIS 4.2.x actual y QGIS 3.44.x LTR, ambas instaladas, con PyQGIS real y dependencias reales.
 - QGIS 4.0.x, otras 4.x y QGIS 3 anteriores: matriz gradual; ninguna garantía genérica de «todos QGIS 3».
 - QGIS 2: fuera de soporte.
-- DuckDB 1.5.0 es la versión mínima soportada. DuckDB 1.5.x y 2.x se certifican por matriz de CI; las versiones nuevas se incorporan tras validación. Usar APIs comunes verificadas, sin asumir que todas las APIs de 2.x existen en 1.5.
+- DuckDB 1.5.4 es la versión mínima soportada (2026-11-15; antes 1.5.0). DuckDB 1.5.x y 2.x se certifican por matriz de CI; las versiones nuevas se incorporan tras validación. Usar APIs comunes verificadas, sin asumir que todas las APIs de 2.x existen en 1.5.
 - La compatibilidad Python depende del wheel concreto de DuckDB 1.5.x/2.x y del runtime QGIS. Verificarla con instalación real por combinación; no imponer el requisito de Python de DuckDB 2.x a la rama 1.5.
 - Elegir PyArrow que publique wheel compatible con el Python/ABI/arquitectura del QGIS de destino. No asumir que `pyarrow` funciona por tener instalado un Python separado.
 - Usar rango compatible más lock/constraints por combinación certificada; evitar depender de «último» sin pruebas.
 
 ## Contrato de compatibilidad DuckDB (GD-COMP-DB-001)
-- **Mínimo funcional: DuckDB Python 1.5.0** (inclusive). **Soporte objetivo: 1.5.x y versiones 2.x y superiores verificadas**; «superior» no equivale a certificación automática para versiones futuras.
-- **Recomendada en la rama 1.5: DuckDB 1.5.6** (decisión D5, 2026-11-01). Por debajo de 1.5.4 el diagnóstico advierte de defectos conocidos de geometría.
+- **Mínimo funcional: DuckDB Python 1.5.4** (inclusive; decisión del 2026-11-15, #154: en 1.5.0–1.5.3, al reabrir una base de archivo grande, un filtro por rectángulo se salta filas que sí están dentro y las capas Conectadas salían vacías o incompletas). **Soporte objetivo: 1.5.x y versiones 2.x y superiores verificadas**; «superior» no equivale a certificación automática para versiones futuras.
+- **Recomendada en la rama 1.5: DuckDB 1.5.6** (decisión D5, 2026-11-01). Por debajo de 1.5.4 el diagnóstico la marca como no soportada.
 - Exigir pruebas funcionales idénticas en 1.5.x y 2.x para SQL multisentencia, `ATTACH/DETACH`, `spatial`, relaciones lazy, `to_arrow_reader()`, tipos Arrow y entrega de capas PyQGIS.
 - Las diferencias reales de APIs, semántica de conexión, lectores Arrow, transacciones, CRS y almacenamiento deben documentarse en una **matriz de capacidades por versión**. No introducir una rama de código especial sin una prueba reproducible.
 - El runtime Python de QGIS, PyArrow y las ruedas nativas DuckDB determinan qué combinaciones se pueden certificar. La aplicación mostrará mensajes claros si la combinación no es soportada.
@@ -833,7 +833,7 @@ conteo). Los valores van codificados como en una URL.
 
 | Petición | SQL |
 |---|---|
-| Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5), que usa el índice R-tree si la tabla tiene uno y `spatial` está cargada. Va como `(… IS TRUE)`, que da lo mismo pero DuckDB no usa para saltarse datos, en dos casos (#154): una tabla sin clave (`fid=rowid`), porque DuckDB 2.0 da un error interno con R-tree y un filtro por `rowid`; y DuckDB 1.5.0–1.5.3, que al reabrir una base de archivo grande se salta filas del rectángulo (0 filas; arreglado en 1.5.4). En los dos la capa quedaba incompleta |
+| Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5), que usa el índice R-tree si la tabla tiene uno y `spatial` está cargada. En una tabla sin clave (`fid=rowid`) va como `(… IS TRUE)`, que da lo mismo y no usa el índice: DuckDB 2.0 da un error interno con R-tree y un filtro por `rowid`, y la capa quedaba incompleta (#154). DuckDB 1.5.0–1.5.3 se saltaban filas del rectángulo al reabrir una base de archivo grande: por eso el mínimo es 1.5.4 |
 | FID | `FID IN (…)` sobre la clave, el `rowid` o la huella; en `fid=map`, los valores de la clave de esos FID (`(k1, k2) IN (…)`) |
 | Atributos pedidos / sin geometría | solo esas columnas; sin la columna de geometría |
 | Filtro de la capa (Capa → Filtrar…, `subsetString`) | Condición de DuckDB sobre los campos de la capa, aplicada a la consulta base (`WHERE (filtro)`). Se comprueba en DuckDB antes de aplicarla; si no es válida, se rechaza con el motivo y la capa no cambia. Se guarda en la URI (`subset=`) y sobrevive a la reapertura del proyecto. Con filtro, la extensión de la capa («Zoom a la capa») es la de lo filtrado: `ST_Extent_Agg` si `spatial` está cargada; si no, se recorre la geometría filtrada. Si tarda más de la espera del hilo principal, se cancela, se avisa y se mantiene la de toda la capa; sin filtro vuelve la de la carga |
@@ -2189,11 +2189,11 @@ No publicar Alpha externa si carga extensiones no firmadas por defecto, si ignor
   API de QGIS entre versiones se resuelven en un único módulo de compatibilidad
   (`geoduck/qgis_bridge/qgis_compat.py`), nunca con suposiciones sobre la versión.
 - **Matriz de la CI (Linux, PyQGIS sin interfaz):** la mínima (3.34), cada LTR (3.40, 3.44) y la última
-  publicada (4.2), con DuckDB 1.5.0 y 2.0.0. Al publicarse una LTR o una versión mayor nueva, se añade.
+  publicada (4.2), con DuckDB 1.5.4 y 2.0.0. Al publicarse una LTR o una versión mayor nueva, se añade.
   Las versiones intermedias comparten API con sus vecinas y quedan cubiertas por ellas.
 - **Anclas de prueba iniciales al 2026-11-01**: QGIS 3.44.15 LTR (Qt5) y QGIS 4.2.3 (Qt6).
 - Windows 11 x64 primero. Otros SO en fases posteriores mediante decisiones registradas.
-- DuckDB >= 1.5.0: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
+- DuckDB >= 1.5.4: verificar los wheels y las versiones Python soportadas por DuckDB 1.5.x y 2.x separadamente. Usar siempre el Python del QGIS instalado.
 - PyArrow requiere coincidencia de ABI, arquitectura y wheels reales; verificar en `sys.executable` de QGIS.
 
 ## 2. Matriz de soporte
@@ -2229,7 +2229,8 @@ La compatibilidad con QGIS 3 es un objetivo **realista por matriz**, no promesa 
 ## 6. Condición para marcar «soportado»
 Solo cuando pasen: instalación limpia, carga del panel, inicio/attach/detach, SQL multi-statement, streaming Arrow, geometría CRS y entrega de capa QGIS en el equipo de prueba correspondiente. El QGIS Plugin Checker complementa pero no sustituye pruebas.
 
-## DuckDB mínimo 1.5.0
+## DuckDB mínimo 1.5.4
+Desde el 2026-11-15 (#154; antes 1.5.0): 1.5.0–1.5.3 se saltan filas al filtrar por rectángulo una base de archivo grande reabierta.
 GeoDuck no debe exigir DuckDB 2.0. La rama 1.5.x es objetivo de soporte de primera clase junto a 2.x. Se requiere matriz independiente por QGIS, Python embebido, DuckDB, Spatial y PyArrow. La instalación no debe actualizar forzosamente una instalación compatible de DuckDB 1.5.x.
 
 
@@ -2374,7 +2375,7 @@ A cada plataforma/versión declarar: `certificado`, `conocido con limitaciones`,
 - Cada PR debe adjuntar test ID, evidencia y release target. Regresiones verificadas bloquean release. Los benchmarks no justifican reducir corrección.
 
 ## Matriz obligatoria de regresión DuckDB
-- Ejecutar pruebas con **1.5.x y 2.x** (comenzando con 1.5.0 y 2.0.0 si sus wheels son compatibles con el runtime).
+- Ejecutar pruebas con **1.5.x y 2.x** (comenzando con 1.5.4, el mínimo, y 2.0.0 si sus wheels son compatibles con el runtime).
 - Verificar por cada versión DuckDB + Spatial + PyArrow: SELECT lazy, lector por lotes, SQL mixto, ATTACH/DETACH, geometría y CRS, cancelación, archivo persistente y casos de error.
 - Mantener artefactos de resultado y versión exacta; no declarar soporte para una combinación no probada.
 
@@ -2504,7 +2505,7 @@ A partir de **v0.4.0a1**: abrir plugin → sesión DuckDB → ATTACH archivo →
 No se propone v1.0.0 en este roadmap. Antes de iniciar una eventual beta, evaluar: madurez de API, ausencia de corrupción de datos, compatibilidad QGIS3/4 ampliamente testada, instalador fiable, cancelación y errores resilientes, experiencias de usuarios externos, soporte/mantenimiento y seguridad revisada.
 
 ## Regla transversal de versiones
-Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.0+**, con pruebas representativas tanto de 1.5.x como de 2.x. Ninguna etapa podrá declararse terminada si solo funciona en 2.x y falla una combinación 1.5.x certificada.
+Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.4+** (antes 1.5.0+; #154), con pruebas representativas tanto de 1.5.x como de 2.x. Ninguna etapa podrá declararse terminada si solo funciona en 2.x y falla una combinación 1.5.x certificada.
 
 
 
@@ -2542,7 +2543,7 @@ Desde el primer spike, los criterios de aceptación requieren DuckDB **1.5.0+**,
 - No materializar todas las filas a pandas o `fetchall()`.
 - No asumir CRS predeterminado.
 - No publicar capas parciales o confundir preview con resultado completo.
-- No bajar DuckDB por debajo de 1.5.0; toda API utilizada debe tener ruta probada para DuckDB 1.5.x y 2.x.
+- No bajar DuckDB por debajo de 1.5.4 (antes 1.5.0; #154); toda API utilizada debe tener ruta probada para DuckDB 1.5.x y 2.x.
 - No declarar «QGIS 3/4 compatible» sin prueba en ambos.
 
 ## 5. Contrato de PR
@@ -2565,7 +2566,7 @@ Cambios de producto, aceptación de degradaciones incompatibles, renuncias a QGI
 Informe G0-A/G0-B con tabla de entornos reales, comandos/evidencia de import, funcionamiento de Arrow/Spatial, PyQGIS memory, editor SQL y recomendación de empaquetado Windows, más `metadata.txt` mínimo y test smoke; **sin** construir antes una arquitectura gigante sin pruebas.
 
 ## Actualización obligatoria de alcance
-Claude Code debe implementar soporte mínimo de **DuckDB 1.5.0** y mantener compatibilidad probada con DuckDB 2.x. Queda prohibido codificar una dependencia incondicional de una API exclusiva de 2.x sin adaptación y prueba equivalente para 1.5.x.
+Claude Code debe implementar soporte mínimo de **DuckDB 1.5.4** (antes 1.5.0; #154) y mantener compatibilidad probada con DuckDB 2.x. Queda prohibido codificar una dependencia incondicional de una API exclusiva de 2.x sin adaptación y prueba equivalente para 1.5.x.
 
 
 

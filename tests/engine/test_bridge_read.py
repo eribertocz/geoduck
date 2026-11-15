@@ -195,7 +195,7 @@ def test_registered_arrow_and_execute_many(worker):
 
 
 def test_geometry_preview_works_in_every_version(worker):
-    """DuckDB 1.5.0 no convierte GEOMETRY a Python: la vista previa lo describe sin fallar (G3/E4)."""
+    """La vista previa describe la geometría igual en todas las versiones (G3/E4)."""
     from geoduck.domain.sql import RunScope, StatementStatus
 
     run = worker.run_script(

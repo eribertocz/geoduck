@@ -29,8 +29,9 @@ incompleta (50 000 de 99 569). Arreglo: en `fid=rowid`, `(st_intersects_extent(�
 La CI (DuckDB 1.5.0) la encontró: una base de archivo con 1 000 000 de puntos (varios grupos de filas), al
 reabrirse, responde 0 filas a `st_intersects_extent(g, rectángulo)` y a `g && rectángulo`; con `IS TRUE`,
 las 60 000 correctas. Pasa sin índice y sin `spatial`; con 100 000 puntos (un grupo) o sin reabrir, no.
-Probado por versión: 1.5.0, 1.5.1, 1.5.2 y 1.5.3 fallan; 1.5.4, 1.5.5, 1.5.6 y 2.0.0 no. Arreglo: con esas
-versiones el filtro va como `(… IS TRUE)` (`test_a_view_over_a_large_reopened_file_reads_every_feature`).
+Probado por versión: 1.5.0, 1.5.1, 1.5.2 y 1.5.3 fallan; 1.5.4, 1.5.5, 1.5.6 y 2.0.0 no. Primero, con esas
+versiones el filtro iba como `(… IS TRUE)` (PR #198); después el propietario fijó el mínimo en **DuckDB 1.5.4**
+(2026-11-15) y ese caso se quitó. La prueba `test_a_view_over_a_large_reopened_file_reads_every_feature` queda.
 
 ## Interfaz (maqueta `154`, aprobada el 2026-11-14)
 
