@@ -325,7 +325,10 @@ class _Iterator(QgsAbstractFeatureIterator):  # type: ignore[misc]
         where: list[str] = []
         if has_rect:
             g = quote_identifier(geometry.name)  # type: ignore[union-attr]
-            where.append(f"st_intersects_extent({g}, {_extent_polygon(self.rect)})")
+            extent = f"st_intersects_extent({g}, {_extent_polygon(self.rect)})"
+            # #154: DuckDB 2.0 falla con un error interno si usa un índice R-tree junto a un filtro por
+            # `rowid` (las páginas de una tabla sin clave). `IS TRUE` da lo mismo y no usa el índice.
+            where.append(f"({extent} IS TRUE)" if p.fid_mode == "rowid" else extent)
         ft = r.filterType()
         if ft in (FilterType.Fid, FilterType.Fids):
             fids = [int(r.filterFid())] if ft == FilterType.Fid else sorted(int(x) for x in r.filterFids())
