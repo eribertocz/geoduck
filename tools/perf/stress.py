@@ -17,7 +17,9 @@ worker DuckDB reales (sin pantalla). Cada vuelta:
 8. quita las capas y cierra la sesión.
 
 Criterios: 0 cierres, 0 filas perdidas, 0 capas o tablas a medias, y la RAM del proceso al final de la última
-vuelta como mucho 10 % sobre la de la primera. Escribe `stress-<qgis>-<duckdb>.json` y un resumen en Markdown.
+vuelta como mucho 10 % sobre la del minuto 10 (antes QGIS y DuckDB se calientan: cachés y memoria que guardan
+para reutilizar). Una prueba de menos de 10 minutos compara con la primera vuelta. Escribe
+`stress-<qgis>-<duckdb>.json` y un resumen en Markdown.
 """
 
 from __future__ import annotations
@@ -41,8 +43,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from qgis.core import Qgis, QgsApplication, QgsProject
 from qgis.PyQt.QtCore import QT_VERSION_STR, QCoreApplication, QEvent
 
-#: Crecimiento máximo de la RAM entre la primera y la última vuelta (performance-spec §6).
+#: Crecimiento máximo de la RAM entre el minuto 10 y la última vuelta (performance-spec §6).
 RAM_GROWTH = 0.10
+#: Minutos de calentamiento antes de la vuelta con la que se compara la RAM.
+WARMUP_MINUTES = 10
 
 
 def until(condition: Any, timeout: float = 600.0) -> None:
@@ -53,6 +57,16 @@ def until(condition: Any, timeout: float = 600.0) -> None:
             raise TimeoutError("la operación no terminó a tiempo")
         QCoreApplication.processEvents()
         time.sleep(0.002)
+
+
+def warm_lap(laps: list[dict[str, Any]]) -> int:
+    """La primera vuelta que empieza pasado el calentamiento; 0 si la prueba es más corta."""
+    elapsed = 0.0
+    for i, lap in enumerate(laps):
+        if elapsed >= WARMUP_MINUTES * 60:
+            return i
+        elapsed += lap["segundos"]
+    return 0
 
 
 def rss_mb() -> float:
@@ -327,8 +341,9 @@ def main() -> None:  # noqa: PLR0915 - la vuelta completa, en orden
         print(f"vuelta {n}: {lap['segundos']} s · RAM {lap['ram_mb']} MB", flush=True)
         n += 1
 
-    first, last = laps[0]["ram_mb"], laps[-1]["ram_mb"]
-    growth = (last - first) / first if first else 0.0
+    base = warm_lap(laps)
+    first, warm, last = laps[0]["ram_mb"], laps[base]["ram_mb"], laps[-1]["ram_mb"]
+    growth = (last - warm) / warm if warm else 0.0
     report = {
         "entorno": {
             "qgis": Qgis.QGIS_VERSION.split("-")[0],
@@ -343,6 +358,8 @@ def main() -> None:  # noqa: PLR0915 - la vuelta completa, en orden
         "vueltas": len(laps),
         "fallos": failures,
         "ram_primera_mb": first,
+        "ram_vuelta_base": base,
+        "ram_base_mb": warm,
         "ram_ultima_mb": last,
         "ram_crecimiento": round(growth, 4),
         "cumple": not failures and growth <= RAM_GROWTH,
@@ -358,7 +375,9 @@ def main() -> None:  # noqa: PLR0915 - la vuelta completa, en orden
         f" {rows:,} filas · {env['minutos']} min",
         "",
         f"- Vueltas: {len(laps)} · fallos: {len(failures)}",
-        f"- RAM: {first:.0f} MB → {last:.0f} MB ({growth:+.1%}; máximo {RAM_GROWTH:.0%})",
+        f"- RAM: {first:.0f} MB al inicio · {warm:.0f} MB en la vuelta {base}"
+        f" (minuto {WARMUP_MINUTES if base else 0}) → {last:.0f} MB al final"
+        f" ({growth:+.1%} desde la vuelta {base}; máximo {RAM_GROWTH:.0%})",
         f"- Cumple: {'sí' if report['cumple'] else 'no'}",
     ]
     summary += [f"  - {f}" for f in failures]

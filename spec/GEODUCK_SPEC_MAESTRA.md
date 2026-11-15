@@ -2032,7 +2032,8 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
 
 - Ciclo automático de 1 hora en QGIS 3.44 y 4.2 (propuesto): iniciar/cerrar sesión, `ATTACH`/`DETACH`, consultas,
   cargar y cancelar, enviar y «Deshacer», exportar y cancelar, con datos T1–T7. **0 cierres de QGIS, 0 filas
-  perdidas, 0 capas a medias**; la RAM de QGIS no crece más de 10 % entre la primera y la última vuelta.
+  perdidas, 0 capas a medias**; la RAM de QGIS no crece más de 10 % entre el minuto 10 y la última vuelta (los primeros minutos
+  QGIS y DuckDB se calientan: cachés y memoria que guardan para reutilizar; una fuga seguiría creciendo).
 - Archivos de datos inválidos (T7) y corte a mitad de un archivo: error claro, sin cierre.
 
 ## 7. Publicación (GD-PERF-006)
@@ -2094,7 +2095,7 @@ paralelizar QGIS; cambiar el formato de transporte (ADR-0008).
 | AT-PERF-002 | Cancelar cada operación de §2 con 1 millón de filas: se detiene en p95 ≤ 1 s, sin restos, sesión en `READY` |
 | AT-PERF-003 | Una Copia que no cabe en el presupuesto se detiene sin publicar nada y ofrece «Cargar como Conectada»; con `temp_directory`, una consulta que excede la memoria termina usando disco |
 | AT-PERF-004 | Interfaz: p95 ≤ 50 ms y máximo ≤ 200 ms durante las transferencias; primera apertura de tabla ≤ 100 ms |
-| AT-PERF-005 | Estrés de 1 h sin cierres, pérdidas ni capas a medias; RAM de QGIS +10 % como máximo |
+| AT-PERF-005 | Estrés de 1 h sin cierres, pérdidas ni capas a medias; RAM de QGIS +10 % como máximo desde el minuto 10 |
 | AT-PERF-006 | `docs/performance.md` publicado con números medidos; regresiones > 20 % detectadas por el trabajo de la CI |
 | AT-PERF-007 | Una consulta cara de 10 millones de filas se ejecuta una vez; desplazarse, ordenar, contar, exportar y cargar no la repiten (página ≤ 50 ms); una barata responde ≤ 200 ms por página; el resultado guardado se borra al cerrar |
 | AT-PERF-008 | Tabla de 100 millones de filas: scroll a cualquier parte ≤ 100 ms sin filtro; total estimado inmediato |
