@@ -101,6 +101,17 @@ DOUBLE_SAFE_DIGITS = 15
 #: Nombre de la columna auxiliar de geometría ilegible (no puede chocar con un nombre de DuckDB válido
 #: del usuario en la práctica; si chocara, `build_load_plan` lo rechaza).
 UNREADABLE = "__geoduck_unreadable"
+#: Tipos de una clave entera que sirve de FID de QGIS (capas Conectadas, `fid=key`).
+INTEGER_KEY_TYPES = frozenset(
+    {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER"}
+)
+
+
+def stale_geometry_stats(version: str) -> bool:
+    """DuckDB 1.5.0 a 1.5.3 (#154): al reabrir una base de archivo grande, un filtro por rectángulo
+    (`st_intersects_extent`, `&&`) se salta filas que sí están dentro. Arreglado en 1.5.4."""
+    parts = [int(n) for n in re.findall(r"\d+", version)[:3]]
+    return len(parts) == 3 and parts[:2] == [1, 5] and parts[2] <= 3
 
 
 def is_geometry_type(source_type: str) -> bool:

@@ -66,6 +66,18 @@ class ColumnInfo:
         return is_geometry_type(self.data_type)
 
 
+@dataclass(frozen=True)
+class SpatialIndex:
+    """Un índice espacial R-tree (#154) sobre una columna de geometría, tal como lo informa
+    `duckdb_indexes()`."""
+
+    database: str
+    schema: str
+    table: str
+    column: str
+    name: str
+
+
 class AccessMode(str, Enum):
     READ_ONLY = "READ_ONLY"
     READ_WRITE = "READ_WRITE"
@@ -126,6 +138,8 @@ class CatalogSnapshot:
     schemas: tuple[tuple[str, str], ...] = ()
     #: Tablas y vistas de esas bases, más las temporales (`database == "temp"`).
     objects: tuple[CatalogObject, ...] = ()
+    #: Índices espaciales R-tree de esas tablas (#154).
+    spatial_indexes: tuple[SpatialIndex, ...] = ()
 
     def __post_init__(self) -> None:
         index: dict[str, AttachedDatabase] = {}
@@ -197,6 +211,18 @@ class CatalogSnapshot:
             o
             for o in self.objects
             if not o.temporary and catalog_key(o.database) == key and o.schema == schema
+        )
+
+    def spatial_index(self, database: str, schema: str, table: str, column: str) -> SpatialIndex | None:
+        """El índice espacial de esa columna, si tiene uno (los nombres, como los compara DuckDB)."""
+        wanted = tuple(catalog_key(n) for n in (database, schema, table, column))
+        return next(
+            (
+                i
+                for i in self.spatial_indexes
+                if tuple(catalog_key(n) for n in (i.database, i.schema, i.table, i.column)) == wanted
+            ),
+            None,
         )
 
     @property

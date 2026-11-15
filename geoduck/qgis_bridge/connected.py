@@ -19,6 +19,7 @@ from qgis.PyQt.QtCore import QTimer
 
 from geoduck.domain.bridge_types import (
     FAMILY_CODES,
+    INTEGER_KEY_TYPES,
     GeometryFormat,
     LoadPlan,
     build_load_plan,
@@ -42,7 +43,7 @@ from geoduck.qgis_bridge.provider import IN_MEMORY, KEY, encode_uri
 
 Done = Callable[[LoadReport | BaseException], None]
 
-_INTEGER_KEYS = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER"}
+_INTEGER_KEYS = INTEGER_KEY_TYPES
 
 
 def _rows(handle: Any, sql: str, max_rows: int = 100) -> list[tuple[Any, ...]]:

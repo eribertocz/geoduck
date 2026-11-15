@@ -67,9 +67,12 @@ from geoduck.app.events import (
     SessionStateChanged,
     SpatialActivated,
     SpatialActivationFailed,
+    SpatialIndexChanged,
+    SpatialIndexFailed,
     TransactionFailed,
     VocabularyChanged,
 )
+from geoduck.domain.bridge_types import INTEGER_KEY_TYPES
 from geoduck.domain.catalog import (
     MEMORY_ALIAS,
     AccessMode,
@@ -118,6 +121,7 @@ from geoduck.ui.pro.recovery import QueryRecovery, read_query
 from geoduck.ui.pro.sidebar import Sidebar
 from geoduck.ui.pro.table_page import TablePage
 from geoduck.ui.pro.tabs import TabArea
+from geoduck.ui.pro.timeline import seconds_text
 from geoduck.ui.pro.tokens import METRICS
 from geoduck.ui.pro.widgets import LOGO, Toast, button, icon_button, label, lines_html, relayout
 
@@ -205,6 +209,8 @@ class ProWorkspace(QWidget):
         #: #183: guardar una base en memoria que leen capas Conectadas, y «No se puede cerrar…».
         self._ask_save_memory = ask_save_memory or self._save_memory_dialog
         self._tell_blocked = tell_blocked or self._blocked_dialog
+        #: #154: el aviso antes de crear un índice espacial (tabla, base, con clave entera) → sí/no.
+        self._ask_spatial_index: Callable[[str, str, bool], bool] = self._spatial_index_dialog
         #: Barra de mensajes de QGIS (texto, nivel, [(botón, acción)]); la pone el complemento.
         self.push_bar: Callable[[str, str, list[tuple[str, Callable[[], None]]]], None] | None = None
         self._close_after_save = False
@@ -505,6 +511,15 @@ class ProWorkspace(QWidget):
         self.notice.setFont(style.ui_font(METRICS.font_small))
         self.notice.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         row.addWidget(self.notice, 1)
+        # #154: una acción junto al aviso («Cancelar» mientras se crea un índice espacial)
+        self.notice_action = QPushButton()
+        self.notice_action.setProperty("pro", "ghost")
+        self.notice_action.setAccessibleName(tr("Cancel"))
+        self.notice_action.setToolTip(tr("Cancel"))
+        self.notice_action.hide()
+        self.notice_action.clicked.connect(self._notice_clicked)
+        self._notice_callback: Callable[[], None] | None = None
+        row.addWidget(self.notice_action)
         # #177: ✕ cierra un error del pie; los avisos de información se borran solos a los `NOTICE_MS`
         self.notice_close = icon_button("close", tr("Close the message"), self.colors, size=12)
         self.notice_close.clicked.connect(lambda: self.notify(""))
@@ -711,6 +726,10 @@ class ProWorkspace(QWidget):
         side.memory_database_requested.connect(self.new_memory_database)
         side.activate_requested.connect(self.activate_database)
         side.close_reason = self._coordinator.close_reason
+        side.spatial_ready = lambda: bool(
+            self._coordinator.engine_info is not None and self._coordinator.engine_info.spatial
+        )
+        side.spatial_index_requested.connect(self.spatial_index)
         side.send_layers_requested.connect(self.send_layers_requested.emit)
         side.diagnostics_requested.connect(self.show_diagnostics)
         side.about_requested.connect(self.show_about)
@@ -903,9 +922,22 @@ class ProWorkspace(QWidget):
         """Punto y texto de la sesión, para la cabecera del panel."""
         return session_text(self._coordinator)
 
-    def notify(self, text: str, *, error: bool = False) -> None:
+    def notify(
+        self,
+        text: str,
+        *,
+        error: bool = False,
+        action: tuple[str, Callable[[], None]] | None = None,
+    ) -> None:
         """Aviso de la aplicación en el pie (§3; #177): la información se borra sola a los `NOTICE_MS`; un
-        error se queda hasta el siguiente aviso o hasta cerrarlo con ✕. Lo de una consulta va a su pestaña."""
+        error se queda hasta el siguiente aviso o hasta cerrarlo con ✕. Lo de una consulta va a su pestaña.
+        Con `action` (#154: «Cancelar») el aviso queda hasta el siguiente."""
+        self._notice_callback = action[1] if action is not None else None
+        if action is not None:
+            self.notice_action.setText(action[0])
+            self.notice_action.setAccessibleName(action[0])
+            self.notice_action.setToolTip(action[0])
+        self.notice_action.setVisible(action is not None)
         self.notice.setText(text)
         self.notice.setToolTip(text)
         self.notice.setProperty("pro", "error" if error and text else "muted")
@@ -913,8 +945,55 @@ class ProWorkspace(QWidget):
         self.notice.style().polish(self.notice)
         self.notice_close.setVisible(error and bool(text))
         self._notice_timer.stop()
-        if text and not error:
+        if text and not error and action is None:
             self._notice_timer.start(NOTICE_MS)
+
+    def _notice_clicked(self) -> None:
+        callback = self._notice_callback
+        if callback is not None:
+            callback()
+
+    # -- índice espacial (#154; maqueta `154`) ---------------------------------------------------------
+
+    def spatial_index(self, source: tuple[str, str, str], column: str) -> None:
+        """«Crear índice espacial…» (con su aviso) o «Quitar índice espacial» (sin preguntar)."""
+        catalog = self._coordinator.catalog
+        existing = catalog.spatial_index(*source, column) if catalog is not None else None
+        table = source[2]
+        if existing is None:
+            keys = [c for c in self.sidebar.columns.get(source, ()) if c.primary_key]
+            integer_key = len(keys) == 1 and keys[0].data_type.upper() in INTEGER_KEY_TYPES
+            if not self._ask_spatial_index(table, source[0], integer_key):
+                return
+            text = tr("Creating spatial index on «{0}»…").format(table)
+        else:
+            text = tr("Removing spatial index from «{0}»…").format(table)
+        self._guard(lambda: self._coordinator.spatial_index(source, column))
+        if self._coordinator.state is SessionState.BUSY:
+            action = (tr("Cancel"), self._coordinator.cancel_current_operation) if existing is None else None
+            self.notify(text, action=action)
+
+    def _spatial_index_dialog(self, table: str, database: str, integer_key: bool) -> bool:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("GeoDuck"))
+        box.setText(tr("Create spatial index on «{0}»").format(table))
+        box.setInformativeText(
+            tr(
+                "The map of the Connected layers of «{0}» will be drawn faster when you zoom in. The index "
+                "takes up space in the database «{1}» and is updated automatically when the table is edited."
+            ).format(table, database)
+            if integer_key
+            else tr(
+                "«{0}» has no integer key: its Connected layers will not use the index. Queries in the "
+                "editor do use it. The index takes up space in the database «{1}»."
+            ).format(table, database)
+        )
+        box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        go = box.addButton(tr("Create index"), QMessageBox.ButtonRole.AcceptRole)
+        box.setDefaultButton(go)
+        box.exec()
+        return box.clickedButton() is go
 
     def _render(self) -> None:
         state = self._coordinator.state
@@ -1603,6 +1682,23 @@ class ProWorkspace(QWidget):
             if self._close_after_save:
                 self._close_after_save = False
                 self.close_session()
+        elif isinstance(event, SpatialIndexChanged):
+            table = event.source[2]
+            self.notify(
+                tr("Spatial index created on «{0}» ({1})").format(table, seconds_text(event.seconds))
+                if event.created
+                else tr("Spatial index removed from «{0}»").format(table)
+            )
+        elif isinstance(event, SpatialIndexFailed):
+            self.notify(
+                (
+                    tr("The spatial index was not created.")
+                    if event.created
+                    else tr("The spatial index was not removed.")
+                )
+                + f" {event.message}",
+                error=True,
+            )
         elif isinstance(event, SaveDatabaseFailed):
             self._close_after_save = False
             self._resave_project = None

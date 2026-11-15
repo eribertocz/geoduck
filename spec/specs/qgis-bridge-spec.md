@@ -116,7 +116,7 @@ conteo). Los valores van codificados como en una URL.
 
 | Petición | SQL |
 |---|---|
-| Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5); con `spatial` cargada, `ST_Intersects(geom, ST_MakeEnvelope(…))`, que usa el RTree si existe |
+| Extensión | `st_intersects_extent(geom, <rectángulo>)` (núcleo de DuckDB ≥ 1.5), que usa el índice R-tree si la tabla tiene uno y `spatial` está cargada. Va como `(… IS TRUE)`, que da lo mismo pero DuckDB no usa para saltarse datos, en dos casos (#154): una tabla sin clave (`fid=rowid`), porque DuckDB 2.0 da un error interno con R-tree y un filtro por `rowid`; y DuckDB 1.5.0–1.5.3, que al reabrir una base de archivo grande se salta filas del rectángulo (0 filas; arreglado en 1.5.4). En los dos la capa quedaba incompleta |
 | FID | `FID IN (…)` sobre la clave, el `rowid` o la huella; en `fid=map`, los valores de la clave de esos FID (`(k1, k2) IN (…)`) |
 | Atributos pedidos / sin geometría | solo esas columnas; sin la columna de geometría |
 | Filtro de la capa (Capa → Filtrar…, `subsetString`) | Condición de DuckDB sobre los campos de la capa, aplicada a la consulta base (`WHERE (filtro)`). Se comprueba en DuckDB antes de aplicarla; si no es válida, se rechaza con el motivo y la capa no cambia. Se guarda en la URI (`subset=`) y sobrevive a la reapertura del proyecto. Con filtro, la extensión de la capa («Zoom a la capa») es la de lo filtrado: `ST_Extent_Agg` si `spatial` está cargada; si no, se recorre la geometría filtrada. Si tarda más de la espera del hilo principal, se cancela, se avisa y se mantiene la de toda la capa; sin filtro vuelve la de la carga |

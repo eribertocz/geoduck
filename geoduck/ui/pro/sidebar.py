@@ -58,7 +58,7 @@ from geoduck.ui.pro.drag import (
     layer_ids,
     places_mime,
 )
-from geoduck.ui.pro.places import Place, Places, icon_name, missing_reason, place_of
+from geoduck.ui.pro.places import TABLE, Place, Places, icon_name, missing_reason, place_of
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
 from geoduck.ui.pro.widgets import (
@@ -534,6 +534,8 @@ class Sidebar(QFrame):
     columns_wanted = pyqtSignal(tuple)
     #: Doble clic en columnas (#147): sus nombres, ya citados si hace falta, para el editor.
     columns_requested = pyqtSignal(str)
+    #: «Crear índice espacial…» o «Quitar índice espacial» (#154): (base, esquema, tabla), columna.
+    spatial_index_requested = pyqtSignal(tuple, str)
 
     def __init__(self, colors: Colors, places: Places) -> None:
         super().__init__()
@@ -542,6 +544,10 @@ class Sidebar(QFrame):
         self.catalog: CatalogSnapshot | None = None
         #: Por qué no se puede cerrar una base (#168), o None; lo pone el workspace (`close_reason`).
         self.close_reason: Callable[[str], str | None] | None = None
+        #: Si la extensión espacial está cargada (#154: sin ella no hay índice espacial); del workspace.
+        self.spatial_ready: Callable[[], bool] | None = None
+        #: Un clic derecho que espera las columnas de su tabla para armar el menú (#154).
+        self._menu_waiting: tuple[tuple[str, str, str], QPoint] | None = None
         #: Columnas conocidas por objeto (del catálogo que se muestra) y los objetos abiertos en el árbol.
         self.columns: dict[tuple[str, str, str], tuple[ColumnInfo, ...]] = {}
         self._tables_open: set[tuple[str, str, str]] = set()
@@ -947,6 +953,10 @@ class Sidebar(QFrame):
         item.setData(0, ROLE, (PLACE, place))
         item.setIcon(0, icons.icon(icon_name(place), self.colors.muted, 14))
         item.setToolTip(0, f"{place.location} · {place.name}")
+        if self._indexed(place):  # #154: una marca sutil
+            item.setData(0, META, tr("index"))
+            item.setData(0, ACCENT_META, True)
+            item.setToolTip(0, f"{place.location} · {place.name}\n" + tr("It has a spatial index"))
         parent.addChild(item)
         # sus columnas, al expandir (#147): del catálogo de DuckDB, sin leer datos
         item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
@@ -1009,6 +1019,9 @@ class Sidebar(QFrame):
                     self._fill_columns(item, source)
         if self.search.edit.text().strip():
             self._apply_filter(self.search.edit.text())
+        waiting, self._menu_waiting = self._menu_waiting, None
+        if waiting is not None and waiting[0] == source:
+            self._context_menu(waiting[1], columns_known=True)
 
     def _items_of(self, source: tuple[str, str, str]) -> list[QTreeWidgetItem]:
         found: list[QTreeWidgetItem] = []
@@ -1250,7 +1263,56 @@ class Sidebar(QFrame):
                 places.append(data[1])
         return places
 
-    def _context_menu(self, pos: QPoint) -> None:
+    def _indexed(self, place: Place) -> bool:
+        return self.catalog is not None and any(
+            catalog_key(i.database) == catalog_key(place.database)
+            and catalog_key(i.schema) == catalog_key(place.schema)
+            and catalog_key(i.table) == catalog_key(place.name)
+            for i in self.catalog.spatial_indexes
+        )
+
+    def _spatial_index_actions(self, menu: QMenu, place: Place, pos: QPoint, columns_known: bool) -> bool:
+        """«Crear índice espacial…» o «Quitar índice espacial» (#154; maqueta `154`): tablas con geometría,
+        con la extensión espacial cargada; en gris, con el motivo, si la base es de solo lectura. False: el
+        menú se abrirá cuando lleguen las columnas de la tabla (hace falta saber si tiene geometría)."""
+        source = (place.database, place.schema, place.name)
+        if source not in self.columns and not columns_known:
+            self._menu_waiting = (source, pos)
+            self._asked.discard(source)
+            self._want(source)
+            return False
+        columns = [c for c in self.columns.get(source, ()) if c.is_geometry]
+        ready = self.spatial_ready() if self.spatial_ready is not None else False
+        if not columns or not ready or self.catalog is None:
+            return True
+        db = self.catalog.get(place.database)
+        read_only = db is not None and db.access is AccessMode.READ_ONLY
+        menu.addSeparator()
+        if len(columns) == 1:
+            column = columns[0].name
+            has = self.catalog.spatial_index(*source, column) is not None
+            text = tr("Remove spatial index") if has else tr("Create spatial index…")
+            target: QMenu = menu
+            actions = [(target.addAction(text, lambda: self.spatial_index_requested.emit(source, column)))]
+        else:
+            target = menu.addMenu(tr("Spatial index"))
+            actions = []
+            for c in columns:
+                has = self.catalog.spatial_index(*source, c.name) is not None
+                text = (tr("Remove: {0}") if has else tr("Create: {0}…")).format(c.name)
+                actions.append(
+                    target.addAction(text, lambda n=c.name: self.spatial_index_requested.emit(source, n))
+                )
+        if read_only:
+            reason = tr("The database «{0}» is open read-only.").format(place.database)
+            for action in actions:
+                action.setEnabled(False)
+                action.setToolTip(reason)
+            target.setToolTipsVisible(True)
+            menu.setToolTipsVisible(True)
+        return True
+
+    def _context_menu(self, pos: QPoint, *, columns_known: bool = False) -> None:
         item = self.tree.itemAt(pos)
         data = item.data(0, ROLE) if item is not None else None
         target = item.data(0, TARGET) if item is not None else None
@@ -1276,6 +1338,9 @@ class Sidebar(QFrame):
                     tr("Remove from favorites") if self.places.is_favorite(place) else tr("Add to favorites")
                 )
                 menu.addAction(text, lambda: self.favorite_requested.emit(place))
+            if place.kind == TABLE and not self._spatial_index_actions(menu, place, pos, columns_known):
+                menu.deleteLater()
+                return
         elif data[0] in (DATABASE, SCHEMA) and self.catalog is not None:
             db = self.catalog.get(item.text(0)) if data[0] == DATABASE else None
             if db is not None and catalog_key(db.name) != catalog_key(self.catalog.default):
