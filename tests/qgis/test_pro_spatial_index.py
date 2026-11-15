@@ -153,7 +153,6 @@ def test_cancel_in_the_notice_keeps_the_table_without_index(coordinator):
     ws._ask_spatial_index = lambda *_: True
     ws.spatial_index(("memory", "main", "grande"), "g")
     assert ws.notice_action.isVisible() and ws.notice_action.text() == tr("Cancel")
-    assert wait_for(lambda: coordinator._engine._current is not None)  # el usuario ve el aviso y cancela
     ws.notice_action.click()
     settle(coordinator)
     assert coordinator.catalog.spatial_index("memory", "main", "grande", "g") is None

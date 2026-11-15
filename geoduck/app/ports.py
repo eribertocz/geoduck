@@ -80,8 +80,9 @@ class SessionEngine(Protocol):
 
     def spatial_index(
         self, source: tuple[str, str, str], column: str, existing: str | None
-    ) -> Future[CatalogSnapshot]:
-        """Crea (`existing` None) o quita el índice espacial de una columna (#154) y lee el catálogo."""
+    ) -> OperationHandle:
+        """Crea (`existing` None) o quita el índice espacial de una columna (#154) y lee el catálogo; la
+        operación se cancela por su id."""
         ...
 
     def transaction_state(self) -> Future[TransactionState]:

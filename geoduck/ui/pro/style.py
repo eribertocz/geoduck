@@ -104,6 +104,9 @@ def stylesheet(c: Colors) -> str:
 {r} QPushButton[pro="link"] {{ border: 0; background: transparent; color: {c.muted}; padding: 0;
     min-height: 0; text-align: left; }}
 {r} QPushButton[pro="link"]:hover {{ color: {c.text}; }}
+{r} QPushButton[pro="link-accent"] {{ border: 0; background: transparent; color: {c.accent}; padding: 0;
+    min-height: 0; font-weight: 600; }}
+{r} QPushButton[pro="link-accent"]:hover {{ text-decoration: underline; }}
 {r} QFrame[pro="error-card"] {{ background: {c.bg}; border: 1px solid {c.error_soft};
     border-left: 4px solid {c.error}; border-radius: {m.radius}px; }}
 {r} QFrame[pro="error-card"] QLabel {{ background: transparent; }}

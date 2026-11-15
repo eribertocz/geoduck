@@ -46,6 +46,8 @@ PATHS: dict[str, str] = {
     "check": '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     "warning": '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.5"/>',
     "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+    "help": '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/>'
+    '<path d="M12 17v.5"/>',
     "play": '<path d="M7 5l12 7-12 7z" fill="currentColor"/>',
     "stop": '<rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/>',
     "export": '<path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 15v4h14v-4"/>',

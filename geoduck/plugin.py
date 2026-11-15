@@ -214,6 +214,7 @@ class GeoDuckPlugin:
         self.iface = iface
         self.action: QAction | None = None
         self.about_action: QAction | None = None
+        self.guide_action: QAction | None = None
         self.content: ProWorkspace | None = None
         self.workspace: ProController | None = None
         self.dispatcher: QtDispatcher | None = None
@@ -254,6 +255,13 @@ class GeoDuckPlugin:
             shell.shown_changed.connect(lambda _shown: self._sync_action())
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.action)
         self.iface.addDatabaseToolBarIcon(self.action)
+        # #150: «Guía de uso» (Base de datos › GeoDuck), con el icono de ayuda de QGIS
+        self.guide_action = QAction(
+            QgsApplication.getThemeIcon("mActionHelpContents.svg"), tr("User guide"), self.iface.mainWindow()
+        )
+        self.guide_action.setObjectName("geoduckGuide")
+        self.guide_action.triggered.connect(self.content.open_contextual_guide)
+        self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.guide_action)
         # Convención de QGIS: «Acerca de…» en el menú del complemento (Base de datos › GeoDuck).
         self.about_action = QAction(
             QgsApplication.getThemeIcon("mActionHelpAbout.svg"),
@@ -309,6 +317,15 @@ class GeoDuckPlugin:
         if isinstance(event, PreviewsInvalidated) and self.loader is not None:
             self.loader.repaint_connected()  # SQL del usuario o un guardado: las capas Conectadas se repintan
 
+    def _remove_actions(self) -> None:
+        """Base de datos › GeoDuck: el complemento, la guía y «Acerca de»; y su botón en la barra."""
+        if self.action is not None:
+            self.iface.removeDatabaseToolBarIcon(self.action)
+        for action in (self.action, self.guide_action, self.about_action):
+            if action is not None:
+                self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), action)
+                action.deleteLater()
+
     def unload(self) -> None:
         if self.link is not None:
             self.link.unload()
@@ -332,18 +349,12 @@ class GeoDuckPlugin:
         if self.loader is not None:
             self.loader.shutdown()
             self.loader = None
-        if self.about_action is not None:
-            self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), self.about_action)
-            self.about_action.deleteLater()
-        if self.action is not None:
-            self.iface.removePluginDatabaseMenu(tr("&GeoDuck"), self.action)
-            self.iface.removeDatabaseToolBarIcon(self.action)
-            self.action.deleteLater()
+        self._remove_actions()
         if self.dispatcher is not None:
             self.dispatcher.deleteLater()
         from geoduck.ui.i18n import uninstall  # noqa: PLC0415
 
         uninstall()
-        self.action = self.about_action = None
+        self.action = self.about_action = self.guide_action = None
         self.content = self.workspace = None
         self.dispatcher = self.coordinator = None

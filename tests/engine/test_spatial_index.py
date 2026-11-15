@@ -48,9 +48,9 @@ def test_create_and_remove_a_spatial_index_with_any_names(worker):
     sql(worker, 'CREATE SCHEMA "Mi esquema"')
     sql(worker, 'CREATE TABLE "Mi esquema"."Mis predios" (id INTEGER, "Geom col" GEOMETRY)')
     source = ("memory", "Mi esquema", "Mis predios")
-    catalog = worker.spatial_index(source, "Geom col", None).result(TIMEOUT)
+    catalog = worker.spatial_index(source, "Geom col", None).future.result(TIMEOUT)
     index = catalog.spatial_index("MEMORY", "mi esquema", "mis predios", "geom col")
     assert index is not None and index.column == "Geom col"
     assert catalog.spatial_index(*source, "id") is None
-    catalog = worker.spatial_index(source, "Geom col", index.name).result(TIMEOUT)
+    catalog = worker.spatial_index(source, "Geom col", index.name).future.result(TIMEOUT)
     assert catalog.spatial_indexes == ()

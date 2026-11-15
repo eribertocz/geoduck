@@ -13,7 +13,8 @@ from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout
 
-from geoduck.domain.sql_errors import ErrorCard, Fix
+from geoduck.domain.sql_errors import LOAD_EXTENSION, ErrorCard, Fix
+from geoduck.ui import guide
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro.style import ui_font
 from geoduck.ui.pro.tokens import METRICS, Colors
@@ -89,11 +90,28 @@ class ErrorCardView(QFrame):
         )
         self.copy_button.clicked.connect(lambda: QGuiApplication.clipboard().setText(card.original))
         row.addWidget(self.copy_button)
+        # #150: «Más información», en los errores que la guía explica
+        self.section = guide_section(card)
+        self.more_button: QPushButton | None = None
+        if self.section and guide.available():
+            self.more_button = button(tr("More information"), "link-accent")
+            self.more_button.setToolTip(tr("Opens the user guide: what this error means and how to fix it"))
+            self.more_button.clicked.connect(lambda: guide.open_page(guide.ERRORS, self.section))
+            row.addWidget(self.more_button)
         row.addStretch(1)
 
     def _toggled(self, open_: bool) -> None:
         self.original.setVisible(open_)
         self.toggle.setText(("▾ " if open_ else "▸ ") + tr("Original engine message"))
+
+
+def guide_section(card: ErrorCard) -> str:
+    """La sección de «Errores frecuentes» que explica este error, o "" si la guía no lo trata."""
+    if card.raw:
+        return ""
+    if any(f.kind == LOAD_EXTENSION for f in card.fixes):
+        return "spatial"
+    return guide.ERROR_SECTIONS.get(card.kind, "")
 
 
 def _fix_help(fix: Fix) -> str:

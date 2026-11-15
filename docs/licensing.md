@@ -24,6 +24,8 @@ de sus implicaciones. No es asesoramiento legal.
 | `duckdb` (Python) | Dependencia de ejecución | MIT (clasificador `License :: OSI Approved :: MIT License`) | Compatible |
 | `pyarrow` | Dependencia de ejecución | Apache-2.0 (`License-Expression: Apache-2.0`) | Compatible con GPLv3, **no** con GPLv2-only; de nuevo requiere «or later» |
 | NumPy (lo trae QGIS) | Indirecta | BSD-3-Clause | Compatible |
+| Guía de uso (`geoduck/guide/`, #150) | Se construye con MkDocs Material e incluye sus estilos y scripts | MIT (MkDocs: BSD-2-Clause, solo para construir; Material: MIT) | Compatible |
+| `iframe-worker` 1.0.4 (`docs/guide/assets/iframe-worker.js`) | Buscador de la guía sin servidor (`file://`) | MIT (`iframe-worker.LICENSE.txt` junto al archivo) | Compatible |
 | Extensión DuckDB `spatial` | La instala el usuario desde DuckDB | MIT; enlaza GEOS (LGPL-2.1), PROJ (MIT), GDAL (MIT) | GeoDuck no la redistribuye |
 
 ## 3. Implicaciones

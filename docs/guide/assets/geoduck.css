@@ -1,0 +1,27 @@
+/* GeoDuck: los colores de la marca (turquesa) sobre Material. */
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0b7c79;
+  --md-primary-fg-color--light: #3a9c99;
+  --md-primary-fg-color--dark: #075a58;
+  --md-accent-fg-color: #0b7c79;
+  --md-typeset-a-color: #0b7c79;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0b7c79;
+  --md-accent-fg-color: #4fc3bf;
+  --md-typeset-a-color: #4fc3bf;
+}
+.gd-time {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 999px;
+  padding: 0 0.6em;
+  margin-bottom: 0.6rem;
+}
+.md-typeset img {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 6px;
+}

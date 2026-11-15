@@ -21,7 +21,7 @@ from typing import Any
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import QEvent, QObject, QPoint, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
+from qgis.PyQt.QtGui import QColor, QGuiApplication, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -86,6 +86,7 @@ from geoduck.domain.errors import GeoDuckError
 from geoduck.domain.files import OTHER, file_filters, format_for, gdal_readable, unsupported_lines
 from geoduck.domain.resources import size_text
 from geoduck.domain.session import ErrorCause, SessionState
+from geoduck.ui import guide
 from geoduck.ui.i18n import tr
 from geoduck.ui.pro import icons, style
 from geoduck.ui.pro.add_layers import AddLayers
@@ -209,6 +210,8 @@ class ProWorkspace(QWidget):
         #: #183: guardar una base en memoria que leen capas Conectadas, y «No se puede cerrar…».
         self._ask_save_memory = ask_save_memory or self._save_memory_dialog
         self._tell_blocked = tell_blocked or self._blocked_dialog
+        #: #150: abre una página de la guía (página, sección) → si se pudo; las pruebas lo reemplazan.
+        self._open_page: Callable[[str, str], bool] = guide.open_page
         #: #154: el aviso antes de crear un índice espacial (tabla, base, con clave entera) → sí/no.
         self._ask_spatial_index: Callable[[str, str, bool], bool] = self._spatial_index_dialog
         #: Barra de mensajes de QGIS (texto, nivel, [(botón, acción)]); la pone el complemento.
@@ -308,6 +311,7 @@ class ProWorkspace(QWidget):
         self._shortcut("Ctrl+B", self.toggle_sidebar)
         self._shortcut("Ctrl+W", self.tabs.close_current)
         self._shortcut("Ctrl+O", self.open_query_file)
+        self._shortcut("F1", self.open_contextual_guide)
         tabs, current = read_tabs(self._settings)
         for place in tabs:
             if place.is_query and missing_reason(place, None) is not None:
@@ -364,6 +368,10 @@ class ProWorkspace(QWidget):
         self.search_button = icon_button("search", tr("Go to a table or run an action (Ctrl+K)"), self.colors)
         self.search_button.clicked.connect(self.open_palette)
         row.addWidget(self.search_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        # #150: la guía y la ayuda («?»; maqueta `150`)
+        self.help_button = icon_button("help", tr("Help: user guide, shortcuts and more (F1)"), self.colors)
+        self.help_button.clicked.connect(self._show_help_menu)
+        row.addWidget(self.help_button, 0, Qt.AlignmentFlag.AlignVCenter)
         self.dock_button = icon_button(
             "dock", tr("Shows GeoDuck as a QGIS panel, with the same session"), self.colors
         )
@@ -499,6 +507,15 @@ class ProWorkspace(QWidget):
         query.clicked.connect(self.new_query)
         page, _, title, self.welcome_text = self._empty_page("table", [search, query])
         title.setText(tr("Open a table"))
+        # #150: «¿Primera vez? Empieza aquí · 5 min», debajo de los botones
+        self.start_link = QPushButton(tr("First time? Start here · 5 min"))
+        self.start_link.setProperty("pro", "link-accent")
+        self.start_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.start_link.clicked.connect(lambda: self.open_guide(guide.START))
+        self.start_link.setVisible(guide.available())
+        layout = page.layout()
+        if isinstance(layout, QVBoxLayout):  # debajo de la fila de botones, antes del espacio de abajo
+            layout.insertWidget(layout.count() - 1, self.start_link, 0, Qt.AlignmentFlag.AlignHCenter)
         return page
 
     def _build_footer(self) -> QWidget:
@@ -970,7 +987,7 @@ class ProWorkspace(QWidget):
             text = tr("Removing spatial index from «{0}»…").format(table)
         self._guard(lambda: self._coordinator.spatial_index(source, column))
         if self._coordinator.state is SessionState.BUSY:
-            action = (tr("Cancel"), self._coordinator.cancel_current_operation) if existing is None else None
+            action = (tr("Cancel"), self._coordinator.cancel_spatial_index) if existing is None else None
             self.notify(text, action=action)
 
     def _spatial_index_dialog(self, table: str, database: str, integer_key: bool) -> bool:
@@ -1542,6 +1559,55 @@ class ProWorkspace(QWidget):
             )
             report = dataclasses.replace(report, facts=facts)
         DiagnosticsDialog(report, self).exec()
+
+    # -- guía de uso (#150; maqueta `150`) ------------------------------------------------------------
+
+    def open_guide(self, page: str = guide.START, section: str = "") -> None:
+        """La guía en el navegador; si esta instalación no la trae, lo dice en el pie."""
+        if not self._open_page(page, section):
+            self.notify(tr("The user guide is not included in this installation."), error=True)
+
+    def open_contextual_guide(self) -> None:
+        """F1: la página de lo que se está viendo (el editor, una tabla o, sin pestañas, «Empieza aquí»)."""
+        page = self.tabs.page(self.tabs.bar.currentIndex()) if len(self.tabs) else None
+        if isinstance(page, QueryPage):
+            self.open_guide(guide.SQL_EDITOR)
+        elif isinstance(page, TablePage):
+            self.open_guide(guide.EXPLORE_TABLE)
+        else:
+            self.open_guide(guide.START)
+
+    def help_actions(self) -> list[tuple[str, Callable[[], None]] | None]:
+        """El menú del «?» (None = separador)."""
+        return [
+            (tr("User guide") + "\tF1", self.open_contextual_guide),
+            (tr("Start here (5 min)"), lambda: self.open_guide(guide.START)),
+            (tr("Keyboard shortcuts"), lambda: self.open_guide(guide.SHORTCUTS)),
+            (tr("What's new"), lambda: self.open_guide(guide.WHATS_NEW)),
+            None,
+            (tr("Report a problem…"), self.report_problem),
+            (tr("Environment diagnostics"), self.show_diagnostics),
+            (tr("About GeoDuck"), self.show_about),
+        ]
+
+    def _show_help_menu(self) -> None:
+        menu = QMenu(self)
+        for item in self.help_actions():
+            if item is None:
+                menu.addSeparator()
+            else:
+                menu.addAction(item[0], item[1])
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        menu.popup(self.help_button.mapToGlobal(self.help_button.rect().bottomLeft()))
+
+    def report_problem(self) -> None:
+        """«Reportar un problema…»: copia el diagnóstico (versiones, nunca datos) y abre la página que explica
+        qué enviar."""
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(self.refresh_environment().to_text())
+        self.open_guide(guide.REPORT)
+        self.notify(tr("Environment diagnostics copied: paste it in the report."))
 
     def show_about(self) -> None:
         from geoduck.ui.about_dialog import AboutDialog  # noqa: PLC0415

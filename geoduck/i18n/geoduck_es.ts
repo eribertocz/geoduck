@@ -209,7 +209,7 @@
         <message>
             <location filename="../../geoduck/connected_link.py" line="70" />
             <location filename="../../geoduck/plugin.py" line="175" />
-            <location filename="../../geoduck/plugin.py" line="247" />
+            <location filename="../../geoduck/plugin.py" line="248" />
             <location filename="../../geoduck/plugin.py" line="87" />
             <location filename="../../geoduck/plugin.py" line="196" />
             <location filename="../../geoduck/ui/pro/add_layers.py" line="573" />
@@ -221,11 +221,11 @@
             <location filename="../../geoduck/ui/pro/shell.py" line="105" />
             <location filename="../../geoduck/ui/pro/shell.py" line="150" />
             <location filename="../../geoduck/ui/pro/transfer.py" line="280" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="979" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1164" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1176" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1288" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1449" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="996" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1181" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1193" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1305" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1466" />
             <source>GeoDuck</source>
             <translation>GeoDuck</translation>
         </message>
@@ -747,14 +747,14 @@
         </message>
         <message>
             <location filename="../../geoduck/domain/load.py" line="99" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1584" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1650" />
             <source>table</source>
             <translation>tabla</translation>
         </message>
         <message>
             <location filename="../../geoduck/domain/load.py" line="99" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="42" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1584" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1650" />
             <source>view</source>
             <translation>vista</translation>
         </message>
@@ -1691,20 +1691,27 @@
             <translation>Envía las capas seleccionadas a GeoDuck como tablas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/plugin.py" line="250" />
+            <location filename="../../geoduck/plugin.py" line="251" />
             <source>Show or hide GeoDuck</source>
             <translation>Mostrar u ocultar GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/plugin.py" line="255" />
-            <location filename="../../geoduck/plugin.py" line="265" />
-            <location filename="../../geoduck/plugin.py" line="336" />
-            <location filename="../../geoduck/plugin.py" line="339" />
+            <location filename="../../geoduck/plugin.py" line="256" />
+            <location filename="../../geoduck/plugin.py" line="264" />
+            <location filename="../../geoduck/plugin.py" line="273" />
+            <location filename="../../geoduck/plugin.py" line="348" />
+            <location filename="../../geoduck/plugin.py" line="345" />
             <source>&amp;GeoDuck</source>
             <translation>&amp;GeoDuck</translation>
         </message>
         <message>
             <location filename="../../geoduck/plugin.py" line="260" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1583" />
+            <source>User guide</source>
+            <translation>Guía de uso</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/plugin.py" line="268" />
             <source>About GeoDuck…</source>
             <translation>Acerca de GeoDuck…</translation>
         </message>
@@ -2042,7 +2049,7 @@
         <message>
             <location filename="../../geoduck/qgis_bridge/provider.py" line="695" />
             <location filename="../../geoduck/ui/pro/places.py" line="114" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1071" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1088" />
             <source>GeoDuck is not started</source>
             <translation>GeoDuck no está iniciado</translation>
         </message>
@@ -2238,6 +2245,7 @@
         <message>
             <location filename="../../geoduck/ui/about_dialog.py" line="77" />
             <location filename="../../geoduck/ui/pro/sidebar.py" line="629" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1590" />
             <source>About GeoDuck</source>
             <translation>Acerca de GeoDuck</translation>
         </message>
@@ -2257,7 +2265,7 @@
             <location filename="../../geoduck/ui/pro/export_progress.py" line="140" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="407" />
             <location filename="../../geoduck/ui/pro/widgets.py" line="523" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="421" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="429" />
             <source>Close</source>
             <translation>Cerrar</translation>
         </message>
@@ -2334,13 +2342,13 @@
             <location filename="../../geoduck/ui/pro/load_window.py" line="181" />
             <location filename="../../geoduck/ui/pro/load_window.py" line="235" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="484" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="517" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="518" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="992" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1167" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1293" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1454" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="973" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="534" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="535" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1009" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1184" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1310" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1471" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="990" />
             <location filename="../../geoduck/ui/send_dialog.py" line="296" />
             <source>Cancel</source>
             <translation>Cancelar</translation>
@@ -2352,7 +2360,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/attach_dialog.py" line="41" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1154" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1171" />
             <source>Database</source>
             <translation>Base de datos</translation>
         </message>
@@ -2526,7 +2534,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="351" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1239" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1256" />
             <source>Retry</source>
             <translation>Reintentar</translation>
         </message>
@@ -2630,7 +2638,7 @@
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/add_layers.py" line="273" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="610" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="627" />
             <source>Start GeoDuck to import files.</source>
             <translation>Inicia GeoDuck para importar archivos.</translation>
         </message>
@@ -3083,37 +3091,47 @@ de {2}</translation>
             <translation>{} columnas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="104" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="122" />
             <source>Only changes the text in the editor; nothing runs until you press ▶</source>
             <translation>Solo cambia el texto del editor; nada se ejecuta hasta que pulses ▶</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="101" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="119" />
             <source>Asks before installing or loading the extension (only for this session)</source>
             <translation>Pregunta antes de instalar o cargar la extensión (solo para esta sesión)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="81" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="82" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="1293" />
             <source>Go</source>
             <translation>Ir</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="82" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="83" />
             <location filename="../../geoduck/ui/pro/query_page.py" line="864" />
             <source>Goes to the error in the editor</source>
             <translation>Lleva al error en el editor</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="88" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="89" />
             <source>Copies the engine's original message (to search for it or report it)</source>
             <translation>Copia el mensaje original del motor (para buscarlo o reportarlo)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/error_card.py" line="55" />
-            <location filename="../../geoduck/ui/pro/error_card.py" line="96" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="56" />
+            <location filename="../../geoduck/ui/pro/error_card.py" line="105" />
             <source>Original engine message</source>
             <translation>Mensaje original del motor</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/error_card.py" line="97" />
+            <source>More information</source>
+            <translation>Más información</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/error_card.py" line="98" />
+            <source>Opens the user guide: what this error means and how to fix it</source>
+            <translation>Abre la guía de uso: qué significa este error y cómo arreglarlo</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/export_progress.py" line="81" />
@@ -3146,7 +3164,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/export_progress.py" line="107" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1256" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1273" />
             <source>«spatial» extension</source>
             <translation>extensión spatial</translation>
         </message>
@@ -3423,7 +3441,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/history.py" line="143" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1595" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1661" />
             <source>Execution history</source>
             <translation>Historial de ejecución</translation>
         </message>
@@ -3774,7 +3792,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/load_window.py" line="404" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="583" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="600" />
             <source>View on map</source>
             <translation>Ver en el mapa</translation>
         </message>
@@ -4072,7 +4090,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/query_page.py" line="1411" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1417" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1434" />
             <source>SQL files (*.sql)</source>
             <translation>Archivos SQL (*.sql)</translation>
         </message>
@@ -4328,7 +4346,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/shell.py" line="129" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="364" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="368" />
             <source>Go to a table or run an action (Ctrl+K)</source>
             <translation>Ir a una tabla o ejecutar una acción (Ctrl+K)</translation>
         </message>
@@ -4339,7 +4357,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="473" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="688" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="705" />
             <source>the current database</source>
             <translation>la base actual</translation>
         </message>
@@ -4350,7 +4368,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="605" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="157" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="158" />
             <source>Stopped</source>
             <translation>Detenido</translation>
         </message>
@@ -4363,30 +4381,30 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="614" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="478" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="486" />
             <source>Start GeoDuck</source>
             <translation>Iniciar GeoDuck</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="616" />
             <location filename="../../geoduck/ui/pro/sidebar.py" line="690" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="483" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1608" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="491" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1674" />
             <source>Open database…</source>
             <translation>Abrir base…</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="618" />
             <location filename="../../geoduck/ui/pro/sidebar.py" line="692" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="485" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1610" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="493" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1676" />
             <source>Create database…</source>
             <translation>Crear base…</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="620" />
             <location filename="../../geoduck/ui/pro/sidebar.py" line="694" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1611" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1677" />
             <source>New database in memory…</source>
             <translation>Nueva base en memoria…</translation>
         </message>
@@ -4402,7 +4420,8 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="628" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1638" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1589" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1704" />
             <source>Environment diagnostics</source>
             <translation>Diagnóstico del entorno</translation>
         </message>
@@ -4438,13 +4457,13 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="697" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1612" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1678" />
             <source>Import files…</source>
             <translation>Importar archivos…</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="699" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1613" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1679" />
             <source>Add QGIS layers to GeoDuck…</source>
             <translation>Añadir capas de QGIS a GeoDuck…</translation>
         </message>
@@ -4455,7 +4474,7 @@ de {2}</translation>
         </message>
         <message>
             <location filename="../../geoduck/ui/pro/sidebar.py" line="736" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="487" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="495" />
             <source>Diagnostics</source>
             <translation>Diagnóstico</translation>
         </message>
@@ -4794,578 +4813,618 @@ de {2}</translation>
             <translation>Progreso</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1590" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1656" />
             <source>Action</source>
             <translation>Acción</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1861" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1927" />
             <source>the layer keeps working</source>
             <translation>la capa seguirá funcionando</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1861" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1927" />
             <source>the layers keep working</source>
             <translation>las capas seguirán funcionando</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="159" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="160" />
             <source>Active</source>
             <translation>Activo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="160" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="161" />
             <source>Busy</source>
             <translation>Ocupada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="161" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="162" />
             <source>With error</source>
             <translation>Con error</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="162" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="163" />
             <source>Closing database…</source>
             <translation>Cerrando la base…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="164" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1061" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="165" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1078" />
             <source>Closing the session…</source>
             <translation>Cerrando la sesión…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="346" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="350" />
             <source>Show or hide the sidebar (Ctrl+B)</source>
             <translation>Mostrar u ocultar la barra lateral (Ctrl+B)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="352" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="498" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1593" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="356" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="506" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1659" />
             <source>New query</source>
             <translation>Nueva consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="357" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="361" />
             <source>Close all tabs</source>
             <translation>Cerrar todas las pestañas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="368" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="372" />
+            <source>Help: user guide, shortcuts and more (F1)</source>
+            <translation>Ayuda: guía de uso, atajos y más (F1)</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="376" />
             <source>Shows GeoDuck as a QGIS panel, with the same session</source>
             <translation>Muestra GeoDuck como un panel de QGIS, con la misma sesión</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="496" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="504" />
             <source>Search…</source>
             <translation>Buscar…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="501" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="509" />
             <source>Open a table</source>
             <translation>Abre una tabla</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="524" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="511" />
+            <source>First time? Start here · 5 min</source>
+            <translation>¿Primera vez? Empieza aquí · 5 min</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="541" />
             <source>Close the message</source>
             <translation>Cerrar el mensaje</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="541" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="542" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="558" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="559" />
             <source>Show the progress</source>
             <translation>Ver el progreso</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="993" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1010" />
             <source>Create index</source>
             <translation>Crear índice</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1168" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1185" />
             <source>Save as file and close…</source>
             <translation>Guardar como archivo y cerrar…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1179" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1196" />
             <source>Understood</source>
             <translation>Entendido</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1254" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1271" />
             <source>Install the «spatial» extension</source>
             <translation>Instalar la extensión spatial</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1290" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1307" />
             <source>1 table</source>
             <translation>1 tabla</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1451" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1468" />
             <source>If you do not save them, they are lost.</source>
             <translation>Si no los guardas, se pierden.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1452" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1469" />
             <source>Save…</source>
             <translation>Guardar…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1453" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1470" />
             <source>Don't save</source>
             <translation>No guardar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1465" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1417" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1482" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1434" />
             <source>Open query</source>
             <translation>Abrir consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1842" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1610" />
+            <source>Environment diagnostics copied: paste it in the report.</source>
+            <translation>Diagnóstico del entorno copiado: pégalo en el reporte.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1908" />
             <source>{0} layers are now unavailable: {1}.</source>
             <translation>{0} capas quedaron no disponibles: {1}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1850" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1916" />
             <source>The layers {0} have unsaved changes. Save or discard them in QGIS and try again.</source>
             <translation>Las capas {0} tienen cambios sin guardar. Guárdalos o descártalos en QGIS y vuelve a intentarlo.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="156" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="157" />
             <source>Starting…</source>
             <translation>Iniciando…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="418" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="426" />
             <source>Save as…</source>
             <translation>Guardar como…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="419" />
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1594" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="427" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1660" />
             <source>Open query…</source>
             <translation>Abrir consulta…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="480" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="488" />
             <source>Starts GeoDuck with a database in memory, in its own thread</source>
             <translation>Inicia GeoDuck con una base en memoria, en su propio hilo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="483" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="491" />
             <source>Opens a .duckdb file</source>
             <translation>Abre un archivo .duckdb</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="485" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="493" />
             <source>Creates a new .duckdb file</source>
             <translation>Crea un archivo .duckdb nuevo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="487" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="495" />
             <source>What is missing and what to do</source>
             <translation>Qué falta y qué hacer</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="613" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="630" />
             <source>Import files</source>
             <translation>Importar archivos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1037" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1054" />
             <source>The transaction failed. «Roll back» discards its changes and GeoDuck is ready again.</source>
             <translation>La transacción falló. «Revertir» descarta sus cambios y GeoDuck vuelve a estar listo.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1041" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1058" />
             <source>Roll back</source>
             <translation>Revertir</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1058" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1075" />
             <source>Starting GeoDuck…</source>
             <translation>Iniciando GeoDuck…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1059" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1076" />
             <source>It takes a moment the first time.</source>
             <translation>La primera vez tarda un momento.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1198" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1215" />
             <source>Database «{0}» closed. {1}</source>
             <translation>Base «{0}» cerrada. {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1270" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1287" />
             <source>GeoDuck session closed. 1 layer is now unavailable; it comes back when you start GeoDuck and open its database.</source>
             <translation>Sesión de GeoDuck cerrada. 1 capa quedó no disponible; vuelve al iniciar GeoDuck y abrir su base.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1313" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1330" />
             <source>New database in memory</source>
             <translation>Nueva base en memoria</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1313" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1330" />
             <source>Alias of the database:</source>
             <translation>Alias de la base:</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1332" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1349" />
             <source>The session cannot be closed</source>
             <translation>No se puede cerrar la sesión</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1498" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1515" />
             <source>History</source>
             <translation>Historial</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1540" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1557" />
             <source>Session temporary files</source>
             <translation>Archivos temporales de la sesión</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1627" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1568" />
+            <source>The user guide is not included in this installation.</source>
+            <translation>Esta instalación no trae la guía de uso.</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1584" />
+            <source>Start here (5 min)</source>
+            <translation>Empieza aquí (5 min)</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1585" />
+            <source>Keyboard shortcuts</source>
+            <translation>Atajos del teclado</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1586" />
+            <source>What's new</source>
+            <translation>Novedades</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1588" />
+            <source>Report a problem…</source>
+            <translation>Reportar un problema…</translation>
+        </message>
+        <message>
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1693" />
             <source>Show or hide the sidebar</source>
             <translation>Mostrar u ocultar la barra lateral</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1812" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1878" />
             <source>Hold to open the explorer</source>
             <translation>Mantén para abrir el explorador</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1841" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1907" />
             <source>1 layer is now unavailable: {0}.</source>
             <translation>1 capa quedó no disponible: {0}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1847" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1913" />
             <source>The layer {0} has unsaved changes. Save or discard them in QGIS and try again.</source>
             <translation>La capa {0} tiene cambios sin guardar. Guárdalos o descártalos en QGIS y vuelve a intentarlo.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1857" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1923" />
             <source>It only exists in memory and the layer {0} uses it.</source>
             <translation>Solo existe en memoria y la usa la capa {0}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1859" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1925" />
             <source>It only exists in memory and the layers {0} use it.</source>
             <translation>Solo existe en memoria y la usan las capas {0}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1863" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1929" />
             <source>It will be saved as a file, with its table, and {0}.</source>
             <translation>Se guardará como archivo, con su tabla, y {0}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1865" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1931" />
             <source>It will be saved as a file, with its {0} tables, and {1}.</source>
             <translation>Se guardará como archivo, con sus {0} tablas, y {1}.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="417" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="425" />
             <source>Save</source>
             <translation>Guardar</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="968" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="985" />
             <source>Creating spatial index on «{0}»…</source>
             <translation>Creando índice espacial en «{0}»…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="970" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="987" />
             <source>Removing spatial index from «{0}»…</source>
             <translation>Quitando el índice espacial de «{0}»…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="980" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="997" />
             <source>Create spatial index on «{0}»</source>
             <translation>Crear índice espacial en «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1152" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1169" />
             <source>Save the database «{0}» as</source>
             <translation>Guardar la base «{0}» como</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1165" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1182" />
             <source>Save the database «{0}» before closing it</source>
             <translation>Guardar la base «{0}» antes de cerrarla</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1204" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1221" />
             <source>Open again</source>
             <translation>Abrir de nuevo</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1239" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1256" />
             <source>Install from a file…</source>
             <translation>Instalar desde un archivo…</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1289" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1306" />
             <source>Close the database «{0}»?</source>
             <translation>¿Cerrar la base «{0}»?</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1290" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1307" />
             <source>{0} tables</source>
             <translation>{0} tablas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1291" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1308" />
             <source>It has {0} that only exist in memory: they will be lost.</source>
             <translation>Tiene {0} que solo existen en memoria: se perderán.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1292" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1309" />
             <source>Close and lose {0}</source>
             <translation>Cerrar y perder {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1450" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1467" />
             <source>Save the changes to «{}»?</source>
             <translation>¿Guardar los cambios de «{}»?</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1540" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1557" />
             <source>{0} · up to {1}</source>
             <translation>{0} · hasta {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1567" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1633" />
             <source>Open tab</source>
             <translation>Pestaña abierta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1598" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1664" />
             <source>Roll back transaction</source>
             <translation>Revertir transacción</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1602" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1668" />
             <source>Show progress: QGIS layers → GeoDuck</source>
             <translation>Ver progreso: capas de QGIS → GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1614" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1680" />
             <source>Refresh databases</source>
             <translation>Actualizar bases</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1630" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1696" />
             <source>Dock to QGIS</source>
             <translation>Acoplar a QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1635" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1701" />
             <source>Open in a window</source>
             <translation>Abrir en ventana</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1653" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1719" />
             <source>The «spatial» extension is loaded: spatial analysis is available.</source>
             <translation>La extensión spatial está cargada: el análisis espacial está disponible.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1836" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1902" />
             <source> and {0} more</source>
             <translation> y {0} más</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="625" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="642" />
             <source>Write query</source>
             <translation>Escribir consulta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="626" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="643" />
             <source>Open in QGIS</source>
             <translation>Abrir en QGIS</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="670" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="687" />
             <source>QGIS could not open: {0}</source>
             <translation>QGIS no pudo abrir: {0}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="982" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="999" />
             <source>The map of the Connected layers of «{0}» will be drawn faster when you zoom in. The index takes up space in the database «{1}» and is updated automatically when the table is edited.</source>
             <translation>El mapa de las capas Conectadas de «{0}» se dibujará más rápido al acercarte. El índice ocupa espacio en la base «{1}» y se actualiza solo al editar la tabla.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="987" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1004" />
             <source>«{0}» has no integer key: its Connected layers will not use the index. Queries in the editor do use it. The index takes up space in the database «{1}».</source>
             <translation>«{0}» no tiene clave entera: sus capas Conectadas no usarán el índice. Sí lo usan las consultas del editor. El índice ocupa espacio en la base «{1}».</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1017" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1034" />
             <source>Double-click a table on the left, press Ctrl+K to search, or + for a new query.</source>
             <translation>Doble clic en una tabla de la izquierda, Ctrl+K para buscar, o + para una consulta nueva.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1019" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1036" />
             <source>Press Ctrl+K to search, or + for a new query.</source>
             <translation>Ctrl+K para buscar, o + para una consulta nueva.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1066" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1083" />
             <source>The environment is not ready for GeoDuck</source>
             <translation>El entorno no está listo para GeoDuck</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1072" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1089" />
             <source>Start GeoDuck in memory, or open a database file.</source>
             <translation>Inicia GeoDuck en memoria, o abre un archivo de base de datos.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1103" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1120" />
             <source>The database «{0}» cannot be closed</source>
             <translation>No se puede cerrar la base «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1196" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1213" />
             <source>Database «{}» closed</source>
             <translation>Base «{}» cerrada</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1275" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1292" />
             <source>GeoDuck session closed. {0} layers are now unavailable; they come back when you start GeoDuck and open their databases.</source>
             <translation>Sesión de GeoDuck cerrada. {0} capas quedaron no disponibles; vuelven al iniciar GeoDuck y abrir sus bases.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1393" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1410" />
             <source>This query was saved with «{0}»; the active database is «{1}».</source>
             <translation>Esta consulta se guardó con «{0}»; la base activa es «{1}».</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1475" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1492" />
             <source>{} (recovered)</source>
             <translation>{} (recuperada)</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1511" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1528" />
             <source>«{}» added to favorites</source>
             <translation>«{}» añadida a favoritos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1511" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1528" />
             <source>«{}» removed from favorites</source>
             <translation>«{}» quitada de favoritos</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="401" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="409" />
             <source>A tab named «{}» is already open</source>
             <translation>Ya hay una pestaña abierta con el nombre «{}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="673" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="690" />
             <source>{0} layer(s) opened in QGIS: now add them to GeoDuck from the layers panel</source>
             <translation>{0} capa(s) abiertas en QGIS: ahora añádelas a GeoDuck desde el panel de capas</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1424" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1441" />
             <source>The query could not be opened: {}</source>
             <translation>No se pudo abrir la consulta: {}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1585" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1651" />
             <source>temporary</source>
             <translation>temporal</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1068" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1085" />
             <source>Missing: {}. Press «Diagnostics» to see how to install it.</source>
             <translation>Falta: {}. Pulsa «Diagnóstico» para ver cómo instalarlo.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1396" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1413" />
             <source>Activate «{0}»</source>
             <translation>Activar «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1621" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1687" />
             <source>Use «{0}» as active database</source>
             <translation>Usar «{0}» como base activa</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1671" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1737" />
             <source>The catalog could not be read.</source>
             <translation>No se pudo leer el catálogo.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1673" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1739" />
             <source>Database «{}» open</source>
             <translation>Base «{}» abierta</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1678" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1744" />
             <source>Database «{0}» saved as {1}</source>
             <translation>Base «{0}» guardada como {1}</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1688" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1754" />
             <source>Spatial index created on «{0}» ({1})</source>
             <translation>Índice espacial creado en «{0}» ({1})</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1690" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1756" />
             <source>Spatial index removed from «{0}»</source>
             <translation>Índice espacial quitado de «{0}»</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1695" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1761" />
             <source>The spatial index was not created.</source>
             <translation>No se creó el índice espacial.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1697" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1763" />
             <source>The spatial index was not removed.</source>
             <translation>No se quitó el índice espacial.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1705" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1771" />
             <source>The database was not saved.</source>
             <translation>La base no se guardó.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1707" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1773" />
             <source>The database was not opened.</source>
             <translation>No se abrió la base.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1710" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1776" />
             <source>The database was not closed.</source>
             <translation>No se cerró la base.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1712" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1778" />
             <source>The active database did not change.</source>
             <translation>La base activa no cambió.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1724" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1790" />
             <source>Start a new session or close.</source>
             <translation>Inicie una sesión nueva o cierre.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1722" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1788" />
             <source>Session invalidated:</source>
             <translation>Sesión invalidada:</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1727" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1793" />
             <source>The transaction operation did not complete.</source>
             <translation>No se completó la operación sobre la transacción.</translation>
         </message>
         <message>
-            <location filename="../../geoduck/ui/pro/workspace.py" line="1729" />
+            <location filename="../../geoduck/ui/pro/workspace.py" line="1795" />
             <source>The operation could not be completed.</source>
             <translation>No se pudo completar la operación.</translation>
         </message>
