@@ -26,6 +26,7 @@ def test_probe(tmp_path):
         f'(SELECT * FROM t) AS s) AS q) AS c WHERE st_intersects_extent(g, {poly})',
     }
     con.close()
+    out = []
     for index in (False, True):
         con = duckdb.connect(str(tmp_path / "p.duckdb"))
         con.execute("LOAD spatial")
@@ -37,5 +38,6 @@ def test_probe(tmp_path):
             except duckdb.Error as exc:
                 got = type(exc).__name__ + ": " + str(exc).splitlines()[0]
             plan = "\n".join(r[1] for r in con.execute("EXPLAIN " + sql).fetchall())
-            print(f"SONDA {duckdb.__version__} índice={index} {name}: {got} {'RTREE' if 'Rtree' in plan else ''}")
+            out.append(f"SONDA {duckdb.__version__} índice={index} {name}: {got} {'RTREE' if 'Rtree' in plan else ''}")
         con.close()
+    raise AssertionError("\n".join(out))
