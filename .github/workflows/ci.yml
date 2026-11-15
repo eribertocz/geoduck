@@ -98,8 +98,8 @@ jobs:
           cache-environment: true
       - run: python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==25.0.1"
       - run: python -c "from qgis.core import Qgis; print(Qgis.version())"
-      # Entorno de pruebas, no GeoDuck: las pruebas AX con `spatial` (spatial-spec §8) la necesitan instalada.
-      # GeoDuck nunca la instala por su cuenta (§10). Sin red hacia extensions.duckdb.org, se omiten.
+      # Las pruebas que piden `spatial` (spatial-spec §8 y §10, #193) la necesitan instalada; las demás
+      # arrancan sin ella (`GEODUCK_SPATIAL=0`). Sin red hacia extensions.duckdb.org, se omiten.
       - name: extensión spatial para las pruebas AX
         run: python -c "import duckdb; duckdb.connect().execute('INSTALL spatial')" || echo "spatial no disponible"
       - name: tests/qgis
@@ -125,6 +125,38 @@ jobs:
             qgis-*.xml
             screenshots/
             perf/
+
+  # G10 · E5 (performance-spec §6, AT-PERF-005): 1 h de operaciones mezcladas. Solo bajo demanda
+  # (workflow_dispatch): no corre en cada PR.
+  stress:
+    name: estrés 1 h · QGIS ${{ matrix.qgis }} · DuckDB 2.0.0
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        qgis: ["3.44.14", "4.2.3"]
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: qgis
+          create-args: qgis=${{ matrix.qgis }} pip
+          cache-environment: true
+      - run: python -m pip install "pytest>=8" "duckdb==2.0.0" "pyarrow==25.0.1"
+      - name: estrés
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/perf/stress.py --minutes 60 --rows 200000 --out stress
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stress-qgis-${{ matrix.qgis }}
+          path: stress/
 
   build:
     name: ZIP del complemento

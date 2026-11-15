@@ -25,7 +25,13 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import duckdb
 
 from geoduck.domain.bridge_types import is_geometry_type
-from geoduck.domain.errors import ErrorCode, GeoDuckError, InvalidArgumentError, SessionStateError
+from geoduck.domain.errors import (
+    ErrorCode,
+    GeoDuckError,
+    InvalidArgumentError,
+    OperationCancelledError,
+    SessionStateError,
+)
 from geoduck.domain.i18n import tr
 from geoduck.domain.operations import StatementOutcome
 from geoduck.domain.sql import (
@@ -125,7 +131,7 @@ def run_script(
         if stopped or token.cancelled:
             result = StatementResult(st, StatementStatus.SKIPPED)
         else:
-            result = _execute_one(handle, st, preview_limit)
+            result = _execute_one(handle, st, preview_limit, token)
             stopped = result.status is not StatementStatus.OK
             if result.preview is not None:
                 result = replace(result, database=_current_database(handle))
@@ -176,10 +182,18 @@ def _current_database(handle: ConnectionHandle) -> str | None:
     return str(rows[0][0]) if rows else None
 
 
-def _execute_one(handle: ConnectionHandle, st: SqlStatement, limit: int) -> StatementResult:
+def _execute_one(
+    handle: ConnectionHandle, st: SqlStatement, limit: int, token: CancelToken | None = None
+) -> StatementResult:
     started = time.perf_counter()
     try:
-        out = handle.execute(st.text, max_rows=limit)
+        if st.type == "COPY":
+            with handle.sync_writes():
+                out = handle.execute(st.text, max_rows=limit, token=token)
+        else:
+            out = handle.execute(st.text, max_rows=limit, token=token)
+    except OperationCancelledError:  # se canceló justo antes de empezar
+        return StatementResult(st, StatementStatus.SKIPPED)
     except duckdb.FatalException:
         raise  # invalida la sesión en el worker (C13 §4 bis)
     except duckdb.Error as exc:

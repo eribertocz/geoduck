@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 
@@ -53,6 +54,44 @@ def test_interrupt_stops_long_execute_and_session_recovers(worker):
         handle.future.result(TIMEOUT)
     assert time.monotonic() - started < 5
     assert worker.submit(lambda h, t: h.execute("SELECT 1")).future.result(TIMEOUT).rows == ((1,),)
+
+
+class _LostInterrupt:
+    """La conexión del worker, pero su primera interrupción se pierde (llega antes de que DuckDB empiece)."""
+
+    def __init__(self, con):
+        self._real = con
+
+    def interrupt(self):
+        pass
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+@needs_verified_interrupt
+def test_a_lost_interrupt_is_repeated_while_the_statement_runs(worker):
+    handle = worker.submit(lambda h, t: h.execute(LONG_QUERY, token=t))
+    wait_until_running(worker, handle)
+    worker._con = _LostInterrupt(worker._con)
+    started = time.monotonic()
+    assert worker.cancel(handle.op_id)
+    with pytest.raises(OperationCancelledError):
+        handle.future.result(TIMEOUT)
+    assert time.monotonic() - started < 5
+    worker._con = worker._con._real
+    assert worker.submit(lambda h, t: h.execute("SELECT 1")).future.result(TIMEOUT).rows == ((1,),)
+
+
+def test_a_cancelled_statement_does_not_start(worker):
+    def op(h, token):
+        token.cancel()
+        return h.execute("CREATE TABLE nunca AS SELECT 1", token=token)
+
+    with pytest.raises(OperationCancelledError):
+        worker.submit(op).future.result(TIMEOUT)
+    tables = worker.submit(lambda h, t: h.execute("SELECT count(*) FROM duckdb_tables()")).future
+    assert tables.result(TIMEOUT).rows == ((0,),)
 
 
 @needs_verified_interrupt
@@ -138,3 +177,35 @@ def test_unverified_version_does_not_call_interrupt():
     with w._lock:
         w._interrupt_current_locked()
     assert fake.interrupted is True
+
+
+def test_writes_are_synchronous_only_during_a_copy(worker):
+    """#175: cancelar un `COPY … TO` con escritura asíncrona (DuckDB 2.0) a veces no termina nunca; fuera
+    del `COPY` el ajuste queda como estaba."""
+    sql = "SELECT value FROM duckdb_settings() WHERE name = 'async_threads'"
+
+    def op(h, t):
+        before = h.execute(sql).rows
+        with h.sync_writes():
+            during = h.execute(sql).rows
+        return before, during, h.execute(sql).rows
+
+    before, during, after = worker.submit(op).future.result(TIMEOUT)
+    assert after == before
+    assert during == (() if not before else (("0",),))
+
+
+@needs_verified_interrupt
+def test_cancelled_copies_always_finish(worker, tmp_path):
+    worker.submit(
+        lambda h, t: h.execute("CREATE TABLE c AS SELECT range AS id FROM range(200000)")
+    ).future.result(TIMEOUT)
+    for n in range(20):
+        target = tmp_path / f"c{n}.parquet"
+        sql = f"COPY (SELECT a.* FROM c a, range(30)) TO '{target}' (FORMAT parquet)"
+        handle = worker.submit(lambda h, t, s=sql: h.execute(s, token=t))
+        time.sleep(0.02 * (n % 10))
+        worker.cancel(handle.op_id)
+        with contextlib.suppress(OperationCancelledError):
+            handle.future.result(TIMEOUT)
+    assert worker.submit(lambda h, t: h.execute("SELECT 1")).future.result(TIMEOUT).rows == ((1,),)

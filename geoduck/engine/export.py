@@ -168,9 +168,12 @@ def export_query(handle: ConnectionHandle, token: CancelToken, request: ExportRe
                 if with_crs and _axis_setting(handle) is None:
                     handle.execute("SET geometry_always_xy = true", max_rows=1)
                     restore_axis = True
-            out = handle.execute(
-                f"COPY (\n{select}\n) TO {quote_string_literal(str(written))} ({options})", max_rows=1
-            )
+            with handle.sync_writes():
+                out = handle.execute(
+                    f"COPY (\n{select}\n) TO {quote_string_literal(str(written))} ({options})",
+                    max_rows=1,
+                    token=token,
+                )
             count = out.rows[0][0] if out.rows and out.rows[0] else None  # COPY devuelve las filas escritas
             rows = int(str(count)) if count is not None else 0
         token.raise_if_cancelled()
