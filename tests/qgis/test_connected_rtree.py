@@ -58,5 +58,6 @@ def test_a_view_over_an_rtree_table_reads_every_feature(session, tmp_path, key):
     _, layer = session.load('SELECT * FROM "d"."main"."t"', name="t", source=("d", "main", "t"))
     # 60 000 de 1 000 000 puntos: DuckDB usa el índice y la vista ocupa dos páginas
     request = QgsFeatureRequest().setFilterRect(QgsRectangle(0, 0, 999, 59))
-    assert sum(1 for _ in layer.getFeatures(request)) == 60_000
-    assert not layer.dataProvider().unavailable
+    provider = layer.dataProvider()
+    assert sum(1 for _ in layer.getFeatures(request)) == 60_000, provider.last_error
+    assert not provider.unavailable
