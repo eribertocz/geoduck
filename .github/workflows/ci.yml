@@ -35,7 +35,7 @@ jobs:
         run: python tools/spec_sync.py --check
       - name: Catálogo de traducción (GD-I18N-001)
         run: python tools/i18n.py --check
-      - name: Guía de uso (#150): mismas páginas, anclas e imágenes en español e inglés
+      - name: "Guía de uso (#150): mismas páginas, anclas e imágenes en español e inglés"
         run: python tools/build_guide.py --check
 
   engine:
