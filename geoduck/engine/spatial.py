@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 
 import duckdb
 
-from geoduck.domain.sql_text import quote_string_literal
+from geoduck.domain.sql_text import quote_identifier, quote_string_literal
 from geoduck.engine.sql import axis_order_setting
 
 if TYPE_CHECKING:
-    from geoduck.engine.worker import ConnectionHandle
+    from geoduck.engine.worker import CancelToken, ConnectionHandle
 
 
 @dataclass(frozen=True)
@@ -56,3 +56,18 @@ def activate_spatial(handle: ConnectionHandle, *, install: bool) -> SpatialState
     with contextlib.suppress(duckdb.Error):  # longitud, latitud (#193); el ajuste existe desde spatial 2.0
         handle.execute("SET geometry_always_xy = true", max_rows=1)
     return spatial_state(handle)
+
+
+def create_spatial_index(
+    handle: ConnectionHandle, token: CancelToken, source: tuple[str, str, str], column: str
+) -> None:
+    """«Crear índice espacial» (#154): `CREATE INDEX … USING RTREE (columna)`. Se puede cancelar."""
+    table = source[2]
+    name = quote_identifier(f"{table}_{column}_rtree"[:120])
+    target = ".".join(quote_identifier(part) for part in source)
+    handle.execute(f"CREATE INDEX {name} ON {target} USING RTREE ({quote_identifier(column)})", token=token)
+
+
+def drop_spatial_index(handle: ConnectionHandle, database: str, schema: str, name: str) -> None:
+    """«Quitar índice espacial» (#154)."""
+    handle.execute(f"DROP INDEX {'.'.join(quote_identifier(p) for p in (database, schema, name))}")

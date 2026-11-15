@@ -101,6 +101,10 @@ DOUBLE_SAFE_DIGITS = 15
 #: Nombre de la columna auxiliar de geometría ilegible (no puede chocar con un nombre de DuckDB válido
 #: del usuario en la práctica; si chocara, `build_load_plan` lo rechaza).
 UNREADABLE = "__geoduck_unreadable"
+#: Tipos de una clave entera que sirve de FID de QGIS (capas Conectadas, `fid=key`).
+INTEGER_KEY_TYPES = frozenset(
+    {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER"}
+)
 
 
 def is_geometry_type(source_type: str) -> bool:

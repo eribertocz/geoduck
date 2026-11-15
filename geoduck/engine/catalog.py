@@ -19,6 +19,7 @@ from geoduck.domain.catalog import (
     CatalogSnapshot,
     ColumnInfo,
     ObjectKind,
+    SpatialIndex,
     catalog_key,
 )
 from geoduck.domain.completion import Vocabulary
@@ -44,6 +45,10 @@ _SCHEMAS_SQL = "SELECT database_name, schema_name FROM duckdb_schemas() ORDER BY
 _TABLES_SQL = (
     "SELECT database_name, schema_name, table_name, temporary FROM duckdb_tables() "
     "WHERE NOT internal ORDER BY database_name, schema_name, table_name"
+)
+_INDEXES_SQL = (
+    "SELECT database_name, schema_name, table_name, index_name, expressions FROM duckdb_indexes() "
+    "WHERE upper(sql) LIKE '%USING RTREE%' ORDER BY database_name, schema_name, table_name, index_name"
 )
 _VIEWS_SQL = (
     "SELECT database_name, schema_name, view_name, temporary FROM duckdb_views() "
@@ -79,12 +84,38 @@ def read_catalog(handle: ConnectionHandle, root: str) -> CatalogSnapshot:
         for db, schema, name, temporary in _bounded(handle, sql)
         if catalog_key(str(db)) in listed_keys or catalog_key(str(db)) == TEMP_CATALOG
     )
+    indexes = tuple(
+        SpatialIndex(str(db), str(schema), str(table), column, str(name))
+        for db, schema, table, name, expressions in _bounded(handle, _INDEXES_SQL)
+        if catalog_key(str(db)) in listed_keys
+        for column in _single_column(expressions)
+    )
     try:
         return CatalogSnapshot(
-            databases, root=root, default=str(current[0][0]), schemas=schemas, objects=objects
+            databases,
+            root=root,
+            default=str(current[0][0]),
+            schemas=schemas,
+            objects=objects,
+            spatial_indexes=indexes,
         )
     except (ValueError, IndexError) as exc:
         raise EngineError(tr("Inconsistent catalog: {0}").format(exc)) from exc
+
+
+def _single_column(expressions: object) -> list[str]:
+    """La columna de un índice de una sola columna (`['g']`, `'[g]'` o `'["Geom col"]'`); [] si no."""
+    if isinstance(expressions, (list, tuple)):
+        parts = [str(e) for e in expressions]
+    else:
+        text = str(expressions or "").strip()
+        parts = [p for p in text.removeprefix("[").removesuffix("]").split(",") if p.strip()]
+    if len(parts) != 1:
+        return []
+    name = parts[0].strip().strip("'")
+    if len(name) >= 2 and name[0] == name[-1] == '"':
+        name = name[1:-1].replace('""', '"')
+    return [name]
 
 
 def _bounded(handle: ConnectionHandle, sql: str) -> tuple[tuple[object, ...], ...]:

@@ -73,7 +73,13 @@ from geoduck.engine.detach import detach_database
 from geoduck.engine.export import export_query
 from geoduck.engine.files import scan_files
 from geoduck.engine.importing import drop_imported, import_batches, import_target
-from geoduck.engine.spatial import activate_spatial, install_spatial_from, spatial_state
+from geoduck.engine.spatial import (
+    activate_spatial,
+    create_spatial_index,
+    drop_spatial_index,
+    install_spatial_from,
+    spatial_state,
+)
 from geoduck.engine.sql import StatementListener, run_in_database, run_script, use_database
 from geoduck.engine.transactions import commit, is_aborted_error, probe_transaction, rollback
 
@@ -562,6 +568,22 @@ class SessionWorker:
             return read_catalog(handle, root)
 
         return self._submit_future(activate)
+
+    def spatial_index(
+        self, source: tuple[str, str, str], column: str, existing: str | None
+    ) -> Future[CatalogSnapshot]:
+        """«Crear índice espacial» (`existing` None) o «Quitar» el índice `existing` (#154), y el catálogo
+        nuevo, en una sola operación. Crear se cancela con `cancel_current`."""
+        root = self._root
+
+        def run(handle: ConnectionHandle, token: CancelToken) -> CatalogSnapshot:
+            if existing is None:
+                create_spatial_index(handle, token, source, column)
+            else:
+                drop_spatial_index(handle, source[0], source[1], existing)
+            return read_catalog(handle, root)
+
+        return self._submit_future(run)
 
     def transaction_state(self) -> Future[TransactionState]:
         """Estado transaccional real, comprobado sin modificarlo."""

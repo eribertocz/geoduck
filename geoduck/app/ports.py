@@ -78,6 +78,12 @@ class SessionEngine(Protocol):
         """«Usar como base activa» (#168): `USE name` y el catálogo resultante."""
         ...
 
+    def spatial_index(
+        self, source: tuple[str, str, str], column: str, existing: str | None
+    ) -> Future[CatalogSnapshot]:
+        """Crea (`existing` None) o quita el índice espacial de una columna (#154) y lee el catálogo."""
+        ...
+
     def transaction_state(self) -> Future[TransactionState]:
         """Estado transaccional real, comprobado en DuckDB sin modificarlo."""
         ...

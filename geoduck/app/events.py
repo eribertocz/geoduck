@@ -272,6 +272,26 @@ class SpatialActivationFailed:
 
 
 @dataclass(frozen=True)
+class SpatialIndexChanged:
+    """Índice espacial creado o quitado (#154)."""
+
+    source: tuple[str, str, str]
+    column: str
+    created: bool
+    seconds: float
+
+
+@dataclass(frozen=True)
+class SpatialIndexFailed:
+    """No se creó o no se quitó el índice espacial (#154): el mensaje de DuckDB tal cual."""
+
+    source: tuple[str, str, str]
+    created: bool
+    code: ErrorCode
+    message: str
+
+
+@dataclass(frozen=True)
 class SendStarted:
     """«Enviar a DuckDB» en curso (G8): la sesión queda ocupada hasta `SendFinished` o `SendFailed`."""
 
@@ -328,6 +348,8 @@ AppEvent = (
     | DatabaseDetached
     | DatabaseSaved
     | SaveDatabaseFailed
+    | SpatialIndexChanged
+    | SpatialIndexFailed
     | DetachFailed
     | ActivationFailed
     | TransactionStateChanged

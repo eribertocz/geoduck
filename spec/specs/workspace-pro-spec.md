@@ -87,6 +87,19 @@ Paquete nuevo `geoduck/ui/pro/` (capa `ui` de ADR-0010); la interfaz actual se r
 - **Clic derecho en una o varias tablas** (Ctrl/Mayús + clic, como en el Explorador de Windows o QGIS) ›
   «Cargar en QGIS ▸» / «Cargar N tablas en QGIS ▸»: el mismo menú que al soltarlas en el mapa (§9); con una
   sola, también «Más opciones…».
+- **Índice espacial (#154; maqueta `154`, aprobada el 2026-11-14).** Nada automático. Clic derecho en una tabla
+  con columna de geometría y la extensión espacial cargada › **«Crear índice espacial…»** (con dos o más
+  columnas de geometría, un submenú «Índice espacial ▸» con cada una). Antes de crear, un aviso de dos botones
+  («Cancelar» y «Crear índice») dice qué pasará: el mapa de sus capas Conectadas se dibuja más rápido al
+  acercarse, y el índice ocupa espacio en la base; si la tabla no tiene clave entera, dice que sus capas
+  Conectadas no lo usarán (qgis-bridge-spec §5.2) y que las consultas del editor sí. Mientras se crea, el pie
+  dice «Creando índice espacial en «tabla»…» con «Cancelar»; al terminar, «Índice espacial creado en «tabla»
+  (3,6 s)». La tabla con índice lleva la marca «índice» en el explorador y el menú ofrece **«Quitar índice
+  espacial»**, sin preguntar (se puede volver a crear). En una base de solo lectura la opción se ve en gris
+  con el motivo. Los errores, con el texto de DuckDB tal cual. SQL: `CREATE INDEX "<tabla>_<columna>_rtree"
+  ON … USING RTREE (columna)` / `DROP INDEX`; el catálogo lee los índices de `duckdb_indexes()`. Medido
+  (`docs/evidence/g10/154/`): con 10 millones de puntos, una vista cercana pasa de 233 ms a 26 ms; con
+  1 millón o con vistas grandes no cambia.
 
 - **La marca** (propietario, 2026-11-07; `claude/marca.md` en el proyecto): el **logo de GeoDuck dice el estado
   de la sesión** en la barra lateral y en la cabecera del panel: un puntito en su esquina (verde lista, ámbar

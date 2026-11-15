@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -56,6 +57,8 @@ from geoduck.app.events import (
     SpatialActivated,
     SpatialActivationFailed,
     SpatialChecked,
+    SpatialIndexChanged,
+    SpatialIndexFailed,
     StatementFinished,
     TransactionFailed,
     TransactionStateChanged,
@@ -368,6 +371,49 @@ class SessionCoordinator:
         code, message = _describe(exc)
         usable = self._end_failed_operation(exc)
         self._emit(SaveDatabaseFailed(code, message))
+        if usable:
+            self.refresh_catalog()
+
+    def spatial_index(self, source: tuple[str, str, str], column: str) -> None:
+        """«Crear índice espacial» o, si la columna ya tiene uno, «Quitar índice espacial» (#154). La sesión
+        pasa por `BUSY`; crear se cancela con `cancel_current_operation`. Responde con
+        `SpatialIndexChanged` o `SpatialIndexFailed`."""
+        engine = self._require_ready(tr("change the spatial index"))
+        existing = self._catalog.spatial_index(*source, column) if self._catalog is not None else None
+        self._sm.transition(SessionState.BUSY)
+        started = time.monotonic()
+        name = existing.name if existing is not None else None
+        fut = engine.spatial_index(source, column, name)
+        fut.add_done_callback(
+            lambda f: self._dispatcher.post(
+                lambda: self._on_spatial_index(engine, f, source, column, name is None, started)
+            )
+        )
+
+    def _on_spatial_index(  # noqa: PLR0917 - lo que dice el evento
+        self,
+        engine: SessionEngine,
+        fut: Future[CatalogSnapshot],
+        source: tuple[str, str, str],
+        column: str,
+        created: bool,
+        started: float,
+    ) -> None:
+        if engine is not self._engine or self._sm.state is not SessionState.BUSY:
+            return
+        exc = fut.exception()
+        if isinstance(exc, SessionInvalidatedError):
+            return
+        if exc is None:
+            self._sm.transition(SessionState.READY)
+            self._catalog_generation += 1
+            self._catalog = fut.result()
+            self._emit(CatalogChanged(self._catalog))
+            self._emit(SpatialIndexChanged(source, column, created, time.monotonic() - started))
+            return
+        code, message = _describe(exc)
+        usable = self._end_failed_operation(exc)
+        self._emit(SpatialIndexFailed(source, created, code, message))
         if usable:
             self.refresh_catalog()
 
