@@ -24,6 +24,7 @@ REPORT = "report-a-problem"
 ERRORS = "errors"
 EXPLORE_TABLE = "explore-table"
 SQL_EDITOR = "sql-editor"
+PERFORMANCE = "performance"
 
 #: Clase de error del motor → sección de «Errores frecuentes» (la tarjeta lleva «Más información»).
 ERROR_SECTIONS = {

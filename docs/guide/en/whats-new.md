@@ -1,6 +1,6 @@
 # What's new
 
-## 0.11.0a1 (in preparation)
+## 0.11.0a1
 
 - **Spatial index** from a table's right-click menu.
 - **The spatial extension is loaded** at start.

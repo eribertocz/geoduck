@@ -59,8 +59,8 @@ Una ejecución = una versión de QGIS × un método (M1, M2 o M3) × una versió
 | `win-qgis-4.2` | 4.2.3 | `constraints/win-qgis-4.2.txt` (se completa tras leer su `facts.json`) | No probado |
 
 **Las tres versiones de DuckDB.** Repita cada ejecución con una copia local del archivo de su celda en la
-que solo cambie la línea de `duckdb`: `2.0.0` (archivo original), `1.5.6` (última 1.5.x) y `1.5.0`
-(mínimo soportado).
+que solo cambie la línea de `duckdb`: `2.0.0` (archivo original), `1.5.6` (última 1.5.x) y `1.5.4`
+(mínimo soportado desde el 2026-11-15; antes 1.5.0).
 
 **PyArrow y NumPy.** Nunca se añaden si QGIS ya los incluye (F-13, F-15). Solo si `facts.json` muestra que
 esa instalación de QGIS no trae PyArrow, se añade al archivo la versión que indique
