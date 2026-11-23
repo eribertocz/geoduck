@@ -168,7 +168,7 @@ def test_a_query_result_filters_with_duckdb_and_exports_what_is_shown(lecturas):
     expected = _count(lecturas, "SELECT count(*) FROM lecturas WHERE zona = 'Norte'")
     assert wait_for(lambda: page.data.total == expected)
     assert all(row[2] == "Norte" for row in page.model.rows)
-    shown = page.model.rowCount()
+    shown = min(page.model.rowCount(), page.model.full)  # las que se ven enteras
     assert page.range_label.text().startswith(tr("Rows {} of {}").format(f"1–{shown}", expected))
     loads = []
     page._loader = lambda *args, **kwargs: loads.append(args)
