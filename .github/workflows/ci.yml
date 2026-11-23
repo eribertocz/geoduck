@@ -178,7 +178,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: qgis
-          create-args: qgis=4.2.3 pip
+          create-args: qgis=4.2.3 pip draco=1.5.7  # sin libdraco.so.9 en draco 1.5.9 (conda-forge, 2026-11)
           cache-environment: true
       - run: python -m pip install "pytest>=8" "duckdb==2.0.0" "pyarrow==25.0.1"
       - name: la base del PR, al lado
