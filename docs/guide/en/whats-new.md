@@ -8,5 +8,6 @@
 - **Engine errors as they are**, with their fix when there is one.
 - **Export with progress** and cancel without half-written files.
 - Faster: catalog in parts, Connected layers and an interface without pauses.
+- **Ctrl+Enter runs everything** (or the selection); **Ctrl+Shift+Enter**, the marked statement.
 - **DuckDB 1.5.4 or later.**
 - This guide, inside the plugin.

@@ -1168,7 +1168,7 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 - Diseño monocromático por defecto con un acento derivado del tema QGIS; estados semanticamente accesibles (éxito/advertencia/error).
 - Controles con alturas y espacios coherentes; evitar iconos sin texto o tooltip.
 - Autocompletado contextual no intrusivo; errores de SQL resaltados sin cubrir código.
-- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar actual, Ctrl+Shift+Enter ejecutar todo, Esc cancelar donde sea seguro), configurables. **F5 no se usa** (en QGIS refresca el mapa); los atajos actúan solo con el foco dentro de GeoDuck (decisión del propietario, 2026-11-02).
+- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar todo o la selección, Ctrl+Shift+Enter ejecutar la sentencia actual — propietario, 2026-11-28 —, Esc cancelar donde sea seguro), configurables. **F5 no se usa** (en QGIS refresca el mapa); los atajos actúan solo con el foco dentro de GeoDuck (decisión del propietario, 2026-11-02).
 - UI responsive dentro del dock; no usar tamaños fijos que hagan inutilizable un panel estrecho.
 
 ## 5. Accesibilidad e internacionalización
@@ -1720,12 +1720,12 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
     lago»** —una línea de agua de 3 px con el pato nadando de un lado a otro—, «Ejecutando… N s» y
     **■ Cancelar · Esc**; mientras corre no hay copiar, exportar ni cargar. Esc cancela solo mientras corre
     (el resto del tiempo, Esc es del editor). Con «menos animaciones» en el sistema, el pato queda quieto.
-- **Un solo «▶ Ejecutar»** (Ctrl+Enter; propietario, 2026-11-06, tras la prueba en Windows): corre la
-  selección o, sin ella, **la sentencia marcada**. Una barra de acento a la izquierda del texto marca la
-  sentencia que correrá y el botón lo dice («Ejecutar · línea 5», «Ejecutar selección»); se ejecuta
-  exactamente lo marcado (se calcula en GeoDuck, igual con DuckDB 1.5 y 2.0; en una línea en blanco entre
-  dos, la anterior). **«Ejecutar todo (N sentencias)»** un paso atrás: Ctrl+Shift+Enter y el **clic derecho
-  del editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón
+- **Un solo «▶ Ejecutar»** (Ctrl+Enter; propietario, 2026-11-06 y 2026-11-28): corre **todo** o, con
+  selección, **solo lo seleccionado** («Ejecutar todo (N sentencias)», «Ejecutar selección»).
+  **Ctrl+Shift+Enter** corre **la sentencia marcada**: una barra de acento a la izquierda del texto la marca
+  y se ejecuta exactamente esa (se calcula en GeoDuck, igual con DuckDB 1.5 y 2.0; en una línea en blanco
+  entre dos, la anterior); también el ▶ del margen y «Ejecutar sentencia · línea 5» en el **clic derecho del
+  editor** (arriba, sobre el menú de siempre); el tooltip del botón explica los dos atajos. Sin botón
   «Todo». La selección se ve con un turquesa claramente distinto del fondo, en claro y en oscuro.
 - **Ejecutar nunca falla en silencio** (#139): Ctrl+Enter y Ctrl+Shift+Enter los toma el editor antes que
   cualquier atajo con la misma tecla (de QGIS o de otro complemento) y cierran la lista de autocompletado si

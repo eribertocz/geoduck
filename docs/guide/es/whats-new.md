@@ -8,5 +8,6 @@
 - **Errores del motor tal cual**, con su arreglo cuando lo hay.
 - **Exportar con avance** y cancelar sin archivos a medias.
 - Más rápido: catálogo por partes, capas Conectadas y la interfaz sin pausas.
+- **Ctrl+Intro ejecuta todo** (o la selección); **Ctrl+Shift+Intro**, la sentencia marcada.
 - **DuckDB 1.5.4 o posterior.**
 - Esta guía, dentro del complemento.

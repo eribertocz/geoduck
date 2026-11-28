@@ -373,10 +373,8 @@ def test_the_panel_is_compact_down_to_340_px_and_the_explorer_opens_on_top(plugi
     query.editor.setText("SELECT 1;")
     query.mark_statement()
     assert ws.compact and table.compact and query.compact
-    assert query.run_button.text() == "" and query.run_button.accessibleName() == tr("Run · line {}").format(
-        1
-    )
-    assert tr("Run · line {}").format(1) in query.run_button.toolTip()
+    assert query.run_button.text() == "" and query.run_button.accessibleName() == tr("Run")
+    assert tr("Run statement · line {}").format(1) in query.run_button.toolTip()
     assert query.load_button.text() == "" and not query.runs_in_label.isVisibleTo(query)
     assert not query.detail_button.isChecked() and not table.detail_button.isChecked()
     assert table.structure_button.isVisibleTo(table) and not table.mode.isVisibleTo(table)

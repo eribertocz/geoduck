@@ -9,9 +9,9 @@
 
 ## Run
 
-- **Ctrl+Enter** runs the selection or, with no selection, the **marked statement** (the teal bar to the left
-  of the text). The ▶ button says what will run: "Run · line 5".
-- **Ctrl+Shift+Enter** runs everything.
+- **Ctrl+Enter** (or the ▶ button) runs **everything**; if you select a part, only **the selection**.
+- **Ctrl+Shift+Enter** runs only the **marked statement**: the one at the cursor, with the teal bar to the
+  left of the text. Also the ▶ in the margin.
 - **Esc** cancels while it runs.
 
 The query runs in the active database ("Active database ▾" above the editor). Name another database in full:
