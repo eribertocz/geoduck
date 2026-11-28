@@ -249,7 +249,9 @@ class ProController:
     def set_visible(self, visible: bool) -> None:
         shell = self.shell
         if shell is self.window and self.window.isMinimized():
+            # Minimizada sigue «visible» para Qt y el botón llega desmarcado: un clic debe traerla de vuelta.
             self.window.showNormal()
+            visible = True
         if not visible:
             shell.hide()
             return
