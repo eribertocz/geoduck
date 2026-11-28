@@ -250,7 +250,7 @@ class GeoDuckPlugin:
         self.action.setCheckable(True)
         self.action.setToolTip(tr("Show or hide GeoDuck"))
         # `triggered` (clic del usuario), no `toggled`: sincronizar la marca no muestra ni oculta nada
-        self.action.triggered.connect(self.workspace.set_visible)
+        self.action.triggered.connect(self._toggle)
         for shell in (self.workspace.window, self.workspace.dock):
             shell.shown_changed.connect(lambda _shown: self._sync_action())
         self.iface.addPluginToDatabaseMenu(tr("&GeoDuck"), self.action)
@@ -283,6 +283,11 @@ class GeoDuckPlugin:
         self.drop_handler = PlacesDropHandler(lambda: self.content)
         if hasattr(self.iface, "registerCustomDropHandler"):
             self.iface.registerCustomDropHandler(self.drop_handler)
+
+    def _toggle(self, visible: bool) -> None:
+        if self.workspace is not None:
+            self.workspace.set_visible(visible)
+        self._sync_action()
 
     def _sync_action(self) -> None:
         if self.action is not None and self.workspace is not None:
