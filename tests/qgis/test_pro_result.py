@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import QItemSelectionModel, Qt
+from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 
 from geoduck.domain.filters import EXCLUDE, FILTER
@@ -23,7 +24,7 @@ from tests.qgis.test_pro_query import (
     recovery_dir,  # noqa: F401 - borra los workspaces en el hilo principal
     workspace,
 )
-from tests.qgis.test_pro_table import coordinator, loaded, open_table, run  # noqa: F401
+from tests.qgis.test_pro_table import coordinator, counted, loaded, open_table, run  # noqa: F401
 
 pytestmark = pytest.mark.qgis
 
@@ -225,3 +226,25 @@ def test_the_result_folds_and_the_editor_takes_the_whole_height(lecturas):
     page.toggle_result()
     page.split.moveSplitter(sum(sizes) - 300, 1)
     assert int(QgsSettings().value("geoduck/pro/result_height")) == page.split.sizes()[1]
+
+
+def test_typing_in_a_filter_box_keeps_the_column_in_view_and_its_width(coordinator):  # noqa: F811
+    columns = ", ".join(f"'v' || (range % 7) AS c{i}" for i in range(30))
+    run(coordinator, f"CREATE TABLE ancha AS SELECT range AS id, {columns} FROM range(500);")
+    _ws, page = open_table(coordinator, "ancha")
+    assert wait_for(lambda: loaded(page))
+    grid = page.data.grid
+    grid.setColumnWidth(30, 300)  # el usuario la ensanchó
+    bar = grid.horizontalScrollBar()
+    bar.setValue(bar.maximum())
+    QApplication.processEvents()
+    x = bar.value()
+    box = page.header.boxes["c29"]
+    box.setFocus()
+    QTest.keyClicks(box, "v")
+    assert wait_for(lambda: page.browse.box("c29") == "v")
+    QTest.keyClicks(box, "1")  # se sigue escribiendo mientras llega el resultado de «v»
+    assert wait_for(lambda: page.browse.box("c29") == "v1" and loaded(page) and counted(page))
+    QApplication.processEvents()
+    assert box.text() == "v1" and box.isVisible() and box.hasFocus()
+    assert bar.value() == x and grid.columnWidth(30) == 300
