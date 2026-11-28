@@ -489,6 +489,24 @@ def test_attach_dialog_builds_requests(qgis_app, tmp_path):
     assert dialog.request == AttachRequest("/datos/x.duckdb", RO, OpenAction.OPEN_EXISTING, "Mi base")
 
 
+def test_memory_as_the_path_opens_a_database_in_memory_in_the_same_dialog(qgis_app):
+    from geoduck.ui.attach_dialog import AttachDialog
+
+    dialog = AttachDialog(OpenAction.OPEN_EXISTING, memory_alias="memory_2")
+    assert dialog.memory_help.text() == "Escribe :memory: para una base sin archivo."
+    dialog.path_edit.setText(" :MEMORY: ")
+    assert dialog.ok_button.isEnabled() and not dialog.path_hint.text()  # sin archivo que buscar
+    assert not dialog.readonly_check.isVisibleTo(dialog) and not dialog.access_help.isVisibleTo(dialog)
+    assert dialog.memory_help.text() == "En memoria, sin archivo: sus tablas se pierden al cerrar la sesión."
+    assert dialog.alias_edit.placeholderText() == "memory_2"  # el siguiente alias libre
+    assert dialog.build_request() == AttachRequest("", RW, OpenAction.IN_MEMORY, "memory_2")
+    dialog.alias_edit.setText("borrador")
+    assert dialog.build_request().alias == "borrador"
+    dialog.path_edit.setText("/datos/x.duckdb")
+    assert dialog.readonly_check.isVisibleTo(dialog) and dialog.access is RO
+    assert not AttachDialog(OpenAction.CREATE_NEW).memory_help.isVisibleTo(dialog)  # solo en «Abrir base»
+
+
 def test_about_shows_version_license_links_and_components(plugin):
     from geoduck import __version__
     from geoduck.ui.about_dialog import AboutDialog, version_text

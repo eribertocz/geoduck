@@ -14,7 +14,8 @@ GeoDuck propone otro.
 ## Crear una base
 
 - **Crear base…**: un archivo nuevo. GeoDuck nunca sobrescribe uno que ya existe.
-- **Nueva base en memoria…**: sin archivo. Se pierde al cerrar la sesión, salvo que la guardes como archivo.
+- **En memoria:** en **Abrir base…** escribe `:memory:` como archivo. No tiene archivo: se pierde al cerrar la
+  sesión, salvo que la guardes como archivo.
 
 ## Usar como base activa
 

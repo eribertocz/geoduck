@@ -4,6 +4,8 @@
 Construye una `AttachRequest`; las comprobaciones de archivo las hace el motor en su operación serial. El
 diálogo solo avisa antes (archivo que no existe al abrir, o que ya existe al crear), sin crear ni tocar nada.
 
+Con `:memory:` como ruta, una base en memoria (sin archivo, siempre de lectura y escritura).
+
 Casilla «Solo lectura», marcada por defecto; etiqueta «Alias»
 con el alias por defecto a la vista. «Crear» no muestra acceso: una base nueva siempre es de lectura y
 escritura, y GeoDuck nunca sobrescribe un archivo (el motor lo rechaza igualmente).
@@ -35,6 +37,8 @@ from geoduck.ui.i18n import N_, tr
 
 READ_ONLY_HELP = N_("Several programs can open it at the same time; none can modify it.")
 READ_WRITE_HELP = N_("Only GeoDuck can open the file while it is attached.")
+#: Escrito como ruta en «Abrir base», una base en memoria (sin archivo), como en DuckDB.
+MEMORY_PATH = ":memory:"
 
 
 def _file_filter() -> str:
@@ -48,10 +52,17 @@ def default_alias(path: str) -> str:
     return stem if dot and stem else name
 
 
+def is_memory_path(path: str) -> bool:
+    return path.strip().lower() == MEMORY_PATH
+
+
 class AttachDialog(QDialog):
-    def __init__(self, action: OpenAction, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, action: OpenAction, parent: QWidget | None = None, *, memory_alias: str = "memory"
+    ) -> None:
         super().__init__(parent)
         self._action = action
+        self._memory_alias = memory_alias
         self.request: AttachRequest | None = None
         self.creating = action is OpenAction.CREATE_NEW
         self.setWindowTitle(tr("Create database") if self.creating else tr("Open database"))
@@ -97,6 +108,9 @@ class AttachDialog(QDialog):
         self.path_hint.setProperty("geoduck", "error-text")
         self.path_hint.setWordWrap(True)
         self.path_hint.hide()
+        self.memory_help = QLabel()
+        self.memory_help.setProperty("geoduck", "muted")
+        self.memory_help.setWordWrap(True)
 
         self.readonly_check = QCheckBox(tr("Read only"))
         self.readonly_check.setChecked(True)
@@ -113,6 +127,7 @@ class AttachDialog(QDialog):
         form.addRow(tr("File"), path_row)
         form.addRow("", self.path_hint)
         if not self.creating:
+            form.addRow("", self.memory_help)
             form.addRow("", self.readonly_check)
             form.addRow("", self.access_help)
         form.addRow(tr("Alias"), self.alias_edit)
@@ -133,22 +148,34 @@ class AttachDialog(QDialog):
         return buttons
 
     @property
+    def in_memory(self) -> bool:
+        return not self.creating and is_memory_path(self.path_edit.text())
+
+    @property
     def access(self) -> AccessMode:
-        if self.creating or not self.readonly_check.isChecked():
+        if self.creating or self.in_memory or not self.readonly_check.isChecked():
             return AccessMode.READ_WRITE
         return AccessMode.READ_ONLY
 
     def _refresh(self) -> None:
         path = self.path_edit.text().strip()
-        alias = default_alias(path) if path else ""
+        memory = self.in_memory
+        alias = self._memory_alias if memory else default_alias(path) if path else ""
         self.alias_edit.setPlaceholderText(alias or tr("The file name, if left empty"))
+        self.memory_help.setText(
+            tr("In memory, no file: its tables are lost when the session closes.")
+            if memory
+            else tr("Type {} for a database without a file.").format(MEMORY_PATH)
+        )
+        self.readonly_check.setVisible(not self.creating and not memory)
+        self.access_help.setVisible(not self.creating and not memory)
         self.access_help.setText(
             tr(READ_ONLY_HELP) if self.access is AccessMode.READ_ONLY else tr(READ_WRITE_HELP)
         )
         problem = ""  # aviso previo; el motor vuelve a comprobarlo en su operación serial
         if path and self.creating and os.path.exists(path):
             problem = tr("A file with that name already exists: GeoDuck does not overwrite it.")
-        elif path and not self.creating and not os.path.isfile(path):
+        elif path and not self.creating and not memory and not os.path.isfile(path):
             problem = tr("The file cannot be found.")
         self.path_hint.setText(problem)
         self.path_hint.setVisible(bool(problem))
@@ -170,6 +197,8 @@ class AttachDialog(QDialog):
 
     def build_request(self) -> AttachRequest:
         alias = self.alias_edit.text().strip() or None
+        if self.in_memory:
+            return AttachRequest("", AccessMode.READ_WRITE, OpenAction.IN_MEMORY, alias or self._memory_alias)
         return AttachRequest(self.path_edit.text().strip(), self.access, self._action, alias)
 
     def _accept(self) -> None:
@@ -182,6 +211,8 @@ class AttachDialog(QDialog):
         self.accept()
 
     @classmethod
-    def ask(cls, action: OpenAction, parent: QWidget | None = None) -> AttachRequest | None:
-        dialog = cls(action, parent)
+    def ask(
+        cls, action: OpenAction, parent: QWidget | None = None, *, memory_alias: str = "memory"
+    ) -> AttachRequest | None:
+        dialog = cls(action, parent, memory_alias=memory_alias)
         return dialog.request if dialog.exec() else None

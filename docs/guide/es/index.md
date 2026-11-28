@@ -17,8 +17,8 @@ El punto del logo se pone verde: la sesión está activa. Ya tienes una base en 
 ## 2. Abre una base
 
 - **Una base que ya tienes:** «+» › **Abrir base…** y elige un archivo `.duckdb`.
-- **Una base nueva:** «+» › **Crear base…** (un archivo) o **Nueva base en memoria…** (se pierde al cerrar la
-  sesión).
+- **Una base nueva:** «+» › **Crear base…** (un archivo), o **Abrir base…** con `:memory:` como archivo (en
+  memoria: se pierde al cerrar la sesión).
 - **Archivos sueltos** (CSV, Parquet, GeoPackage, Shapefile…): arrástralos sobre una base del explorador.
   Ver [Importar archivos](import-files.md).
 

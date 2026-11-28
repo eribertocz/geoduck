@@ -3,7 +3,7 @@
 **Estado:** baseline para Alpha · **IDs:** GD-SES-001..005
 
 ## 1. Semántica general
-GeoDuck mantiene una **única sesión lógica** con conexión física raíz en `:memory:`. Seleccionar archivo persistente en la pantalla de inicio equivale a adjuntarlo con alias asignado a su base principal visible. El archivo se puede `DETACH` sin cerrar todo GeoDuck. **Base activa** (#168, propietario, 2026-11-13): una sola por sesión, la predeterminada de DuckDB (`USE`); el explorador y el editor muestran la misma. Cualquier base se puede `DETACH`, también la `memory` del inicio, **salvo la activa y la última**: siempre queda una. Se puede adjuntar una base nueva en memoria con alias (`ATTACH ':memory:' AS <alias>`; por defecto `memory`, o `memory_2`… si ya existe).
+GeoDuck mantiene una **única sesión lógica** con conexión física raíz en `:memory:`. Seleccionar archivo persistente en la pantalla de inicio equivale a adjuntarlo con alias asignado a su base principal visible. El archivo se puede `DETACH` sin cerrar todo GeoDuck. **Base activa** (#168, propietario, 2026-11-13): una sola por sesión, la predeterminada de DuckDB (`USE`); el explorador y el editor muestran la misma. Cualquier base se puede `DETACH`, también la `memory` del inicio, **salvo la activa y la última**: siempre queda una. Se puede adjuntar una base nueva en memoria con alias (`ATTACH ':memory:' AS <alias>`; por defecto `memory`, o `memory_2`… si ya existe): en el mismo diálogo «Abrir base…», escribiendo `:memory:` como ruta; no hay una entrada aparte (propietario, 2026-11-28).
 
 La sesión es propiedad exclusiva del Session Worker; no existe un objeto `con` compartido simultáneamente con la UI. Los objetos temporales persisten durante la sesión; al salir de ella desaparecen.
 

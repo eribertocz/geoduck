@@ -18,8 +18,8 @@ ready to use.
 ## 2. Open a database
 
 - **One you already have:** "+" › **Open database…** and choose a `.duckdb` file.
-- **A new one:** "+" › **Create database…** (a file) or **New database in memory…** (lost when the session
-  closes).
+- **A new one:** "+" › **Create database…** (a file), or **Open database…** with `:memory:` as the file (in
+  memory: lost when the session closes).
 - **Loose files** (CSV, Parquet, GeoPackage, Shapefile…): drag them onto a database in the explorer. See
   [Import files](import-files.md).
 
