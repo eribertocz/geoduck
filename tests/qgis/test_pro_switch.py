@@ -91,6 +91,20 @@ def test_the_plugin_opens_workspace_pro_in_its_own_window_and_registers_the_map_
     assert iface.drop_handlers == [] and iface.docks == []
 
 
+def test_the_menu_brings_back_a_minimized_window_with_one_click(plugin, qgis_app):
+    item = plugin()
+    item.action.trigger()
+    window = item.workspace.window
+    window.showMinimized()
+    qgis_app.processEvents()
+    item.action.trigger()
+    qgis_app.processEvents()
+    assert window.isVisible() and not window.isMinimized() and item.action.isChecked()
+    item.action.trigger()
+    assert window.isHidden() and not item.action.isChecked()
+    item.unload()
+
+
 def test_window_and_panel_share_the_session_hiding_never_closes_it_and_the_mode_is_remembered(plugin, iface):
     item = plugin()
     coordinator = start(item)

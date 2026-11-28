@@ -18,7 +18,7 @@ QGIS: **SQL espacial y capas en los dos sentidos.**
 | Versión | Alcance | Estado |
 |---|---|---|
 | `0.10.0a1` | Workspace profesional, editor SQL, QGIS ↔ DuckDB en los dos sentidos | Publicada (pre-release) |
-| `0.11.0a1` — Rendimiento | Resultados bajo demanda, cancelar todo, memoria acotada, interfaz sin bloqueos | En desarrollo (G10) |
+| `0.11.0a1` — Rendimiento | Resultados bajo demanda, cancelar todo, memoria acotada, interfaz sin bloqueos, índice espacial, guía de uso ([números medidos](docs/performance.md)) | Lista para publicar (G10; el tag y la release, el propietario) |
 
 El alcance completo por fases está en [`spec/docs/roadmap.md`](spec/docs/roadmap.md); las versiones publicadas,
 en [Releases](https://github.com/eribertocz/geoduck/releases).

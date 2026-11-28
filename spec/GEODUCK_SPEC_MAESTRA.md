@@ -2065,8 +2065,12 @@ GeoDuck existe para el rendimiento (decisión del propietario, 2026-11-07). G10 
 
 ## 7. Publicación (GD-PERF-006)
 
-`docs/performance.md`: tabla por operación, tamaño, versión de QGIS y DuckDB, y equipo, con mediana y p95, enlazada
-desde «Acerca de». Solo números medidos con el banco de §2.
+`docs/performance.md`: tabla por operación, tamaño, versión de QGIS y DuckDB, y equipo, con la mediana, el máximo y
+la pausa máxima de la interfaz. Solo números medidos con el banco de §2. «Acerca de» enlaza a «Rendimiento ›
+Números medidos» de la guía (dentro del complemento; #150), con el resumen. **Regresiones (#176):** en cada PR, la
+versión nueva contra la base, en el mismo runner y en rondas alternadas; falla con más del 20 % y más de 50 ms en
+una operación (`tools/perf/compare.py`). Nunca contra números guardados: los runners varían 30–180 % entre
+corridas. Windows: la guía manual `docs/certification/performance-windows.md`.
 
 ## 8. Resultados de consulta bajo demanda (GD-PERF-007; propietario, 2026-11-12)
 
