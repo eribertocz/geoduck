@@ -525,3 +525,20 @@ def test_a_connected_layer_from_memory_goes_to_a_file_database_inside_duckdb(coo
     coordinator.read_rows("SELECT count(*) FROM db.main.pozos", 1, rows.append)
     assert wait_for(lambda: rows, TIMEOUT)
     assert rows[0].rows[0][0] in (1000, "1000")
+
+
+def test_sending_again_does_not_repeat_the_options(coordinator):
+    """«Solo seleccionadas» y «Más opciones» se veían una vez más en cada envío: la ventana se reusa."""
+    from qgis.PyQt.QtWidgets import QPushButton
+
+    ws = workspace(coordinator)
+    counts = []
+    for n in range(3):
+        ws.send_layers([points(f"otra_vez_{n}", 3).id()], (DB, "main"))
+        to_step_two(ws)
+        window = ws.to_duckdb.window
+        more = [b for b in window.findChildren(QPushButton) if b.text() == tr("More options")]
+        assert len(more) == 1, n
+        counts.append(window.options.count())
+        window.hide()
+    assert counts == [counts[0]] * 3

@@ -1079,7 +1079,7 @@ class QueryPage(QWidget):
             self.range_label.setText("")
             self.column_summary.setText("")
             return
-        shown = data.model.rowCount()
+        shown = min(data.model.rowCount(), data.model.full)  # las que se ven enteras
         if data.total is None and not result.statement.replayable:
             # una escritura (`DELETE … RETURNING`) no se repite: ni se cuenta ni se pasa de página
             # (#170: se recorren solo las filas que trajo la ejecución)

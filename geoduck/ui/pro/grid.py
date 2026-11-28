@@ -232,6 +232,8 @@ class PageModel(QAbstractTableModel):
         self.count = 0
         self.top = 0
         self.visible = PAGE
+        #: Las que se ven enteras (la de abajo puede verse a medias): al final, la última fila queda entera.
+        self.full = PAGE
         self.mono = ui_font(METRICS.font_small, mono=True)
         self.italic = ui_font()
         self.italic.setItalic(True)
@@ -325,15 +327,17 @@ class PageModel(QAbstractTableModel):
         self._changed()
 
     def set_count(self, count: int) -> None:
-        self.set_view(self.top, self.visible, count=max(0, count))
+        self.set_view(self.top, self.visible, count=max(0, count), full=self.full)
 
-    def set_view(self, top: int, visible: int, *, count: int | None = None) -> None:
-        """Mueve la ventana: `top` es la primera fila absoluta que se ve. Si cambia el número de filas que
-        se ven, el modelo se rehace; si no, solo se repinta."""
+    def set_view(self, top: int, visible: int, *, count: int | None = None, full: int | None = None) -> None:
+        """Mueve la ventana: `top` es la primera fila absoluta que se ve. `visible` cuenta también la de
+        abajo que se ve a medias; `full`, solo las enteras: la última fila nunca queda cortada abajo. Si
+        cambia el número de filas que se ven, el modelo se rehace; si no, solo se repinta."""
         count = self.count if count is None else count
-        top = max(0, min(top, max(0, count - visible)))
+        full = max(1, min(visible, full if full is not None else visible))
+        top = max(0, min(top, max(0, count - full)))
         before = self.rowCount()
-        self.top, self.visible, self.count = top, max(1, visible), count
+        self.top, self.visible, self.count, self.full = top, max(1, visible), count, full
         self._texts = {}
         if self.rowCount() != before:
             self.beginResetModel()
@@ -1168,7 +1172,7 @@ class DataGrid(QWidget):
         self, browse: Browse, rows: tuple[tuple[object, ...], ...], start: int = 0, count: int | None = None
     ) -> None:
         self.model.set_page(browse.columns, rows, start, count)
-        self.model.set_view(start, self._visible_rows())
+        self._set_view(start)
         self._update_bar_range()
         fit_columns(self.grid, self.model)
         self.header.set_columns(dict(browse.boxes))
@@ -1225,10 +1229,18 @@ class DataGrid(QWidget):
         height = self.grid.viewport().height()
         return max(1, (height + METRICS.row - 1) // METRICS.row) if height > 0 else PAGE
 
+    def _full_rows(self) -> int:
+        """Las filas que caben enteras: al final de la tabla, la última se ve completa."""
+        height = self.grid.viewport().height()
+        return max(1, height // METRICS.row) if height > 0 else PAGE
+
+    def _set_view(self, top: int) -> None:
+        self.model.set_view(top, self._visible_rows(), full=self._full_rows())
+
     def _update_bar_range(self) -> None:
         """La barra va de la primera fila a la última que puede quedar arriba; con más de mil millones de
         filas, cada paso de la barra son varias filas."""
-        last_top = max(0, self.model.count - max(1, self.model.visible - 1))
+        last_top = max(0, self.model.count - self.model.full)
         self._scale = max(1, -(-last_top // SCROLL_MAX))
         self.vbar.blockSignals(True)
         self.vbar.setRange(0, -(-last_top // self._scale))
@@ -1247,7 +1259,7 @@ class DataGrid(QWidget):
         absolute = self.model.top + current.row() if current.isValid() else -1
         column = max(0, current.column())
         before = self.model.top
-        self.model.set_view(top, self._visible_rows())
+        self._set_view(top)
         if self.model.top == before and not from_bar:
             return
         if not from_bar:
@@ -1307,7 +1319,7 @@ class DataGrid(QWidget):
                     self.scroll_to(self.model.top - round(steps * WHEEL_ROWS))
                     return True
             elif kind == QEvent.Type.Resize and self.model.columns:
-                self.model.set_view(self.model.top, self._visible_rows())
+                self._set_view(self.model.top)
                 self._update_bar_range()
                 self._fetch_timer.start()
         elif watched is self.grid and kind == QEvent.Type.KeyPress:
@@ -1318,11 +1330,10 @@ class DataGrid(QWidget):
         key = event.key()
         current = self.grid.currentIndex()
         row = current.row() if current.isValid() else 0
-        rows = self.model.rowCount()
-        page = max(1, self.model.visible - 1)
+        page = max(1, self.model.full - 1)
         ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         target = None
-        if key == Qt.Key.Key_Down and row >= rows - 2:
+        if key == Qt.Key.Key_Down and row >= self.model.full - 1:
             target = self.model.top + 1
         elif key == Qt.Key.Key_Up and row == 0 and self.model.top > 0:
             target = self.model.top - 1
@@ -1738,8 +1749,10 @@ class DataGrid(QWidget):
     # -- detalle --------------------------------------------------------------------------------------
 
     def set_detail_open(self, open_: bool) -> None:
+        """Al abrirlo sin celda elegida (se desplazó lejos de ella), muestra la primera fila que se ve."""
         self.detail_open = open_
-        self._row_changed(self.grid.currentIndex().row())
+        current = self.grid.currentIndex()
+        self._row_changed(current.row() if current.isValid() else 0)
 
     def _row_changed(self, row: int) -> None:
         browse = self.browse

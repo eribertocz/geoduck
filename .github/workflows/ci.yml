@@ -93,10 +93,11 @@ jobs:
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: qgis
-          # QGIS 3.34 en conda-forge: sin fijar draco, el solver elige una que no coincide con libdraco.so.9.
+          # QGIS 3.34 y 4.2 en conda-forge: sin fijar draco, el solver elige una (1.5.9, 2026-11) que no trae
+          # el libdraco.so.9 con el que se compilaron.
           create-args: >-
             qgis=${{ matrix.qgis }} pip
-            ${{ startsWith(matrix.qgis, '3.34') && 'draco=1.5.7' || '' }}
+            ${{ (startsWith(matrix.qgis, '3.34') || startsWith(matrix.qgis, '4.2')) && 'draco=1.5.7' || '' }}
           cache-environment: true
       - run: python -m pip install "pytest>=8" "duckdb==${{ matrix.duckdb }}" "pyarrow==25.0.1"
       - run: python -c "from qgis.core import Qgis; print(Qgis.version())"
@@ -147,7 +148,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: qgis
-          create-args: qgis=${{ matrix.qgis }} pip
+          create-args: qgis=${{ matrix.qgis }} pip ${{ startsWith(matrix.qgis, '4.2') && 'draco=1.5.7' || '' }}
           cache-environment: true
       - run: python -m pip install "pytest>=8" "duckdb==2.0.0" "pyarrow==25.0.1"
       - name: estrés
