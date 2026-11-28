@@ -601,7 +601,18 @@ class AddLayers:
 
     def _drop_send_dialog(self) -> None:
         window = self.window
-        if window is not None and window.send_dialog is not None:
+        if window is None:
+            return
+        # Las opciones del diálogo anterior («Solo seleccionadas», «Más opciones»…) pasaron a la ventana:
+        # fuera, o se suman en cada envío.
+        while window.options.count():
+            item = window.options.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.hide()
+                widget.setParent(None)
+                widget.deleteLater()
+        if window.send_dialog is not None:
             window.send_dialog.on_target = None
             window.send_dialog.hide()
             window.send_dialog.setParent(None)

@@ -120,7 +120,8 @@ def test_a_million_rows_first_page_quickly_then_the_total(consumidores):
     assert 0 < shown <= PAGE and shown == min(page.model.visible, PAGE)
     assert wait_for(lambda: counted(page))
     assert page.total == 1_000_000
-    assert page.range_label.text() == tr("Rows {} of {}").format(f"1–{shown}", "1 000 000")
+    # el pie cuenta las filas que se ven enteras (la de abajo puede verse a medias)
+    assert page.range_label.text() == tr("Rows {} of {}").format(f"1–{page.model.full}", "1 000 000")
     assert [c.name for c in page.model.columns] == ["id", "nombre", "kwh"]
     assert page.model.headerData(0, 2) == "1"  # número de fila (vertical)
     # el tipo ya no va al lado del nombre: icono de su familia y el tipo completo en la ayuda (2026-11-13)
@@ -288,7 +289,21 @@ def test_scrolling_reads_blocks_by_position_and_never_keeps_the_whole_table(cons
     assert page.offset == 999_003  # 3 filas por paso de la rueda
     assert wait_for(lambda: data.model.row(0) is not None and data.model.row(0)[0] == 999_003, 10)
     data.scroll_to(10**12)  # más allá del final: la última ventana
-    assert page.offset == 1_000_000 - data.model.visible
+    assert page.offset == 1_000_000 - data.model.full  # la última fila, entera abajo
     data.scroll_to(0)
     assert wait_for(lambda: data.model.row(0) is not None and data.model.row(0)[0] == 0, 10)
     assert len(data.model.blocks) <= KEEP_BLOCKS + 1  # nunca la tabla entera en la interfaz
+
+
+def test_at_the_end_the_last_row_is_whole_and_not_cut_off(consumidores):
+    """La última fila de la vista no queda cortada (ni escondida) bajo el borde de la grilla."""
+    _ws, page = open_table(consumidores, "consumidores")
+    assert wait_for(lambda: loaded(page) and counted(page))
+    data = page.data
+    data.scroll_to(10**12)
+    model = data.model
+    assert model.top + model.full == page.total  # la última fila es la última que se ve entera
+    last = model.full - 1
+    rect = page.grid.visualRect(model.index(last, 0))
+    assert rect.bottom() < page.grid.viewport().height()
+    assert wait_for(lambda: model.row(last) is not None and model.row(last)[0] == page.total - 1, 10)

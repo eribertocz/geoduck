@@ -482,7 +482,8 @@ def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coord
     assert wait_for(lambda: done(coordinator, page) and page.results)
     shown = page.model.rowCount()  # #170: las filas que se ven; sin ‹ ›
     assert page.model.row(0) == (0, "v0") and not hasattr(page, "next_button")
-    first = tr("Rows {} of {}").format(f"1–{shown}", "250")
+    assert shown >= page.model.full
+    first = tr("Rows {} of {}").format(f"1–{page.model.full}", "250")
     assert wait_for(lambda: page.range_label.text().startswith(first))
     assert page.summary.text() == ""  # el resumen está en el pie
     # el detalle: la fila elegida, con su número real

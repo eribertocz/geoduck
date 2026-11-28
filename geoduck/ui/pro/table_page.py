@@ -421,7 +421,7 @@ class TablePage(QWidget):
         self.data.go(offset)
 
     def _update_range(self) -> None:
-        shown = self.model.rowCount()
+        shown = min(self.model.rowCount(), self.model.full)  # las que se ven enteras
         browse = self.browse
         if browse is None or self.body.currentIndex() != GRID:
             self.range_label.setText("" if browse is None or not browse.filtered else self.range_label.text())
