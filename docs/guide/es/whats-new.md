@@ -1,6 +1,6 @@
 # Novedades
 
-## 0.11.0a1 (en preparación)
+## 0.11.0a1
 
 - **Índice espacial** desde el clic derecho de una tabla.
 - **La extensión espacial viene cargada** al iniciar.

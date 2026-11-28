@@ -350,6 +350,10 @@ def main() -> None:  # noqa: PLR0915 - todas las medidas, en orden
     (out / f"{name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     plugin.unload()
+    # Al volver de `main`, Python destruiría los objetos de QGIS en mal orden y Qt 5 se cae (las medidas ya
+    # están escritas): se sale aquí, con éxito.
+    sys.stdout.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":
