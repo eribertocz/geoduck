@@ -486,7 +486,9 @@ def test_a_long_result_has_pages_its_total_and_the_row_detail_like_a_table(coord
     first = tr("Rows {} of {}").format(f"1–{page.model.full}", "250")
     assert wait_for(lambda: page.range_label.text().startswith(first))
     assert page.summary.text() == ""  # el resumen está en el pie
-    # el detalle: la fila elegida, con su número real
+    # el detalle: plegado; con ◫, la fila elegida con su número real
+    assert not page.detail.isVisible() and not page.detail_button.isChecked()
+    page.detail_button.setChecked(True)
     assert page.detail.isVisible() and page.detail.title.text() == tr("Row {}").format("1")
     page.go(100)  # desplazarse: repite la consulta con ventana para el bloque que falta
     assert wait_for(lambda: page.model.offset == 100 and page.model.row(0) is not None)

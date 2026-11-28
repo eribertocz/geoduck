@@ -886,7 +886,7 @@ class DataGrid(QWidget):
         self._scale = 1
         self.base_total: int | None = None
         self.replayable = True
-        self.detail_open = True
+        self.detail_open = False  # plegado: se abre con ◫
         self.filters_open = always_show_bar
         self.pending = False
         self.closed = False

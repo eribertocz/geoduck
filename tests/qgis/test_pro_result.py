@@ -142,9 +142,12 @@ def test_ctrl_c_of_whole_columns_is_read_by_duckdb_and_too_many_offers_export(le
     assert QApplication.clipboard().text() == "cliente 2"
 
 
-def test_the_detail_follows_the_chosen_cell_without_a_close_button(lecturas):
+def test_the_detail_starts_folded_and_follows_the_chosen_cell_without_a_close_button(lecturas):
     _ws, page = open_table(lecturas, "lecturas")
-    assert wait_for(lambda: loaded(page) and page.detail.isVisible())
+    assert wait_for(lambda: loaded(page))
+    assert not page.detail.isVisible() and not page.detail_button.isChecked()  # plegado al abrir
+    page.detail_button.click()
+    assert page.detail.isVisible()
     page.grid.setCurrentIndex(page.model.index(4, 2))
     assert page.detail.title.text() == tr("Row {}").format(5)
     page.grid.setFocus()
