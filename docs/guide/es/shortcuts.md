@@ -13,8 +13,8 @@
 
 | Atajo | Qué hace |
 |---|---|
-| Ctrl+Intro | Ejecutar la selección o la sentencia marcada |
-| Ctrl+Shift+Intro | Ejecutar todo |
+| Ctrl+Intro | Ejecutar todo, o la selección |
+| Ctrl+Shift+Intro | Ejecutar la sentencia marcada |
 | Esc | Cancelar mientras corre |
 | Ctrl+J | Plegar o abrir el resultado |
 

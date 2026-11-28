@@ -103,7 +103,7 @@ def test_run_runs_the_statement_under_the_cursor_and_shows_its_rows(coordinator)
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 1 AS uno;\nSELECT range AS n FROM range(5);")
     page.editor.setCursorPosition(1, 3)
-    page.run_button.click()
+    page.statement_action.trigger()  # Ctrl+Shift+Enter
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert len(page.results) == 1
     assert [c.name for c in page.model.columns] == ["n"]
@@ -115,7 +115,7 @@ def test_run_runs_the_statement_under_the_cursor_and_shows_its_rows(coordinator)
 def test_all_shows_one_result_tab_per_statement_with_rows(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "CREATE TABLE t AS SELECT 1 AS a;\nSELECT * FROM t;\nSELECT 2 AS b, 3 AS c;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 3)
     assert page.result_tabs.isVisible() and page.result_tabs.count() == 2
     assert [c.name for c in page.model.columns] == ["b", "c"]  # la última, elegida
@@ -137,7 +137,7 @@ def test_selection_runs_only_the_selection(coordinator):
 def test_an_error_shows_messages_with_its_line_and_go_moves_the_cursor(coordinator):
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 1;\nSELECT no_existe FROM range(1);\nSELECT 3;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.view.current == MESSAGES
     assert [ok for ok, _ in page._log] == [True, False]
@@ -234,7 +234,7 @@ def test_ctrl_enter_wins_over_another_shortcut_with_the_same_keys(coordinator):
     _ctrl_enter(page)
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert hits == []
-    _ctrl_enter(page, shift=True)  # Ctrl+Shift+Enter: todo
+    _ctrl_enter(page, shift=True)  # Ctrl+Shift+Enter: la sentencia
     assert wait_for(lambda: done(coordinator, page) and page.results)
 
 
@@ -269,7 +269,7 @@ def test_a_syntax_error_opens_messages_and_marks_the_editor(coordinator):
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.view.current == RESULT
     page.editor.setText("SELECT range AS zona\nFROM range(3)\nGROUP zona;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page._log)
     assert page.view.current == MESSAGES
     marks = page.editor.markersAtLine(2)
@@ -292,7 +292,7 @@ def test_each_statement_gets_its_mark(coordinator):
 
     ws = workspace(coordinator)
     page = new_query(ws, "SELECT 1;\n\nSELECT no_existe FROM range(1);\n\nSELECT 3;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.results)
     assert page.editor.markersAtLine(0) & (1 << pro_editor.OK_MARK)
     assert page.editor.markersAtLine(2) & (1 << pro_editor.ERROR_MARK)
@@ -530,10 +530,9 @@ def test_a_short_result_is_not_counted_again_and_a_write_has_no_pages(coordinato
     assert wait_for(lambda: page.range_label.text().startswith(expected))
 
 
-def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
-    """Un solo «Ejecutar»; la barra a la izquierda y el botón dicen qué correrá
-    (la sentencia del cursor, también en una línea en blanco, igual con DuckDB 1.5 y 2.0); con selección,
-    «Ejecutar selección»; «Ejecutar todo» en «⋯» y con Ctrl+Shift+Enter."""
+def test_ctrl_enter_runs_everything_or_the_selection_and_ctrl_shift_enter_the_statement(coordinator):
+    """Ctrl+Enter y ▶ ejecutan todo (con selección, solo lo seleccionado);
+    Ctrl+Shift+Enter, la sentencia marcada (la del cursor, también en una línea en blanco: la anterior)."""
     from geoduck.ui.pro.editor import MARK, PLAY
 
     ws = workspace(coordinator)
@@ -542,25 +541,27 @@ def test_one_run_button_marks_what_will_run_and_runs_exactly_that(coordinator):
     marked = lambda: [ln for ln in range(page.editor.lines()) if page.editor.markersAtLine(ln) & (1 << MARK)]  # noqa: E731
     page.editor.setCursorPosition(1, 0)  # la línea en blanco entre las dos: la anterior
     page.mark_statement()
-    assert marked() == [0] and page.run_button.accessibleName() == tr("Run · line {}").format(1)
-    page.run_button.click()
+    assert marked() == [0] and page.run_button.accessibleName() == tr("Run all ({} statements)").format(2)
+    tip = page.run_button.toolTip()
+    assert tr("Run all ({} statements)").format(2) + " · Ctrl+Enter" in tip
+    assert tr("Run statement · line {}").format(1) + " · Ctrl+Shift+Enter" in tip
+    _ctrl_enter(page, shift=True)
     assert wait_for(lambda: done(coordinator, page) and page.results)
-    assert [c.name for c in page.model.columns] == ["uno"]
+    assert len(page.results) == 1 and [c.name for c in page.model.columns] == ["uno"]
     page.editor.setCursorPosition(3, 2)
     page.mark_statement()
-    assert marked() == [2, 3] and page.run_button.accessibleName() == tr("Run · line {}").format(3)
-    assert tr("Run all ({} statements) · Ctrl+Shift+Enter").format(2) in page.run_button.toolTip()
-    assert page.editor.markersAtLine(2) & (1 << PLAY)  # ▶ en el margen, primera línea de la sentencia
+    assert marked() == [2, 3] and page.editor.markersAtLine(2) & (1 << PLAY)  # ▶ en el margen
+    assert page.statement_action.text().startswith(tr("Run statement · line {}").format(3))
+    _ctrl_enter(page)
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)  # todo
     page.run_button.click()
-    assert wait_for(lambda: done(coordinator, page) and page.results[0].statement.text.startswith("SELECT 2"))
-    assert [c.name for c in page.model.columns] == ["dos"]
-    page.editor.setSelection(0, 0, 0, 8)
+    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)  # ▶ = Ctrl+Enter
+    page.editor.setSelection(2, 0, 3, 14)  # la segunda sentencia, seleccionada
     page.mark_statement()
     assert marked() == [] and page.run_button.accessibleName() == tr("Run selection")
-    assert page.run_all_action.text().startswith(tr("Run all ({} statements)").format(2))
-    page.editor.setSelection(0, 0, 0, 0)
-    page.run_all_action.trigger()
-    assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)
+    _ctrl_enter(page)
+    assert wait_for(lambda: done(coordinator, page) and page.results)
+    assert len(page.results) == 1 and [c.name for c in page.model.columns] == ["dos"]
 
 
 def test_file_is_on_the_tab_right_click_and_run_all_is_in_the_editor_menu(coordinator, tmp_path):
@@ -585,10 +586,10 @@ def test_file_is_on_the_tab_right_click_and_run_all_is_in_the_editor_menu(coordi
     page.mark_statement()
     menu = page._context.build()
     actions = [a for a in menu.actions() if not a.isSeparator()]
-    assert actions[0].text().startswith(tr("Run · line {}").format(1))
-    assert actions[1] is page.run_all_action
+    assert actions[0].text() == tr("Run all ({} statements)").format(2) + "\tCtrl+Enter"
+    assert actions[1] is page.statement_action
     assert len(actions) > 2  # y debajo, el menú de siempre del editor
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and len(page.results) == 2)
 
 
@@ -740,7 +741,7 @@ def test_an_error_card_fixes_only_the_editor_text_and_copies_the_original(coordi
 
     ws = workspace(coordinator)
     page = new_query(ws, "CREATE TABLE lecturas AS SELECT 1.5 AS kwh;\nSELECT kwhh FROM lecturas;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.results)
     [card] = page.cards
     assert card.title.text() == tr("The column «{}» does not exist").format("kwhh")
@@ -764,7 +765,7 @@ def test_an_error_geoduck_does_not_recognize_shows_duckdbs_message_as_is(coordin
     """#189: el título es el texto de DuckDB, completo; sin pliegue, porque ya se ve todo."""
     ws = workspace(coordinator)
     page = new_query(ws, "ATTACH ':memory:' AS otra; USE otra; DETACH otra;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(coordinator, page) and page.cards)
     card = page.cards[-1]
     assert card.title.text().startswith(

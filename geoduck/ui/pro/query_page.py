@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Pestaña de consulta de Workspace Pro (workspace-pro-spec §5; GD-WSP-004; AT-WSP-005).
 
-Una sola barra fina: «▶ Ejecutar» (la sentencia bajo el cursor o la selección, Ctrl+Enter), «Todo»
-(Ctrl+Shift+Enter), «Cancelar», la base de la consulta y «⋯» (abrir, guardar, guardar como). Debajo, el
+Una sola barra fina: «▶ Ejecutar» (todo o la selección, Ctrl+Enter; la sentencia bajo el cursor,
+Ctrl+Shift+Enter), «Cancelar», la base de la consulta y «⋯» (abrir, guardar, guardar como). Debajo, el
 editor SQL de QGIS (con el autocompletado de G6 y los colores de GeoDuck) y el resultado, con un divisor que
 se arrastra: **Resultado** (la grilla de E3; una pestaña por sentencia con tabla, sin pestañas si es una) y
 **Mensajes** (✓ o ✕ por sentencia, con la línea y la palabra del error e «Ir»; ante un error se abre solo y el
@@ -221,7 +221,7 @@ class QueryPage(QWidget):
         # autocompletado abierta (#139); los atajos de abajo cubren el resto de la página (resultado, barra)
         self._run_keys = pro_editor.RunKeys(
             self.editor,
-            lambda every: self.execute(RunScope.ALL if every else RunScope.CURRENT),
+            lambda statement: self.execute(RunScope.CURRENT if statement else RunScope.ALL),
             self._escape_cancels,
         )
         self.editor.installEventFilter(self._run_keys)
@@ -282,10 +282,10 @@ class QueryPage(QWidget):
 
     def _shortcuts(self) -> None:
         for keys, slot in (
-            ("Ctrl+Return", lambda: self.execute(RunScope.CURRENT)),
-            ("Ctrl+Enter", lambda: self.execute(RunScope.CURRENT)),
-            ("Ctrl+Shift+Return", lambda: self.execute(RunScope.ALL)),
-            ("Ctrl+Shift+Enter", lambda: self.execute(RunScope.ALL)),
+            ("Ctrl+Return", lambda: self.execute(RunScope.ALL)),
+            ("Ctrl+Enter", lambda: self.execute(RunScope.ALL)),
+            ("Ctrl+Shift+Return", lambda: self.execute(RunScope.CURRENT)),
+            ("Ctrl+Shift+Enter", lambda: self.execute(RunScope.CURRENT)),
             ("Ctrl+S", self.save),
             ("Ctrl+J", self.toggle_result),
             ("Escape", self.cancel),
@@ -313,7 +313,7 @@ class QueryPage(QWidget):
         self.run_button.setFixedSize(RUN_SIZE, RUN_SIZE)
         self.run_button.setIcon(self._icon("play", self.colors.on_accent, 12))
         self.run_button.setIconSize(QSize(12, 12))
-        self.run_button.clicked.connect(lambda: self.execute(RunScope.CURRENT))
+        self.run_button.clicked.connect(lambda: self.execute(RunScope.ALL))
         row.addWidget(self.run_button)
         row.addSpacing(6)
         # Una sola base activa para toda la sesión (#168): este desplegable y el
@@ -327,10 +327,9 @@ class QueryPage(QWidget):
         self.base.activated.connect(self._base_chosen)
         row.addWidget(self.base)
         row.addWidget(spacer(), 1)
-        # «Ejecutar todo»: Ctrl+Shift+Enter y el clic derecho del editor (abrir y guardar están junto a las
-        # pestañas: el archivo arriba, la ejecución aquí)
-        self.run_all_action = QAction(tr("Run all") + "\tCtrl+Shift+Enter", self)
-        self.run_all_action.triggered.connect(lambda: self.execute(RunScope.ALL))
+        # «Ejecutar la sentencia» marcada: Ctrl+Shift+Enter y el clic derecho del editor
+        self.statement_action = QAction(tr("Run statement") + "\tCtrl+Shift+Enter", self)
+        self.statement_action.triggered.connect(lambda: self.execute(RunScope.CURRENT))
         return bar
 
     def _icon(self, name: str, color: str, size: int = 16) -> Any:
@@ -575,7 +574,7 @@ class QueryPage(QWidget):
             return
         cursor, base = 0, 0
         sql = text
-        if scope is RunScope.CURRENT and self.editor.hasSelectedText():
+        if scope in (RunScope.CURRENT, RunScope.ALL) and self.editor.hasSelectedText():
             scope = RunScope.SELECTION
             line_from, index_from, _l, _i = self.editor.getSelection()
             base = offset_from(text, line_from, index_from)
@@ -757,21 +756,21 @@ class QueryPage(QWidget):
         if span is not None:
             lines = (line_index_from(text, span[0])[0], line_index_from(text, span[1])[0])
         pro_editor.mark_lines(self.editor, lines)
-        if self.editor.hasSelectedText():
+        selection = self.editor.hasSelectedText()
+        if selection:
             what = tr("Run selection")
-        elif lines is not None:
-            what = tr("Run · line {}").format(lines[0] + 1)
+        elif count > 1:
+            what = tr("Run all ({} statements)").format(count)
         else:
             what = tr("Run")
+        statement = tr("Run statement · line {}").format(lines[0] + 1) if lines is not None else ""
         # solo el ícono ▶: la ayuda dice qué corre y sus atajos
         self.run_button.setAccessibleName(what)
         self.run_button.setToolTip(
-            "\n".join(
-                [what + " · Ctrl+Enter", tr("Run all ({} statements) · Ctrl+Shift+Enter").format(count)]
-            )
+            "\n".join([what + " · Ctrl+Enter"] + ([statement + " · Ctrl+Shift+Enter"] if statement else []))
         )
         pro_editor.mark_play(self.editor, lines[0] if lines is not None else None)
-        self.run_all_action.setText(tr("Run all ({} statements)").format(count) + "\tCtrl+Shift+Enter")
+        self.statement_action.setText((statement or tr("Run statement")) + "\tCtrl+Shift+Enter")
 
     def _escape_cancels(self) -> bool:
         """Esc en el editor: cancela si hay una consulta en curso (#143); si no, la tecla sigue su camino."""
@@ -1477,7 +1476,7 @@ class QueryPage(QWidget):
         ready = state is SessionState.READY
         for widget in (self.run_button, self.base):
             widget.setEnabled(ready and self.run is None)
-        self.run_all_action.setEnabled(ready and self.run is None)
+        self.statement_action.setEnabled(ready and self.run is None)
         running = self.run is not None
         self._escape.setEnabled(running)
         self.stop_button.setEnabled(running and state is SessionState.BUSY)
@@ -1570,9 +1569,9 @@ class _EditorMenu(QObject):
         first = menu.actions()[0] if menu.actions() else None
         run = QAction(page.run_button.accessibleName() + "\tCtrl+Enter", menu)
         run.setEnabled(page.run_button.isEnabled())
-        run.triggered.connect(lambda: page.execute(RunScope.CURRENT))
+        run.triggered.connect(lambda: page.execute(RunScope.ALL))
         menu.insertAction(first, run)
-        menu.insertAction(first, page.run_all_action)
+        menu.insertAction(first, page.statement_action)
         if first is not None:
             menu.insertSeparator(first)
         self._editing(menu, page)

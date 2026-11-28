@@ -9,9 +9,9 @@
 
 ## Ejecutar
 
-- **Ctrl+Intro** ejecuta la selección o, sin selección, la **sentencia marcada** (la barra turquesa a la
-  izquierda del texto). El botón ▶ dice qué correrá: «Ejecutar · línea 5».
-- **Ctrl+Shift+Intro** ejecuta todo.
+- **Ctrl+Intro** (o el botón ▶) ejecuta **todo**; si seleccionas una parte, solo **la selección**.
+- **Ctrl+Shift+Intro** ejecuta solo la **sentencia marcada**: la del cursor, con la barra turquesa a la
+  izquierda del texto. También el ▶ del margen.
 - **Esc** cancela mientras corre.
 
 La consulta se ejecuta en la base activa («Base activa ▾» arriba del editor). Otra base se nombra completa:

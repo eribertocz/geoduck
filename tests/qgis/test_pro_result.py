@@ -16,6 +16,7 @@ from qgis.PyQt.QtWidgets import QApplication
 
 from geoduck.domain.filters import EXCLUDE, FILTER
 from geoduck.domain.i18n import tr
+from geoduck.domain.sql import RunScope
 from geoduck.ui.pro import grid as grid_module
 from tests.qgis.conftest import wait_for
 from tests.qgis.test_pro_query import (
@@ -184,7 +185,7 @@ def test_a_query_result_filters_with_duckdb_and_exports_what_is_shown(lecturas):
 def test_a_write_with_rows_cannot_be_filtered_again(lecturas):
     ws = workspace(lecturas)
     page = new_query(ws, "CREATE TABLE w AS SELECT range AS n FROM range(5); DELETE FROM w RETURNING n;")
-    page.run_all_action.trigger()
+    page.execute(RunScope.ALL)
     assert wait_for(lambda: done(lecturas, page) and page.results)
     assert not page.filter_button.isEnabled() and not page.data.replayable
     assert not page.header.sortable

@@ -13,8 +13,8 @@
 
 | Shortcut | What it does |
 |---|---|
-| Ctrl+Enter | Run the selection or the marked statement |
-| Ctrl+Shift+Enter | Run everything |
+| Ctrl+Enter | Run everything, or the selection |
+| Ctrl+Shift+Enter | Run the marked statement |
 | Esc | Cancel while it runs |
 | Ctrl+J | Fold or open the result |
 

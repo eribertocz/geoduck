@@ -40,7 +40,7 @@ El explorador puede colapsarse; el área del editor y resultados tiene divisores
 - Diseño monocromático por defecto con un acento derivado del tema QGIS; estados semanticamente accesibles (éxito/advertencia/error).
 - Controles con alturas y espacios coherentes; evitar iconos sin texto o tooltip.
 - Autocompletado contextual no intrusivo; errores de SQL resaltados sin cubrir código.
-- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar actual, Ctrl+Shift+Enter ejecutar todo, Esc cancelar donde sea seguro), configurables. **F5 no se usa** (en QGIS refresca el mapa); los atajos actúan solo con el foco dentro de GeoDuck (decisión del propietario, 2026-11-02).
+- Pestañas cerrables, atajos conocidos (Ctrl+Enter ejecutar todo o la selección, Ctrl+Shift+Enter ejecutar la sentencia actual — propietario, 2026-11-28 —, Esc cancelar donde sea seguro), configurables. **F5 no se usa** (en QGIS refresca el mapa); los atajos actúan solo con el foco dentro de GeoDuck (decisión del propietario, 2026-11-02).
 - UI responsive dentro del dock; no usar tamaños fijos que hagan inutilizable un panel estrecho.
 
 ## 5. Accesibilidad e internacionalización
