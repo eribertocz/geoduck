@@ -198,6 +198,8 @@ def test_row_detail_shows_full_values_and_a_geometry_summary(coordinator):
     )
     _ws, page = open_table(coordinator, "lugares")
     assert wait_for(lambda: loaded(page))
+    assert not page.detail.isVisible()  # plegado hasta abrirlo con ◫
+    page.detail_button.setChecked(True)
     assert page.detail.isVisible()
     assert wait_for(lambda: dict(page.detail.fields).get("geom", "").startswith("POLYGON"))
     fields = dict(page.detail.fields)

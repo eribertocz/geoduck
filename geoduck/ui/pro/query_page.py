@@ -200,7 +200,7 @@ class QueryPage(QWidget):
         self._save_clock.setInterval(SAVE_TICK_MS)
         self._save_clock.timeout.connect(self._show_save)
         self._database: str | None = None
-        self.detail_open = True
+        self.detail_open = False
         self.compact = False
         self._started = 0.0  # consulta en curso (#138): cuándo empezó
         self._running_timer = QTimer(self, timeout=self._tick_running)
@@ -417,7 +417,6 @@ class QueryPage(QWidget):
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
         self.detail_button.setIcon(icons.toggle("dock", self.colors.muted, self.colors.accent))
         self.detail_button.setCheckable(True)
-        self.detail_button.setChecked(True)
         self.detail_button.toggled.connect(self.set_detail_open)
         row.addWidget(self.detail_button)
         box.addWidget(head)
@@ -700,7 +699,8 @@ class QueryPage(QWidget):
         self.compact = compact
         self.runs_in_label.setVisible(not compact)
         self.base.setMinimumWidth(80 if compact else 110)
-        self.detail_button.setChecked(not compact)
+        if compact:  # al ensancharse no se abre solo: el detalle empieza plegado
+            self.detail_button.setChecked(False)
         self.view.set_compact(compact)
         for widget in self.result_head.findChildren(QPushButton):  # los iconos de la barra, más juntos
             if widget.property("pro") == "icon":

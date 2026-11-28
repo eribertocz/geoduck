@@ -276,7 +276,6 @@ class TablePage(QWidget):
         self.detail_button = icon_button("dock", tr("Show or hide the row detail"), self.colors)
         self.detail_button.setIcon(icons.toggle("dock", self.colors.muted, self.colors.accent))
         self.detail_button.setCheckable(True)
-        self.detail_button.setChecked(True)
         self.detail_button.toggled.connect(self.set_detail_open)
         self.data.add_tool(self.detail_button)
 
@@ -477,7 +476,8 @@ class TablePage(QWidget):
         self.mode.setVisible(not compact)
         self.structure_button.setVisible(compact)
         self.structure_button.setChecked(self.mode.current == 1)
-        self.detail_button.setChecked(not compact)
+        if compact:  # al ensancharse no se abre solo: el detalle empieza plegado
+            self.detail_button.setChecked(False)
         self.column_summary.setVisible(not compact)
         tighten(self.range_label.parentWidget().layout(), compact, (16, 0, 16, 0), 10)
 

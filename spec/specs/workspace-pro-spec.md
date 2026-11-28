@@ -181,7 +181,7 @@ Se abre con **doble clic** en una tabla o vista (barra lateral, ★ o Ctrl+K). S
     metadatos, «de ≈ 1 000 000» hasta contarlo.
   - **Detalle de fila** (panel derecho): sigue a la celda elegida (clic o ↑ ↓); cada campo con su tipo y su
     valor completo; la geometría resumida (tipo, SRC, número de vértices); copiar valor. Sin ✕: se muestra u
-    oculta con su icono ◫ (turquesa = abierto).
+    oculta con su icono ◫ (turquesa = abierto). **Empieza plegado** (propietario, 2026-11-28): se abre con ◫.
 - **Estructura:** columnas (nombre, tipo, nulos, clave), filas, tamaño aproximado y la sentencia `CREATE`.
 - **Botones de acción solo con icono** (propietario, 2026-11-13), en la ventana y en el panel: «Exportar»,
   «Cargar en QGIS», «Ver SQL», «Buscar» (Ctrl+K), «Acoplar a QGIS» y «Copiar error» de la tarjeta de
