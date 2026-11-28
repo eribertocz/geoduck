@@ -14,7 +14,8 @@ suggests another.
 ## Create a database
 
 - **Create database…**: a new file. GeoDuck never overwrites an existing one.
-- **New database in memory…**: no file. Lost when the session closes, unless you save it as a file.
+- **In memory:** in **Open database…** type `:memory:` as the file. It has no file: lost when the session
+  closes, unless you save it as a file.
 
 ## Use as active database
 

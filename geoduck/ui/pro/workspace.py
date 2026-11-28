@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import functools
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -29,7 +30,6 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QMenu,
     QMessageBox,
@@ -75,7 +75,6 @@ from geoduck.app.events import (
 from geoduck.domain.bridge_types import INTEGER_KEY_TYPES
 from geoduck.domain.catalog import (
     MEMORY_ALIAS,
-    AccessMode,
     AttachRequest,
     ObjectKind,
     OpenAction,
@@ -201,7 +200,6 @@ class ProWorkspace(QWidget):
         ask_save_copies: Any = None,
         copies_bridge: Any = None,
         ask_files: Callable[[str, list[str]], list[str]] | None = None,
-        ask_alias: Callable[[str], str | None] | None = None,
         ask_lose: Callable[[str, int], bool] | None = None,
         ask_save_memory: Callable[[str, list[str], int, bool], str | None] | None = None,
         tell_blocked: Callable[[str, str], None] | None = None,
@@ -227,7 +225,6 @@ class ProWorkspace(QWidget):
         self._ask_spatial_file: Callable[[], str] = self._spatial_file_dialog
         self._resave_project: Callable[[], None] | None = None
         #: #168: el alias de una base nueva en memoria y confirmar cerrar una base en memoria con tablas.
-        self._ask_alias = ask_alias
         self._ask_lose = ask_lose
         self._ask_files = ask_files or self._files_dialog
         self._pending_query: tuple[str, str | None] | None = None
@@ -740,7 +737,6 @@ class ProWorkspace(QWidget):
         side.close_session_requested.connect(self.close_session)
         side.open_database_requested.connect(lambda: self.attach(OpenAction.OPEN_EXISTING))
         side.create_database_requested.connect(lambda: self.attach(OpenAction.CREATE_NEW))
-        side.memory_database_requested.connect(self.new_memory_database)
         side.activate_requested.connect(self.activate_database)
         side.close_reason = self._coordinator.close_reason
         side.spatial_ready = lambda: bool(
@@ -1098,16 +1094,25 @@ class ProWorkspace(QWidget):
         self._guard(self._coordinator.start_memory_session)
 
     def attach(self, action: OpenAction) -> None:
-        """«Abrir base…» o «Crear base…»: sin sesión, la inicia con esa base; con sesión, la adjunta."""
+        """«Abrir base…» o «Crear base…»: sin sesión, la inicia con esa base; con sesión, la adjunta. En
+        «Abrir base…», `:memory:` es una base en memoria con el siguiente alias libre."""
         ask = self._ask_attach
         if ask is None:
             from geoduck.ui.attach_dialog import AttachDialog  # noqa: PLC0415
 
-            ask = AttachDialog.ask
+            catalog = self._coordinator.catalog
+            proposed = catalog.next_alias() if catalog is not None else MEMORY_ALIAS
+            ask = functools.partial(AttachDialog.ask, memory_alias=proposed)
         request = ask(action, self)
         if request is None:
             return
-        if self._coordinator.can_start:
+        if (
+            self._coordinator.can_start
+            and request.action is OpenAction.IN_MEMORY
+            and (catalog_key(request.effective_alias) == catalog_key(MEMORY_ALIAS))
+        ):
+            self.start()  # la sesión ya empieza con esa base en memoria
+        elif self._coordinator.can_start:
             self._guard(lambda: self._coordinator.start_file_session(request))
         else:
             self._guard(lambda: self._coordinator.attach_database(request))
@@ -1314,29 +1319,6 @@ class ProWorkspace(QWidget):
     def activate_database(self, name: str) -> None:
         """«Usar como base activa» (#168): una sola para toda la sesión (explorador, editor y lo nuevo)."""
         self._guard(lambda: self._coordinator.activate_database(name))
-
-    def new_memory_database(self) -> None:
-        """«Nueva base en memoria…» (#168): con el alias que se elija («memory» o el siguiente libre). Sin
-        sesión, la inicia en memoria."""
-        if self._coordinator.can_start:
-            self.start()
-            return
-        catalog = self._coordinator.catalog
-        proposed = catalog.next_alias() if catalog is not None else MEMORY_ALIAS
-        if self._ask_alias is not None:
-            alias = self._ask_alias(proposed)
-        else:
-            text, ok = QInputDialog.getText(
-                self, tr("New database in memory"), tr("Alias of the database:"), text=proposed
-            )
-            alias = text.strip() if ok else None
-        if not alias:
-            return
-        self._guard(
-            lambda: self._coordinator.attach_database(
-                AttachRequest(path="", access=AccessMode.READ_WRITE, action=OpenAction.IN_MEMORY, alias=alias)
-            )
-        )
 
     def refresh(self) -> None:
         self._guard(self._coordinator.refresh_catalog)
@@ -1674,7 +1656,6 @@ class ProWorkspace(QWidget):
                     tr("Open database…"), action, "database", lambda: self.attach(OpenAction.OPEN_EXISTING)
                 ),
                 Entry(tr("Create database…"), action, "database", lambda: self.attach(OpenAction.CREATE_NEW)),
-                Entry(tr("New database in memory…"), action, "memory", self.new_memory_database),
                 Entry(tr("Import files…"), action, "layers", self.import_files),
                 Entry(tr("Add QGIS layers to GeoDuck…"), action, "layers", self.send_layers_requested.emit),
                 Entry(tr("Refresh databases"), action, "refresh", self.refresh),

@@ -7,8 +7,10 @@ from __future__ import annotations
 import pytest
 from qgis.PyQt.QtWidgets import QAbstractButton, QApplication, QMenu
 
+from geoduck.domain.catalog import AccessMode, AttachRequest, OpenAction
 from geoduck.domain.i18n import tr
 from geoduck.domain.session import SessionState
+from geoduck.ui.attach_dialog import AttachDialog
 from geoduck.ui.pro.sidebar import ACTIVE, META
 from geoduck.ui.pro.workspace import ProWorkspace
 from tests.qgis import test_pro_workspace as base
@@ -28,6 +30,18 @@ def workspace(coordinator, **kwargs):
     ws.resize(1200, 800)
     ws.show()
     return ws
+
+
+def in_memory(coordinator, alias=""):
+    """«Abrir base…» con `:memory:` como ruta (y `alias`, o el propuesto) en el diálogo de verdad."""
+
+    def ask(action, parent):
+        dialog = AttachDialog(action, parent, memory_alias=coordinator.catalog.next_alias())
+        dialog.path_edit.setText(":memory:")
+        dialog.alias_edit.setText(alias)
+        return dialog.build_request()
+
+    return ask
 
 
 def bases(ws):
@@ -62,8 +76,8 @@ def settle(coordinator):
 
 def test_one_active_database_is_shown_the_same_in_the_explorer_and_in_the_editor(coordinator):
     start(coordinator)
-    ws = workspace(coordinator, ask_alias=lambda proposed: "borrador")
-    ws.new_memory_database()
+    ws = workspace(coordinator, ask_attach=in_memory(coordinator, "borrador"))
+    ws.attach(OpenAction.OPEN_EXISTING)
     assert wait_for(lambda: coordinator.catalog.get("borrador") is not None)
     settle(coordinator)
     assert active_in_tree(ws) == ["memory"]
@@ -109,10 +123,10 @@ def test_the_starting_memory_database_closes_when_another_is_active(coordinator)
     answers = [False, True]
     ws = workspace(
         coordinator,
-        ask_alias=lambda proposed: proposed,
+        ask_attach=in_memory(coordinator),
         ask_lose=lambda name, count: asked.append((name, count)) or answers.pop(0),
     )
-    ws.new_memory_database()
+    ws.attach(OpenAction.OPEN_EXISTING)
     assert wait_for(lambda: coordinator.catalog.get("memory_2") is not None)  # alias propuesto
     settle(coordinator)
     ws.activate_database("memory_2")
@@ -130,8 +144,8 @@ def test_the_starting_memory_database_closes_when_another_is_active(coordinator)
 
 def test_a_saved_query_with_another_database_offers_it_without_changing_it(coordinator):
     start(coordinator)
-    ws = workspace(coordinator, ask_alias=lambda proposed: "censo")
-    ws.new_memory_database()
+    ws = workspace(coordinator, ask_attach=in_memory(coordinator, "censo"))
+    ws.attach(OpenAction.OPEN_EXISTING)
     assert wait_for(lambda: coordinator.catalog.get("censo") is not None)
     settle(coordinator)
     ws.open_recovered("guardada", "SELECT 1;", "censo", None)
@@ -164,3 +178,17 @@ def test_query_notices_stay_in_their_tab_and_app_notices_clear_themselves(coordi
     assert ws.notice.text() == "Falló"  # el error se queda
     ws.notice_close.click()
     assert ws.notice.text() == "" and not ws.notice_close.isVisibleTo(ws)
+
+
+def test_there_is_no_separate_entry_for_memory_and_without_a_session_memory_starts_it(coordinator):
+    ws = workspace(
+        coordinator,
+        ask_attach=lambda action, parent: AttachRequest(
+            "", AccessMode.READ_WRITE, OpenAction.IN_MEMORY, "memory"
+        ),
+    )
+    texts = [a.text() for a in ws.sidebar.add_menu.actions() + ws.sidebar.session_menu.actions()]
+    assert tr("Open database…") in texts and not [t for t in texts if "memoria" in t.lower()]
+    ws.attach(OpenAction.OPEN_EXISTING)  # sin sesión: la inicia, con su base en memoria
+    assert wait_for(lambda: ready(coordinator))
+    assert [db.name for db in coordinator.catalog.databases] == ["memory"]

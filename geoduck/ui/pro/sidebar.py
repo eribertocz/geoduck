@@ -518,8 +518,6 @@ class Sidebar(QFrame):
     close_session_requested = pyqtSignal()
     open_database_requested = pyqtSignal()
     create_database_requested = pyqtSignal()
-    #: «Nueva base en memoria…» (#168).
-    memory_database_requested = pyqtSignal()
     #: «Usar como base activa» (#168): el nombre de la base.
     activate_requested = pyqtSignal(str)
     send_layers_requested = pyqtSignal()
@@ -617,8 +615,6 @@ class Sidebar(QFrame):
         self.session_open_db.triggered.connect(self.open_database_requested.emit)
         self.session_create_db = self.session_menu.addAction(tr("Create database…"))
         self.session_create_db.triggered.connect(self.create_database_requested.emit)
-        self.session_memory_db = self.session_menu.addAction(tr("New database in memory…"))
-        self.session_memory_db.triggered.connect(self.memory_database_requested.emit)
         self.refresh_action = self.session_menu.addAction(tr("Refresh"))
         self.refresh_action.triggered.connect(self.refresh_requested.emit)
         self.session_menu.addSeparator()
@@ -691,8 +687,6 @@ class Sidebar(QFrame):
         self.open_db_action.triggered.connect(self.open_database_requested.emit)
         self.create_db_action = self.add_menu.addAction(tr("Create database…"))
         self.create_db_action.triggered.connect(self.create_database_requested.emit)
-        self.memory_db_action = self.add_menu.addAction(tr("New database in memory…"))
-        self.memory_db_action.triggered.connect(self.memory_database_requested.emit)
         self.add_menu.addSeparator()
         self.import_action = self.add_menu.addAction(tr("Import files…"))
         self.import_action.triggered.connect(lambda: self.import_files_requested.emit(None))
@@ -767,9 +761,9 @@ class Sidebar(QFrame):
         self.refresh_action.setVisible(dot != "off")
         self.close_action.setVisible(dot != "off")
         self.start_action.setVisible(dot == "off")
-        for action in (self.session_open_db, self.session_create_db, self.session_memory_db):
+        for action in (self.session_open_db, self.session_create_db):
             action.setEnabled(ready or dot == "off")
-        for action in (self.open_db_action, self.create_db_action, self.memory_db_action):
+        for action in (self.open_db_action, self.create_db_action):
             action.setEnabled(ready or dot == "off")
         self.send_action.setEnabled(ready)
         # Sin DuckDB, todo en gris salvo iniciar, abrir o crear una base, Diagnóstico y Acerca de
