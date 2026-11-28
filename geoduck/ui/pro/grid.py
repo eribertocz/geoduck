@@ -498,7 +498,8 @@ class TypeHeader(QHeaderView):
                 box.returnPressed.connect(lambda b=box, n=name: self._commit(n, b))
                 box.textEdited.connect(lambda _t, b=box: self._edited(b))
                 self.boxes[name] = box
-            self.set_box(name, texts.get(name, ""))
+            # La casilla en la que se escribe no se pisa: el resultado que llega es de lo escrito antes.
+            self.set_box(name, None if box.hasFocus() else texts.get(name, ""))
         self.place_boxes()
 
     def set_box(self, name: str, text: str | None, *, error: str = "") -> None:
@@ -1171,20 +1172,30 @@ class DataGrid(QWidget):
     def _show_page(
         self, browse: Browse, rows: tuple[tuple[object, ...], ...], start: int = 0, count: int | None = None
     ) -> None:
+        # Mismas columnas (un filtro, el orden, recargar): se quedan los anchos y la columna a la vista, o
+        # cada letra en una casilla de filtro devolvería la grilla a la primera columna.
+        same = bool(self.model.columns) and self.model.columns == browse.columns and self.model.count > 0
+        bar = self.grid.horizontalScrollBar()
+        x, left = (bar.value(), max(0, self.grid.columnAt(0))) if same else (0, 0)
+        widths = [self.grid.columnWidth(i) for i in range(len(browse.columns))] if same else []
         self.model.set_page(browse.columns, rows, start, count)
         self._set_view(start)
         self._update_bar_range()
-        fit_columns(self.grid, self.model)
+        for i, width in enumerate(widths):
+            self.grid.setColumnWidth(i, width)
+        if not widths:
+            fit_columns(self.grid, self.model)
         self.header.set_columns(dict(browse.boxes))
-        self._place()
         if rows:
             self.body.setCurrentIndex(GRID)
-            self.grid.setCurrentIndex(self.model.index(0, 0))  # el detalle muestra la primera fila
+            self.grid.setCurrentIndex(self.model.index(0, left))  # el detalle muestra la primera fila
             self.grid.clearSelection()
         elif browse.filtered:
             self.show_message(tr("No rows match these filters."), clear=True)
         else:
             self.show_message(self.empty_text)
+        bar.setValue(x)
+        self._place()
         self._row_changed(0 if rows else -1)
 
     def _counted(self, result: Any) -> None:
